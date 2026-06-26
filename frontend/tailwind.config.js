@@ -25,11 +25,16 @@ module.exports = {
       },
       animation: {
         'fade-in': 'fadeIn 0.2s ease-in-out',
+        'tooltip-in': 'tooltipIn 0.12s ease-out',
       },
       keyframes: {
         fadeIn: {
           '0%': { opacity: '0' },
           '100%': { opacity: '1' },
+        },
+        tooltipIn: {
+          '0%': { opacity: '0', transform: 'scale(0.92)' },
+          '100%': { opacity: '1', transform: 'scale(1)' },
         },
       },
     },

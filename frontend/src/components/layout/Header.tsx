@@ -1,10 +1,11 @@
 'use client';
 
 import { usePathname } from 'next/navigation';
-import { Bell, Sun, Moon, Search } from 'lucide-react';
+import { Bell, Sun, Moon } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useAuthStore } from '@/store/auth.store';
 import { getInitials } from '@/lib/utils';
+import { Tooltip } from '@/components/ui/Tooltip';
 
 const pageLabels: Record<string, string> = {
   '/dashboard': 'Dashboard',
@@ -33,28 +34,38 @@ export function Header() {
       <h1 className="text-lg font-semibold text-gray-800 dark:text-white flex-1">{title}</h1>
 
       <div className="flex items-center gap-2">
-        <button
-          onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-          className="w-9 h-9 flex items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition"
-          title="Cambiar tema"
-        >
-          {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
-        </button>
+        <Tooltip content={theme === 'dark' ? 'Activar modo claro' : 'Activar modo oscuro'} side="bottom">
+          <button
+            type="button"
+            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+            className="w-9 h-9 flex items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition"
+          >
+            {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+          </button>
+        </Tooltip>
 
-        <button className="w-9 h-9 flex items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition relative">
-          <Bell size={18} />
-          <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full" />
-        </button>
+        <Tooltip content="Notificaciones" side="bottom">
+          <button
+            type="button"
+            aria-label="Notificaciones"
+            className="w-9 h-9 flex items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition relative"
+          >
+            <Bell size={18} />
+            <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full" />
+          </button>
+        </Tooltip>
 
-        <div className="flex items-center gap-2 pl-2 border-l border-gray-200 dark:border-gray-700">
-          <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-bold">
-            {user?.name ? getInitials(user.name) : '?'}
+        <Tooltip content={`${user?.name} · ${user?.role}`} side="bottom">
+          <div className="flex items-center gap-2 pl-2 border-l border-gray-200 dark:border-gray-700 cursor-default">
+            <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-bold">
+              {user?.name ? getInitials(user.name) : '?'}
+            </div>
+            <div className="hidden md:block">
+              <p className="text-sm font-medium text-gray-800 dark:text-white leading-none">{user?.name}</p>
+              <p className="text-xs text-gray-500 leading-none mt-0.5">{user?.role}</p>
+            </div>
           </div>
-          <div className="hidden md:block">
-            <p className="text-sm font-medium text-gray-800 dark:text-white leading-none">{user?.name}</p>
-            <p className="text-xs text-gray-500 leading-none mt-0.5">{user?.role}</p>
-          </div>
-        </div>
+        </Tooltip>
       </div>
     </header>
   );

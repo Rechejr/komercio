@@ -5,11 +5,12 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth.store';
+import { Tooltip } from '@/components/ui/Tooltip';
 import {
   LayoutDashboard, Package, ShoppingCart, Users, Truck,
   Receipt, CreditCard, TrendingUp, Settings, Store,
   ChevronLeft, ChevronRight, ShoppingBag, DollarSign,
-  Archive, Bell, LogOut, Calculator,
+  LogOut, Calculator,
 } from 'lucide-react';
 
 const navItems = [
@@ -42,33 +43,35 @@ export function Sidebar() {
       )}
     >
       {/* Logo */}
-      <div className={cn('flex items-center gap-3 px-4 py-4 border-b border-gray-700/50', collapsed && 'justify-center')}>
-        <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center flex-shrink-0">
-          <Store size={18} />
+      <Tooltip content="Komercio" side="right" disabled={!collapsed}>
+        <div className={cn('flex items-center gap-3 px-4 py-4 border-b border-gray-700/50', collapsed && 'justify-center px-2')}>
+          <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center flex-shrink-0">
+            <Store size={18} />
+          </div>
+          {!collapsed && <span className="font-bold text-lg tracking-tight">Komercio</span>}
         </div>
-        {!collapsed && <span className="font-bold text-lg tracking-tight">Komercio</span>}
-      </div>
+      </Tooltip>
 
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto scrollbar-thin py-3 px-2 space-y-0.5">
         {visibleItems.map((item) => {
           const active = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href));
           return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={cn(
-                'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
-                active
-                  ? 'bg-blue-600 text-white'
-                  : 'text-gray-400 hover:text-white hover:bg-gray-800',
-                collapsed && 'justify-center px-2',
-              )}
-              title={collapsed ? item.label : undefined}
-            >
-              <item.icon size={18} className="flex-shrink-0" />
-              {!collapsed && <span className="truncate">{item.label}</span>}
-            </Link>
+            <Tooltip key={item.href} content={item.label} side="right" disabled={!collapsed}>
+              <Link
+                href={item.href}
+                className={cn(
+                  'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
+                  active
+                    ? 'bg-blue-600 text-white'
+                    : 'text-gray-400 hover:text-white hover:bg-gray-800',
+                  collapsed && 'justify-center px-2',
+                )}
+              >
+                <item.icon size={18} className="flex-shrink-0" />
+                {!collapsed && <span className="truncate">{item.label}</span>}
+              </Link>
+            </Tooltip>
           );
         })}
       </nav>
@@ -81,24 +84,29 @@ export function Sidebar() {
             <p className="text-xs text-gray-400 truncate">{user?.role}</p>
           </div>
         )}
-        <button
-          onClick={logout}
-          className={cn(
-            'flex items-center gap-3 w-full px-3 py-2 rounded-lg text-sm text-gray-400 hover:text-red-400 hover:bg-gray-800 transition-colors',
-            collapsed && 'justify-center',
-          )}
-          title="Cerrar sesión"
-        >
-          <LogOut size={16} />
-          {!collapsed && 'Cerrar sesión'}
-        </button>
-        <button
-          onClick={() => setCollapsed((c) => !c)}
-          className="flex items-center gap-3 w-full px-3 py-2 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-gray-800 transition-colors justify-center"
-        >
-          {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
-          {!collapsed && <span className="text-xs">Colapsar</span>}
-        </button>
+        <Tooltip content={collapsed ? `Cerrar sesión (${user?.name})` : 'Cerrar sesión'} side="right">
+          <button
+            type="button"
+            onClick={logout}
+            className={cn(
+              'flex items-center gap-3 w-full px-3 py-2 rounded-lg text-sm text-gray-400 hover:text-red-400 hover:bg-gray-800 transition-colors',
+              collapsed && 'justify-center',
+            )}
+          >
+            <LogOut size={16} />
+            {!collapsed && 'Cerrar sesión'}
+          </button>
+        </Tooltip>
+        <Tooltip content={collapsed ? 'Expandir sidebar' : 'Colapsar sidebar'} side="right">
+          <button
+            type="button"
+            onClick={() => setCollapsed((c) => !c)}
+            className="flex items-center gap-3 w-full px-3 py-2 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-gray-800 transition-colors justify-center"
+          >
+            {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
+            {!collapsed && <span className="text-xs">Colapsar</span>}
+          </button>
+        </Tooltip>
       </div>
     </aside>
   );

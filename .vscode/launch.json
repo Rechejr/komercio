@@ -12,35 +12,52 @@
       "envFile": "${workspaceFolder}/backend/.env",
       "sourceMaps": true,
       "console": "integratedTerminal",
-      "skipFiles": ["<node_internals>/**"]
+      "skipFiles": ["<node_internals>/**"],
+      "presentation": { "group": "dev", "order": 1 }
     },
     {
       "name": "Frontend (dev)",
       "type": "node",
       "request": "launch",
-      "runtimeExecutable": "npm",
+      "runtimeExecutable": "npm.cmd",
       "runtimeArgs": ["run", "dev"],
       "cwd": "${workspaceFolder}/frontend",
-      "console": "integratedTerminal"
+      "console": "integratedTerminal",
+      "presentation": { "group": "dev", "order": 2 },
+      "serverReadyAction": {
+        "pattern": "Local:.*http://localhost:(\\d+)",
+        "uriFormat": "http://localhost:%s",
+        "action": "openExternally"
+      }
     },
     {
       "name": "Frontend (produccion - RAPIDO)",
       "type": "node",
       "request": "launch",
-      "runtimeExecutable": "npm",
+      "runtimeExecutable": "npm.cmd",
       "runtimeArgs": ["run", "start"],
       "cwd": "${workspaceFolder}/frontend",
-      "console": "integratedTerminal"
+      "console": "integratedTerminal",
+      "presentation": { "group": "prod", "order": 2 },
+      "serverReadyAction": {
+        "pattern": "Local:.*http://localhost:(\\d+)",
+        "uriFormat": "http://localhost:%s",
+        "action": "openExternally"
+      }
     }
   ],
   "compounds": [
     {
       "name": "Dev (Backend + Frontend dev)",
-      "configurations": ["Backend (ts-node)", "Frontend (dev)"]
+      "configurations": ["Backend (ts-node)", "Frontend (dev)"],
+      "stopAll": true,
+      "presentation": { "group": "compounds", "order": 1 }
     },
     {
       "name": "PRODUCCION (Backend + Frontend rapido)",
-      "configurations": ["Backend (ts-node)", "Frontend (produccion - RAPIDO)"]
+      "configurations": ["Backend (ts-node)", "Frontend (produccion - RAPIDO)"],
+      "stopAll": true,
+      "presentation": { "group": "compounds", "order": 2 }
     }
   ]
 }
