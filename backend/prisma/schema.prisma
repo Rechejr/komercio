@@ -1,0 +1,506 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── ROLES ────────────────────────────────────────────────────────────────────
+enum UserRole {
+  ADMIN
+  SUPERVISOR
+  CASHIER
+  SELLER
+  WAREHOUSE
+}
+
+// ─── ESTADOS GENERALES ────────────────────────────────────────────────────────
+enum SaleStatus {
+  PENDING
+  COMPLETED
+  CANCELLED
+  REFUNDED
+}
+
+enum CreditStatus {
+  PENDING
+  PAID
+  OVERDUE
+  PARTIAL
+}
+
+enum PaymentMethod {
+  CASH
+  TRANSFER
+  NEQUI
+  DAVIPLATA
+  CARD
+  MIXED
+}
+
+enum MovementType {
+  IN
+  OUT
+  ADJUSTMENT
+}
+
+// ─── USERS ────────────────────────────────────────────────────────────────────
+model User {
+  id               String    @id @default(uuid())
+  name             String
+  email            String    @unique
+  phone            String?
+  password         String
+  role             UserRole  @default(CASHIER)
+  isActive         Boolean   @default(true)
+  isEmailVerified  Boolean   @default(false)
+  emailVerifyToken String?
+  resetPasswordToken String?
+  resetPasswordExpires DateTime?
+  avatar           String?
+  lastLogin        DateTime?
+  refreshTokens    RefreshToken[]
+  business         Business? @relation("BusinessOwner")
+  branchId         String?
+  branch           Branch?   @relation(fields: [branchId], references: [id])
+  sales            Sale[]
+  auditLogs        AuditLog[]
+  notifications    Notification[]
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  deletedAt        DateTime?
+
+  @@index([email])
+  @@index([branchId])
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+// ─── BUSINESS ─────────────────────────────────────────────────────────────────
+model Business {
+  id          String   @id @default(uuid())
+  name        String
+  legalName   String?
+  nit         String?
+  phone       String?
+  email       String?
+  address     String?
+  city        String?
+  country     String   @default("Colombia")
+  logo        String?
+  currency    String   @default("COP")
+  taxRate     Float    @default(0)
+  ownerId     String   @unique
+  owner       User     @relation("BusinessOwner", fields: [ownerId], references: [id])
+  branches    Branch[]
+  plan        String   @default("free")
+  settings    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  deletedAt   DateTime?
+
+  @@map("businesses")
+}
+
+model Branch {
+  id          String    @id @default(uuid())
+  name        String
+  address     String?
+  phone       String?
+  businessId  String
+  business    Business  @relation(fields: [businessId], references: [id])
+  users       User[]
+  products    Product[]
+  sales       Sale[]
+  cashRegisters CashRegister[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  @@index([businessId])
+  @@map("branches")
+}
+
+// ─── CATEGORIES & BRANDS ──────────────────────────────────────────────────────
+model Category {
+  id          String    @id @default(uuid())
+  name        String
+  description String?
+  color       String?
+  icon        String?
+  parentId    String?
+  parent      Category? @relation("CategoryChildren", fields: [parentId], references: [id])
+  children    Category[] @relation("CategoryChildren")
+  products    Product[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  @@map("categories")
+}
+
+model Brand {
+  id          String    @id @default(uuid())
+  name        String
+  logo        String?
+  products    Product[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  @@map("brands")
+}
+
+// ─── PRODUCTS ─────────────────────────────────────────────────────────────────
+model Product {
+  id              String    @id @default(uuid())
+  code            String    @unique
+  barcode         String?   @unique
+  name            String
+  description     String?
+  categoryId      String?
+  category        Category? @relation(fields: [categoryId], references: [id])
+  brandId         String?
+  brand           Brand?    @relation(fields: [brandId], references: [id])
+  supplierId      String?
+  supplier        Supplier? @relation(fields: [supplierId], references: [id])
+  branchId        String?
+  branch          Branch?   @relation(fields: [branchId], references: [id])
+  costPrice       Float     @default(0)
+  salePrice       Float     @default(0)
+  wholesalePrice  Float?
+  stock           Float     @default(0)
+  minStock        Float     @default(0)
+  unit            String    @default("unit")
+  image           String?
+  images          String[]
+  taxRate         Float     @default(0)
+  isActive        Boolean   @default(true)
+  allowNegativeStock Boolean @default(false)
+  saleDetails     SaleDetail[]
+  purchaseDetails PurchaseDetail[]
+  inventoryMovements InventoryMovement[]
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  deletedAt       DateTime?
+
+  @@index([code])
+  @@index([barcode])
+  @@index([categoryId])
+  @@index([branchId])
+  @@map("products")
+}
+
+// ─── INVENTORY MOVEMENTS ──────────────────────────────────────────────────────
+model InventoryMovement {
+  id          String       @id @default(uuid())
+  productId   String
+  product     Product      @relation(fields: [productId], references: [id])
+  type        MovementType
+  quantity    Float
+  previousStock Float
+  newStock    Float
+  reason      String?
+  referenceId String?
+  referenceType String?
+  notes       String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@index([productId])
+  @@map("inventory_movements")
+}
+
+// ─── CUSTOMERS ────────────────────────────────────────────────────────────────
+model Customer {
+  id          String    @id @default(uuid())
+  name        String
+  document    String?   @unique
+  documentType String?  @default("CC")
+  phone       String?
+  email       String?
+  address     String?
+  city        String?
+  notes       String?
+  creditLimit Float     @default(0)
+  currentDebt Float     @default(0)
+  loyaltyPoints Int     @default(0)
+  isActive    Boolean   @default(true)
+  sales       Sale[]
+  credits     Credit[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  @@index([document])
+  @@map("customers")
+}
+
+// ─── SUPPLIERS ────────────────────────────────────────────────────────────────
+model Supplier {
+  id          String    @id @default(uuid())
+  name        String
+  document    String?
+  phone       String?
+  email       String?
+  address     String?
+  city        String?
+  contactName String?
+  notes       String?
+  isActive    Boolean   @default(true)
+  products    Product[]
+  purchases   Purchase[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  @@map("suppliers")
+}
+
+// ─── SALES ────────────────────────────────────────────────────────────────────
+model Sale {
+  id              String      @id @default(uuid())
+  invoiceNumber   String      @unique
+  customerId      String?
+  customer        Customer?   @relation(fields: [customerId], references: [id])
+  userId          String
+  user            User        @relation(fields: [userId], references: [id])
+  branchId        String
+  branch          Branch      @relation(fields: [branchId], references: [id])
+  status          SaleStatus  @default(COMPLETED)
+  subtotal        Float
+  taxAmount       Float       @default(0)
+  discountAmount  Float       @default(0)
+  total           Float
+  paidAmount      Float
+  changeAmount    Float       @default(0)
+  paymentMethod   PaymentMethod @default(CASH)
+  paymentDetails  Json?
+  notes           String?
+  details         SaleDetail[]
+  credit          Credit?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  deletedAt       DateTime?
+
+  @@index([customerId])
+  @@index([userId])
+  @@index([branchId])
+  @@index([createdAt])
+  @@map("sales")
+}
+
+model SaleDetail {
+  id          String   @id @default(uuid())
+  saleId      String
+  sale        Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id])
+  quantity    Float
+  unitPrice   Float
+  costPrice   Float
+  discountPct Float    @default(0)
+  taxRate     Float    @default(0)
+  subtotal    Float
+  total       Float
+  createdAt   DateTime @default(now())
+
+  @@index([saleId])
+  @@index([productId])
+  @@map("sale_details")
+}
+
+// ─── PURCHASES ────────────────────────────────────────────────────────────────
+model Purchase {
+  id              String    @id @default(uuid())
+  invoiceNumber   String?
+  supplierId      String
+  supplier        Supplier  @relation(fields: [supplierId], references: [id])
+  status          String    @default("COMPLETED")
+  subtotal        Float
+  taxAmount       Float     @default(0)
+  total           Float
+  invoicePdf      String?
+  notes           String?
+  purchaseDate    DateTime  @default(now())
+  details         PurchaseDetail[]
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  deletedAt       DateTime?
+
+  @@index([supplierId])
+  @@map("purchases")
+}
+
+model PurchaseDetail {
+  id          String    @id @default(uuid())
+  purchaseId  String
+  purchase    Purchase  @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  productId   String
+  product     Product   @relation(fields: [productId], references: [id])
+  quantity    Float
+  unitCost    Float
+  taxRate     Float     @default(0)
+  subtotal    Float
+  total       Float
+  createdAt   DateTime  @default(now())
+
+  @@index([purchaseId])
+  @@index([productId])
+  @@map("purchase_details")
+}
+
+// ─── EXPENSES ─────────────────────────────────────────────────────────────────
+model ExpenseCategory {
+  id          String    @id @default(uuid())
+  name        String
+  description String?
+  expenses    Expense[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@map("expense_categories")
+}
+
+model Expense {
+  id          String          @id @default(uuid())
+  categoryId  String?
+  category    ExpenseCategory? @relation(fields: [categoryId], references: [id])
+  description String
+  amount      Float
+  paymentMethod PaymentMethod  @default(CASH)
+  receiptUrl  String?
+  date        DateTime        @default(now())
+  notes       String?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  deletedAt   DateTime?
+
+  @@index([categoryId])
+  @@index([date])
+  @@map("expenses")
+}
+
+// ─── CREDITS / FIADOS ────────────────────────────────────────────────────────
+model Credit {
+  id          String       @id @default(uuid())
+  saleId      String?      @unique
+  sale        Sale?        @relation(fields: [saleId], references: [id])
+  customerId  String
+  customer    Customer     @relation(fields: [customerId], references: [id])
+  totalAmount Float
+  paidAmount  Float        @default(0)
+  balance     Float
+  status      CreditStatus @default(PENDING)
+  dueDate     DateTime?
+  notes       String?
+  payments    CreditPayment[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  deletedAt   DateTime?
+
+  @@index([customerId])
+  @@index([status])
+  @@map("credits")
+}
+
+model CreditPayment {
+  id            String   @id @default(uuid())
+  creditId      String
+  credit        Credit   @relation(fields: [creditId], references: [id], onDelete: Cascade)
+  amount        Float
+  paymentMethod PaymentMethod @default(CASH)
+  notes         String?
+  createdAt     DateTime @default(now())
+
+  @@index([creditId])
+  @@map("credit_payments")
+}
+
+// ─── CASH REGISTER ────────────────────────────────────────────────────────────
+model CashRegister {
+  id            String    @id @default(uuid())
+  branchId      String
+  branch        Branch    @relation(fields: [branchId], references: [id])
+  openedBy      String
+  closedBy      String?
+  openingAmount Float
+  closingAmount Float?
+  expectedAmount Float?
+  difference    Float?
+  status        String    @default("OPEN")
+  openedAt      DateTime  @default(now())
+  closedAt      DateTime?
+  notes         String?
+  movements     CashMovement[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([branchId])
+  @@index([status])
+  @@map("cash_registers")
+}
+
+model CashMovement {
+  id             String       @id @default(uuid())
+  cashRegisterId String
+  cashRegister   CashRegister @relation(fields: [cashRegisterId], references: [id])
+  type           MovementType
+  amount         Float
+  description    String
+  referenceId    String?
+  createdAt      DateTime     @default(now())
+
+  @@index([cashRegisterId])
+  @@map("cash_movements")
+}
+
+// ─── NOTIFICATIONS ────────────────────────────────────────────────────────────
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  message   String
+  type      String   @default("INFO")
+  isRead    Boolean  @default(false)
+  data      Json?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([isRead])
+  @@map("notifications")
+}
+
+// ─── AUDIT LOGS ───────────────────────────────────────────────────────────────
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  action    String
+  module    String
+  entityId  String?
+  oldData   Json?
+  newData   Json?
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([module])
+  @@index([createdAt])
+  @@map("audit_logs")
+}

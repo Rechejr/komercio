@@ -1,0 +1,261 @@
+import { Request, Response, NextFunction } from 'express';
+import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
+import { prisma } from '../config/database';
+import { cache } from '../config/redis';
+import { generateAccessToken, generateRefreshToken, verifyRefreshToken } from '../utils/jwt';
+import { AppError, success, created } from '../utils/response';
+import { AuthRequest } from '../middlewares/auth';
+
+export const authController = {
+  async register(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { name, email, password, businessName } = req.body;
+
+      const existing = await prisma.user.findUnique({ where: { email } });
+      if (existing) throw new AppError('El email ya está registrado', 409);
+
+      const hashedPassword = await bcrypt.hash(password, 12);
+      const emailVerifyToken = crypto.randomBytes(32).toString('hex');
+
+      const user = await prisma.$transaction(async (tx) => {
+        const newUser = await tx.user.create({
+          data: {
+            name,
+            email,
+            password: hashedPassword,
+            role: 'ADMIN',
+            emailVerifyToken,
+          },
+          select: { id: true, name: true, email: true, role: true },
+        });
+
+        if (businessName) {
+          const business = await tx.business.create({
+            data: {
+              name: businessName,
+              ownerId: newUser.id,
+              branches: { create: { name: 'Sucursal Principal' } },
+            },
+            include: { branches: true },
+          });
+          // Vincular el usuario a la sucursal recién creada
+          await tx.user.update({
+            where: { id: newUser.id },
+            data: { branchId: business.branches[0].id },
+          });
+        }
+
+        return newUser;
+      });
+
+      return created(res, user, 'Cuenta creada exitosamente. Verifica tu correo.');
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async login(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { email, password } = req.body;
+
+      const user = await prisma.user.findUnique({
+        where: { email, deletedAt: null },
+        include: {
+          branch: { select: { id: true, businessId: true } },
+        },
+      });
+
+      if (!user || !(await bcrypt.compare(password, user.password))) {
+        throw new AppError('Credenciales inválidas', 401);
+      }
+
+      if (!user.isActive) throw new AppError('Cuenta desactivada. Contacta al administrador.', 403);
+
+      const payload = {
+        userId: user.id,
+        email: user.email,
+        role: user.role,
+        businessId: user.branch?.businessId,
+        branchId: user.branchId ?? undefined,
+      };
+
+      const accessToken = generateAccessToken(payload);
+      const refreshToken = generateRefreshToken(payload);
+
+      await prisma.refreshToken.create({
+        data: {
+          token: refreshToken,
+          userId: user.id,
+          expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        },
+      });
+
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { lastLogin: new Date() },
+      });
+
+      res.cookie('refreshToken', refreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+      });
+
+      return success(res, {
+        accessToken,
+        user: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          avatar: user.avatar,
+          branchId: user.branchId,
+          businessId: user.branch?.businessId,
+        },
+      }, 'Sesión iniciada');
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async refreshToken(req: Request, res: Response, next: NextFunction) {
+    try {
+      const token = req.cookies.refreshToken || req.body.refreshToken;
+      if (!token) throw new AppError('Refresh token requerido', 401);
+
+      const stored = await prisma.refreshToken.findUnique({ where: { token } });
+      if (!stored || stored.expiresAt < new Date()) {
+        throw new AppError('Refresh token inválido o expirado', 401);
+      }
+
+      const payload = verifyRefreshToken(token);
+
+      const newAccessToken = generateAccessToken({
+        userId: payload.userId,
+        email: payload.email,
+        role: payload.role,
+        businessId: payload.businessId,
+        branchId: payload.branchId,
+      });
+
+      return success(res, { accessToken: newAccessToken });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async logout(req: Request, res: Response, next: NextFunction) {
+    try {
+      const token = req.cookies.refreshToken || req.body.refreshToken;
+      if (token) {
+        await prisma.refreshToken.deleteMany({ where: { token } });
+      }
+      res.clearCookie('refreshToken');
+      return success(res, null, 'Sesión cerrada');
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async forgotPassword(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { email } = req.body;
+      const user = await prisma.user.findUnique({ where: { email } });
+
+      // Don't reveal if email exists
+      if (!user) return success(res, null, 'Si el email existe, recibirás un correo.');
+
+      const resetToken = crypto.randomBytes(32).toString('hex');
+      const expires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { resetPasswordToken: resetToken, resetPasswordExpires: expires },
+      });
+
+      // Store in cache for quick lookup
+      await cache.set(`reset:${resetToken}`, user.id, 3600);
+
+      // TODO: Send email with token
+      // await emailService.sendPasswordReset(user.email, resetToken);
+
+      return success(res, null, 'Si el email existe, recibirás un correo.');
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async resetPassword(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { token, password } = req.body;
+
+      const user = await prisma.user.findFirst({
+        where: {
+          resetPasswordToken: token,
+          resetPasswordExpires: { gt: new Date() },
+        },
+      });
+
+      if (!user) throw new AppError('Token inválido o expirado', 400);
+
+      const hashed = await bcrypt.hash(password, 12);
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { password: hashed, resetPasswordToken: null, resetPasswordExpires: null },
+      });
+
+      await prisma.refreshToken.deleteMany({ where: { userId: user.id } });
+      await cache.del(`reset:${token}`);
+
+      return success(res, null, 'Contraseña actualizada exitosamente');
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async me(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const user = await prisma.user.findUnique({
+        where: { id: req.user!.userId },
+        select: {
+          id: true, name: true, email: true, phone: true,
+          role: true, avatar: true, isEmailVerified: true,
+          branchId: true, lastLogin: true,
+          branch: {
+            select: {
+              id: true, name: true,
+              business: { select: { id: true, name: true, currency: true, logo: true } },
+            },
+          },
+        },
+      });
+      if (!user) throw new AppError('Usuario no encontrado', 404);
+      return success(res, user);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async changePassword(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const { currentPassword, newPassword } = req.body;
+
+      const user = await prisma.user.findUnique({ where: { id: req.user!.userId } });
+      if (!user) throw new AppError('Usuario no encontrado', 404);
+
+      if (!(await bcrypt.compare(currentPassword, user.password))) {
+        throw new AppError('Contraseña actual incorrecta', 400);
+      }
+
+      const hashed = await bcrypt.hash(newPassword, 12);
+      await prisma.user.update({ where: { id: user.id }, data: { password: hashed } });
+      await prisma.refreshToken.deleteMany({ where: { userId: user.id } });
+
+      return success(res, null, 'Contraseña actualizada');
+    } catch (err) {
+      next(err);
+    }
+  },
+};
