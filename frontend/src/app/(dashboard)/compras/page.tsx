@@ -143,11 +143,11 @@ export default function ComprasPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="text-xs text-gray-500 border-b border-gray-100 bg-gray-50 dark:bg-gray-700/50">
-                <th className="text-left px-4 py-3 font-medium">Factura proveedor</th>
+                <th className="hidden sm:table-cell text-left px-4 py-3 font-medium">Factura proveedor</th>
                 <th className="text-left px-4 py-3 font-medium">Proveedor</th>
-                <th className="text-center px-4 py-3 font-medium">Productos</th>
+                <th className="hidden md:table-cell text-center px-4 py-3 font-medium">Productos</th>
                 <th className="text-right px-4 py-3 font-medium">Total</th>
-                <th className="text-left px-4 py-3 font-medium">Fecha</th>
+                <th className="hidden sm:table-cell text-left px-4 py-3 font-medium">Fecha</th>
                 <th className="w-24 sr-only">Acciones</th>
               </tr>
             </thead>
@@ -160,11 +160,11 @@ export default function ComprasPage() {
                 <tr><td colSpan={6} className="text-center py-12 text-gray-400"><ShoppingBag size={40} className="mx-auto mb-3 opacity-30" /><p>No hay compras</p></td></tr>
               ) : purchases.map((p: any) => (
                 <tr key={p.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/30 cursor-pointer" onClick={() => setSelected(p)}>
-                  <td className="px-4 py-3 font-mono text-xs text-blue-600">{p.invoiceNumber || '-'}</td>
+                  <td className="hidden sm:table-cell px-4 py-3 font-mono text-xs text-blue-600">{p.invoiceNumber || '-'}</td>
                   <td className="px-4 py-3 font-medium text-gray-800 dark:text-white">{p.supplier?.name}</td>
-                  <td className="px-4 py-3 text-center text-gray-600">{p._count?.details}</td>
+                  <td className="hidden md:table-cell px-4 py-3 text-center text-gray-600">{p._count?.details}</td>
                   <td className="px-4 py-3 text-right font-bold text-gray-800 dark:text-white">{formatCurrency(p.total)}</td>
-                  <td className="px-4 py-3 text-gray-400 text-xs">{formatDate(p.purchaseDate)}</td>
+                  <td className="hidden sm:table-cell px-4 py-3 text-gray-400 text-xs">{formatDate(p.purchaseDate)}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2 justify-end" onClick={(e) => e.stopPropagation()}>
                       <button type="button" onClick={() => openEdit(p)} className="text-gray-400 hover:text-blue-600 transition" title="Editar" aria-label="Editar compra"><Edit size={15} /></button>
@@ -316,7 +316,7 @@ export default function ComprasPage() {
                   </button>
                 </div>
                 <div className="space-y-2">
-                  <div className="grid grid-cols-12 gap-2 text-xs text-gray-400 px-1">
+                  <div className="hidden sm:grid sm:grid-cols-12 gap-2 text-xs text-gray-400 px-1">
                     <div className="col-span-5">Producto</div>
                     <div className="col-span-2 text-center">Cantidad</div>
                     <div className="col-span-3 text-right">Costo unit.</div>
@@ -324,23 +324,32 @@ export default function ComprasPage() {
                     <div className="col-span-1" />
                   </div>
                   {fields.map((field, i) => (
-                    <div key={field.id} className="grid grid-cols-12 gap-2 items-center">
-                      <div className="col-span-5">
+                    <div key={field.id} className="grid grid-cols-6 sm:grid-cols-12 gap-2 items-center">
+                      {/* Producto — fila completa en móvil */}
+                      <div className="col-span-5 sm:col-span-5">
                         <select {...register(`items.${i}.productId`, { required: true })} className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
                           <option value="">Producto...</option>
                           {products?.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}
                         </select>
                       </div>
-                      <div className="col-span-2">
+                      {/* Eliminar — junto al producto en móvil */}
+                      <div className="col-span-1 sm:hidden flex justify-center">
+                        {fields.length > 1 && (
+                          <button type="button" aria-label="Eliminar línea" onClick={() => remove(i)} className="text-red-400 hover:text-red-600"><Trash2 size={14} /></button>
+                        )}
+                      </div>
+                      {/* Cant. / Costo / %IVA — segunda fila en móvil */}
+                      <div className="col-span-2 sm:col-span-2">
                         <input {...register(`items.${i}.quantity`, { required: true, valueAsNumber: true, min: 0.001 })} type="number" step="any" min="0.001" placeholder="Cant." className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
                       </div>
-                      <div className="col-span-3">
+                      <div className="col-span-2 sm:col-span-3">
                         <input {...register(`items.${i}.unitCost`, { required: true, valueAsNumber: true })} type="number" step="0.01" min="0" placeholder="$ costo" className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
                       </div>
-                      <div className="col-span-1">
+                      <div className="col-span-2 sm:col-span-1">
                         <input {...register(`items.${i}.taxRate`, { valueAsNumber: true })} type="number" step="1" min="0" placeholder="0" className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
                       </div>
-                      <div className="col-span-1 flex justify-center">
+                      {/* Eliminar — última columna en desktop */}
+                      <div className="hidden sm:flex sm:col-span-1 justify-center">
                         {fields.length > 1 && (
                           <button type="button" aria-label="Eliminar línea" onClick={() => remove(i)} className="text-red-400 hover:text-red-600"><Trash2 size={14} /></button>
                         )}

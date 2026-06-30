@@ -19,14 +19,16 @@ router.get('/', async (_req, res, next) => {
 
 router.post('/', authorize('ADMIN', 'SUPERVISOR'), async (req, res, next) => {
   try {
-    const cat = await prisma.category.create({ data: req.body });
+    const { name, description, color, icon, parentId } = req.body;
+    const cat = await prisma.category.create({ data: { name, description, color, icon, parentId } });
     return created(res, cat, 'Categoría creada');
   } catch (err) { next(err); }
 });
 
 router.put('/:id', authorize('ADMIN', 'SUPERVISOR'), async (req, res, next) => {
   try {
-    const cat = await prisma.category.update({ where: { id: req.params.id }, data: req.body });
+    const { name, description, color, icon, parentId } = req.body;
+    const cat = await prisma.category.update({ where: { id: req.params.id }, data: { name, description, color, icon, parentId } });
     return success(res, cat, 'Categoría actualizada');
   } catch (err) { next(err); }
 });

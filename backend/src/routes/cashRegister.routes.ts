@@ -35,7 +35,7 @@ router.get('/current', async (req: any, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.post('/open', async (req: any, res, next) => {
+router.post('/open', authorize('ADMIN', 'SUPERVISOR', 'CASHIER'), async (req: any, res, next) => {
   try {
     const existing = await prisma.cashRegister.findFirst({
       where: { branchId: req.user.branchId, status: 'OPEN' },
@@ -92,8 +92,13 @@ router.post('/:id/close', authorize('ADMIN', 'SUPERVISOR', 'CASHIER'), async (re
   } catch (err) { next(err); }
 });
 
-router.post('/:id/movement', async (req: any, res, next) => {
+router.post('/:id/movement', authorize('ADMIN', 'SUPERVISOR', 'CASHIER'), async (req: any, res, next) => {
   try {
+    const register = await prisma.cashRegister.findUnique({ where: { id: req.params.id } });
+    if (!register) throw new AppError('Caja no encontrada', 404);
+    if (register.branchId !== req.user.branchId) throw new AppError('No tienes acceso a esta caja', 403);
+    if (register.status !== 'OPEN') throw new AppError('La caja no está abierta', 400);
+
     const movement = await prisma.cashMovement.create({
       data: {
         cashRegisterId: req.params.id,

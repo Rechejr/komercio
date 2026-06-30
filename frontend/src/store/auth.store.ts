@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage } from 'zustand/middleware';
 
 interface User {
   id: string;
@@ -9,6 +9,9 @@ interface User {
   avatar?: string;
   branchId?: string;
   businessId?: string;
+  businessName?: string;
+  plan?: string;
+  isEmailVerified?: boolean;
 }
 
 interface AuthState {
@@ -17,9 +20,36 @@ interface AuthState {
   isAuthenticated: boolean;
   setUser: (user: User) => void;
   setAccessToken: (token: string) => void;
-  login: (user: User, token: string) => void;
+  login: (user: User, token: string, rememberMe?: boolean) => void;
+  restoreSession: (user: User, accessToken: string) => void;
   logout: () => void;
 }
+
+const REMEMBER_KEY = 'komercio-remember';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
+
+// Saves to localStorage if "remember me" is on, otherwise sessionStorage (clears on tab close)
+const smartStorage = {
+  getItem: (name: string): string | null => {
+    if (typeof window === 'undefined') return null;
+    return localStorage.getItem(name) ?? sessionStorage.getItem(name);
+  },
+  setItem: (name: string, value: string): void => {
+    if (typeof window === 'undefined') return;
+    if (localStorage.getItem(REMEMBER_KEY) === 'true') {
+      localStorage.setItem(name, value);
+      sessionStorage.removeItem(name);
+    } else {
+      sessionStorage.setItem(name, value);
+      localStorage.removeItem(name);
+    }
+  },
+  removeItem: (name: string): void => {
+    if (typeof window === 'undefined') return;
+    localStorage.removeItem(name);
+    sessionStorage.removeItem(name);
+  },
+};
 
 export const useAuthStore = create<AuthState>()(
   persist(
@@ -29,15 +59,32 @@ export const useAuthStore = create<AuthState>()(
       isAuthenticated: false,
       setUser: (user) => set({ user }),
       setAccessToken: (accessToken) => set({ accessToken }),
-      login: (user, accessToken) => set({ user, accessToken, isAuthenticated: true }),
+      login: (user, accessToken, rememberMe = false) => {
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(REMEMBER_KEY, String(rememberMe));
+        }
+        set({ user, accessToken, isAuthenticated: true });
+      },
+      // Used on page load to restore session without touching the rememberMe preference
+      restoreSession: (user, accessToken) => set({ user, accessToken, isAuthenticated: true }),
       logout: () => {
         set({ user: null, accessToken: null, isAuthenticated: false });
-        if (typeof window !== 'undefined') window.location.href = '/login';
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem(REMEMBER_KEY);
+          // MUST wait for server to clear the httpOnly cookie before redirecting.
+          // If we redirect first, the middleware sees the stale cookie and sends
+          // the user back to /dashboard → infinite redirect loop → blank page.
+          fetch(`${API_URL}/auth/logout`, { method: 'POST', credentials: 'include' })
+            .catch(() => {})
+            .finally(() => { window.location.href = '/login'; });
+        }
       },
     }),
     {
       name: 'komercio-auth',
-      partialize: (state) => ({ user: state.user, accessToken: state.accessToken, isAuthenticated: state.isAuthenticated }),
+      storage: createJSONStorage(() => smartStorage),
+      // accessToken is intentionally excluded — it lives in memory only (never in localStorage/sessionStorage)
+      partialize: (state) => ({ user: state.user, isAuthenticated: state.isAuthenticated }),
     },
   ),
 );

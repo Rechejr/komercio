@@ -29,6 +29,7 @@ import notificationRoutes from './routes/notification.routes';
 import inventoryRoutes from './routes/inventory.routes';
 import dashboardRoutes from './routes/dashboard.routes';
 import exportRoutes from './routes/export.routes';
+import superadminRoutes from './routes/superadmin.routes';
 
 const app = express();
 
@@ -96,6 +97,7 @@ app.use(`${apiPrefix}/notifications`, notificationRoutes);
 app.use(`${apiPrefix}/inventory`, inventoryRoutes);
 app.use(`${apiPrefix}/dashboard`, dashboardRoutes);
 app.use(`${apiPrefix}/exports`, exportRoutes);
+app.use(`${apiPrefix}/superadmin`, superadminRoutes);
 
 // Error handling
 app.use(notFound);

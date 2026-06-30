@@ -3,6 +3,7 @@ import { body } from 'express-validator';
 import { saleController } from '../controllers/sale.controller';
 import { authenticate, authorize } from '../middlewares/auth';
 import { validate } from '../middlewares/validate';
+import { planLimit } from '../middlewares/planLimit';
 
 const router = Router();
 router.use(authenticate);
@@ -12,6 +13,7 @@ router.get('/summary/daily', saleController.getDailySummary);
 router.get('/:id', saleController.getOne);
 
 router.post('/',
+  planLimit.salesPerMonth(),
   [
     body('items').isArray({ min: 1 }).withMessage('Se requiere al menos un producto'),
     body('items.*.productId').notEmpty(),

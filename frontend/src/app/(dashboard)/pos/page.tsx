@@ -125,9 +125,9 @@ export default function POSPage() {
   }
 
   return (
-    <div className="flex gap-4 h-full max-h-[calc(100vh-120px)]">
+    <div className="flex flex-col lg:flex-row gap-4 lg:h-full lg:max-h-[calc(100vh-120px)]">
       {/* Left: Product Search */}
-      <div className="flex-1 flex flex-col gap-4 overflow-hidden">
+      <div className="flex-1 flex flex-col gap-4 lg:overflow-hidden">
         {/* Search */}
         <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 p-4">
           <div className="relative">
@@ -171,7 +171,7 @@ export default function POSPage() {
         </div>
 
         {/* Cart Items */}
-        <div className="flex-1 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 overflow-hidden flex flex-col">
+        <div className="lg:flex-1 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 overflow-hidden flex flex-col">
           <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
             <h3 className="font-semibold text-gray-800 dark:text-white flex items-center gap-2">
               <ShoppingBag size={18} className="text-blue-500" />
@@ -182,7 +182,7 @@ export default function POSPage() {
             )}
           </div>
 
-          <div className="flex-1 overflow-y-auto">
+          <div className="max-h-72 lg:max-h-none lg:flex-1 overflow-y-auto">
             {items.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-gray-400 gap-2">
                 <ShoppingBag size={40} className="opacity-30" />
@@ -253,7 +253,7 @@ export default function POSPage() {
       </div>
 
       {/* Right: Summary & Payment */}
-      <div className="w-72 flex flex-col gap-4">
+      <div className="w-full lg:w-72 flex flex-col gap-4">
         {/* Customer */}
         <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 p-4">
           <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2 flex items-center gap-1">

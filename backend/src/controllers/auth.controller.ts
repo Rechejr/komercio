@@ -6,14 +6,19 @@ import { cache } from '../config/redis';
 import { generateAccessToken, generateRefreshToken, verifyRefreshToken } from '../utils/jwt';
 import { AppError, success, created } from '../utils/response';
 import { AuthRequest } from '../middlewares/auth';
+import { emailService } from '../config/email';
 
 export const authController = {
   async register(req: Request, res: Response, next: NextFunction) {
     try {
-      const { name, email, password, businessName } = req.body;
+      const { name, email, password, businessName, businessCategory } = req.body;
 
       const existing = await prisma.user.findUnique({ where: { email } });
       if (existing) throw new AppError('El email ya está registrado', 409);
+
+      // SUPER_ADMIN cannot be created via public registration
+      const { role: bodyRole } = req.body;
+      if (bodyRole === 'SUPER_ADMIN') throw new AppError('No autorizado', 403);
 
       const hashedPassword = await bcrypt.hash(password, 12);
       const emailVerifyToken = crypto.randomBytes(32).toString('hex');
@@ -34,6 +39,7 @@ export const authController = {
           const business = await tx.business.create({
             data: {
               name: businessName,
+              category: businessCategory || null,
               ownerId: newUser.id,
               branches: { create: { name: 'Sucursal Principal' } },
             },
@@ -49,7 +55,56 @@ export const authController = {
         return newUser;
       });
 
-      return created(res, user, 'Cuenta creada exitosamente. Verifica tu correo.');
+      // Send verification email (non-blocking)
+      emailService.sendVerification(email, name, emailVerifyToken);
+
+      return created(res, user, 'Cuenta creada exitosamente. Revisa tu correo para verificar tu cuenta.');
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async verifyEmail(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { token } = req.params;
+
+      const user = await prisma.user.findFirst({
+        where: { emailVerifyToken: token, isEmailVerified: false },
+      });
+
+      if (!user) throw new AppError('Token inválido o cuenta ya verificada', 400);
+
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { isEmailVerified: true, emailVerifyToken: null },
+      });
+
+      return success(res, null, 'Correo verificado exitosamente. Ya puedes iniciar sesión.');
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async resendVerification(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { email } = req.body;
+
+      const user = await prisma.user.findUnique({ where: { email } });
+
+      // No revelar si el email existe o no
+      if (!user || user.isEmailVerified) {
+        return success(res, null, 'Si el correo existe y no está verificado, recibirás un email.');
+      }
+
+      const newToken = crypto.randomBytes(32).toString('hex');
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { emailVerifyToken: newToken },
+      });
+
+      emailService.sendVerification(user.email, user.name, newToken);
+
+      return success(res, null, 'Si el correo existe y no está verificado, recibirás un email.');
     } catch (err) {
       next(err);
     }
@@ -62,7 +117,7 @@ export const authController = {
       const user = await prisma.user.findUnique({
         where: { email, deletedAt: null },
         include: {
-          branch: { select: { id: true, businessId: true } },
+          branch: { select: { id: true, businessId: true, business: { select: { id: true, name: true, plan: true } } } },
         },
       });
 
@@ -111,8 +166,11 @@ export const authController = {
           email: user.email,
           role: user.role,
           avatar: user.avatar,
-          branchId: user.branchId,
-          businessId: user.branch?.businessId,
+          branchId: user.branchId ?? undefined,
+          businessId: user.branch?.businessId ?? undefined,
+          businessName: user.branch?.business?.name ?? undefined,
+          isEmailVerified: user.isEmailVerified,
+          plan: user.branch?.business?.plan || 'free',
         },
       }, 'Sesión iniciada');
     } catch (err) {
@@ -175,11 +233,9 @@ export const authController = {
         data: { resetPasswordToken: resetToken, resetPasswordExpires: expires },
       });
 
-      // Store in cache for quick lookup
       await cache.set(`reset:${resetToken}`, user.id, 3600);
 
-      // TODO: Send email with token
-      // await emailService.sendPasswordReset(user.email, resetToken);
+      emailService.sendPasswordReset(user.email, user.name, resetToken);
 
       return success(res, null, 'Si el email existe, recibirás un correo.');
     } catch (err) {
@@ -226,7 +282,7 @@ export const authController = {
           branch: {
             select: {
               id: true, name: true,
-              business: { select: { id: true, name: true, currency: true, logo: true } },
+              business: { select: { id: true, name: true, currency: true, logo: true, plan: true } },
             },
           },
         },

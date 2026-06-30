@@ -3,6 +3,7 @@ import { prisma } from '../config/database';
 import { authenticate, authorize } from '../middlewares/auth';
 import { success, created, paginated } from '../utils/response';
 import { getPagination } from '../utils/pagination';
+import { planLimit } from '../middlewares/planLimit';
 import bcrypt from 'bcryptjs';
 
 const router = Router();
@@ -23,7 +24,7 @@ router.get('/', authorize('ADMIN', 'SUPERVISOR'), async (req: any, res, next) =>
   } catch (err) { next(err); }
 });
 
-router.post('/', authorize('ADMIN'), async (req: any, res, next) => {
+router.post('/', authorize('ADMIN'), planLimit.users(), async (req: any, res, next) => {
   try {
     const { name, email, password, role, branchId } = req.body;
     const hashed = await bcrypt.hash(password, 12);

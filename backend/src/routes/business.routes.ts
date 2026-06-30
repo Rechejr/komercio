@@ -23,9 +23,11 @@ router.put('/me', authorize('ADMIN'), async (req: any, res, next) => {
       include: { branch: true },
     });
     if (!user?.branch?.businessId) return success(res, null, 'No tiene negocio asociado');
+
+    const { name, legalName, nit, phone, email, address, city, country, logo, currency, taxRate, settings } = req.body;
     const business = await prisma.business.update({
       where: { id: user.branch.businessId },
-      data: req.body,
+      data: { name, legalName, nit, phone, email, address, city, country, logo, currency, taxRate, settings },
     });
     return success(res, business, 'Negocio actualizado');
   } catch (err) { next(err); }

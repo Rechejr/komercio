@@ -96,14 +96,14 @@ export default function InventarioPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="text-xs text-gray-500 dark:text-gray-400 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50">
-                <th className="text-left px-4 py-3 font-medium">Código</th>
+                <th className="hidden sm:table-cell text-left px-4 py-3 font-medium">Código</th>
                 <th className="text-left px-4 py-3 font-medium">Nombre</th>
-                <th className="text-left px-4 py-3 font-medium">Categoría</th>
-                <th className="text-right px-4 py-3 font-medium">Costo</th>
+                <th className="hidden md:table-cell text-left px-4 py-3 font-medium">Categoría</th>
+                <th className="hidden md:table-cell text-right px-4 py-3 font-medium">Costo</th>
                 <th className="text-right px-4 py-3 font-medium">Precio</th>
-                <th className="text-right px-4 py-3 font-medium">Margen</th>
+                <th className="hidden lg:table-cell text-right px-4 py-3 font-medium">Margen</th>
                 <th className="text-center px-4 py-3 font-medium">Stock</th>
-                <th className="text-center px-4 py-3 font-medium">Estado</th>
+                <th className="hidden sm:table-cell text-center px-4 py-3 font-medium">Estado</th>
                 <th className="w-20 sr-only">Acciones</th>
               </tr>
             </thead>
@@ -129,15 +129,15 @@ export default function InventarioPage() {
                   : null;
                 return (
                   <tr key={p.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition">
-                    <td className="px-4 py-3 font-mono text-xs text-gray-500">{p.code}</td>
+                    <td className="hidden sm:table-cell px-4 py-3 font-mono text-xs text-gray-500">{p.code}</td>
                     <td className="px-4 py-3">
                       <p className="font-medium text-gray-800 dark:text-white">{p.name}</p>
                       {p.barcode && <p className="text-xs text-gray-400">{p.barcode}</p>}
                     </td>
-                    <td className="px-4 py-3 text-gray-500">{p.category?.name || '-'}</td>
-                    <td className="px-4 py-3 text-right text-gray-600">{formatCurrency(p.costPrice)}</td>
+                    <td className="hidden md:table-cell px-4 py-3 text-gray-500">{p.category?.name || '-'}</td>
+                    <td className="hidden md:table-cell px-4 py-3 text-right text-gray-600">{formatCurrency(p.costPrice)}</td>
                     <td className="px-4 py-3 text-right font-semibold text-gray-800 dark:text-white">{formatCurrency(p.salePrice)}</td>
-                    <td className="px-4 py-3 text-right">
+                    <td className="hidden lg:table-cell px-4 py-3 text-right">
                       {margin !== null ? (
                         <span className={`text-xs font-semibold px-1.5 py-0.5 rounded ${parseFloat(margin) >= 20 ? 'text-green-700 bg-green-50' : parseFloat(margin) >= 0 ? 'text-yellow-700 bg-yellow-50' : 'text-red-700 bg-red-50'}`}>
                           {margin}%
@@ -152,7 +152,7 @@ export default function InventarioPage() {
                         {p.stock} {p.unit || ''}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-center">
+                    <td className="hidden sm:table-cell px-4 py-3 text-center">
                       <span className={`text-xs px-2 py-0.5 rounded-full ${p.isActive ? 'bg-green-50 text-green-600' : 'bg-gray-100 text-gray-500'}`}>
                         {p.isActive ? 'Activo' : 'Inactivo'}
                       </span>

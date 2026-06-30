@@ -84,10 +84,10 @@ export default function ClientesPage() {
             <thead>
               <tr className="text-xs text-gray-500 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50">
                 <th className="text-left px-4 py-3 font-medium">Nombre</th>
-                <th className="text-left px-4 py-3 font-medium">Documento</th>
-                <th className="text-left px-4 py-3 font-medium">Teléfono</th>
-                <th className="text-left px-4 py-3 font-medium">Ciudad</th>
-                <th className="text-center px-4 py-3 font-medium">Compras</th>
+                <th className="hidden sm:table-cell text-left px-4 py-3 font-medium">Documento</th>
+                <th className="hidden md:table-cell text-left px-4 py-3 font-medium">Teléfono</th>
+                <th className="hidden lg:table-cell text-left px-4 py-3 font-medium">Ciudad</th>
+                <th className="hidden lg:table-cell text-center px-4 py-3 font-medium">Compras</th>
                 <th className="text-right px-4 py-3 font-medium">Deuda</th>
                 <th className="w-20 sr-only">Acciones</th>
               </tr>
@@ -102,10 +102,10 @@ export default function ClientesPage() {
               ) : customers.map((c: any) => (
                 <tr key={c.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition cursor-pointer" onClick={() => setSelected(c)}>
                   <td className="px-4 py-3 font-medium text-gray-800 dark:text-white">{c.name}</td>
-                  <td className="px-4 py-3 text-gray-500 font-mono text-xs">{c.document || '-'}</td>
-                  <td className="px-4 py-3 text-gray-500">{c.phone || '-'}</td>
-                  <td className="px-4 py-3 text-gray-500">{c.city || '-'}</td>
-                  <td className="px-4 py-3 text-center text-gray-600">{c._count?.sales || 0}</td>
+                  <td className="hidden sm:table-cell px-4 py-3 text-gray-500 font-mono text-xs">{c.document || '-'}</td>
+                  <td className="hidden md:table-cell px-4 py-3 text-gray-500">{c.phone || '-'}</td>
+                  <td className="hidden lg:table-cell px-4 py-3 text-gray-500">{c.city || '-'}</td>
+                  <td className="hidden lg:table-cell px-4 py-3 text-center text-gray-600">{c._count?.sales || 0}</td>
                   <td className="px-4 py-3 text-right">
                     {c.currentDebt > 0 ? (
                       <span className="text-red-600 font-semibold flex items-center justify-end gap-1">

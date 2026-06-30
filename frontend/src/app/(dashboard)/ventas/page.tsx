@@ -136,12 +136,12 @@ export default function VentasPage() {
               <tr className="text-xs text-gray-500 dark:text-gray-400 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50">
                 <th className="text-left px-4 py-3 font-medium">Factura</th>
                 <th className="text-left px-4 py-3 font-medium">Cliente</th>
-                <th className="text-left px-4 py-3 font-medium">Vendedor</th>
-                <th className="text-center px-4 py-3 font-medium">Items</th>
+                <th className="hidden md:table-cell text-left px-4 py-3 font-medium">Vendedor</th>
+                <th className="hidden sm:table-cell text-center px-4 py-3 font-medium">Items</th>
                 <th className="text-right px-4 py-3 font-medium">Total</th>
-                <th className="text-left px-4 py-3 font-medium">Pago</th>
+                <th className="hidden md:table-cell text-left px-4 py-3 font-medium">Pago</th>
                 <th className="text-left px-4 py-3 font-medium">Estado</th>
-                <th className="text-left px-4 py-3 font-medium">Fecha</th>
+                <th className="hidden sm:table-cell text-left px-4 py-3 font-medium">Fecha</th>
                 <th className="w-8 sr-only">Ver</th>
               </tr>
             </thead>
@@ -156,10 +156,10 @@ export default function VentasPage() {
                 <tr key={s.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition cursor-pointer" onClick={() => setSelected(s)}>
                   <td className="px-4 py-3 font-mono text-xs text-blue-600 font-medium">{s.invoiceNumber}</td>
                   <td className="px-4 py-3 text-gray-700 dark:text-gray-300">{s.customer?.name || 'Mostrador'}</td>
-                  <td className="px-4 py-3 text-gray-500">{s.user?.name}</td>
-                  <td className="px-4 py-3 text-center">{s._count?.details}</td>
+                  <td className="hidden md:table-cell px-4 py-3 text-gray-500">{s.user?.name}</td>
+                  <td className="hidden sm:table-cell px-4 py-3 text-center">{s._count?.details}</td>
                   <td className="px-4 py-3 text-right font-bold text-gray-800 dark:text-white">{formatCurrency(s.total)}</td>
-                  <td className="px-4 py-3 text-gray-500 text-xs">{paymentMethodLabel[s.paymentMethod] || s.paymentMethod}</td>
+                  <td className="hidden md:table-cell px-4 py-3 text-gray-500 text-xs">{paymentMethodLabel[s.paymentMethod] || s.paymentMethod}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusColor(s.status)}`}>{statusLabel(s.status)}</span>
@@ -170,7 +170,7 @@ export default function VentasPage() {
                       )}
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-gray-400 text-xs">{formatDateTime(s.createdAt)}</td>
+                  <td className="hidden sm:table-cell px-4 py-3 text-gray-400 text-xs">{formatDateTime(s.createdAt)}</td>
                   <td className="px-4 py-3 text-gray-400"><ChevronRight size={14} /></td>
                 </tr>
               ))}

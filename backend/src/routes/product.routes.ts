@@ -3,6 +3,7 @@ import { body } from 'express-validator';
 import { productController } from '../controllers/product.controller';
 import { authenticate, authorize } from '../middlewares/auth';
 import { validate } from '../middlewares/validate';
+import { planLimit } from '../middlewares/planLimit';
 
 const router = Router();
 router.use(authenticate);
@@ -13,6 +14,7 @@ router.get('/:id', productController.getOne);
 
 router.post('/',
   authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE'),
+  planLimit.products(),
   [
     body('code').trim().notEmpty().withMessage('El código es requerido'),
     body('name').trim().notEmpty().withMessage('El nombre es requerido'),

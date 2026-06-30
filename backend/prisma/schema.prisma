@@ -9,6 +9,7 @@ datasource db {
 
 // ─── ROLES ────────────────────────────────────────────────────────────────────
 enum UserRole {
+  SUPER_ADMIN
   ADMIN
   SUPERVISOR
   CASHIER
@@ -93,6 +94,7 @@ model RefreshToken {
 model Business {
   id          String   @id @default(uuid())
   name        String
+  category    String?
   legalName   String?
   nit         String?
   phone       String?
@@ -106,7 +108,8 @@ model Business {
   ownerId     String   @unique
   owner       User     @relation("BusinessOwner", fields: [ownerId], references: [id])
   branches    Branch[]
-  plan        String   @default("free")
+  plan           String   @default("free")
+  planExpiresAt  DateTime?
   settings    Json?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt

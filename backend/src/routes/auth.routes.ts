@@ -1,8 +1,18 @@
 import { Router } from 'express';
 import { body } from 'express-validator';
+import { rateLimit } from 'express-rate-limit';
 import { authController } from '../controllers/auth.controller';
 import { authenticate } from '../middlewares/auth';
 import { validate } from '../middlewares/validate';
+
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: true,
+  message: { error: 'Demasiados intentos de inicio de sesión. Intente de nuevo en 15 minutos.' },
+});
 
 const router = Router();
 
@@ -18,6 +28,7 @@ router.post('/register',
 );
 
 router.post('/login',
+  loginLimiter,
   [
     body('email').isEmail().normalizeEmail(),
     body('password').notEmpty(),
@@ -42,6 +53,14 @@ router.post('/reset-password',
   ],
   validate,
   authController.resetPassword,
+);
+
+router.get('/verify-email/:token', authController.verifyEmail);
+
+router.post('/resend-verification',
+  [body('email').isEmail().normalizeEmail()],
+  validate,
+  authController.resendVerification,
 );
 
 router.get('/me', authenticate, authController.me);

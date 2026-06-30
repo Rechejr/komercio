@@ -6,6 +6,8 @@ import { AuthRequest } from '../middlewares/auth';
 import { emitToBusinesss, socketEvents } from '../config/socket';
 
 async function generateInvoiceNumber(tx: any): Promise<string> {
+  // Advisory lock serializes concurrent calls; held until transaction commits/rolls back
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(74296518)`;
   const count = await tx.sale.count();
   const date = new Date();
   const y = date.getFullYear();

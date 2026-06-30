@@ -15,14 +15,16 @@ router.get('/', async (_req, res, next) => {
 
 router.post('/', authorize('ADMIN', 'SUPERVISOR'), async (req, res, next) => {
   try {
-    const brand = await prisma.brand.create({ data: req.body });
+    const { name, logo } = req.body;
+    const brand = await prisma.brand.create({ data: { name, logo } });
     return created(res, brand, 'Marca creada');
   } catch (err) { next(err); }
 });
 
 router.put('/:id', authorize('ADMIN', 'SUPERVISOR'), async (req, res, next) => {
   try {
-    const brand = await prisma.brand.update({ where: { id: req.params.id }, data: req.body });
+    const { name, logo } = req.body;
+    const brand = await prisma.brand.update({ where: { id: req.params.id }, data: { name, logo } });
     return success(res, brand, 'Marca actualizada');
   } catch (err) { next(err); }
 });

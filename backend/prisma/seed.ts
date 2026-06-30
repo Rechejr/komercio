@@ -6,6 +6,21 @@ const prisma = new PrismaClient();
 async function main() {
   console.log('Seeding database...');
 
+  // Create super admin (developer access — never via registration)
+  const superAdminPassword = await bcrypt.hash('SuperAdmin123!', 12);
+  await prisma.user.upsert({
+    where: { email: 'superadmin@komercio.app' },
+    update: {},
+    create: {
+      name: 'Super Admin',
+      email: 'superadmin@komercio.app',
+      password: superAdminPassword,
+      role: 'SUPER_ADMIN',
+      isActive: true,
+      isEmailVerified: true,
+    },
+  });
+
   // Create admin user
   const hashedPassword = await bcrypt.hash('Admin123!', 12);
 
@@ -77,9 +92,10 @@ async function main() {
   }
 
   console.log(`✅ Seed completed!
-  Admin: admin@komercio.app / Admin123!
-  Business: ${business.name}
-  Branch: ${branch.name}
+  Super Admin: superadmin@komercio.app / SuperAdmin123!
+  Admin:       admin@komercio.app / Admin123!
+  Business:    ${business.name}
+  Branch:      ${branch.name}
   `);
 }
 
