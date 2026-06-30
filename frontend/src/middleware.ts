@@ -6,9 +6,17 @@ const PUBLIC_PAGES = new Set(['/', '/register']);
 // Only for unauthenticated; authenticated users get redirected to dashboard
 const AUTH_PAGES = new Set(['/login', '/forgot-password', '/reset-password']);
 
+// Always accessible, no matter the auth state — e.g. verify-email must work
+// even if the user already logged in with an unverified account
+const ALWAYS_OPEN_PAGES = new Set(['/verify-email']);
+
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const hasSession = request.cookies.has('refreshToken');
+
+  if (ALWAYS_OPEN_PAGES.has(pathname)) {
+    return NextResponse.next();
+  }
 
   // Authenticated on public/auth pages → dashboard
   if (hasSession && (PUBLIC_PAGES.has(pathname) || AUTH_PAGES.has(pathname))) {
@@ -37,6 +45,7 @@ export const config = {
     '/login',
     '/forgot-password',
     '/reset-password',
+    '/verify-email',
     '/dashboard/:path*',
     '/superadmin/:path*',
     '/pos/:path*',

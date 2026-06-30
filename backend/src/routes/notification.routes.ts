@@ -7,6 +7,15 @@ import { getPagination } from '../utils/pagination';
 const router = Router();
 router.use(authenticate);
 
+router.get('/unread-count', async (req: any, res, next) => {
+  try {
+    const count = await prisma.notification.count({
+      where: { userId: req.user.userId, isRead: false },
+    });
+    return success(res, { count });
+  } catch (err) { next(err); }
+});
+
 router.get('/', async (req: any, res, next) => {
   try {
     const { page, limit, skip } = getPagination(req);

@@ -32,6 +32,16 @@ export function formatNumber(n: number): string {
   return new Intl.NumberFormat('es-CO').format(n);
 }
 
+const MONTHS_ES_SHORT = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+
+// Formats a 'YYYY-MM-DD' string as "25 jun" for chart axes.
+// Parses the parts manually (no Date object) to avoid UTC-vs-local timezone shifts.
+export function formatChartDate(dateStr: string): string {
+  const [, m, d] = dateStr.split('-').map(Number);
+  if (!m || !d) return dateStr;
+  return `${d} ${MONTHS_ES_SHORT[m - 1]}`;
+}
+
 export function truncate(str: string, maxLen = 30): string {
   return str.length > maxLen ? str.slice(0, maxLen) + '...' : str;
 }

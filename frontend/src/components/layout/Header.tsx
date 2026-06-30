@@ -1,12 +1,16 @@
 'use client';
 
+import { useState } from 'react';
 import { usePathname } from 'next/navigation';
+import { useQuery } from '@tanstack/react-query';
 import { Bell, Sun, Moon, Menu, Zap } from 'lucide-react';
 import { useTheme } from 'next-themes';
+import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth.store';
 import { useUpgradeStore } from '@/store/upgrade.store';
 import { getInitials } from '@/lib/utils';
 import { Tooltip } from '@/components/ui/Tooltip';
+import { NotificationPanel } from './NotificationPanel';
 
 const pageLabels: Record<string, string> = {
   '/dashboard': 'Dashboard',
@@ -33,6 +37,14 @@ export function Header({ onMenuClick }: HeaderProps) {
   const { user } = useAuthStore();
   const openUpgrade = useUpgradeStore((s) => s.open);
   const isFree = !user?.plan || user.plan === 'free';
+  const [notifOpen, setNotifOpen] = useState(false);
+
+  const { data: unreadData } = useQuery({
+    queryKey: ['notifications-unread-count'],
+    queryFn: () => api.get('/notifications/unread-count').then((r) => r.data.data),
+    refetchInterval: 30000,
+  });
+  const unreadCount = unreadData?.count || 0;
 
   const title =
     Object.entries(pageLabels).find(([k]) => pathname === k || pathname.startsWith(k + '/'))?.[1] ||
@@ -83,16 +95,24 @@ export function Header({ onMenuClick }: HeaderProps) {
             </button>
           </Tooltip>
 
-          <Tooltip content="Notificaciones" side="bottom">
-            <button
-              type="button"
-              aria-label="Notificaciones"
-              className="w-9 h-9 flex items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition relative"
-            >
-              <Bell size={18} />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full" />
-            </button>
-          </Tooltip>
+          <div className="relative">
+            <Tooltip content="Notificaciones" side="bottom">
+              <button
+                type="button"
+                aria-label="Notificaciones"
+                onClick={() => setNotifOpen((v) => !v)}
+                className="w-9 h-9 flex items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition relative"
+              >
+                <Bell size={18} />
+                {unreadCount > 0 && (
+                  <span className="absolute top-1 right-1 min-w-[16px] h-4 px-1 flex items-center justify-center bg-red-500 text-white text-[10px] font-bold rounded-full leading-none">
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </span>
+                )}
+              </button>
+            </Tooltip>
+            <NotificationPanel open={notifOpen} onClose={() => setNotifOpen(false)} />
+          </div>
 
           <Tooltip content={`${user?.name} · ${user?.role}`} side="bottom">
             <div className="flex items-center gap-2 pl-2 border-l border-gray-200 dark:border-gray-700 cursor-default">

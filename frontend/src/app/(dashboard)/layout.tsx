@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { useAuthStore } from '@/store/auth.store';
 import { api } from '@/lib/api';
+import { useSocket } from '@/hooks/useSocket';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { Header } from '@/components/layout/Header';
 import { UpgradeModal } from '@/components/ui/UpgradeModal';
@@ -14,6 +15,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // Always start in "restoring" state — the effect decides immediately if restore is needed
   const [isRestoring, setIsRestoring] = useState(true);
   const didRestore = useRef(false);
+  useSocket();
 
   useEffect(() => {
     if (didRestore.current) return;

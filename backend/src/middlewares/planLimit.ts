@@ -154,6 +154,23 @@ export const planLimit = {
       } catch (err) { next(err); }
     };
   },
+
+  // Only blocks when the sale being created is marked as credit (isCredit: true) —
+  // regular cash/transfer sales are never restricted by plan.
+  saleCredit() {
+    return async (req: AuthRequest, res: Response, next: NextFunction) => {
+      try {
+        if (!req.body.isCredit) return next();
+        const business = await getBusinessWithPlan(req);
+        if (!business) return next();
+        const limits = getPlan(business.plan);
+        if (!limits.canUseCredits) {
+          return next(planError('Las ventas a crédito están disponibles solo en el plan Pro.', business.plan));
+        }
+        next();
+      } catch (err) { next(err); }
+    };
+  },
 };
 
 async function getBusinessWithPlan(req: AuthRequest) {

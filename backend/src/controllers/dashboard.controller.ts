@@ -133,14 +133,14 @@ export const dashboardController = {
 
       const sales = await prisma.$queryRaw<Array<{ date: string; total: number; count: bigint }>>`
         SELECT
-          DATE("createdAt") AS date,
+          TO_CHAR("createdAt", 'YYYY-MM-DD') AS date,
           SUM(total)::float  AS total,
           COUNT(*)::int      AS count
         FROM sales
         WHERE "createdAt" >= ${startDate}
           AND status = 'COMPLETED'
           AND "deletedAt" IS NULL
-        GROUP BY DATE("createdAt")
+        GROUP BY date
         ORDER BY date ASC
       `;
 

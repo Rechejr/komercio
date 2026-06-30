@@ -32,6 +32,12 @@ enum CreditStatus {
   PARTIAL
 }
 
+enum PurchaseStatus {
+  PENDING
+  COMPLETED
+  CANCELLED
+}
+
 enum PaymentMethod {
   CASH
   TRANSFER
@@ -108,6 +114,7 @@ model Business {
   ownerId     String   @unique
   owner       User     @relation("BusinessOwner", fields: [ownerId], references: [id])
   branches    Branch[]
+  categories  Category[]
   plan           String   @default("free")
   planExpiresAt  DateTime?
   settings    Json?
@@ -140,6 +147,8 @@ model Branch {
 // ─── CATEGORIES & BRANDS ──────────────────────────────────────────────────────
 model Category {
   id          String    @id @default(uuid())
+  businessId  String?
+  business    Business? @relation(fields: [businessId], references: [id])
   name        String
   description String?
   color       String?
@@ -152,6 +161,8 @@ model Category {
   updatedAt   DateTime  @updatedAt
   deletedAt   DateTime?
 
+  @@unique([businessId, name])
+  @@index([businessId])
   @@map("categories")
 }
 
@@ -303,6 +314,8 @@ model Sale {
   @@index([userId])
   @@index([branchId])
   @@index([createdAt])
+  @@index([branchId, createdAt])
+  @@index([status, createdAt])
   @@map("sales")
 }
 
@@ -332,7 +345,7 @@ model Purchase {
   invoiceNumber   String?
   supplierId      String
   supplier        Supplier  @relation(fields: [supplierId], references: [id])
-  status          String    @default("COMPLETED")
+  status          PurchaseStatus @default(COMPLETED)
   subtotal        Float
   taxAmount       Float     @default(0)
   total           Float
@@ -454,6 +467,7 @@ model CashRegister {
 
   @@index([branchId])
   @@index([status])
+  @@index([branchId, status])
   @@map("cash_registers")
 }
 

@@ -69,14 +69,18 @@ async function main() {
     }).catch(() => prisma.expenseCategory.create({ data: { name } }).catch(() => {}));
   }
 
-  // Default categories
+  // Default categories (scoped to this business, idempotent)
   const categories = ['Alimentos', 'Bebidas', 'Aseo', 'Electrónica', 'Ropa', 'Papelería', 'Salud', 'General'];
   for (const name of categories) {
-    await prisma.category.create({ data: { name } }).catch(() => {});
+    await prisma.category.upsert({
+      where: { businessId_name: { businessId: business.id, name } },
+      update: {},
+      create: { name, businessId: business.id },
+    });
   }
 
   // Sample products
-  const cat = await prisma.category.findFirst({ where: { name: 'Alimentos' } });
+  const cat = await prisma.category.findFirst({ where: { name: 'Alimentos', businessId: business.id } });
   if (cat) {
     const sampleProducts = [
       { code: 'P001', name: 'Arroz Diana 1kg', costPrice: 2500, salePrice: 3200, stock: 50, minStock: 10 },

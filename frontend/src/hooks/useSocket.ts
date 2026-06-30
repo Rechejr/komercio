@@ -44,6 +44,11 @@ export function useSocket() {
       qc.invalidateQueries({ queryKey: ['credits'] });
     });
 
+    socket.on('new_notification', () => {
+      qc.invalidateQueries({ queryKey: ['notifications-unread-count'] });
+      qc.invalidateQueries({ queryKey: ['notifications'] });
+    });
+
     socket.on('disconnect', () => {
       connected.current = false;
     });

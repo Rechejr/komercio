@@ -2,16 +2,17 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { formatCurrency, formatDateTime, statusColor, statusLabel } from '@/lib/utils';
+import { formatCurrency, formatDateTime, formatChartDate, statusColor, statusLabel } from '@/lib/utils';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer,
 } from 'recharts';
 import {
   ShoppingCart, CreditCard,
-  TrendingUp, AlertTriangle, ArrowUpRight,
+  TrendingUp, AlertTriangle, ArrowUpRight, Info,
 } from 'lucide-react';
 import Link from 'next/link';
+import { Tooltip as InfoTooltip } from '@/components/ui/Tooltip';
 
 interface StatCardProps {
   title: string;
@@ -19,16 +20,24 @@ interface StatCardProps {
   sub: string;
   icon: React.ElementType;
   color: string;
+  tooltip?: string;
 }
 
-function StatCard({ title, value, sub, icon: Icon, color }: StatCardProps) {
+function StatCard({ title, value, sub, icon: Icon, color, tooltip }: StatCardProps) {
   return (
     <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 p-5 flex gap-4">
       <div className={`w-12 h-12 ${color} rounded-xl flex items-center justify-center flex-shrink-0`}>
         <Icon size={22} className="text-white" />
       </div>
       <div>
-        <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">{title}</p>
+        <div className="flex items-center gap-1">
+          <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">{title}</p>
+          {tooltip && (
+            <InfoTooltip content={tooltip} side="top">
+              <Info size={11} className="text-gray-300 dark:text-gray-500 cursor-help" />
+            </InfoTooltip>
+          )}
+        </div>
         <p className="text-2xl font-bold text-gray-900 dark:text-white">{value}</p>
         <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{sub}</p>
       </div>
@@ -84,6 +93,7 @@ export default function DashboardPage() {
           sub={`de ${s?.inventory?.totalProducts || 0} productos`}
           icon={AlertTriangle}
           color="bg-yellow-500"
+          tooltip="Productos cuya cantidad disponible llegó al mínimo configurado. El total es la cantidad de productos activos en tu inventario."
         />
         <StatCard
           title="Créditos pendientes"
@@ -108,7 +118,7 @@ export default function DashboardPage() {
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="date" tick={{ fontSize: 11 }} tickFormatter={(v) => v?.slice(5)} />
+              <XAxis dataKey="date" tick={{ fontSize: 11 }} tickFormatter={formatChartDate} />
               <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
               <Tooltip
                 formatter={(v: number) => formatCurrency(v)}

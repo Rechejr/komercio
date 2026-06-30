@@ -3,12 +3,27 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { formatCurrency, formatNumber } from '@/lib/utils';
+import { formatCurrency, formatNumber, formatChartDate } from '@/lib/utils';
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
 import { TrendingUp, TrendingDown, DollarSign, ShoppingCart, Package, Users } from 'lucide-react';
+
+// Fills gaps in the daily series with zero-value days so the chart line
+// reflects reality instead of smoothly interpolating across days with no sales.
+function fillDailySeries(chart: any[], startDate: Date, endDate: Date) {
+  const byDay = new Map(chart.map((c: any) => [c.period, c]));
+  const days: any[] = [];
+  const cur = new Date(Date.UTC(startDate.getUTCFullYear(), startDate.getUTCMonth(), startDate.getUTCDate()));
+  const end = new Date(Date.UTC(endDate.getUTCFullYear(), endDate.getUTCMonth(), endDate.getUTCDate()));
+  while (cur <= end) {
+    const key = cur.toISOString().slice(0, 10);
+    days.push(byDay.get(key) || { period: key, revenue: 0, count: 0, taxes: 0, discounts: 0 });
+    cur.setUTCDate(cur.getUTCDate() + 1);
+  }
+  return days;
+}
 
 export default function ReportesPage() {
   const [period, setPeriod] = useState('30d');
@@ -123,7 +138,7 @@ export default function ReportesPage() {
         <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 p-5">
           <h3 className="font-semibold text-gray-800 dark:text-white mb-4">Ventas en el período</h3>
           <ResponsiveContainer width="100%" height={300}>
-            <AreaChart data={salesData.chart || []}>
+            <AreaChart data={fillDailySeries(salesData.chart || [], new Date(dates.startDate), new Date(dates.endDate))}>
               <defs>
                 <linearGradient id="revenueGrad" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.15} />
@@ -131,7 +146,7 @@ export default function ReportesPage() {
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="period" tick={{ fontSize: 11 }} />
+              <XAxis dataKey="period" tick={{ fontSize: 11 }} tickFormatter={formatChartDate} />
               <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
               <Tooltip formatter={(v: number) => formatCurrency(v)} />
               <Area type="monotone" dataKey="revenue" stroke="#3b82f6" fill="url(#revenueGrad)" strokeWidth={2} name="Ingresos" />

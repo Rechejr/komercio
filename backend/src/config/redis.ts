@@ -26,24 +26,42 @@ redis.on('connect', () => {
   logger.info('Redis connected');
 });
 
+// Redis is optional (see redisAvailable above) — every method fails silently
+// so the app keeps working without cache when Redis isn't reachable.
 export const cache = {
   async get<T>(key: string): Promise<T | null> {
-    const data = await redis.get(key);
-    return data ? JSON.parse(data) : null;
+    try {
+      const data = await redis.get(key);
+      return data ? JSON.parse(data) : null;
+    } catch {
+      return null;
+    }
   },
 
   async set(key: string, value: unknown, ttlSeconds = 300): Promise<void> {
-    await redis.setex(key, ttlSeconds, JSON.stringify(value));
+    try {
+      await redis.setex(key, ttlSeconds, JSON.stringify(value));
+    } catch {
+      // no-op — cache is best-effort
+    }
   },
 
   async del(key: string): Promise<void> {
-    await redis.del(key);
+    try {
+      await redis.del(key);
+    } catch {
+      // no-op — cache is best-effort
+    }
   },
 
   async delPattern(pattern: string): Promise<void> {
-    const keys = await redis.keys(pattern);
-    if (keys.length > 0) {
-      await redis.del(...keys);
+    try {
+      const keys = await redis.keys(pattern);
+      if (keys.length > 0) {
+        await redis.del(...keys);
+      }
+    } catch {
+      // no-op — cache is best-effort
     }
   },
 };

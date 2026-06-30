@@ -14,6 +14,7 @@ router.get('/:id', saleController.getOne);
 
 router.post('/',
   planLimit.salesPerMonth(),
+  planLimit.saleCredit(),
   [
     body('items').isArray({ min: 1 }).withMessage('Se requiere al menos un producto'),
     body('items.*.productId').notEmpty(),

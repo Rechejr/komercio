@@ -2,13 +2,15 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useForm } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
 import { api } from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
+import { ImageUpload } from '@/components/ui/ImageUpload';
+import { CategorySelect } from '@/components/ui/CategorySelect';
 import toast from 'react-hot-toast';
 import {
   Plus, Search, Edit, Trash2, Package, AlertTriangle,
-  X, Loader2,
+  X, Loader2, Barcode,
 } from 'lucide-react';
 
 
@@ -40,7 +42,7 @@ export default function InventarioPage() {
     onError: () => toast.error('Error al eliminar'),
   });
 
-  const { register, handleSubmit, reset, formState: { isSubmitting } } = useForm();
+  const { register, handleSubmit, reset, control, formState: { isSubmitting } } = useForm();
 
   const saveMutation = useMutation({
     mutationFn: (data: any) => editItem
@@ -61,6 +63,7 @@ export default function InventarioPage() {
     reset({
       ...item,
       categoryId: item.category?.id || item.categoryId || '',
+      images: item.images || [],
     });
     setShowForm(true);
   }
@@ -83,7 +86,7 @@ export default function InventarioPage() {
         </div>
         <button
           type="button"
-          onClick={() => { setEditItem(null); reset({}); setShowForm(true); }}
+          onClick={() => { setEditItem(null); reset({ images: [] }); setShowForm(true); }}
           className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition"
         >
           <Plus size={16} /> Nuevo producto
@@ -96,6 +99,7 @@ export default function InventarioPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="text-xs text-gray-500 dark:text-gray-400 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50">
+                <th className="w-14 px-4 py-3 sr-only">Imagen</th>
                 <th className="hidden sm:table-cell text-left px-4 py-3 font-medium">Código</th>
                 <th className="text-left px-4 py-3 font-medium">Nombre</th>
                 <th className="hidden md:table-cell text-left px-4 py-3 font-medium">Categoría</th>
@@ -111,14 +115,14 @@ export default function InventarioPage() {
               {isLoading ? (
                 [...Array(5)].map((_, i) => (
                   <tr key={i}>
-                    {[...Array(9)].map((_, j) => (
+                    {[...Array(10)].map((_, j) => (
                       <td key={j} className="px-4 py-3"><div className="h-4 bg-gray-100 dark:bg-gray-700 rounded animate-pulse" /></td>
                     ))}
                   </tr>
                 ))
               ) : products.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="text-center py-12 text-gray-400">
+                  <td colSpan={10} className="text-center py-12 text-gray-400">
                     <Package size={40} className="mx-auto mb-3 opacity-30" />
                     <p>No hay productos</p>
                   </td>
@@ -129,6 +133,16 @@ export default function InventarioPage() {
                   : null;
                 return (
                   <tr key={p.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition">
+                    <td className="px-4 py-3">
+                      {p.image ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={p.image} alt={p.name} className="w-10 h-10 rounded-lg object-cover border border-gray-100 dark:border-gray-600" />
+                      ) : (
+                        <div className="w-10 h-10 rounded-lg bg-gray-100 dark:bg-gray-700 flex items-center justify-center flex-shrink-0">
+                          <Package size={16} className="text-gray-300 dark:text-gray-500" />
+                        </div>
+                      )}
+                    </td>
                     <td className="hidden sm:table-cell px-4 py-3 font-mono text-xs text-gray-500">{p.code}</td>
                     <td className="px-4 py-3">
                       <p className="font-medium text-gray-800 dark:text-white">{p.name}</p>
@@ -219,8 +233,8 @@ export default function InventarioPage() {
       {/* Product Form Modal */}
       {showForm && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-800 z-10">
               <h2 className="text-lg font-semibold text-gray-800 dark:text-white">
                 {editItem ? 'Editar producto' : 'Nuevo producto'}
               </h2>
@@ -229,50 +243,163 @@ export default function InventarioPage() {
               </button>
             </div>
 
-            <form onSubmit={handleSubmit((d) => saveMutation.mutate(d))} className="p-6 grid grid-cols-2 gap-4">
-              {[
-                { name: 'code', label: 'Código *', placeholder: 'P001', col: 1 },
-                { name: 'barcode', label: 'Código de barras', placeholder: '7701234567890', col: 1 },
-                { name: 'name', label: 'Nombre *', placeholder: 'Nombre del producto', col: 2 },
-                { name: 'description', label: 'Descripción', placeholder: 'Descripción del producto', col: 2 },
-                { name: 'costPrice', label: 'Costo ($)', placeholder: '0', type: 'number', col: 1 },
-                { name: 'salePrice', label: 'Precio de venta ($) *', placeholder: '0', type: 'number', col: 1 },
-                { name: 'wholesalePrice', label: 'Precio mayorista ($)', placeholder: '0', type: 'number', col: 1 },
-                { name: 'taxRate', label: 'IVA (%)', placeholder: '0', type: 'number', col: 1 },
-                { name: 'stock', label: 'Stock inicial', placeholder: '0', type: 'number', col: 1 },
-                { name: 'minStock', label: 'Stock mínimo', placeholder: '5', type: 'number', col: 1 },
-                { name: 'unit', label: 'Unidad (ej: und, kg, lt)', placeholder: 'und', col: 1 },
-              ].map((f) => (
-                <div key={f.name} className={f.col === 2 ? 'col-span-2' : ''}>
-                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">{f.label}</label>
+            <form onSubmit={handleSubmit((d) => saveMutation.mutate(d))} className="p-6 grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-5">
+
+              {/* ── Columna izquierda: Datos del producto ──────────────────── */}
+              <div className="space-y-4">
+                <h3 className="text-sm font-bold text-gray-800 dark:text-white">Datos del producto</h3>
+
+                <Controller
+                  name="images"
+                  control={control}
+                  defaultValue={[]}
+                  render={({ field }) => (
+                    <ImageUpload value={field.value || []} onChange={field.onChange} />
+                  )}
+                />
+
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Código *</label>
+                  <div className="relative">
+                    <Barcode className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={15} />
+                    <input
+                      {...register('code')}
+                      placeholder="Escanea o escribe el código del producto"
+                      className="w-full pl-9 pr-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Código de barras</label>
                   <input
-                    {...register(f.name)}
-                    type={f.type || 'text'}
-                    placeholder={f.placeholder}
+                    {...register('barcode')}
+                    placeholder="7701234567890"
                     className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
                   />
                 </div>
-              ))}
 
-              <div>
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Categoría</label>
-                <select {...register('categoryId')} className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white">
-                  <option value="">Sin categoría</option>
-                  {categories?.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Nombre del producto *</label>
+                  <input
+                    {...register('name')}
+                    placeholder="Camiseta, perfume, aretes..."
+                    className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Cantidad disponible</label>
+                    <input
+                      {...register('stock')}
+                      type="number"
+                      placeholder="0"
+                      className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Cantidad mínima</label>
+                    <input
+                      {...register('minStock')}
+                      type="number"
+                      placeholder="5"
+                      className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Precio de venta *</label>
+                    <input
+                      {...register('salePrice')}
+                      type="number"
+                      placeholder="0"
+                      className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Costo</label>
+                    <input
+                      {...register('costPrice')}
+                      type="number"
+                      placeholder="0"
+                      className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Precio mayorista</label>
+                    <input
+                      {...register('wholesalePrice')}
+                      type="number"
+                      placeholder="0"
+                      className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Unidad</label>
+                    <input
+                      {...register('unit')}
+                      placeholder="und, kg, lt..."
+                      className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                    />
+                  </div>
+                </div>
               </div>
 
-              <div className="flex items-center gap-3 pt-1">
-                <input type="checkbox" id="isActive" {...register('isActive')} className="w-4 h-4 accent-blue-600" defaultChecked />
-                <label htmlFor="isActive" className="text-sm text-gray-600 dark:text-gray-300">Producto activo</label>
+              {/* ── Columna derecha: Información adicional ──────────────────── */}
+              <div className="space-y-4 md:border-l md:border-gray-100 md:dark:border-gray-700 md:pl-8">
+                <h3 className="text-sm font-bold text-gray-800 dark:text-white">Información adicional</h3>
+
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Categoría</label>
+                  <Controller
+                    name="categoryId"
+                    control={control}
+                    defaultValue=""
+                    render={({ field }) => (
+                      <CategorySelect value={field.value || ''} onChange={field.onChange} categories={categories || []} />
+                    )}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Descripción</label>
+                  <textarea
+                    {...register('description')}
+                    rows={3}
+                    placeholder="Añadir una descripción ayudará a identificar mejor el producto"
+                    className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white resize-none"
+                  />
+                </div>
+
+                <div>
+                  <h4 className="text-xs font-bold text-gray-700 dark:text-gray-300 mb-2">Impuestos del producto</h4>
+                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">IVA (%)</label>
+                  <input
+                    {...register('taxRate')}
+                    type="number"
+                    placeholder="0"
+                    className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                  />
+                </div>
+
+                <div className="flex items-center gap-3 pt-1">
+                  <input type="checkbox" id="isActive" {...register('isActive')} className="w-4 h-4 accent-blue-600" defaultChecked />
+                  <label htmlFor="isActive" className="text-sm text-gray-600 dark:text-gray-300">Producto activo</label>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <input type="checkbox" id="allowNegativeStock" {...register('allowNegativeStock')} className="w-4 h-4 accent-blue-600" />
+                  <label htmlFor="allowNegativeStock" className="text-sm text-gray-600 dark:text-gray-300">Permitir stock negativo</label>
+                </div>
               </div>
 
-              <div className="col-span-2 flex items-center gap-3 pt-1">
-                <input type="checkbox" id="allowNegativeStock" {...register('allowNegativeStock')} className="w-4 h-4 accent-blue-600" />
-                <label htmlFor="allowNegativeStock" className="text-sm text-gray-600 dark:text-gray-300">Permitir stock negativo</label>
-              </div>
-
-              <div className="col-span-2 flex justify-end gap-3 pt-2 border-t border-gray-100 dark:border-gray-700">
+              <div className="md:col-span-2 flex justify-end gap-3 pt-4 border-t border-gray-100 dark:border-gray-700">
                 <button type="button" onClick={() => { setShowForm(false); setEditItem(null); }}
                   className="px-4 py-2 border border-gray-200 rounded-lg text-sm hover:bg-gray-50 transition">
                   Cancelar

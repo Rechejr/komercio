@@ -4,17 +4,30 @@ import { AppError, success, created, paginated } from '../utils/response';
 import { getPagination, getSearch } from '../utils/pagination';
 import { AuthRequest } from '../middlewares/auth';
 import { emitToBusinesss, socketEvents } from '../config/socket';
+import { notifyLowStock } from '../services/notification.service';
 
 async function generateInvoiceNumber(tx: any): Promise<string> {
   // Advisory lock serializes concurrent calls; held until transaction commits/rolls back
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(74296518)`;
-  const count = await tx.sale.count();
+
   const date = new Date();
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, '0');
   const d = String(date.getDate()).padStart(2, '0');
-  const seq = String(count + 1).padStart(6, '0');
-  return `FAC-${y}${m}${d}-${seq}`;
+  const prefix = `FAC-${y}${m}${d}-`;
+
+  // Derive the next sequence from the highest invoice number actually in use
+  // for today's prefix — NOT a total row count, which drifts (and collides)
+  // whenever an older sale gets permanently deleted.
+  const last = await tx.sale.findFirst({
+    where: { invoiceNumber: { startsWith: prefix } },
+    orderBy: { invoiceNumber: 'desc' },
+    select: { invoiceNumber: true },
+  });
+
+  const lastSeq = last ? parseInt(last.invoiceNumber.slice(prefix.length), 10) : 0;
+  const seq = String(lastSeq + 1).padStart(6, '0');
+  return `${prefix}${seq}`;
 }
 
 export const saleController = {
@@ -110,7 +123,7 @@ export const saleController = {
 
       const productMap = new Map(products.map((p) => [p.id, p]));
 
-      const sale = await prisma.$transaction(async (tx) => {
+      const result = await prisma.$transaction(async (tx) => {
         let subtotal = 0;
         let taxAmount = 0;
 
@@ -142,8 +155,13 @@ export const saleController = {
         });
 
         const discAmt = parseFloat(discountAmount) || 0;
+        if (discAmt < 0) throw new AppError('El descuento no puede ser negativo', 400);
+
         const total = subtotal + taxAmount - discAmt;
+        if (total < 0) throw new AppError('El descuento no puede ser mayor al total de la venta', 400);
+
         const paid = (paidAmount != null && !isNaN(parseFloat(paidAmount))) ? parseFloat(paidAmount) : total;
+        if (paid < 0) throw new AppError('El monto pagado no puede ser negativo', 400);
 
         const newSale = await tx.sale.create({
           data: {
@@ -167,6 +185,7 @@ export const saleController = {
         });
 
         // Update stock and record movements
+        const lowStockProducts: Array<{ id: string; name: string; stock: number; minStock: number }> = [];
         for (const item of items) {
           const product = productMap.get(item.productId)!;
           const newStock = product.stock - item.quantity;
@@ -183,6 +202,9 @@ export const saleController = {
               referenceType: 'SALE',
             },
           });
+          if (newStock <= product.minStock) {
+            lowStockProducts.push({ id: product.id, name: product.name, stock: newStock, minStock: product.minStock });
+          }
         }
 
         // Update customer debt if credit sale
@@ -204,8 +226,10 @@ export const saleController = {
           });
         }
 
-        return newSale;
+        return { newSale, lowStockProducts };
       });
+
+      const { newSale: sale, lowStockProducts } = result;
 
       // Registrar ingreso en caja abierta para ventas en efectivo (best effort)
       try {
@@ -235,6 +259,10 @@ export const saleController = {
       const businessId = req.user?.businessId;
       if (businessId) {
         emitToBusinesss(businessId, socketEvents.NEW_SALE, { sale });
+        for (const product of lowStockProducts) {
+          emitToBusinesss(businessId, socketEvents.LOW_STOCK_ALERT, { product });
+          await notifyLowStock(businessId, product);
+        }
       }
 
       return created(res, sale, 'Venta registrada exitosamente');
@@ -258,7 +286,7 @@ export const saleController = {
       await prisma.$transaction(async (tx) => {
         await tx.sale.update({ where: { id }, data: { status: 'CANCELLED', notes: reason } });
 
-        // Return stock
+        // 1. Revert stock
         for (const detail of sale.details) {
           const product = await tx.product.findUnique({ where: { id: detail.productId } });
           if (product) {
@@ -276,6 +304,40 @@ export const saleController = {
                 referenceType: 'SALE_CANCEL',
               },
             });
+          }
+        }
+
+        // 2. Revert credit if it was a credit sale — cancels phantom debt on customer
+        const credit = await tx.credit.findUnique({ where: { saleId: id } });
+        if (credit) {
+          await tx.customer.update({
+            where: { id: credit.customerId },
+            data: { currentDebt: { decrement: credit.balance } },
+          });
+          await tx.credit.update({
+            where: { id: credit.id },
+            data: { status: 'PAID', balance: 0, paidAmount: credit.totalAmount },
+          });
+        }
+
+        // 3. Revert cash movement if it was a cash sale — prevents phantom "missing cash" on register
+        if (sale.branchId) {
+          const netCash = sale.paidAmount - sale.changeAmount;
+          if (netCash > 0) {
+            const openRegister = await tx.cashRegister.findFirst({
+              where: { branchId: sale.branchId, status: 'OPEN' },
+            });
+            if (openRegister) {
+              await tx.cashMovement.create({
+                data: {
+                  cashRegisterId: openRegister.id,
+                  type: 'OUT',
+                  amount: netCash,
+                  description: `Anulación venta ${sale.invoiceNumber}`,
+                  referenceId: id,
+                },
+              });
+            }
           }
         }
       });

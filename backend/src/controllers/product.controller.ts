@@ -5,6 +5,7 @@ import { AppError, success, created, paginated } from '../utils/response';
 import { getPagination, getSearch } from '../utils/pagination';
 import { AuthRequest } from '../middlewares/auth';
 import { emitToBusinesss, socketEvents } from '../config/socket';
+import { notifyLowStock } from '../services/notification.service';
 
 const CACHE_TTL = 300;
 
@@ -99,7 +100,8 @@ export const productController = {
             minStock: parseFloat(data.minStock) || 0,
             unit: data.unit || 'unit',
             taxRate: parseFloat(data.taxRate) || 0,
-            image: data.image || null,
+            image: data.images?.[0] || data.image || null,
+            images: Array.isArray(data.images) ? data.images : [],
           },
         });
 
@@ -154,7 +156,8 @@ export const productController = {
           minStock: data.minStock !== undefined ? parseFloat(data.minStock) : undefined,
           unit: data.unit,
           taxRate: data.taxRate !== undefined ? parseFloat(data.taxRate) : undefined,
-          image: data.image,
+          image: Array.isArray(data.images) ? (data.images[0] || null) : data.image,
+          images: Array.isArray(data.images) ? data.images : undefined,
           isActive: data.isActive,
         },
       });
@@ -225,7 +228,9 @@ export const productController = {
 
       const businessId = req.user?.businessId;
       if (businessId && newStock <= product.minStock) {
-        emitToBusinesss(businessId, socketEvents.LOW_STOCK_ALERT, { product: { id, name: product.name, stock: newStock, minStock: product.minStock } });
+        const lowStockProduct = { id, name: product.name, stock: newStock, minStock: product.minStock };
+        emitToBusinesss(businessId, socketEvents.LOW_STOCK_ALERT, { product: lowStockProduct });
+        await notifyLowStock(businessId, lowStockProduct);
       }
 
       return success(res, { stock: newStock }, 'Stock ajustado');

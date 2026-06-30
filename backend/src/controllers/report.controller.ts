@@ -26,7 +26,7 @@ export const reportController = {
         WHERE "createdAt" BETWEEN ${start} AND ${end}
           AND status = 'COMPLETED'
           AND "deletedAt" IS NULL
-        GROUP BY TO_CHAR("createdAt", ${groupFormat})
+        GROUP BY period
         ORDER BY period ASC
       `;
 

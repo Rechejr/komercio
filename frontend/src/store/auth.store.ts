@@ -74,9 +74,14 @@ export const useAuthStore = create<AuthState>()(
           // MUST wait for server to clear the httpOnly cookie before redirecting.
           // If we redirect first, the middleware sees the stale cookie and sends
           // the user back to /dashboard → infinite redirect loop → blank page.
-          fetch(`${API_URL}/auth/logout`, { method: 'POST', credentials: 'include' })
+          // But the fetch itself has no native timeout — if the backend is slow
+          // or unreachable (e.g. paused under a debugger), it can hang forever
+          // and the redirect below would never fire. AbortController caps it.
+          const controller = new AbortController();
+          const timer = setTimeout(() => controller.abort(), 5000);
+          fetch(`${API_URL}/auth/logout`, { method: 'POST', credentials: 'include', signal: controller.signal })
             .catch(() => {})
-            .finally(() => { window.location.href = '/login'; });
+            .finally(() => { clearTimeout(timer); window.location.href = '/login'; });
         }
       },
     }),

@@ -4,11 +4,13 @@ import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { useCartStore } from '@/store/cart.store';
-import { formatCurrency, paymentMethodLabel } from '@/lib/utils';
+import { useAuthStore } from '@/store/auth.store';
+import { useUpgradeStore } from '@/store/upgrade.store';
+import { formatCurrency, paymentMethodLabel, cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import {
   Search, Plus, Minus, Trash2, User,
-  DollarSign, Printer, X, Loader2, ShoppingBag, CheckCircle,
+  DollarSign, Printer, X, Loader2, ShoppingBag, CheckCircle, Zap, Package, AlertCircle,
 } from 'lucide-react';
 
 const PAYMENT_METHODS = ['CASH', 'NEQUI', 'DAVIPLATA', 'TRANSFER', 'CARD', 'MIXED'];
@@ -16,7 +18,11 @@ const PAYMENT_METHODS = ['CASH', 'NEQUI', 'DAVIPLATA', 'TRANSFER', 'CARD', 'MIXE
 export default function POSPage() {
   const qc = useQueryClient();
   const { items, addItem, updateQty, removeItem, clear, totals, customerId, setCustomer } = useCartStore();
+  const plan = useAuthStore((s) => s.user?.plan);
+  const isFree = !plan || plan === 'free';
+  const openUpgrade = useUpgradeStore((s) => s.open);
   const [search, setSearch] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('');
   const [customerSearch, setCustomerSearch] = useState('');
   const [showCustomerList, setShowCustomerList] = useState(false);
   const [showPayment, setShowPayment] = useState(false);
@@ -24,12 +30,19 @@ export default function POSPage() {
   const [paidAmount, setPaidAmount] = useState('');
   const [isCredit, setIsCredit] = useState(false);
   const [lastSale, setLastSale] = useState<any>(null);
+  const [saleError, setSaleError] = useState('');
   const searchRef = useRef<HTMLInputElement>(null);
 
+  const { data: categories } = useQuery({
+    queryKey: ['categories'],
+    queryFn: () => api.get('/categories').then((r) => r.data.data),
+  });
+
   const { data: productsData, isLoading } = useQuery({
-    queryKey: ['products-pos', search],
-    queryFn: () => api.get(`/products?search=${encodeURIComponent(search)}&limit=20&isActive=true`).then((r) => r.data.data),
-    enabled: search.length > 0,
+    queryKey: ['products-pos', search, categoryFilter],
+    queryFn: () => api.get(
+      `/products?search=${encodeURIComponent(search)}&limit=40&isActive=true${categoryFilter ? `&categoryId=${categoryFilter}` : ''}`,
+    ).then((r) => r.data.data),
   });
 
   const { data: customersData } = useQuery({
@@ -42,6 +55,7 @@ export default function POSPage() {
   const saleMutation = useMutation({
     mutationFn: (saleData: any) => api.post('/sales', saleData).then((r) => r.data.data),
     onSuccess: (sale) => {
+      setSaleError('');
       setLastSale(sale);
       clear();
       setShowPayment(false);
@@ -55,7 +69,9 @@ export default function POSPage() {
       qc.invalidateQueries({ queryKey: ['credits'] });
     },
     onError: (err: any) => {
-      toast.error(err.response?.data?.error || 'Error al procesar la venta');
+      const message = err.response?.data?.error || 'Error al procesar la venta. Intenta de nuevo.';
+      setSaleError(message);
+      toast.error(message);
     },
   });
 
@@ -77,6 +93,7 @@ export default function POSPage() {
   }
 
   function handleSale() {
+    setSaleError('');
     if (items.length === 0) { toast.error('Agrega productos'); return; }
     if (isCredit && !customerId) {
       toast.error('Selecciona un cliente para registrar un fiado');
@@ -128,7 +145,7 @@ export default function POSPage() {
     <div className="flex flex-col lg:flex-row gap-4 lg:h-full lg:max-h-[calc(100vh-120px)]">
       {/* Left: Product Search */}
       <div className="flex-1 flex flex-col gap-4 lg:overflow-hidden">
-        {/* Search */}
+        {/* Search + category tabs + grid */}
         <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 p-4">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
@@ -142,32 +159,74 @@ export default function POSPage() {
             />
           </div>
 
-          {/* Results */}
-          {search && (
-            <div className="mt-3 max-h-64 overflow-y-auto space-y-1">
-              {isLoading ? (
-                <div className="flex items-center justify-center py-6 text-gray-400">
-                  <Loader2 size={20} className="animate-spin" />
-                </div>
-              ) : productsData?.length === 0 ? (
-                <p className="text-sm text-gray-400 text-center py-4">Sin resultados</p>
-              ) : (
-                productsData?.map((p: any) => (
-                  <button
-                    key={p.id}
-                    onClick={() => handleAddProduct(p)}
-                    className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-blue-50 dark:hover:bg-gray-700 transition text-left"
-                  >
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-800 dark:text-white truncate">{p.name}</p>
-                      <p className="text-xs text-gray-500">{p.code} · Stock: {p.stock} {p.unit}</p>
-                    </div>
-                    <p className="text-sm font-bold text-blue-600">{formatCurrency(p.salePrice)}</p>
-                  </button>
-                ))
+          {/* Category tabs */}
+          <div className="flex items-center gap-2 mt-3 overflow-x-auto pb-1">
+            <button
+              type="button"
+              onClick={() => setCategoryFilter('')}
+              className={cn(
+                'flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors',
+                !categoryFilter ? 'bg-amber-400 text-gray-900' : 'border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:border-gray-300',
               )}
-            </div>
-          )}
+            >
+              Todos
+            </button>
+            {categories?.map((c: any) => (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => setCategoryFilter(c.id)}
+                className={cn(
+                  'flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors',
+                  categoryFilter === c.id ? 'bg-amber-400 text-gray-900' : 'border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:border-gray-300',
+                )}
+              >
+                {c.name}
+              </button>
+            ))}
+          </div>
+
+          {/* Product grid */}
+          <div className="mt-3 max-h-72 overflow-y-auto">
+            {isLoading ? (
+              <div className="flex items-center justify-center py-10 text-gray-400">
+                <Loader2 size={20} className="animate-spin" />
+              </div>
+            ) : productsData?.length === 0 ? (
+              <p className="text-sm text-gray-400 text-center py-8">Sin resultados</p>
+            ) : (
+              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2.5">
+                {productsData?.map((p: any) => {
+                  const lowStock = p.stock <= p.minStock;
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => handleAddProduct(p)}
+                      className="flex flex-col bg-gray-50 dark:bg-gray-700/40 rounded-xl p-2.5 text-left hover:ring-2 hover:ring-blue-400 transition"
+                    >
+                      <div className="aspect-square w-full rounded-lg overflow-hidden bg-white dark:bg-gray-800 mb-2 flex items-center justify-center">
+                        {p.image ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={p.image} alt={p.name} className="w-full h-full object-cover" />
+                        ) : (
+                          <Package size={26} className="text-gray-300 dark:text-gray-500" />
+                        )}
+                      </div>
+                      <p className="text-sm font-bold text-gray-900 dark:text-white truncate">{formatCurrency(p.salePrice)}</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{p.name}</p>
+                      <span className={cn(
+                        'mt-1.5 inline-block w-fit text-[10px] font-semibold px-1.5 py-0.5 rounded-full',
+                        lowStock ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-700',
+                      )}>
+                        {p.stock} disp.
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Cart Items */}
@@ -334,8 +393,21 @@ export default function POSPage() {
           <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 p-4 space-y-3">
             <div className="flex items-center justify-between">
               <h3 className="font-semibold text-gray-800 dark:text-white">Cobrar</h3>
-              <button type="button" aria-label="Cerrar cobro" onClick={() => setShowPayment(false)} className="text-gray-400 hover:text-gray-600"><X size={16} /></button>
+              <button type="button" aria-label="Cerrar cobro" onClick={() => { setShowPayment(false); setSaleError(''); }} className="text-gray-400 hover:text-gray-600"><X size={16} /></button>
             </div>
+
+            {saleError && (
+              <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-lg px-3 py-2.5 text-xs text-red-700">
+                <AlertCircle size={14} className="flex-shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <p className="font-semibold">No se pudo registrar la venta</p>
+                  <p className="mt-0.5">{saleError}</p>
+                </div>
+                <button type="button" aria-label="Cerrar mensaje de error" onClick={() => setSaleError('')} className="text-red-400 hover:text-red-600 flex-shrink-0">
+                  <X size={14} />
+                </button>
+              </div>
+            )}
 
             <div>
               <label className="text-xs text-gray-500 mb-1 block">Método de pago</label>
@@ -375,10 +447,21 @@ export default function POSPage() {
               </div>
             )}
 
-            <label className="flex items-center gap-2 text-xs text-gray-600 cursor-pointer">
-              <input type="checkbox" checked={isCredit} onChange={(e) => setIsCredit(e.target.checked)} className="rounded" />
-              Fiado / Crédito
-            </label>
+            {isFree ? (
+              <button
+                type="button"
+                onClick={openUpgrade}
+                className="flex items-center gap-2 text-xs text-amber-600 hover:text-amber-700 transition-colors"
+              >
+                <Zap size={13} className="fill-amber-500 text-amber-500" />
+                Fiado / Crédito — Solo Plan Pro
+              </button>
+            ) : (
+              <label className="flex items-center gap-2 text-xs text-gray-600 cursor-pointer">
+                <input type="checkbox" checked={isCredit} onChange={(e) => setIsCredit(e.target.checked)} className="rounded" />
+                Fiado / Crédito
+              </label>
+            )}
 
             <button
               type="button"

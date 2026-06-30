@@ -42,11 +42,16 @@ router.post('/open', authorize('ADMIN', 'SUPERVISOR', 'CASHIER'), async (req: an
     });
     if (existing) throw new AppError('Ya hay una caja abierta', 400);
 
+    const openingAmount = parseFloat(req.body.openingAmount);
+    if (isNaN(openingAmount) || openingAmount < 0) {
+      throw new AppError('El monto de apertura debe ser un número mayor o igual a 0', 400);
+    }
+
     const register = await prisma.cashRegister.create({
       data: {
         branchId: req.user.branchId,
         openedBy: req.user.userId,
-        openingAmount: parseFloat(req.body.openingAmount) || 0,
+        openingAmount,
         status: 'OPEN',
       },
     });
@@ -70,9 +75,13 @@ router.post('/:id/close', authorize('ADMIN', 'SUPERVISOR', 'CASHIER'), async (re
       }),
     ]);
 
+    const closingAmount = parseFloat(req.body.closingAmount);
+    if (isNaN(closingAmount) || closingAmount < 0) {
+      throw new AppError('El monto de cierre debe ser un número mayor o igual a 0', 400);
+    }
+
     const totalIn = Number(inAgg._sum.amount || 0);
     const totalOut = Number(outAgg._sum.amount || 0);
-    const closingAmount = parseFloat(req.body.closingAmount) || 0;
     const expectedAmount = register.openingAmount + totalIn - totalOut;
     const difference = closingAmount - expectedAmount;
 
@@ -99,11 +108,24 @@ router.post('/:id/movement', authorize('ADMIN', 'SUPERVISOR', 'CASHIER'), async 
     if (register.branchId !== req.user.branchId) throw new AppError('No tienes acceso a esta caja', 403);
     if (register.status !== 'OPEN') throw new AppError('La caja no está abierta', 400);
 
+    if (!['IN', 'OUT'].includes(req.body.type)) {
+      throw new AppError('Tipo de movimiento inválido', 400);
+    }
+
+    const amount = parseFloat(req.body.amount);
+    if (isNaN(amount) || amount <= 0) {
+      throw new AppError('El monto debe ser un número mayor a 0', 400);
+    }
+
+    if (!req.body.description?.trim()) {
+      throw new AppError('La descripción es requerida', 400);
+    }
+
     const movement = await prisma.cashMovement.create({
       data: {
         cashRegisterId: req.params.id,
         type: req.body.type,
-        amount: parseFloat(req.body.amount),
+        amount,
         description: req.body.description,
       },
     });
