@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { api } from '@/lib/api';
 import toast from 'react-hot-toast';
-import { Plus, Search, Edit, Truck, X, Loader2 } from 'lucide-react';
+import { Plus, Search, Edit, Truck, X, Loader2, Phone } from 'lucide-react';
 
 export default function ProveedoresPage() {
   const qc = useQueryClient();
@@ -53,27 +53,44 @@ export default function ProveedoresPage() {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-xs text-gray-500 border-b border-gray-100 bg-gray-50 dark:bg-gray-700/50">
+              <tr className="text-xs text-gray-500 border-b border-gray-100 bg-gray-50 dark:bg-gray-700/50 dark:text-gray-400">
                 <th className="text-left px-4 py-3 font-medium">Nombre</th>
-                <th className="text-left px-4 py-3 font-medium">Contacto</th>
-                <th className="text-left px-4 py-3 font-medium">Teléfono</th>
-                <th className="text-left px-4 py-3 font-medium">Email</th>
+                <th className="hidden md:table-cell text-left px-4 py-3 font-medium">Razón social</th>
+                <th className="hidden sm:table-cell text-left px-4 py-3 font-medium">Contacto</th>
+                <th className="text-left px-4 py-3 font-medium">Teléfonos</th>
+                <th className="hidden lg:table-cell text-left px-4 py-3 font-medium">Email</th>
                 <th className="text-center px-4 py-3 font-medium">Productos</th>
                 <th className="w-16 sr-only">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50 dark:divide-gray-700">
               {isLoading ? (
-                [...Array(5)].map((_, i) => <tr key={i}>{[...Array(6)].map((_, j) => <td key={j} className="px-4 py-3"><div className="h-4 bg-gray-100 rounded animate-pulse" /></td>)}</tr>)
+                [...Array(5)].map((_, i) => <tr key={i}>{[...Array(7)].map((_, j) => <td key={j} className="px-4 py-3"><div className="h-4 bg-gray-100 dark:bg-gray-700 rounded animate-pulse" /></td>)}</tr>)
               ) : suppliers.length === 0 ? (
-                <tr><td colSpan={6} className="text-center py-12 text-gray-400"><Truck size={40} className="mx-auto mb-3 opacity-30" /><p>No hay proveedores</p></td></tr>
+                <tr><td colSpan={7} className="text-center py-12 text-gray-400"><Truck size={40} className="mx-auto mb-3 opacity-30" /><p>No hay proveedores</p></td></tr>
               ) : suppliers.map((s: any) => (
                 <tr key={s.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition">
-                  <td className="px-4 py-3 font-medium text-gray-800 dark:text-white">{s.name}</td>
-                  <td className="px-4 py-3 text-gray-500">{s.contactName || '-'}</td>
-                  <td className="px-4 py-3 text-gray-500">{s.phone || '-'}</td>
-                  <td className="px-4 py-3 text-gray-500">{s.email || '-'}</td>
-                  <td className="px-4 py-3 text-center text-gray-600">{s._count?.products || 0}</td>
+                  <td className="px-4 py-3">
+                    <p className="font-medium text-gray-800 dark:text-white">{s.name}</p>
+                    {s.document && <p className="text-xs text-gray-400 mt-0.5">NIT: {s.document}</p>}
+                  </td>
+                  <td className="hidden md:table-cell px-4 py-3 text-gray-500 text-sm">{s.legalName || <span className="text-gray-300">—</span>}</td>
+                  <td className="hidden sm:table-cell px-4 py-3 text-gray-500 text-sm">{s.contactName || <span className="text-gray-300">—</span>}</td>
+                  <td className="px-4 py-3 text-sm">
+                    {s.phone && (
+                      <p className="flex items-center gap-1 text-gray-500">
+                        <Phone size={11} className="text-gray-300" /> {s.phone}
+                      </p>
+                    )}
+                    {s.mobile && (
+                      <p className="flex items-center gap-1 text-gray-500 mt-0.5">
+                        <Phone size={11} className="text-blue-300" /> {s.mobile}
+                      </p>
+                    )}
+                    {!s.phone && !s.mobile && <span className="text-gray-300">—</span>}
+                  </td>
+                  <td className="hidden lg:table-cell px-4 py-3 text-gray-500 text-sm">{s.email || <span className="text-gray-300">—</span>}</td>
+                  <td className="px-4 py-3 text-center text-gray-600 text-sm">{s._count?.products || 0}</td>
                   <td className="px-4 py-3">
                     <button type="button" aria-label="Editar proveedor" onClick={() => { setEditItem(s); reset(s); setShowForm(true); }} className="text-gray-400 hover:text-blue-600 transition"><Edit size={15} /></button>
                   </td>
@@ -82,6 +99,23 @@ export default function ProveedoresPage() {
             </tbody>
           </table>
         </div>
+
+        {pagination && pagination.totalPages > 1 && (
+          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 dark:border-gray-700 text-sm text-gray-500">
+            <span>{pagination.total} proveedores</span>
+            <div className="flex gap-2">
+              <button type="button" disabled={page === 1} onClick={() => setPage(p => p - 1)}
+                className="px-3 py-1 border border-gray-200 dark:border-gray-600 rounded-lg disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-gray-700 transition">
+                Anterior
+              </button>
+              <span className="px-3 py-1">{page} / {pagination.totalPages}</span>
+              <button type="button" disabled={page === pagination.totalPages} onClick={() => setPage(p => p + 1)}
+                className="px-3 py-1 border border-gray-200 dark:border-gray-600 rounded-lg disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-gray-700 transition">
+                Siguiente
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {showForm && (
@@ -93,17 +127,19 @@ export default function ProveedoresPage() {
             </div>
             <form onSubmit={handleSubmit((d) => saveMutation.mutate(d))} className="p-6 grid grid-cols-2 gap-4">
               {[
-                { name: 'name', label: 'Nombre *', col: 2 },
-                { name: 'document', label: 'NIT / Documento', col: 1 },
-                { name: 'contactName', label: 'Persona de contacto', col: 1 },
-                { name: 'phone', label: 'Teléfono', col: 1 },
-                { name: 'email', label: 'Correo', col: 1, type: 'email' },
-                { name: 'address', label: 'Dirección', col: 2 },
-                { name: 'city', label: 'Ciudad', col: 1 },
-                { name: 'notes', label: 'Notas', col: 1 },
+                { name: 'name',        label: 'Nombre comercial *',   col: 2 },
+                { name: 'legalName',   label: 'Razón social',         col: 2 },
+                { name: 'document',    label: 'NIT / Documento',      col: 1 },
+                { name: 'contactName', label: 'Persona de contacto',  col: 1 },
+                { name: 'phone',       label: 'Teléfono',             col: 1 },
+                { name: 'mobile',      label: 'Celular',              col: 1, type: 'tel' },
+                { name: 'email',       label: 'Correo',               col: 2, type: 'email' },
+                { name: 'address',     label: 'Dirección',            col: 2 },
+                { name: 'city',        label: 'Ciudad',               col: 1 },
+                { name: 'notes',       label: 'Notas',                col: 1 },
               ].map((f) => (
                 <div key={f.name} className={f.col === 2 ? 'col-span-2' : ''}>
-                  <label className="text-xs font-medium text-gray-600 mb-1 block">{f.label}</label>
+                  <label className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1 block">{f.label}</label>
                   <input {...register(f.name)} type={f.type || 'text'}
                     className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white" />
                 </div>

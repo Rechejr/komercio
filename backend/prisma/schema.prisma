@@ -60,6 +60,7 @@ model User {
   email            String    @unique
   phone            String?
   password         String
+  googleId         String?   @unique
   role             UserRole  @default(CASHIER)
   isActive         Boolean   @default(true)
   isEmailVerified  Boolean   @default(false)
@@ -286,8 +287,10 @@ model Supplier {
   businessId  String?
   business    Business? @relation(fields: [businessId], references: [id])
   name        String
+  legalName   String?
   document    String?
   phone       String?
+  mobile      String?
   email       String?
   address     String?
   city        String?

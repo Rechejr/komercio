@@ -1,9 +1,10 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { Bell, Check, AlertTriangle, Info, CheckCheck } from 'lucide-react';
+import { Bell, Check, AlertTriangle, Info, CheckCheck, ArrowRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface NotificationPanelProps {
@@ -25,6 +26,7 @@ function timeAgo(dateStr: string) {
 export function NotificationPanel({ open, onClose }: NotificationPanelProps) {
   const qc = useQueryClient();
   const ref = useRef<HTMLDivElement>(null);
+  const router = useRouter();
 
   const { data } = useQuery({
     queryKey: ['notifications'],
@@ -86,33 +88,50 @@ export function NotificationPanel({ open, onClose }: NotificationPanelProps) {
             <p className="text-xs">No tienes notificaciones</p>
           </div>
         ) : (
-          notifications.map((n: any) => (
-            <button
-              type="button"
-              key={n.id}
-              onClick={() => !n.isRead && markRead.mutate(n.id)}
-              className={cn(
-                'w-full text-left flex items-start gap-3 px-4 py-3 border-b border-gray-50 dark:border-gray-700/50 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors',
-                !n.isRead && 'bg-blue-50/50 dark:bg-blue-900/10',
-              )}
-            >
-              <div className={cn(
-                'w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5',
-                n.type === 'WARNING' ? 'bg-amber-100 text-amber-600' : 'bg-blue-100 text-blue-600',
-              )}>
-                {n.type === 'WARNING' ? <AlertTriangle size={13} /> : <Info size={13} />}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className={cn('text-xs leading-snug', n.isRead ? 'text-gray-600 dark:text-gray-400' : 'text-gray-800 dark:text-white font-medium')}>
-                  {n.title}
-                </p>
-                <p className="text-xs text-gray-400 mt-0.5 line-clamp-2">{n.message}</p>
-                <p className="text-[11px] text-gray-300 mt-1">{timeAgo(n.createdAt)}</p>
-              </div>
-              {!n.isRead && <div className="w-1.5 h-1.5 rounded-full bg-blue-500 flex-shrink-0 mt-1.5" />}
-              {n.isRead && <Check size={12} className="text-gray-300 flex-shrink-0 mt-1.5" />}
-            </button>
-          ))
+          notifications.map((n: any) => {
+            const isLowStock = n.data?.kind === 'LOW_STOCK' && n.data?.productId;
+            return (
+              <button
+                type="button"
+                key={n.id}
+                onClick={() => {
+                  if (!n.isRead) markRead.mutate(n.id);
+                  if (isLowStock) {
+                    router.push(`/inventario?productId=${n.data.productId}`);
+                    onClose();
+                  }
+                }}
+                className={cn(
+                  'w-full text-left flex items-start gap-3 px-4 py-3 border-b border-gray-50 dark:border-gray-700/50 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors',
+                  !n.isRead && 'bg-blue-50/50 dark:bg-blue-900/10',
+                  isLowStock && 'cursor-pointer',
+                )}
+              >
+                <div className={cn(
+                  'w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5',
+                  n.type === 'WARNING' ? 'bg-amber-100 text-amber-600' : 'bg-blue-100 text-blue-600',
+                )}>
+                  {n.type === 'WARNING' ? <AlertTriangle size={13} /> : <Info size={13} />}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className={cn('text-xs leading-snug', n.isRead ? 'text-gray-600 dark:text-gray-400' : 'text-gray-800 dark:text-white font-medium')}>
+                    {n.title}
+                  </p>
+                  <p className="text-xs text-gray-400 mt-0.5 line-clamp-2">{n.message}</p>
+                  <div className="flex items-center gap-2 mt-1">
+                    <p className="text-[11px] text-gray-300">{timeAgo(n.createdAt)}</p>
+                    {isLowStock && (
+                      <span className="text-[10px] text-amber-600 dark:text-amber-400 font-medium flex items-center gap-0.5">
+                        Ver en inventario <ArrowRight size={9} />
+                      </span>
+                    )}
+                  </div>
+                </div>
+                {!n.isRead && <div className="w-1.5 h-1.5 rounded-full bg-blue-500 flex-shrink-0 mt-1.5" />}
+                {n.isRead && <Check size={12} className="text-gray-300 flex-shrink-0 mt-1.5" />}
+              </button>
+            );
+          })
         )}
       </div>
     </div>

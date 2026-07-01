@@ -231,7 +231,22 @@ export default function VentasPage() {
                   </div>
                 </div>
                 <div><p className="text-gray-400 text-xs">Vendedor</p><p className="font-medium">{detail.user?.name}</p></div>
-                <div><p className="text-gray-400 text-xs">Método de pago</p><p className="font-medium">{paymentMethodLabel[detail.paymentMethod]}</p></div>
+                <div>
+                  <p className="text-gray-400 text-xs">Método de pago</p>
+                  {detail.paymentMethod === 'MIXED' && detail.paymentDetails?.splits?.length > 0 ? (
+                    <div className="mt-0.5 space-y-0.5">
+                      <p className="font-medium text-sm">Mixto</p>
+                      {detail.paymentDetails.splits.map((s: any, i: number) => (
+                        <div key={i} className="flex justify-between items-center text-xs pl-2">
+                          <span className="text-gray-500">{paymentMethodLabel[s.method] || s.method}</span>
+                          <span className="font-medium text-gray-700 dark:text-gray-300">{formatCurrency(s.amount)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="font-medium">{paymentMethodLabel[detail.paymentMethod]}</p>
+                  )}
+                </div>
               </div>
 
               <table className="w-full text-sm border-t border-gray-100 dark:border-gray-700 pt-4">

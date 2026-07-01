@@ -63,6 +63,8 @@ router.post('/:id/close', authorize('ADMIN', 'SUPERVISOR', 'CASHIER'), async (re
   try {
     const register = await prisma.cashRegister.findUnique({ where: { id: req.params.id } });
     if (!register || register.status !== 'OPEN') throw new AppError('Caja no encontrada o ya cerrada', 400);
+    // CRIT-06: verifica que la caja pertenezca a la sucursal del usuario autenticado
+    if (register.branchId !== req.user.branchId) throw new AppError('No tienes acceso a esta caja', 403);
 
     const [inAgg, outAgg] = await Promise.all([
       prisma.cashMovement.aggregate({

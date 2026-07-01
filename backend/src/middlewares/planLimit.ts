@@ -39,7 +39,7 @@ export const planLimit = {
         const limits = getPlan(business.plan);
         if (limits.customers === Infinity) return next();
 
-        const count = await prisma.customer.count({ where: { deletedAt: null } });
+        const count = await prisma.customer.count({ where: { deletedAt: null, businessId: business.id } });
         if (count >= limits.customers) {
           return next(planError(`Límite de ${limits.customers} clientes alcanzado en el plan gratuito.`, business.plan));
         }
@@ -149,6 +149,20 @@ export const planLimit = {
         const limits = getPlan(business.plan);
         if (!limits.canUseSuppliers) {
           return next(planError('El módulo de proveedores está disponible solo en el plan Pro.', business.plan));
+        }
+        next();
+      } catch (err) { next(err); }
+    };
+  },
+
+  bulkImport() {
+    return async (req: AuthRequest, res: Response, next: NextFunction) => {
+      try {
+        const business = await getBusinessWithPlan(req);
+        if (!business) return next();
+        const limits = getPlan(business.plan);
+        if (!limits.canBulkImport) {
+          return next(planError('La importación masiva de productos está disponible solo en el plan Pro.', business.plan));
         }
         next();
       } catch (err) { next(err); }

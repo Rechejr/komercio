@@ -9,6 +9,7 @@ export interface PlanLimits {
   canExport: boolean;
   canUseCredits: boolean;
   canUseSuppliers: boolean;
+  canBulkImport: boolean;
 }
 
 export const PLANS: Record<PlanName, PlanLimits> = {
@@ -21,6 +22,7 @@ export const PLANS: Record<PlanName, PlanLimits> = {
     canExport: false,
     canUseCredits: false,
     canUseSuppliers: false,
+    canBulkImport: false,
   },
   pro: {
     products: Infinity,
@@ -31,6 +33,7 @@ export const PLANS: Record<PlanName, PlanLimits> = {
     canExport: true,
     canUseCredits: true,
     canUseSuppliers: true,
+    canBulkImport: true,
   },
 };
 

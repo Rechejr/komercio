@@ -43,8 +43,9 @@ router.patch('/read-all', async (req: any, res, next) => {
 
 router.patch('/:id/read', async (req: any, res, next) => {
   try {
-    await prisma.notification.update({
-      where: { id: req.params.id },
+    // Verifica pertenencia al usuario autenticado antes de actualizar
+    await prisma.notification.updateMany({
+      where: { id: req.params.id, userId: req.user.userId },
       data: { isRead: true },
     });
     return success(res, null, 'Notificación leída');

@@ -348,10 +348,12 @@ export const saleController = {
     }
   },
 
-  async permanentDelete(_req: AuthRequest, res: Response, next: NextFunction) {
+  async permanentDelete(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const { id } = _req.params;
-      const sale = await prisma.sale.findFirst({ where: { id } });
+      const { id } = req.params;
+      const sale = await prisma.sale.findFirst({
+        where: { id, branch: { businessId: req.user!.businessId } },
+      });
       if (!sale) throw new AppError('Venta no encontrada', 404);
       if (sale.status !== 'CANCELLED') {
         throw new AppError('Solo se pueden eliminar permanentemente ventas anuladas', 400);
@@ -366,7 +368,7 @@ export const saleController = {
     } catch (err) { next(err); }
   },
 
-  async getDailySummary(_req: AuthRequest, res: Response, next: NextFunction) {
+  async getDailySummary(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
@@ -377,6 +379,7 @@ export const saleController = {
         where: {
           createdAt: { gte: today, lt: tomorrow },
           status: 'COMPLETED',
+          branch: { businessId: req.user!.businessId },
         },
         _sum: { total: true, taxAmount: true, discountAmount: true },
         _count: { id: true },

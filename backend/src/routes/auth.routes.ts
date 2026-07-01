@@ -37,6 +37,12 @@ router.post('/login',
   authController.login,
 );
 
+router.post('/google',
+  [body('accessToken').notEmpty().withMessage('Token de Google requerido')],
+  validate,
+  authController.googleAuth,
+);
+
 router.post('/refresh-token', authController.refreshToken);
 router.post('/logout', authController.logout);
 

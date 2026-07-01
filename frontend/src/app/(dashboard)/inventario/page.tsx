@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm, Controller } from 'react-hook-form';
 import { api } from '@/lib/api';
@@ -10,17 +11,51 @@ import { CategorySelect } from '@/components/ui/CategorySelect';
 import toast from 'react-hot-toast';
 import {
   Plus, Search, Edit, Trash2, Package, AlertTriangle,
-  X, Loader2, Barcode,
+  X, Loader2, Barcode, FileUp, FileDown, CheckCircle2,
+  ArrowRight, Lock,
 } from 'lucide-react';
+import { useAuthStore } from '@/store/auth.store';
+import { useUpgradeStore } from '@/store/upgrade.store';
 
+type PreviewData = {
+  total: number;
+  valid: number;
+  toCreate: number;
+  toUpdate: number;
+  issues: { row: number; name: string; message: string; type: 'error' | 'warning' }[];
+  detectedColumns: { field: string; header: string }[];
+};
+
+const fieldLabel: Record<string, string> = {
+  name: 'Nombre',
+  code: 'Código',
+  salePrice: 'Precio Venta',
+  costPrice: 'Costo',
+  stock: 'Stock',
+  minStock: 'Stock Mín.',
+  category: 'Categoría',
+  unit: 'Unidad',
+  barcode: 'Cód. Barras',
+  description: 'Descripción',
+};
 
 export default function InventarioPage() {
   const qc = useQueryClient();
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const plan = useAuthStore((s) => s.user?.plan);
+  const isFree = !plan || plan === 'free';
+  const openUpgrade = useUpgradeStore((s) => s.open);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [showForm, setShowForm] = useState(false);
   const [editItem, setEditItem] = useState<any>(null);
   const [deleteTarget, setDeleteTarget] = useState<any>(null);
+  const [importResult, setImportResult] = useState<{ imported: number; updated: number; errors: { row: number; message: string }[] } | null>(null);
+  const [previewData, setPreviewData] = useState<PreviewData | null>(null);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ['products', page, search],
@@ -43,6 +78,43 @@ export default function InventarioPage() {
   });
 
   const { register, handleSubmit, reset, control, formState: { isSubmitting } } = useForm();
+
+  // Step 1: dry-run preview
+  const previewMutation = useMutation({
+    mutationFn: (file: File) => {
+      const fd = new FormData();
+      fd.append('file', file);
+      return api.post('/products/import?dryRun=true', fd, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      }).then((r) => r.data.data as PreviewData);
+    },
+    onSuccess: (data) => setPreviewData(data),
+    onError: (err: any) => {
+      setIsPreviewOpen(false);
+      setPendingFile(null);
+      toast.error(err.response?.data?.error || 'No se pudo leer el archivo');
+    },
+  });
+
+  // Step 2: actual import
+  const importMutation = useMutation({
+    mutationFn: (file: File) => {
+      const fd = new FormData();
+      fd.append('file', file);
+      return api.post('/products/import', fd, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      }).then((r) => r.data.data);
+    },
+    onSuccess: (result) => {
+      setIsPreviewOpen(false);
+      setPreviewData(null);
+      setPendingFile(null);
+      setImportResult(result);
+      qc.invalidateQueries({ queryKey: ['products'] });
+      toast.success(`${result.imported} creados, ${result.updated} actualizados`);
+    },
+    onError: (err: any) => toast.error(err.response?.data?.error || 'Error al importar'),
+  });
 
   const saveMutation = useMutation({
     mutationFn: (data: any) => editItem
@@ -68,6 +140,23 @@ export default function InventarioPage() {
     setShowForm(true);
   }
 
+  function closePreview() {
+    setIsPreviewOpen(false);
+    setPreviewData(null);
+    setPendingFile(null);
+  }
+
+  // Open edit modal when arriving from a low-stock notification
+  useEffect(() => {
+    const productId = searchParams.get('productId');
+    if (!productId) return;
+    api.get(`/products/${productId}`)
+      .then((r) => openEdit(r.data.data))
+      .catch(() => toast.error('Producto no encontrado'))
+      .finally(() => router.replace('/inventario'));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const products = data?.data || [];
   const pagination = data?.pagination;
 
@@ -84,6 +173,65 @@ export default function InventarioPage() {
             className="w-full pl-9 pr-4 py-2.5 border border-gray-200 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 dark:text-white"
           />
         </div>
+        {isFree ? (
+          <button
+            type="button"
+            onClick={openUpgrade}
+            className="flex items-center gap-2 px-4 py-2.5 border border-gray-200 dark:border-gray-600 rounded-lg text-sm font-semibold text-gray-400 dark:text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition"
+          >
+            <FileDown size={16} />
+            Plantilla
+            <span className="ml-0.5 px-1.5 py-0.5 bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400 text-[10px] font-bold rounded-full leading-none">PRO</span>
+          </button>
+        ) : (
+          <a
+            href={`${process.env.NEXT_PUBLIC_API_URL}/products/import-template`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 px-4 py-2.5 border border-gray-200 dark:border-gray-600 rounded-lg text-sm font-semibold text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition"
+          >
+            <FileDown size={16} /> Plantilla
+          </a>
+        )}
+        {isFree ? (
+          <button
+            type="button"
+            onClick={openUpgrade}
+            className="flex items-center gap-2 px-4 py-2.5 border border-gray-200 dark:border-gray-600 rounded-lg text-sm font-semibold text-gray-400 dark:text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition"
+          >
+            <Lock size={15} />
+            Importar Excel
+            <span className="ml-0.5 px-1.5 py-0.5 bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400 text-[10px] font-bold rounded-full leading-none">PRO</span>
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={previewMutation.isPending || importMutation.isPending}
+            className="flex items-center gap-2 px-4 py-2.5 border border-green-300 dark:border-green-700 rounded-lg text-sm font-semibold text-green-700 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 transition disabled:opacity-60"
+          >
+            {(previewMutation.isPending || importMutation.isPending)
+              ? <Loader2 size={16} className="animate-spin" />
+              : <FileUp size={16} />}
+            Importar Excel
+          </button>
+        )}
+        <input
+          ref={fileInputRef}
+          type="file"
+          aria-label="Seleccionar archivo Excel para importar productos"
+          accept=".xlsx,.xls,.csv"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) {
+              setPendingFile(file);
+              setIsPreviewOpen(true);
+              previewMutation.mutate(file);
+            }
+            e.target.value = '';
+          }}
+        />
         <button
           type="button"
           onClick={() => { setEditItem(null); reset({ images: [] }); setShowForm(true); }}
@@ -198,7 +346,153 @@ export default function InventarioPage() {
         )}
       </div>
 
-      {/* Delete Confirm Modal */}
+      {/* ── Import Preview Modal ─────────────────────────────────────────────── */}
+      {isPreviewOpen && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg flex flex-col max-h-[90vh]">
+
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700">
+              <h2 className="font-semibold text-gray-800 dark:text-white flex items-center gap-2">
+                <FileUp size={18} className="text-blue-500" />
+                Vista previa de importación
+              </h2>
+              <button type="button" aria-label="Cerrar" onClick={closePreview}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition">
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Body */}
+            {previewMutation.isPending ? (
+              /* Loading state */
+              <div className="flex flex-col items-center justify-center py-16 gap-3">
+                <Loader2 size={36} className="animate-spin text-blue-500" />
+                <p className="text-sm text-gray-500 dark:text-gray-400">Analizando archivo...</p>
+              </div>
+            ) : previewData ? (
+              <div className="p-6 space-y-5 overflow-y-auto">
+
+                {/* Total */}
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  Se encontraron{' '}
+                  <span className="font-bold text-gray-800 dark:text-white">{previewData.total}</span>{' '}
+                  producto{previewData.total !== 1 ? 's' : ''} en el archivo
+                </p>
+
+                {/* Stats */}
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="bg-green-50 dark:bg-green-900/20 rounded-xl p-3 text-center">
+                    <p className="text-2xl font-bold text-green-700 dark:text-green-400">{previewData.valid}</p>
+                    <p className="text-xs text-green-600 dark:text-green-500 mt-0.5">Válidos</p>
+                  </div>
+                  <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-3 text-center">
+                    <p className="text-2xl font-bold text-blue-700 dark:text-blue-400">{previewData.toCreate}</p>
+                    <p className="text-xs text-blue-600 dark:text-blue-500 mt-0.5">Nuevos</p>
+                  </div>
+                  <div className="bg-violet-50 dark:bg-violet-900/20 rounded-xl p-3 text-center">
+                    <p className="text-2xl font-bold text-violet-700 dark:text-violet-400">{previewData.toUpdate}</p>
+                    <p className="text-xs text-violet-600 dark:text-violet-500 mt-0.5">Actualizan</p>
+                  </div>
+                </div>
+
+                {/* Detected columns */}
+                <div>
+                  <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">
+                    Columnas reconocidas ({previewData.detectedColumns.length})
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {previewData.detectedColumns.map(({ field, header }) => (
+                      <span
+                        key={field}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 text-xs rounded-full font-medium"
+                        title={`Campo: ${fieldLabel[field] ?? field}`}
+                      >
+                        <CheckCircle2 size={10} />
+                        {header}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Issues */}
+                {previewData.issues.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">
+                      {previewData.issues.filter(i => i.type === 'error').length > 0 && (
+                        <span className="text-red-500">{previewData.issues.filter(i => i.type === 'error').length} error{previewData.issues.filter(i => i.type === 'error').length > 1 ? 'es' : ''}</span>
+                      )}
+                      {previewData.issues.filter(i => i.type === 'error').length > 0 && previewData.issues.filter(i => i.type === 'warning').length > 0 && ' · '}
+                      {previewData.issues.filter(i => i.type === 'warning').length > 0 && (
+                        <span className="text-yellow-600">{previewData.issues.filter(i => i.type === 'warning').length} advertencia{previewData.issues.filter(i => i.type === 'warning').length > 1 ? 's' : ''}</span>
+                      )}
+                    </p>
+                    <div className="rounded-xl border border-gray-100 dark:border-gray-700 divide-y divide-gray-100 dark:divide-gray-700 max-h-44 overflow-y-auto text-xs">
+                      {previewData.issues.map((issue, i) => (
+                        <div
+                          key={i}
+                          className={`flex gap-2 items-start px-3 py-2 ${
+                            issue.type === 'error'
+                              ? 'bg-red-50 dark:bg-red-900/10'
+                              : 'bg-yellow-50 dark:bg-yellow-900/10'
+                          }`}
+                        >
+                          <span className={`font-mono flex-shrink-0 font-semibold ${issue.type === 'error' ? 'text-red-500' : 'text-yellow-600'}`}>
+                            Fila {issue.row}
+                          </span>
+                          <span className={`min-w-0 ${issue.type === 'error' ? 'text-red-700 dark:text-red-300' : 'text-yellow-700 dark:text-yellow-300'}`}>
+                            {issue.type === 'warning' ? '⚠ ' : '✕ '}
+                            <span className="font-medium">{issue.name}</span> — {issue.message}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                    {previewData.issues.some(i => i.type === 'error') && (
+                      <p className="text-xs text-gray-400 mt-1.5">
+                        Las filas con error no se importarán. Las advertencias sí se incluyen.
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {previewData.valid === 0 && (
+                  <div className="bg-red-50 dark:bg-red-900/20 rounded-xl p-4 text-center">
+                    <p className="text-sm text-red-700 dark:text-red-300 font-medium">
+                      No hay filas válidas para importar.
+                    </p>
+                    <p className="text-xs text-red-500 mt-1">Revisa los errores y corrige el archivo.</p>
+                  </div>
+                )}
+              </div>
+            ) : null}
+
+            {/* Footer */}
+            {!previewMutation.isPending && previewData && (
+              <div className="flex gap-3 px-6 pb-5 pt-3 border-t border-gray-100 dark:border-gray-700">
+                <button
+                  type="button"
+                  onClick={closePreview}
+                  className="flex-1 px-4 py-2.5 border border-gray-200 dark:border-gray-600 rounded-xl text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-700 transition"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  disabled={previewData.valid === 0 || importMutation.isPending}
+                  onClick={() => pendingFile && importMutation.mutate(pendingFile)}
+                  className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 disabled:opacity-60 transition flex items-center justify-center gap-2"
+                >
+                  {importMutation.isPending
+                    ? <><Loader2 size={14} className="animate-spin" /> Importando...</>
+                    : <><ArrowRight size={14} /> Importar {previewData.valid} producto{previewData.valid !== 1 ? 's' : ''}</>}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Delete Confirm Modal ─────────────────────────────────────────────── */}
       {deleteTarget && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm">
@@ -230,7 +524,7 @@ export default function InventarioPage() {
         </div>
       )}
 
-      {/* Product Form Modal */}
+      {/* ── Product Form Modal ───────────────────────────────────────────────── */}
       {showForm && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
@@ -245,7 +539,7 @@ export default function InventarioPage() {
 
             <form onSubmit={handleSubmit((d) => saveMutation.mutate(d))} className="p-6 grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-5">
 
-              {/* ── Columna izquierda: Datos del producto ──────────────────── */}
+              {/* ── Columna izquierda ──────────────────── */}
               <div className="space-y-4">
                 <h3 className="text-sm font-bold text-gray-800 dark:text-white">Datos del producto</h3>
 
@@ -351,7 +645,7 @@ export default function InventarioPage() {
                 </div>
               </div>
 
-              {/* ── Columna derecha: Información adicional ──────────────────── */}
+              {/* ── Columna derecha ──────────────────── */}
               <div className="space-y-4 md:border-l md:border-gray-100 md:dark:border-gray-700 md:pl-8">
                 <h3 className="text-sm font-bold text-gray-800 dark:text-white">Información adicional</h3>
 
@@ -411,6 +705,65 @@ export default function InventarioPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── Import Results Modal (post-import) ──────────────────────────────── */}
+      {importResult && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+          onClick={() => setImportResult(null)}>
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md max-h-[80vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700">
+              <h2 className="font-semibold text-gray-800 dark:text-white flex items-center gap-2">
+                <CheckCircle2 size={18} className="text-green-500" /> Importación completada
+              </h2>
+              <button type="button" aria-label="Cerrar" onClick={() => setImportResult(null)}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4 overflow-y-auto">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-green-50 dark:bg-green-900/20 rounded-xl p-4 text-center">
+                  <p className="text-2xl font-bold text-green-700 dark:text-green-400">{importResult.imported}</p>
+                  <p className="text-xs text-green-600 dark:text-green-500 mt-0.5">Productos creados</p>
+                </div>
+                <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-4 text-center">
+                  <p className="text-2xl font-bold text-blue-700 dark:text-blue-400">{importResult.updated}</p>
+                  <p className="text-xs text-blue-600 dark:text-blue-500 mt-0.5">Productos actualizados</p>
+                </div>
+              </div>
+
+              {importResult.errors.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-red-600 mb-2">
+                    {importResult.errors.length} fila{importResult.errors.length > 1 ? 's' : ''} con error:
+                  </p>
+                  <div className="bg-red-50 dark:bg-red-900/20 rounded-lg divide-y divide-red-100 dark:divide-red-800 max-h-48 overflow-y-auto">
+                    {importResult.errors.map((e, i) => (
+                      <div key={i} className="px-3 py-2 flex gap-2 text-xs">
+                        <span className="font-mono text-red-400 flex-shrink-0">Fila {e.row}</span>
+                        <span className="text-red-700 dark:text-red-300">{e.message}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {importResult.imported === 0 && importResult.updated === 0 && importResult.errors.length === 0 && (
+                <p className="text-sm text-gray-400 text-center">El archivo no contenía filas válidas.</p>
+              )}
+            </div>
+
+            <div className="px-6 pb-5">
+              <button type="button" onClick={() => setImportResult(null)}
+                className="w-full py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 transition">
+                Entendido
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -341,6 +341,139 @@ export const authController = {
     }
   },
 
+  async googleAuth(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { accessToken: googleToken } = req.body;
+      if (!googleToken) throw new AppError('Token de Google requerido', 400);
+
+      // Verify token and get user info from Google
+      const gRes = await fetch(`https://www.googleapis.com/oauth2/v3/userinfo`, {
+        headers: { Authorization: `Bearer ${googleToken}` },
+      });
+      if (!gRes.ok) throw new AppError('Token de Google inválido o expirado', 401);
+
+      const { sub: googleId, email, name: googleName, picture: avatar } = await gRes.json() as {
+        sub: string; email: string; name: string; picture?: string;
+      };
+
+      if (!email) throw new AppError('No se pudo obtener el correo de Google', 400);
+
+      const INCLUDE_BRANCH = {
+        branch: {
+          select: {
+            id: true,
+            businessId: true,
+            business: { select: { id: true, name: true, plan: true } },
+          },
+        },
+      } as const;
+
+      let user = await prisma.user.findFirst({
+        where: { OR: [{ email }, { googleId }], deletedAt: null },
+        include: INCLUDE_BRANCH,
+      });
+
+      if (user) {
+        // Link Google account if not already linked
+        if (!user.googleId) {
+          await prisma.user.update({
+            where: { id: user.id },
+            data: { googleId, avatar: avatar || user.avatar },
+          });
+        }
+      } else {
+        // New user — create account + business in one transaction
+        const randomPwd = await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 12);
+        const defaultCategories = [
+          'Arriendo', 'Servicios públicos', 'Nómina', 'Transporte',
+          'Publicidad', 'Insumos', 'Mantenimiento', 'Otros',
+        ];
+
+        user = await prisma.$transaction(async (tx) => {
+          const newUser = await tx.user.create({
+            data: {
+              name: googleName || email.split('@')[0],
+              email,
+              password: randomPwd,
+              googleId,
+              avatar: avatar || null,
+              role: 'ADMIN',
+              isEmailVerified: true,
+            },
+            include: INCLUDE_BRANCH,
+          });
+
+          const business = await tx.business.create({
+            data: {
+              name: `Negocio de ${newUser.name}`,
+              ownerId: newUser.id,
+              branches: { create: { name: 'Sucursal Principal' } },
+            },
+            include: { branches: true },
+          });
+
+          await tx.user.update({
+            where: { id: newUser.id },
+            data: { branchId: business.branches[0].id },
+          });
+
+          await tx.expenseCategory.createMany({
+            data: defaultCategories.map((n) => ({ name: n, businessId: business.id })),
+          });
+
+          return tx.user.findUniqueOrThrow({
+            where: { id: newUser.id },
+            include: INCLUDE_BRANCH,
+          });
+        });
+      }
+
+      if (!user!.isActive) throw new AppError('Cuenta desactivada. Contacta al administrador.', 403);
+
+      const jwtPayload = {
+        userId: user!.id,
+        email: user!.email,
+        role: user!.role,
+        businessId: user!.branch?.businessId,
+        branchId: user!.branchId ?? undefined,
+      };
+
+      const accessToken = generateAccessToken(jwtPayload);
+      const refreshToken = generateRefreshToken(jwtPayload);
+      const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
+
+      await prisma.refreshToken.create({
+        data: { token: refreshToken, userId: user!.id, expiresAt: new Date(Date.now() + THIRTY_DAYS) },
+      });
+      await prisma.user.update({ where: { id: user!.id }, data: { lastLogin: new Date() } });
+
+      res.cookie('refreshToken', refreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
+        maxAge: THIRTY_DAYS,
+      });
+
+      return success(res, {
+        accessToken,
+        user: {
+          id: user!.id,
+          name: user!.name,
+          email: user!.email,
+          role: user!.role,
+          avatar: user!.avatar,
+          branchId: user!.branchId ?? undefined,
+          businessId: user!.branch?.businessId ?? undefined,
+          businessName: user!.branch?.business?.name ?? undefined,
+          isEmailVerified: user!.isEmailVerified,
+          plan: user!.branch?.business?.plan || 'free',
+        },
+      }, 'Sesión iniciada con Google');
+    } catch (err) {
+      next(err);
+    }
+  },
+
   async changePassword(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const { currentPassword, newPassword } = req.body;

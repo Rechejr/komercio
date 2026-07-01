@@ -6,18 +6,18 @@ import { api } from '@/lib/api';
 import { useCartStore } from '@/store/cart.store';
 import { useAuthStore } from '@/store/auth.store';
 import { useUpgradeStore } from '@/store/upgrade.store';
-import { formatCurrency, paymentMethodLabel, cn } from '@/lib/utils';
+import { formatCurrency, formatDate, paymentMethodLabel, statusColor, statusLabel, cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import {
   Search, Plus, Minus, Trash2, User,
-  DollarSign, Printer, X, Loader2, ShoppingBag, CheckCircle, Zap, Package, AlertCircle,
+  DollarSign, Printer, X, Loader2, ShoppingBag, CheckCircle, Zap, Package, AlertCircle, CreditCard,
 } from 'lucide-react';
 
 const PAYMENT_METHODS = ['CASH', 'NEQUI', 'DAVIPLATA', 'TRANSFER', 'CARD', 'MIXED'];
 
 export default function POSPage() {
   const qc = useQueryClient();
-  const { items, addItem, updateQty, removeItem, clear, totals, customerId, setCustomer } = useCartStore();
+  const { items, addItem, updateQty, updateDiscount, removeItem, clear, totals, customerId, setCustomer } = useCartStore();
   const plan = useAuthStore((s) => s.user?.plan);
   const isFree = !plan || plan === 'free';
   const openUpgrade = useUpgradeStore((s) => s.open);
@@ -34,6 +34,14 @@ export default function POSPage() {
   const [showCreateCustomer, setShowCreateCustomer] = useState(false);
   const [newCustName, setNewCustName] = useState('');
   const [newCustPhone, setNewCustPhone] = useState('');
+  const [mixedPayments, setMixedPayments] = useState<Array<{ method: string; amount: number }>>([]);
+  const [splitMethod, setSplitMethod] = useState('CASH');
+  const [splitAmount, setSplitAmount] = useState('');
+  const [saleNotes, setSaleNotes] = useState('');
+  const [showCreditPayment, setShowCreditPayment] = useState(false);
+  const [selectedCreditId, setSelectedCreditId] = useState<string | null>(null);
+  const [creditPayAmount, setCreditPayAmount] = useState('');
+  const [creditPayMethod, setCreditPayMethod] = useState('CASH');
   const searchRef = useRef<HTMLInputElement>(null);
 
   const { data: categories } = useQuery({
@@ -55,6 +63,48 @@ export default function POSPage() {
     enabled: customerSearch.length > 0 || showCustomerList,
   });
 
+  const { data: selectedCustomer } = useQuery({
+    queryKey: ['customer', customerId],
+    queryFn: () => api.get(`/customers/${customerId}`).then((r) => r.data.data),
+    enabled: !!customerId,
+  });
+
+  const { data: customerCredits, isLoading: loadingCredits } = useQuery({
+    queryKey: ['customer-credits-pos', customerId],
+    queryFn: () =>
+      api.get(`/credits?customerId=${customerId}&limit=50`).then((r) =>
+        (r.data.data || []).filter((c: any) =>
+          ['PENDING', 'PARTIAL', 'OVERDUE'].includes(c.status) && c.balance > 0,
+        ),
+      ),
+    enabled: !!customerId && showCreditPayment,
+  });
+
+  const creditPaymentMutation = useMutation({
+    mutationFn: ({ creditId, ...data }: any) =>
+      api.post(`/credits/${creditId}/payments`, data).then((r) => r.data),
+    onSuccess: () => {
+      toast.success('Abono registrado');
+      setShowCreditPayment(false);
+      setSelectedCreditId(null);
+      setCreditPayAmount('');
+      qc.invalidateQueries({ queryKey: ['credits'] });
+      qc.invalidateQueries({ queryKey: ['customer', customerId] });
+      qc.invalidateQueries({ queryKey: ['customers-search'] });
+      qc.invalidateQueries({ queryKey: ['customer-credits-pos', customerId] });
+    },
+    onError: (err: any) => toast.error(err.response?.data?.error || 'Error al registrar abono'),
+  });
+
+  function handleCreditPayment() {
+    if (!selectedCreditId || !creditPayAmount || parseFloat(creditPayAmount) <= 0) return;
+    creditPaymentMutation.mutate({
+      creditId: selectedCreditId,
+      amount: parseFloat(creditPayAmount),
+      paymentMethod: creditPayMethod,
+    });
+  }
+
   const saleMutation = useMutation({
     mutationFn: (saleData: any) => api.post('/sales', saleData).then((r) => r.data.data),
     onSuccess: (sale) => {
@@ -63,6 +113,10 @@ export default function POSPage() {
       clear();
       setShowPayment(false);
       setSearch('');
+      setMixedPayments([]);
+      setSplitAmount('');
+      setSplitMethod('CASH');
+      setSaleNotes('');
       toast.success('¡Venta registrada!');
       qc.invalidateQueries({ queryKey: ['sales'] });
       qc.invalidateQueries({ queryKey: ['products'] });
@@ -95,6 +149,22 @@ export default function POSPage() {
 
   const { subtotal, taxes, discount, total } = totals();
   const change = Math.max(0, parseFloat(paidAmount || '0') - total);
+  const mixedTotal = mixedPayments.reduce((sum, p) => sum + p.amount, 0);
+  const mixedRemaining = Math.max(0, total - mixedTotal);
+
+  function addSplitPayment() {
+    const amount = parseFloat(splitAmount);
+    if (!amount || amount <= 0) return;
+    const newPayments = [...mixedPayments, { method: splitMethod, amount }];
+    setMixedPayments(newPayments);
+    const newTotal = newPayments.reduce((sum, p) => sum + p.amount, 0);
+    const remaining = Math.max(0, total - newTotal);
+    setSplitAmount(remaining > 0 ? String(Math.round(remaining)) : '');
+  }
+
+  function removeSplitPayment(index: number) {
+    setMixedPayments((prev) => prev.filter((_, i) => i !== index));
+  }
 
   function handleAddProduct(product: any) {
     addItem({
@@ -117,13 +187,22 @@ export default function POSPage() {
       toast.error('Selecciona un cliente para registrar un fiado');
       return;
     }
+    if (paymentMethod === 'MIXED' && mixedPayments.length === 0) {
+      toast.error('Agrega al menos un método de pago');
+      return;
+    }
+    const paid = paymentMethod === 'MIXED'
+      ? mixedTotal
+      : isCredit ? parseFloat(paidAmount || '0') : parseFloat(paidAmount || String(total));
     saleMutation.mutate({
       customerId: customerId || undefined,
       items: items.map((i) => ({ productId: i.productId, quantity: i.quantity, discountPct: i.discountPct })),
       paymentMethod,
-      paidAmount: isCredit ? parseFloat(paidAmount || '0') : parseFloat(paidAmount || String(total)),
+      paidAmount: paid,
+      paymentDetails: paymentMethod === 'MIXED' ? { splits: mixedPayments } : undefined,
       discountAmount: discount,
       isCredit,
+      notes: saleNotes.trim() || undefined,
     });
   }
 
@@ -272,7 +351,7 @@ export default function POSPage() {
                   <tr className="text-xs text-gray-500 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50">
                     <th className="text-left px-4 py-2 font-medium">Producto</th>
                     <th className="text-center px-2 py-2 font-medium w-24">Cant.</th>
-                    <th className="text-right px-4 py-2 font-medium">Precio</th>
+                    <th className="text-right px-2 py-2 font-medium w-16">Desc%</th>
                     <th className="text-right px-4 py-2 font-medium">Total</th>
                     <th className="w-8 sr-only">Eliminar</th>
                   </tr>
@@ -294,7 +373,17 @@ export default function POSPage() {
                           >
                             <Minus size={12} />
                           </button>
-                          <span className="w-8 text-center text-sm font-mono">{item.quantity}</span>
+                          <input
+                            type="number"
+                            aria-label="Cantidad"
+                            min={1}
+                            value={item.quantity}
+                            onChange={(e) => {
+                              const v = parseInt(e.target.value);
+                              if (!isNaN(v) && v > 0) updateQty(item.productId, v);
+                            }}
+                            className="w-10 text-center text-sm font-mono border border-gray-200 dark:border-gray-600 rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                          />
                           <button
                             type="button"
                             aria-label="Aumentar cantidad"
@@ -305,8 +394,22 @@ export default function POSPage() {
                           </button>
                         </div>
                       </td>
-                      <td className="px-4 py-2 text-right text-gray-600 dark:text-gray-300">
-                        {formatCurrency(item.unitPrice)}
+                      <td className="px-2 py-2 text-right">
+                        <div className="flex items-center justify-end gap-0.5">
+                          <input
+                            type="number"
+                            aria-label="Descuento %"
+                            min={0}
+                            max={100}
+                            value={item.discountPct}
+                            onChange={(e) => {
+                              const v = parseFloat(e.target.value);
+                              updateDiscount(item.productId, isNaN(v) ? 0 : Math.min(100, Math.max(0, v)));
+                            }}
+                            className="w-10 text-right text-xs border border-gray-200 dark:border-gray-600 rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                          />
+                          <span className="text-xs text-gray-400">%</span>
+                        </div>
                       </td>
                       <td className="px-4 py-2 text-right font-semibold text-gray-800 dark:text-white">
                         {formatCurrency(item.total)}
@@ -338,15 +441,27 @@ export default function POSPage() {
             <User size={12} /> Cliente (opcional)
           </p>
           {customerId ? (
-            <div className="flex items-center justify-between bg-blue-50 dark:bg-blue-900/20 rounded-lg px-3 py-2">
-              <span className="text-sm font-medium text-blue-700 dark:text-blue-300 truncate">
-                {customersData?.find((c: any) => c.id === customerId)?.name ?? customerSearch}
-              </span>
-              <button type="button" aria-label="Quitar cliente"
-                onClick={() => { setCustomer(null); setCustomerSearch(''); setShowCustomerList(false); }}
-                className="text-blue-400 hover:text-red-500 ml-2 flex-shrink-0">
-                <X size={14} />
-              </button>
+            <div>
+              <div className="flex items-center justify-between bg-blue-50 dark:bg-blue-900/20 rounded-lg px-3 py-2">
+                <span className="text-sm font-medium text-blue-700 dark:text-blue-300 truncate">
+                  {customersData?.find((c: any) => c.id === customerId)?.name ?? customerSearch}
+                </span>
+                <button type="button" aria-label="Quitar cliente"
+                  onClick={() => { setCustomer(null); setCustomerSearch(''); setShowCustomerList(false); setShowCreditPayment(false); setSelectedCreditId(null); setCreditPayAmount(''); }}
+                  className="text-blue-400 hover:text-red-500 ml-2 flex-shrink-0">
+                  <X size={14} />
+                </button>
+              </div>
+              {(selectedCustomer?.currentDebt ?? 0) > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setShowCreditPayment(true)}
+                  className="mt-1.5 w-full text-xs px-3 py-1.5 bg-orange-50 border border-orange-200 dark:bg-orange-900/20 dark:border-orange-700 rounded-lg text-orange-700 dark:text-orange-400 hover:bg-orange-100 dark:hover:bg-orange-900/40 transition flex items-center justify-between"
+                >
+                  <span className="flex items-center gap-1"><CreditCard size={11} /> Deuda: {formatCurrency(selectedCustomer.currentDebt)}</span>
+                  <span className="font-semibold">Abonar →</span>
+                </button>
+              )}
             </div>
           ) : (
             <div className="relative">
@@ -453,23 +568,126 @@ export default function POSPage() {
               </div>
             </div>
 
+            {paymentMethod === 'MIXED' ? (
+              <div className="space-y-2">
+                {/* Add split row */}
+                <div className="flex gap-1.5">
+                  <select
+                    aria-label="Método de pago"
+                    value={splitMethod}
+                    onChange={(e) => setSplitMethod(e.target.value)}
+                    className="flex-1 min-w-0 px-2 py-2 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                  >
+                    {PAYMENT_METHODS.filter((m) => m !== 'MIXED').map((m) => (
+                      <option key={m} value={m}>{paymentMethodLabel[m]}</option>
+                    ))}
+                  </select>
+                  <input
+                    type="number"
+                    value={splitAmount}
+                    onChange={(e) => setSplitAmount(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && addSplitPayment()}
+                    placeholder={mixedRemaining > 0 ? String(Math.round(mixedRemaining)) : '0'}
+                    className="w-24 px-2 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <button
+                    type="button"
+                    aria-label="Agregar pago"
+                    onClick={addSplitPayment}
+                    className="px-3 py-2 bg-blue-600 text-white rounded-lg text-xs font-bold hover:bg-blue-700 transition flex-shrink-0"
+                  >
+                    +
+                  </button>
+                </div>
+
+                {/* Payment list */}
+                {mixedPayments.length > 0 && (
+                  <div className="bg-gray-50 rounded-lg overflow-hidden border border-gray-100">
+                    {mixedPayments.map((p, i) => (
+                      <div key={i} className="flex items-center justify-between px-3 py-2 border-b border-gray-100 last:border-b-0">
+                        <span className="text-xs text-gray-600">{paymentMethodLabel[p.method]}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-semibold text-gray-800">{formatCurrency(p.amount)}</span>
+                          <button type="button" aria-label="Quitar pago" onClick={() => removeSplitPayment(i)} className="text-gray-300 hover:text-red-500 transition">
+                            <X size={13} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                    <div className="flex items-center justify-between px-3 py-2 bg-white border-t border-gray-200">
+                      <span className="text-xs font-semibold text-gray-700">Total registrado</span>
+                      <span className={`text-sm font-bold ${mixedTotal >= total ? 'text-green-600' : 'text-orange-500'}`}>
+                        {formatCurrency(mixedTotal)}
+                        {mixedTotal >= total ? ' ✓' : ` (falta ${formatCurrency(mixedRemaining)})`}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {mixedTotal > total && (
+                  <div className="bg-green-50 rounded-lg p-2 text-center">
+                    <p className="text-xs text-green-600">Cambio</p>
+                    <p className="font-bold text-green-700 text-lg">{formatCurrency(mixedTotal - total)}</p>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <>
+                <div>
+                  <label className="text-xs text-gray-500 mb-1 block">Monto recibido</label>
+                  <input
+                    type="number"
+                    value={paidAmount}
+                    onChange={(e) => setPaidAmount(e.target.value)}
+                    placeholder={formatCurrency(total)}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  {/* Quick denomination chips */}
+                  <div className="flex flex-wrap gap-1 mt-1.5">
+                    {[5000, 10000, 20000, 50000, 100000, 200000]
+                      .filter((d) => d >= total)
+                      .slice(0, 4)
+                      .concat(total % 1 === 0 ? [] : [])
+                      .map((d) => (
+                        <button
+                          key={d}
+                          type="button"
+                          onClick={() => setPaidAmount(String(d))}
+                          className="px-2 py-0.5 text-xs rounded-full border border-gray-200 text-gray-600 hover:border-blue-400 hover:text-blue-600 transition"
+                        >
+                          ${(d / 1000).toFixed(0)}k
+                        </button>
+                      ))}
+                    <button
+                      type="button"
+                      onClick={() => setPaidAmount(String(Math.ceil(total)))}
+                      className="px-2 py-0.5 text-xs rounded-full border border-blue-200 text-blue-600 hover:bg-blue-50 transition"
+                    >
+                      Exacto
+                    </button>
+                  </div>
+                </div>
+
+                {parseFloat(paidAmount) > 0 && (
+                  <div className="bg-green-50 rounded-lg p-2 text-center">
+                    <p className="text-xs text-green-600">Cambio</p>
+                    <p className="font-bold text-green-700 text-lg">{formatCurrency(change)}</p>
+                  </div>
+                )}
+              </>
+            )}
+
             <div>
-              <label className="text-xs text-gray-500 mb-1 block">Monto recibido</label>
+              <label className="text-xs text-gray-500 mb-1 block">Observaciones (opcional)</label>
               <input
-                type="number"
-                value={paidAmount}
-                onChange={(e) => setPaidAmount(e.target.value)}
-                placeholder={formatCurrency(total)}
+                type="text"
+                value={saleNotes}
+                onChange={(e) => setSaleNotes(e.target.value)}
+                placeholder="Ej: cliente pagó con transferencia..."
+                maxLength={200}
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
-
-            {parseFloat(paidAmount) > 0 && (
-              <div className="bg-green-50 rounded-lg p-2 text-center">
-                <p className="text-xs text-green-600">Cambio</p>
-                <p className="font-bold text-green-700 text-lg">{formatCurrency(change)}</p>
-              </div>
-            )}
 
             {isFree ? (
               <button
@@ -490,7 +708,7 @@ export default function POSPage() {
             <button
               type="button"
               onClick={handleSale}
-              disabled={saleMutation.isPending}
+              disabled={saleMutation.isPending || (paymentMethod === 'MIXED' && mixedTotal < total && !isCredit)}
               className="w-full bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white font-bold py-3 rounded-xl transition flex items-center justify-center gap-2"
             >
               {saleMutation.isPending ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle size={18} />}
@@ -509,6 +727,125 @@ export default function POSPage() {
         )}
       </div>
     </div>
+
+    {/* Credit payment modal */}
+    {showCreditPayment && customerId && (
+      <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+        onClick={() => { setShowCreditPayment(false); setSelectedCreditId(null); setCreditPayAmount(''); }}>
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md"
+          onClick={(e) => e.stopPropagation()}>
+          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700">
+            <h2 className="font-semibold text-gray-800 dark:text-white flex items-center gap-2">
+              <CreditCard size={18} className="text-orange-500" /> Registrar abono
+            </h2>
+            <button type="button" aria-label="Cerrar"
+              onClick={() => { setShowCreditPayment(false); setSelectedCreditId(null); setCreditPayAmount(''); }}
+              className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+              <X size={20} />
+            </button>
+          </div>
+
+          <div className="p-6 space-y-4">
+            {/* Customer debt summary */}
+            <div className="bg-orange-50 dark:bg-orange-900/20 rounded-lg px-4 py-2.5 flex justify-between items-center">
+              <span className="text-sm font-medium text-orange-700 dark:text-orange-400">
+                {customersData?.find((c: any) => c.id === customerId)?.name ?? customerSearch}
+              </span>
+              <span className="text-sm font-bold text-orange-700 dark:text-orange-400">
+                Deuda: {formatCurrency(selectedCustomer?.currentDebt || 0)}
+              </span>
+            </div>
+
+            {/* Credits list */}
+            {loadingCredits ? (
+              <div className="flex justify-center py-6"><Loader2 size={22} className="animate-spin text-gray-400" /></div>
+            ) : !customerCredits?.length ? (
+              <p className="text-sm text-gray-400 text-center py-4">No hay créditos pendientes</p>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-gray-500 dark:text-gray-400">Selecciona el crédito a abonar</p>
+                {customerCredits.map((credit: any) => (
+                  <button key={credit.id} type="button"
+                    onClick={() => { setSelectedCreditId(credit.id); setCreditPayAmount(String(credit.balance)); }}
+                    className={`w-full text-left px-4 py-3 rounded-xl border-2 transition ${
+                      selectedCreditId === credit.id
+                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                        : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500'
+                    }`}>
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <p className="text-sm font-medium text-gray-800 dark:text-white">
+                          {credit.sale?.invoiceNumber || 'Crédito directo'}
+                        </p>
+                        {credit.dueDate && (
+                          <p className="text-xs text-gray-400">Vence: {formatDate(credit.dueDate)}</p>
+                        )}
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm font-bold text-red-600">Saldo: {formatCurrency(credit.balance)}</p>
+                        <span className={`text-xs px-1.5 py-0.5 rounded-full ${statusColor(credit.status)}`}>
+                          {statusLabel(credit.status)}
+                        </span>
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Amount + method (only when a credit is selected) */}
+            {selectedCreditId && (
+              <>
+                <div>
+                  <label htmlFor="creditPayAmount" className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1 block">Monto del abono *</label>
+                  <input
+                    id="creditPayAmount"
+                    type="number"
+                    min={0.01}
+                    step={0.01}
+                    value={creditPayAmount}
+                    onChange={(e) => setCreditPayAmount(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5 block">Método de pago</label>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {(['CASH', 'NEQUI', 'DAVIPLATA', 'TRANSFER', 'CARD'] as const).map((m) => (
+                      <button key={m} type="button"
+                        onClick={() => setCreditPayMethod(m)}
+                        className={`text-xs py-1.5 px-1 rounded-lg border transition font-medium ${
+                          creditPayMethod === m
+                            ? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                            : 'border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:border-gray-300'
+                        }`}>
+                        {paymentMethodLabel[m]}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* Actions */}
+            <div className="flex gap-3 pt-1">
+              <button type="button"
+                onClick={() => { setShowCreditPayment(false); setSelectedCreditId(null); setCreditPayAmount(''); }}
+                className="flex-1 px-4 py-2.5 border border-gray-200 dark:border-gray-600 rounded-xl text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-700 transition">
+                Cancelar
+              </button>
+              <button type="button"
+                onClick={handleCreditPayment}
+                disabled={!selectedCreditId || !creditPayAmount || parseFloat(creditPayAmount) <= 0 || creditPaymentMutation.isPending}
+                className="flex-1 px-4 py-2.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-sm font-semibold disabled:opacity-60 flex items-center justify-center gap-2 transition">
+                {creditPaymentMutation.isPending && <Loader2 size={14} className="animate-spin" />}
+                Registrar abono
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
 
     {/* Inline customer creation modal */}
     {showCreateCustomer && (
