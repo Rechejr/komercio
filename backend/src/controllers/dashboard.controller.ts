@@ -7,9 +7,9 @@ import { AuthRequest } from '../middlewares/auth';
 export const dashboardController = {
   async getSummary(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const cacheKey = `dashboard:${req.user?.branchId || req.user?.businessId || 'global'}`;
+      const businessId = req.user!.businessId!;
+      const cacheKey = `dashboard:${businessId}`;
 
-      // Cache de 2 minutos — evita recalcular en cada clic
       const cached = await cache.get(cacheKey).catch(() => null);
       if (cached) return success(res, cached);
 
@@ -19,44 +19,44 @@ export const dashboardController = {
       weekStart.setDate(weekStart.getDate() - 7);
       const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
-      // Una sola query raw que calcula todo en la BD → un solo viaje a Neon
       const [summaryRaw, recentSales, topProducts] = await Promise.all([
         prisma.$queryRaw<any[]>`
           SELECT
-            -- Ventas hoy
-            COALESCE(SUM(CASE WHEN "createdAt" >= ${todayStart} AND status = 'COMPLETED' THEN total END), 0)        AS today_total,
-            COALESCE(COUNT(CASE WHEN "createdAt" >= ${todayStart} AND status = 'COMPLETED' THEN 1 END), 0)          AS today_count,
-            -- Ventas semana
-            COALESCE(SUM(CASE WHEN "createdAt" >= ${weekStart} AND status = 'COMPLETED' THEN total END), 0)         AS week_total,
-            COALESCE(COUNT(CASE WHEN "createdAt" >= ${weekStart} AND status = 'COMPLETED' THEN 1 END), 0)           AS week_count,
-            -- Ventas mes
-            COALESCE(SUM(CASE WHEN "createdAt" >= ${monthStart} AND status = 'COMPLETED' THEN total END), 0)        AS month_total,
-            COALESCE(COUNT(CASE WHEN "createdAt" >= ${monthStart} AND status = 'COMPLETED' THEN 1 END), 0)          AS month_count
-          FROM sales
-          WHERE "deletedAt" IS NULL
+            COALESCE(SUM(CASE WHEN s."createdAt" >= ${todayStart} AND s.status = 'COMPLETED' THEN s.total END), 0)   AS today_total,
+            COALESCE(COUNT(CASE WHEN s."createdAt" >= ${todayStart} AND s.status = 'COMPLETED' THEN 1 END), 0)       AS today_count,
+            COALESCE(SUM(CASE WHEN s."createdAt" >= ${weekStart}  AND s.status = 'COMPLETED' THEN s.total END), 0)   AS week_total,
+            COALESCE(COUNT(CASE WHEN s."createdAt" >= ${weekStart}  AND s.status = 'COMPLETED' THEN 1 END), 0)       AS week_count,
+            COALESCE(SUM(CASE WHEN s."createdAt" >= ${monthStart} AND s.status = 'COMPLETED' THEN s.total END), 0)   AS month_total,
+            COALESCE(COUNT(CASE WHEN s."createdAt" >= ${monthStart} AND s.status = 'COMPLETED' THEN 1 END), 0)       AS month_count
+          FROM sales s
+          JOIN branches br ON s."branchId" = br.id
+          WHERE br."businessId" = ${businessId}
+            AND s."deletedAt" IS NULL
         `,
 
-        // Últimas 5 ventas con join mínimo
         prisma.$queryRaw<any[]>`
           SELECT s.id, s."invoiceNumber", s.total, s.status, s."createdAt",
                  c.name AS customer_name, u.name AS user_name
           FROM sales s
+          JOIN branches br ON s."branchId" = br.id
           LEFT JOIN customers c ON s."customerId" = c.id
           LEFT JOIN users u ON s."userId" = u.id
           WHERE s."deletedAt" IS NULL
+            AND br."businessId" = ${businessId}
           ORDER BY s."createdAt" DESC
           LIMIT 5
         `,
 
-        // Top 5 productos del mes con nombre
         prisma.$queryRaw<any[]>`
           SELECT p.name, p.code, SUM(sd.quantity) AS total_qty
           FROM sale_details sd
           JOIN products p ON sd."productId" = p.id
           JOIN sales s ON sd."saleId" = s.id
+          JOIN branches br ON s."branchId" = br.id
           WHERE s."createdAt" >= ${monthStart}
             AND s.status = 'COMPLETED'
             AND s."deletedAt" IS NULL
+            AND br."businessId" = ${businessId}
           GROUP BY p.id, p.name, p.code
           ORDER BY total_qty DESC
           LIMIT 5
@@ -65,15 +65,21 @@ export const dashboardController = {
 
       const [totalProducts, lowStockRaw, totalCustomers, customersWithDebt, pendingCredits] =
         await Promise.all([
-          prisma.product.count({ where: { deletedAt: null, isActive: true } }),
+          prisma.product.count({ where: { deletedAt: null, isActive: true, businessId } }),
           prisma.$queryRaw<[{ c: bigint }]>`
             SELECT COUNT(*)::int AS c FROM products
-            WHERE stock <= "minStock" AND "deletedAt" IS NULL AND "isActive" = true
+            WHERE stock <= "minStock"
+              AND "deletedAt" IS NULL
+              AND "isActive" = true
+              AND "businessId" = ${businessId}
           `,
-          prisma.customer.count({ where: { deletedAt: null, isActive: true } }),
-          prisma.customer.count({ where: { currentDebt: { gt: 0 } } }),
+          prisma.customer.count({ where: { deletedAt: null, isActive: true, businessId } }),
+          prisma.customer.count({ where: { currentDebt: { gt: 0 }, businessId } }),
           prisma.credit.aggregate({
-            where: { status: { in: ['PENDING', 'PARTIAL', 'OVERDUE'] } },
+            where: {
+              status: { in: ['PENDING', 'PARTIAL', 'OVERDUE'] },
+              customer: { businessId },
+            },
             _sum: { balance: true },
             _count: { id: true },
           }),
@@ -87,10 +93,7 @@ export const dashboardController = {
           week:  { total: Number(sr.week_total || 0),  count: Number(sr.week_count || 0) },
           month: { total: Number(sr.month_total || 0), count: Number(sr.month_count || 0) },
         },
-        inventory: {
-          totalProducts,
-          lowStock,
-        },
+        inventory: { totalProducts, lowStock },
         customers: { total: totalCustomers, withDebt: customersWithDebt },
         credits: {
           totalBalance: pendingCredits._sum.balance || 0,
@@ -111,9 +114,7 @@ export const dashboardController = {
         })),
       };
 
-      // Guarda 2 minutos en cache (si Redis está disponible)
       await cache.set(cacheKey, data, 120).catch(() => {});
-
       return success(res, data);
     } catch (err) {
       next(err);
@@ -123,30 +124,32 @@ export const dashboardController = {
   async getSalesChart(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const { period = '30d' } = req.query;
+      const businessId = req.user!.businessId!;
       const days = period === '7d' ? 7 : period === '90d' ? 90 : 30;
       const startDate = new Date();
       startDate.setDate(startDate.getDate() - days);
 
-      const cacheKey = `chart:${req.user?.businessId || 'global'}:${period}`;
+      const cacheKey = `chart:${businessId}:${period}`;
       const cached = await cache.get(cacheKey).catch(() => null);
       if (cached) return success(res, cached);
 
       const sales = await prisma.$queryRaw<Array<{ date: string; total: number; count: bigint }>>`
         SELECT
-          TO_CHAR("createdAt", 'YYYY-MM-DD') AS date,
-          SUM(total)::float  AS total,
-          COUNT(*)::int      AS count
-        FROM sales
-        WHERE "createdAt" >= ${startDate}
-          AND status = 'COMPLETED'
-          AND "deletedAt" IS NULL
+          TO_CHAR(s."createdAt", 'YYYY-MM-DD') AS date,
+          SUM(s.total)::float AS total,
+          COUNT(*)::int       AS count
+        FROM sales s
+        JOIN branches br ON s."branchId" = br.id
+        WHERE s."createdAt" >= ${startDate}
+          AND s.status = 'COMPLETED'
+          AND s."deletedAt" IS NULL
+          AND br."businessId" = ${businessId}
         GROUP BY date
         ORDER BY date ASC
       `;
 
       const result = sales.map((s) => ({ ...s, count: Number(s.count), total: Number(s.total) }));
       await cache.set(cacheKey, result, 300).catch(() => {});
-
       return success(res, result);
     } catch (err) {
       next(err);

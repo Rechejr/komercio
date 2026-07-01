@@ -7,6 +7,7 @@ export const reportController = {
   async salesReport(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const { startDate, endDate, groupBy = 'day' } = req.query;
+      const businessId = req.user!.businessId!;
 
       const start = startDate ? new Date(startDate as string) : new Date(new Date().setDate(1));
       const end = endDate ? new Date(endDate as string) : new Date();
@@ -17,21 +18,28 @@ export const reportController = {
 
       const sales = await prisma.$queryRaw<Array<any>>`
         SELECT
-          TO_CHAR("createdAt", ${groupFormat}) AS period,
-          SUM(total)::float            AS revenue,
-          COUNT(*)::int                AS count,
-          SUM("taxAmount")::float      AS taxes,
-          SUM("discountAmount")::float AS discounts
-        FROM sales
-        WHERE "createdAt" BETWEEN ${start} AND ${end}
-          AND status = 'COMPLETED'
-          AND "deletedAt" IS NULL
+          TO_CHAR(s."createdAt", ${groupFormat}) AS period,
+          SUM(s.total)::float            AS revenue,
+          COUNT(*)::int                  AS count,
+          SUM(s."taxAmount")::float      AS taxes,
+          SUM(s."discountAmount")::float AS discounts
+        FROM sales s
+        JOIN branches br ON s."branchId" = br.id
+        WHERE s."createdAt" BETWEEN ${start} AND ${end}
+          AND s.status = 'COMPLETED'
+          AND s."deletedAt" IS NULL
+          AND br."businessId" = ${businessId}
         GROUP BY period
         ORDER BY period ASC
       `;
 
       const totals = await prisma.sale.aggregate({
-        where: { createdAt: { gte: start, lte: end }, status: 'COMPLETED', deletedAt: null },
+        where: {
+          createdAt: { gte: start, lte: end },
+          status: 'COMPLETED',
+          deletedAt: null,
+          branch: { businessId },
+        },
         _sum: { total: true, taxAmount: true, discountAmount: true },
         _count: { id: true },
       });
@@ -60,13 +68,19 @@ export const reportController = {
   async topProducts(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const { startDate, endDate, limit = '10' } = req.query;
+      const businessId = req.user!.businessId!;
       const start = startDate ? new Date(startDate as string) : new Date(new Date().setDate(1));
       const end = endDate ? new Date(endDate as string) : new Date();
 
       const top = await prisma.saleDetail.groupBy({
         by: ['productId'],
         where: {
-          sale: { createdAt: { gte: start, lte: end }, status: 'COMPLETED', deletedAt: null },
+          sale: {
+            createdAt: { gte: start, lte: end },
+            status: 'COMPLETED',
+            deletedAt: null,
+            branch: { businessId },
+          },
         },
         _sum: { quantity: true, total: true },
         orderBy: { _sum: { total: 'desc' } },
@@ -75,7 +89,7 @@ export const reportController = {
 
       const productIds = top.map((t) => t.productId);
       const products = await prisma.product.findMany({
-        where: { id: { in: productIds } },
+        where: { id: { in: productIds }, businessId },
         select: { id: true, name: true, code: true, category: { select: { name: true } } },
       });
       const productMap = new Map(products.map((p) => [p.id, p]));
@@ -93,6 +107,7 @@ export const reportController = {
   async topCustomers(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const { startDate, endDate, limit = '10' } = req.query;
+      const businessId = req.user!.businessId!;
       const start = startDate ? new Date(startDate as string) : new Date(new Date().setDate(1));
       const end = endDate ? new Date(endDate as string) : new Date();
 
@@ -103,6 +118,7 @@ export const reportController = {
           status: 'COMPLETED',
           deletedAt: null,
           customerId: { not: null },
+          branch: { businessId },
         },
         _sum: { total: true },
         _count: { id: true },
@@ -112,7 +128,7 @@ export const reportController = {
 
       const customerIds = top.map((t) => t.customerId!);
       const customers = await prisma.customer.findMany({
-        where: { id: { in: customerIds } },
+        where: { id: { in: customerIds }, businessId },
         select: { id: true, name: true, phone: true },
       });
       const customerMap = new Map(customers.map((c) => [c.id, c]));
@@ -130,25 +146,33 @@ export const reportController = {
   async profitReport(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const { startDate, endDate } = req.query;
+      const businessId = req.user!.businessId!;
       const start = startDate ? new Date(startDate as string) : new Date(new Date().setDate(1));
       const end = endDate ? new Date(endDate as string) : new Date();
 
       const [revenueData, expenseData, cogsResult] = await Promise.all([
         prisma.sale.aggregate({
-          where: { createdAt: { gte: start, lte: end }, status: 'COMPLETED', deletedAt: null },
+          where: {
+            createdAt: { gte: start, lte: end },
+            status: 'COMPLETED',
+            deletedAt: null,
+            branch: { businessId },
+          },
           _sum: { total: true, taxAmount: true, discountAmount: true },
         }),
         prisma.expense.aggregate({
-          where: { date: { gte: start, lte: end }, deletedAt: null },
+          where: { date: { gte: start, lte: end }, deletedAt: null, businessId },
           _sum: { amount: true },
         }),
         prisma.$queryRaw<[{ cogs: number }]>`
           SELECT COALESCE(SUM(sd."costPrice" * sd.quantity), 0)::float AS cogs
           FROM sale_details sd
           JOIN sales s ON sd."saleId" = s.id
+          JOIN branches br ON s."branchId" = br.id
           WHERE s."createdAt" BETWEEN ${start} AND ${end}
             AND s.status = 'COMPLETED'
             AND s."deletedAt" IS NULL
+            AND br."businessId" = ${businessId}
         `,
       ]);
 

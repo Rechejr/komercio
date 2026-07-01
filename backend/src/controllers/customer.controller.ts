@@ -9,7 +9,8 @@ export const customerController = {
     try {
       const { page, limit, skip } = getPagination(req);
       const search = getSearch(req);
-      const where: any = { deletedAt: null };
+      const businessId = req.user!.businessId;
+      const where: any = { deletedAt: null, businessId };
 
       if (search) {
         where.OR = [
@@ -46,7 +47,7 @@ export const customerController = {
   async getOne(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const customer = await prisma.customer.findFirst({
-        where: { id: req.params.id, deletedAt: null },
+        where: { id: req.params.id, deletedAt: null, businessId: req.user!.businessId },
         include: {
           sales: {
             orderBy: { createdAt: 'desc' },
@@ -72,7 +73,11 @@ export const customerController = {
     try {
       const { creditLimit, ...rest } = req.body;
       const customer = await prisma.customer.create({
-        data: { ...rest, creditLimit: creditLimit != null && creditLimit !== '' ? parseFloat(creditLimit) : 0 },
+        data: {
+          ...rest,
+          businessId: req.user!.businessId,
+          creditLimit: creditLimit != null && creditLimit !== '' ? parseFloat(creditLimit) : 0,
+        },
       });
       return created(res, customer, 'Cliente creado');
     } catch (err) {
@@ -83,7 +88,9 @@ export const customerController = {
   async update(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const { id } = req.params;
-      const existing = await prisma.customer.findFirst({ where: { id, deletedAt: null } });
+      const existing = await prisma.customer.findFirst({
+        where: { id, deletedAt: null, businessId: req.user!.businessId },
+      });
       if (!existing) throw new AppError('Cliente no encontrado', 404);
 
       const { creditLimit, ...rest } = req.body;
@@ -100,6 +107,10 @@ export const customerController = {
   async delete(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const { id } = req.params;
+      const existing = await prisma.customer.findFirst({
+        where: { id, deletedAt: null, businessId: req.user!.businessId },
+      });
+      if (!existing) throw new AppError('Cliente no encontrado', 404);
       await prisma.customer.update({ where: { id }, data: { deletedAt: new Date() } });
       return success(res, null, 'Cliente eliminado');
     } catch (err) {
@@ -111,6 +122,12 @@ export const customerController = {
     try {
       const { page, limit, skip } = getPagination(req);
       const { id } = req.params;
+
+      // Verify the customer belongs to this business
+      const customer = await prisma.customer.findFirst({
+        where: { id, deletedAt: null, businessId: req.user!.businessId },
+      });
+      if (!customer) throw new AppError('Cliente no encontrado', 404);
 
       const [sales, total] = await Promise.all([
         prisma.sale.findMany({

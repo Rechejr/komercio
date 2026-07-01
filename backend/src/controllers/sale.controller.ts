@@ -37,7 +37,7 @@ export const saleController = {
       const search = getSearch(req);
       const { status, customerId, startDate, endDate, branchId } = req.query;
 
-      const where: any = { deletedAt: null };
+      const where: any = { deletedAt: null, branch: { businessId: req.user!.businessId } };
       if (search) {
         where.OR = [
           { invoiceNumber: { contains: search, mode: 'insensitive' } },
@@ -78,7 +78,7 @@ export const saleController = {
   async getOne(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const sale = await prisma.sale.findFirst({
-        where: { id: req.params.id, deletedAt: null },
+        where: { id: req.params.id, deletedAt: null, branch: { businessId: req.user!.businessId } },
         include: {
           customer: true,
           user: { select: { id: true, name: true } },
@@ -189,7 +189,7 @@ export const saleController = {
         for (const item of items) {
           const product = productMap.get(item.productId)!;
           const newStock = product.stock - item.quantity;
-          await tx.product.update({ where: { id: product.id }, data: { stock: newStock } });
+          await tx.product.update({ where: { id: product.id }, data: { stock: { decrement: item.quantity } } });
           await tx.inventoryMovement.create({
             data: {
               productId: product.id,
@@ -277,7 +277,7 @@ export const saleController = {
       const { reason } = req.body;
 
       const sale = await prisma.sale.findFirst({
-        where: { id, deletedAt: null },
+        where: { id, deletedAt: null, branch: { businessId: req.user!.businessId } },
         include: { details: true },
       });
       if (!sale) throw new AppError('Venta no encontrada', 404);
@@ -291,7 +291,7 @@ export const saleController = {
           const product = await tx.product.findUnique({ where: { id: detail.productId } });
           if (product) {
             const newStock = product.stock + detail.quantity;
-            await tx.product.update({ where: { id: product.id }, data: { stock: newStock } });
+            await tx.product.update({ where: { id: product.id }, data: { stock: { increment: detail.quantity } } });
             await tx.inventoryMovement.create({
               data: {
                 productId: product.id,

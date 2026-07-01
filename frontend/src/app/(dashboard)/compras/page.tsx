@@ -6,7 +6,7 @@ import { useForm, useFieldArray } from 'react-hook-form';
 import { api } from '@/lib/api';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import toast from 'react-hot-toast';
-import { Plus, ShoppingBag, X, Loader2, Trash2, Edit, ChevronRight, FileDown } from 'lucide-react';
+import { Plus, ShoppingBag, X, Loader2, Trash2, Edit, ChevronRight, FileDown, Search } from 'lucide-react';
 import { downloadExcel } from '@/lib/exportExcel';
 
 export default function ComprasPage() {
@@ -16,6 +16,12 @@ export default function ComprasPage() {
   const [editItem, setEditItem] = useState<any>(null);
   const [selected, setSelected] = useState<any>(null);
   const [deleteTarget, setDeleteTarget] = useState<any>(null);
+  const [supplierSearch, setSupplierSearch] = useState('');
+  const [showSupplierDD, setShowSupplierDD] = useState(false);
+  const [selectedSupplierName, setSelectedSupplierName] = useState('');
+  const [showCreateSupplier, setShowCreateSupplier] = useState(false);
+  const [newSupName, setNewSupName] = useState('');
+  const [newSupPhone, setNewSupPhone] = useState('');
 
   const { data, isLoading } = useQuery({
     queryKey: ['purchases', page],
@@ -38,7 +44,7 @@ export default function ComprasPage() {
     queryFn: () => api.get('/products?limit=200&isActive=true').then((r) => r.data.data),
   });
 
-  const { register, handleSubmit, control, reset, watch } = useForm({
+  const { register, handleSubmit, control, reset, watch, setValue, formState: { errors } } = useForm({
     defaultValues: { supplierId: '', invoiceNumber: '', notes: '', purchaseDate: '', items: [{ productId: '', quantity: 1, unitCost: 0, taxRate: 0 }] },
   });
 
@@ -62,6 +68,8 @@ export default function ComprasPage() {
       setShowForm(false);
       setEditItem(null);
       reset();
+      setSelectedSupplierName('');
+      setSupplierSearch('');
     },
     onError: (err: any) => toast.error(err.response?.data?.error || 'Error al guardar'),
   });
@@ -78,11 +86,29 @@ export default function ComprasPage() {
     onError: (err: any) => toast.error(err.response?.data?.error || 'Error al eliminar'),
   });
 
+  const createSupplierMutation = useMutation({
+    mutationFn: (d: { name: string; phone?: string }) =>
+      api.post('/suppliers', d).then((r) => r.data.data),
+    onSuccess: (supplier) => {
+      setValue('supplierId', supplier.id);
+      setSelectedSupplierName(supplier.name);
+      setSupplierSearch('');
+      setShowCreateSupplier(false);
+      setNewSupName('');
+      setNewSupPhone('');
+      qc.invalidateQueries({ queryKey: ['suppliers-list'] });
+      toast.success('Proveedor creado');
+    },
+    onError: (err: any) => toast.error(err.response?.data?.error || 'Error al crear proveedor'),
+  });
+
   function openEdit(purchase: any) {
     setSelected(null);
     api.get(`/purchases/${purchase.id}`).then((r) => {
       const p = r.data.data;
       setEditItem(p);
+      setSelectedSupplierName(p.supplier?.name || '');
+      setSupplierSearch('');
       reset({
         supplierId: p.supplierId,
         invoiceNumber: p.invoiceNumber || '',
@@ -117,7 +143,7 @@ export default function ComprasPage() {
       <div className="flex justify-end">
         <button
           type="button"
-          onClick={() => { setEditItem(null); reset({ supplierId: '', invoiceNumber: '', notes: '', purchaseDate: '', items: [{ productId: '', quantity: 1, unitCost: 0, taxRate: 0 }] }); setShowForm(true); }}
+          onClick={() => { setEditItem(null); reset({ supplierId: '', invoiceNumber: '', notes: '', purchaseDate: '', items: [{ productId: '', quantity: 1, unitCost: 0, taxRate: 0 }] }); setSelectedSupplierName(''); setSupplierSearch(''); setShowForm(true); }}
           className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition"
         >
           <Plus size={16} /> Registrar compra
@@ -282,16 +308,52 @@ export default function ComprasPage() {
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700">
               <h2 className="font-semibold text-gray-800 dark:text-white">{editItem ? 'Editar compra' : 'Registrar compra'}</h2>
-              <button type="button" aria-label="Cerrar" onClick={() => { setShowForm(false); setEditItem(null); }}><X size={20} className="text-gray-400" /></button>
+              <button type="button" aria-label="Cerrar" onClick={() => { setShowForm(false); setEditItem(null); setSelectedSupplierName(''); setSupplierSearch(''); }}><X size={20} className="text-gray-400" /></button>
             </div>
             <form onSubmit={handleSubmit((d) => saveMutation.mutate(d))} className="p-6 space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs font-medium text-gray-600 mb-1 block">Proveedor *</label>
-                  <select {...register('supplierId', { required: true })} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
-                    <option value="">Seleccionar...</option>
-                    {suppliers?.map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}
-                  </select>
+                  <input type="hidden" {...register('supplierId', { required: true })} />
+                  <div className="relative">
+                    <div className="relative">
+                      <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                      <input
+                        type="text"
+                        placeholder={selectedSupplierName || 'Buscar proveedor...'}
+                        value={supplierSearch}
+                        onChange={(e) => { setSupplierSearch(e.target.value); setShowSupplierDD(true); }}
+                        onFocus={() => setShowSupplierDD(true)}
+                        onBlur={() => setTimeout(() => setShowSupplierDD(false), 150)}
+                        className="w-full pl-7 pr-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                      />
+                    </div>
+                    {selectedSupplierName && !supplierSearch && (
+                      <p className="mt-1 text-xs text-blue-600 dark:text-blue-400 font-medium truncate">{selectedSupplierName}</p>
+                    )}
+                    {showSupplierDD && (
+                      <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg z-20 max-h-44 overflow-y-auto">
+                        {(suppliers?.filter((s: any) =>
+                          !supplierSearch || s.name.toLowerCase().includes(supplierSearch.toLowerCase())
+                        ) ?? []).map((s: any) => (
+                          <button key={s.id} type="button"
+                            onMouseDown={() => { setValue('supplierId', s.id); setSelectedSupplierName(s.name); setSupplierSearch(''); setShowSupplierDD(false); }}
+                            className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 dark:hover:bg-gray-700 text-gray-800 dark:text-white">
+                            {s.name}
+                          </button>
+                        ))}
+                        {suppliers?.length === 0 && (
+                          <p className="px-3 py-2 text-xs text-gray-400">Sin proveedores</p>
+                        )}
+                        <button type="button"
+                          onMouseDown={(e) => { e.preventDefault(); setShowSupplierDD(false); setShowCreateSupplier(true); }}
+                          className="w-full flex items-center gap-1.5 px-3 py-2 text-sm text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-gray-700 border-t border-gray-100 dark:border-gray-700">
+                          <Plus size={13} /> Crear proveedor nuevo
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  {errors.supplierId && <p className="mt-1 text-xs text-red-500">Selecciona un proveedor</p>}
                 </div>
                 <div>
                   <label className="text-xs font-medium text-gray-600 mb-1 block">N° Factura proveedor</label>
@@ -373,7 +435,7 @@ export default function ComprasPage() {
               )}
 
               <div className="flex justify-end gap-3 border-t border-gray-100 pt-4">
-                <button type="button" onClick={() => { setShowForm(false); setEditItem(null); }} className="px-4 py-2 border border-gray-200 rounded-lg text-sm hover:bg-gray-50 transition">Cancelar</button>
+                <button type="button" onClick={() => { setShowForm(false); setEditItem(null); setSelectedSupplierName(''); setSupplierSearch(''); }} className="px-4 py-2 border border-gray-200 rounded-lg text-sm hover:bg-gray-50 transition">Cancelar</button>
                 <button type="submit" disabled={saveMutation.isPending}
                   className="px-6 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 disabled:opacity-60 flex items-center gap-2">
                   {saveMutation.isPending && <Loader2 size={14} className="animate-spin" />}
@@ -381,6 +443,47 @@ export default function ComprasPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Inline supplier creation modal */}
+      {showCreateSupplier && (
+        <div className="fixed inset-0 bg-black/40 z-[60] flex items-center justify-center p-4"
+          onClick={() => { setShowCreateSupplier(false); setNewSupName(''); setNewSupPhone(''); }}>
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-sm p-5 space-y-3"
+            onClick={(e) => e.stopPropagation()}>
+            <h3 className="font-semibold text-gray-800 dark:text-white">Crear proveedor</h3>
+            <input
+              type="text"
+              placeholder="Nombre *"
+              value={newSupName}
+              onChange={(e) => setNewSupName(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && newSupName.trim() && createSupplierMutation.mutate({ name: newSupName.trim(), phone: newSupPhone.trim() || undefined })}
+              autoFocus
+              className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+            />
+            <input
+              type="text"
+              placeholder="Teléfono (opcional)"
+              value={newSupPhone}
+              onChange={(e) => setNewSupPhone(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && newSupName.trim() && createSupplierMutation.mutate({ name: newSupName.trim(), phone: newSupPhone.trim() || undefined })}
+              className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+            />
+            <div className="flex gap-2 pt-1">
+              <button type="button"
+                onClick={() => { setShowCreateSupplier(false); setNewSupName(''); setNewSupPhone(''); }}
+                className="flex-1 px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700">
+                Cancelar
+              </button>
+              <button type="button"
+                onClick={() => newSupName.trim() && createSupplierMutation.mutate({ name: newSupName.trim(), phone: newSupPhone.trim() || undefined })}
+                disabled={!newSupName.trim() || createSupplierMutation.isPending}
+                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50">
+                {createSupplierMutation.isPending ? 'Guardando...' : 'Guardar'}
+              </button>
+            </div>
           </div>
         </div>
       )}

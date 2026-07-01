@@ -9,7 +9,8 @@ export const supplierController = {
     try {
       const { page, limit, skip } = getPagination(req);
       const search = getSearch(req);
-      const where: any = { deletedAt: null };
+      const businessId = req.user!.businessId;
+      const where: any = { deletedAt: null, businessId };
       if (search) {
         where.OR = [
           { name: { contains: search, mode: 'insensitive' } },
@@ -31,7 +32,7 @@ export const supplierController = {
   async getOne(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const supplier = await prisma.supplier.findFirst({
-        where: { id: req.params.id, deletedAt: null },
+        where: { id: req.params.id, deletedAt: null, businessId: req.user!.businessId },
         include: {
           products: { select: { id: true, name: true, code: true, stock: true } },
           purchases: { orderBy: { createdAt: 'desc' }, take: 10, select: { id: true, invoiceNumber: true, total: true, purchaseDate: true } },
@@ -44,7 +45,9 @@ export const supplierController = {
 
   async create(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const supplier = await prisma.supplier.create({ data: req.body });
+      const supplier = await prisma.supplier.create({
+        data: { ...req.body, businessId: req.user!.businessId },
+      });
       return created(res, supplier, 'Proveedor creado');
     } catch (err) { next(err); }
   },
@@ -52,6 +55,10 @@ export const supplierController = {
   async update(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const { id } = req.params;
+      const existing = await prisma.supplier.findFirst({
+        where: { id, deletedAt: null, businessId: req.user!.businessId },
+      });
+      if (!existing) throw new AppError('Proveedor no encontrado', 404);
       const supplier = await prisma.supplier.update({ where: { id }, data: req.body });
       return success(res, supplier, 'Proveedor actualizado');
     } catch (err) { next(err); }
@@ -59,6 +66,10 @@ export const supplierController = {
 
   async delete(req: AuthRequest, res: Response, next: NextFunction) {
     try {
+      const existing = await prisma.supplier.findFirst({
+        where: { id: req.params.id, deletedAt: null, businessId: req.user!.businessId },
+      });
+      if (!existing) throw new AppError('Proveedor no encontrado', 404);
       await prisma.supplier.update({ where: { id: req.params.id }, data: { deletedAt: new Date() } });
       return success(res, null, 'Proveedor eliminado');
     } catch (err) { next(err); }

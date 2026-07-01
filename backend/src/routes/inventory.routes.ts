@@ -1,17 +1,19 @@
 import { Router } from 'express';
 import { prisma } from '../config/database';
-import { authenticate } from '../middlewares/auth';
+import { authenticate, AuthRequest } from '../middlewares/auth';
 import { success, paginated } from '../utils/response';
 import { getPagination } from '../utils/pagination';
 
 const router = Router();
 router.use(authenticate);
 
-router.get('/movements', async (req: any, res, next) => {
+router.get('/movements', async (req: AuthRequest, res, next) => {
   try {
     const { page, limit, skip } = getPagination(req);
     const { productId, type } = req.query;
-    const where: any = {};
+    const businessId = req.user!.businessId;
+
+    const where: any = { product: { businessId } };
     if (productId) where.productId = productId;
     if (type) where.type = type;
 
@@ -27,15 +29,18 @@ router.get('/movements', async (req: any, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.get('/valuation', async (_req, res, next) => {
+router.get('/valuation', async (req: AuthRequest, res, next) => {
   try {
+    const businessId = req.user!.businessId;
     const result = await prisma.$queryRaw<[{ total_cost: number; total_sale: number; count: bigint }]>`
       SELECT
         SUM("costPrice" * stock) as total_cost,
         SUM("salePrice" * stock) as total_sale,
         COUNT(*) as count
       FROM products
-      WHERE "deletedAt" IS NULL AND "isActive" = true
+      WHERE "deletedAt" IS NULL
+        AND "isActive" = true
+        AND "businessId" = ${businessId}
     `;
     return success(res, {
       totalCostValue: Number(result[0]?.total_cost || 0),

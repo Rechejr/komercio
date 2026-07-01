@@ -31,6 +31,9 @@ export default function POSPage() {
   const [isCredit, setIsCredit] = useState(false);
   const [lastSale, setLastSale] = useState<any>(null);
   const [saleError, setSaleError] = useState('');
+  const [showCreateCustomer, setShowCreateCustomer] = useState(false);
+  const [newCustName, setNewCustName] = useState('');
+  const [newCustPhone, setNewCustPhone] = useState('');
   const searchRef = useRef<HTMLInputElement>(null);
 
   const { data: categories } = useQuery({
@@ -73,6 +76,21 @@ export default function POSPage() {
       setSaleError(message);
       toast.error(message);
     },
+  });
+
+  const createCustomerMutation = useMutation({
+    mutationFn: (d: { name: string; phone?: string }) =>
+      api.post('/customers', d).then((r) => r.data.data),
+    onSuccess: (customer) => {
+      setCustomer(customer.id);
+      setCustomerSearch(customer.name);
+      setShowCreateCustomer(false);
+      setNewCustName('');
+      setNewCustPhone('');
+      qc.invalidateQueries({ queryKey: ['customers-search'] });
+      toast.success('Cliente creado');
+    },
+    onError: (err: any) => toast.error(err.response?.data?.error || 'Error al crear cliente'),
   });
 
   const { subtotal, taxes, discount, total } = totals();
@@ -142,6 +160,7 @@ export default function POSPage() {
   }
 
   return (
+    <>
     <div className="flex flex-col lg:flex-row gap-4 lg:h-full lg:max-h-[calc(100vh-120px)]">
       {/* Left: Product Search */}
       <div className="flex-1 flex flex-col gap-4 lg:overflow-hidden">
@@ -359,6 +378,11 @@ export default function POSPage() {
                       )}
                     </button>
                   ))}
+                  <button type="button"
+                    onMouseDown={(e) => { e.preventDefault(); setShowCustomerList(false); setShowCreateCustomer(true); }}
+                    className="w-full flex items-center gap-1.5 px-3 py-2 text-sm text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-gray-700 border-t border-gray-100 dark:border-gray-700">
+                    <Plus size={13} /> Crear cliente nuevo
+                  </button>
                 </div>
               )}
             </div>
@@ -485,5 +509,47 @@ export default function POSPage() {
         )}
       </div>
     </div>
+
+    {/* Inline customer creation modal */}
+    {showCreateCustomer && (
+      <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
+        onClick={() => { setShowCreateCustomer(false); setNewCustName(''); setNewCustPhone(''); }}>
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-sm p-5 space-y-3"
+          onClick={(e) => e.stopPropagation()}>
+          <h3 className="font-semibold text-gray-800 dark:text-white">Crear cliente</h3>
+          <input
+            type="text"
+            placeholder="Nombre *"
+            value={newCustName}
+            onChange={(e) => setNewCustName(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && newCustName.trim() && createCustomerMutation.mutate({ name: newCustName.trim(), phone: newCustPhone.trim() || undefined })}
+            autoFocus
+            className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+          />
+          <input
+            type="text"
+            placeholder="Teléfono (opcional)"
+            value={newCustPhone}
+            onChange={(e) => setNewCustPhone(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && newCustName.trim() && createCustomerMutation.mutate({ name: newCustName.trim(), phone: newCustPhone.trim() || undefined })}
+            className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+          />
+          <div className="flex gap-2 pt-1">
+            <button type="button"
+              onClick={() => { setShowCreateCustomer(false); setNewCustName(''); setNewCustPhone(''); }}
+              className="flex-1 px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700">
+              Cancelar
+            </button>
+            <button type="button"
+              onClick={() => newCustName.trim() && createCustomerMutation.mutate({ name: newCustName.trim(), phone: newCustPhone.trim() || undefined })}
+              disabled={!newCustName.trim() || createCustomerMutation.isPending}
+              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50">
+              {createCustomerMutation.isPending ? 'Guardando...' : 'Guardar'}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }

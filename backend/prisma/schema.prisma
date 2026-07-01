@@ -115,6 +115,13 @@ model Business {
   owner       User     @relation("BusinessOwner", fields: [ownerId], references: [id])
   branches    Branch[]
   categories  Category[]
+  customers   Customer[]
+  suppliers   Supplier[]
+  brands      Brand[]
+  purchases   Purchase[]
+  expenses    Expense[]
+  expenseCategories ExpenseCategory[]
+  products    Product[]
   plan           String   @default("free")
   planExpiresAt  DateTime?
   settings    Json?
@@ -170,11 +177,14 @@ model Brand {
   id          String    @id @default(uuid())
   name        String
   logo        String?
+  businessId  String?
+  business    Business? @relation(fields: [businessId], references: [id])
   products    Product[]
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   deletedAt   DateTime?
 
+  @@index([businessId])
   @@map("brands")
 }
 
@@ -193,6 +203,8 @@ model Product {
   supplier        Supplier? @relation(fields: [supplierId], references: [id])
   branchId        String?
   branch          Branch?   @relation(fields: [branchId], references: [id])
+  businessId      String?
+  business        Business? @relation(fields: [businessId], references: [id])
   costPrice       Float     @default(0)
   salePrice       Float     @default(0)
   wholesalePrice  Float?
@@ -215,6 +227,7 @@ model Product {
   @@index([barcode])
   @@index([categoryId])
   @@index([branchId])
+  @@index([businessId])
   @@map("products")
 }
 
@@ -240,25 +253,29 @@ model InventoryMovement {
 
 // ─── CUSTOMERS ────────────────────────────────────────────────────────────────
 model Customer {
-  id          String    @id @default(uuid())
-  name        String
-  document    String?   @unique
-  documentType String?  @default("CC")
-  phone       String?
-  email       String?
-  address     String?
-  city        String?
-  notes       String?
-  creditLimit Float     @default(0)
-  currentDebt Float     @default(0)
-  loyaltyPoints Int     @default(0)
-  isActive    Boolean   @default(true)
-  sales       Sale[]
-  credits     Credit[]
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  deletedAt   DateTime?
+  id           String    @id @default(uuid())
+  businessId   String?
+  business     Business? @relation(fields: [businessId], references: [id])
+  name         String
+  document     String?
+  documentType String?   @default("CC")
+  phone        String?
+  email        String?
+  address      String?
+  city         String?
+  notes        String?
+  creditLimit  Float     @default(0)
+  currentDebt  Float     @default(0)
+  loyaltyPoints Int      @default(0)
+  isActive     Boolean   @default(true)
+  sales        Sale[]
+  credits      Credit[]
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
 
+  @@unique([businessId, document])
+  @@index([businessId])
   @@index([document])
   @@map("customers")
 }
@@ -266,6 +283,8 @@ model Customer {
 // ─── SUPPLIERS ────────────────────────────────────────────────────────────────
 model Supplier {
   id          String    @id @default(uuid())
+  businessId  String?
+  business    Business? @relation(fields: [businessId], references: [id])
   name        String
   document    String?
   phone       String?
@@ -281,6 +300,7 @@ model Supplier {
   updatedAt   DateTime  @updatedAt
   deletedAt   DateTime?
 
+  @@index([businessId])
   @@map("suppliers")
 }
 
@@ -342,6 +362,8 @@ model SaleDetail {
 // ─── PURCHASES ────────────────────────────────────────────────────────────────
 model Purchase {
   id              String    @id @default(uuid())
+  businessId      String?
+  business        Business? @relation(fields: [businessId], references: [id])
   invoiceNumber   String?
   supplierId      String
   supplier        Supplier  @relation(fields: [supplierId], references: [id])
@@ -358,6 +380,7 @@ model Purchase {
   deletedAt       DateTime?
 
   @@index([supplierId])
+  @@index([businessId])
   @@map("purchases")
 }
 
@@ -382,17 +405,22 @@ model PurchaseDetail {
 // ─── EXPENSES ─────────────────────────────────────────────────────────────────
 model ExpenseCategory {
   id          String    @id @default(uuid())
+  businessId  String?
+  business    Business? @relation(fields: [businessId], references: [id])
   name        String
   description String?
   expenses    Expense[]
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
+  @@index([businessId])
   @@map("expense_categories")
 }
 
 model Expense {
   id          String          @id @default(uuid())
+  businessId  String?
+  business    Business?       @relation(fields: [businessId], references: [id])
   categoryId  String?
   category    ExpenseCategory? @relation(fields: [categoryId], references: [id])
   description String
@@ -405,6 +433,7 @@ model Expense {
   updatedAt   DateTime        @updatedAt
   deletedAt   DateTime?
 
+  @@index([businessId])
   @@index([categoryId])
   @@index([date])
   @@map("expenses")

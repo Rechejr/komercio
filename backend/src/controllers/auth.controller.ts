@@ -22,6 +22,7 @@ export const authController = {
 
       const hashedPassword = await bcrypt.hash(password, 12);
       const emailVerifyToken = crypto.randomBytes(32).toString('hex');
+      const emailVerifyTokenHash = crypto.createHash('sha256').update(emailVerifyToken).digest('hex');
 
       const user = await prisma.$transaction(async (tx) => {
         const newUser = await tx.user.create({
@@ -30,7 +31,7 @@ export const authController = {
             email,
             password: hashedPassword,
             role: 'ADMIN',
-            emailVerifyToken,
+            emailVerifyToken: emailVerifyTokenHash,
           },
           select: { id: true, name: true, email: true, role: true },
         });
@@ -50,6 +51,14 @@ export const authController = {
             where: { id: newUser.id },
             data: { branchId: business.branches[0].id },
           });
+          // Seed default expense categories for the new business
+          const defaultCategories = [
+            'Arriendo', 'Servicios públicos', 'Nómina', 'Transporte',
+            'Publicidad', 'Insumos', 'Mantenimiento', 'Otros',
+          ];
+          await tx.expenseCategory.createMany({
+            data: defaultCategories.map((name) => ({ name, businessId: business.id })),
+          });
         }
 
         return newUser;
@@ -68,8 +77,9 @@ export const authController = {
     try {
       const { token } = req.params;
 
+      const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
       const user = await prisma.user.findFirst({
-        where: { emailVerifyToken: token, isEmailVerified: false },
+        where: { emailVerifyToken: tokenHash, isEmailVerified: false },
       });
 
       if (!user) throw new AppError('Token inválido o cuenta ya verificada', 400);
@@ -97,9 +107,10 @@ export const authController = {
       }
 
       const newToken = crypto.randomBytes(32).toString('hex');
+      const newTokenHash = crypto.createHash('sha256').update(newToken).digest('hex');
       await prisma.user.update({
         where: { id: user.id },
-        data: { emailVerifyToken: newToken },
+        data: { emailVerifyToken: newTokenHash },
       });
 
       emailService.sendVerification(user.email, user.name, newToken);
@@ -138,11 +149,12 @@ export const authController = {
       const accessToken = generateAccessToken(payload);
       const refreshToken = generateRefreshToken(payload);
 
+      const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
       await prisma.refreshToken.create({
         data: {
           token: refreshToken,
           userId: user.id,
-          expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+          expiresAt: new Date(Date.now() + THIRTY_DAYS),
         },
       });
 
@@ -155,7 +167,7 @@ export const authController = {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'strict',
-        maxAge: 7 * 24 * 60 * 60 * 1000,
+        maxAge: THIRTY_DAYS,
       });
 
       return success(res, {
@@ -188,16 +200,49 @@ export const authController = {
         throw new AppError('Refresh token inválido o expirado', 401);
       }
 
-      const payload = verifyRefreshToken(token);
+      // Verify JWT signature before touching DB
+      verifyRefreshToken(token);
 
-      const newAccessToken = generateAccessToken({
-        userId: payload.userId,
-        email: payload.email,
-        role: payload.role,
-        businessId: payload.businessId,
-        branchId: payload.branchId,
+      // Revalidate user: isActive, role, businessId (can change after token was issued)
+      const user = await prisma.user.findUnique({
+        where: { id: stored.userId },
+        include: {
+          branch: { select: { businessId: true } },
+        },
       });
 
+      if (!user || !user.isActive || user.deletedAt) {
+        await prisma.refreshToken.delete({ where: { token } });
+        throw new AppError('Cuenta desactivada o eliminada', 401);
+      }
+
+      const payload = {
+        userId: user.id,
+        email: user.email,
+        role: user.role,
+        businessId: user.branch?.businessId,
+        branchId: user.branchId ?? undefined,
+      };
+
+      // Rotation: delete old token, issue a new one
+      const newRefreshToken = generateRefreshToken(payload);
+      const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
+
+      await prisma.$transaction([
+        prisma.refreshToken.delete({ where: { token } }),
+        prisma.refreshToken.create({
+          data: { token: newRefreshToken, userId: user.id, expiresAt: new Date(Date.now() + THIRTY_DAYS) },
+        }),
+      ]);
+
+      res.cookie('refreshToken', newRefreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
+        maxAge: THIRTY_DAYS,
+      });
+
+      const newAccessToken = generateAccessToken(payload);
       return success(res, { accessToken: newAccessToken });
     } catch (err) {
       next(err);
@@ -226,14 +271,15 @@ export const authController = {
       if (!user) return success(res, null, 'Si el email existe, recibirás un correo.');
 
       const resetToken = crypto.randomBytes(32).toString('hex');
+      const resetTokenHash = crypto.createHash('sha256').update(resetToken).digest('hex');
       const expires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
 
       await prisma.user.update({
         where: { id: user.id },
-        data: { resetPasswordToken: resetToken, resetPasswordExpires: expires },
+        data: { resetPasswordToken: resetTokenHash, resetPasswordExpires: expires },
       });
 
-      await cache.set(`reset:${resetToken}`, user.id, 3600);
+      await cache.set(`reset:${resetTokenHash}`, user.id, 3600);
 
       emailService.sendPasswordReset(user.email, user.name, resetToken);
 
@@ -247,9 +293,10 @@ export const authController = {
     try {
       const { token, password } = req.body;
 
+      const resetHash = crypto.createHash('sha256').update(token).digest('hex');
       const user = await prisma.user.findFirst({
         where: {
-          resetPasswordToken: token,
+          resetPasswordToken: resetHash,
           resetPasswordExpires: { gt: new Date() },
         },
       });
@@ -263,7 +310,7 @@ export const authController = {
       });
 
       await prisma.refreshToken.deleteMany({ where: { userId: user.id } });
-      await cache.del(`reset:${token}`);
+      await cache.del(`reset:${resetHash}`);
 
       return success(res, null, 'Contraseña actualizada exitosamente');
     } catch (err) {

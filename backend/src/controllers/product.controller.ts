@@ -14,9 +14,10 @@ export const productController = {
     try {
       const { page, limit, skip } = getPagination(req);
       const search = getSearch(req);
-      const { categoryId, brandId, supplierId, lowStock, isActive } = req.query;
+      const { categoryId, brandId, supplierId, isActive } = req.query;
+      const businessId = req.user!.businessId;
 
-      const where: any = { deletedAt: null };
+      const where: any = { deletedAt: null, businessId };
       if (search) {
         where.OR = [
           { name: { contains: search, mode: 'insensitive' } },
@@ -27,7 +28,6 @@ export const productController = {
       if (categoryId) where.categoryId = categoryId;
       if (brandId) where.brandId = brandId;
       if (supplierId) where.supplierId = supplierId;
-      // lowStock filter handled via getLowStock endpoint (cross-column compare requires raw SQL)
       if (isActive !== undefined) where.isActive = isActive === 'true';
 
       const [products, total] = await Promise.all([
@@ -58,7 +58,7 @@ export const productController = {
       if (cached) return success(res, cached);
 
       const product = await prisma.product.findFirst({
-        where: { id: req.params.id, deletedAt: null },
+        where: { id: req.params.id, deletedAt: null, businessId: req.user!.businessId },
         include: {
           category: true,
           brand: true,
@@ -81,6 +81,7 @@ export const productController = {
   async create(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const data = req.body;
+      const businessId = req.user!.businessId;
 
       const product = await prisma.$transaction(async (tx) => {
         const newProduct = await tx.product.create({
@@ -92,7 +93,8 @@ export const productController = {
             categoryId: data.categoryId || null,
             brandId: data.brandId || null,
             supplierId: data.supplierId || null,
-            branchId: data.branchId || null,
+            branchId: data.branchId || req.user?.branchId || null,
+            businessId,
             costPrice: parseFloat(data.costPrice) || 0,
             salePrice: parseFloat(data.salePrice) || 0,
             wholesalePrice: data.wholesalePrice ? parseFloat(data.wholesalePrice) : null,
@@ -123,7 +125,6 @@ export const productController = {
 
       await cache.delPattern('products:*');
 
-      const businessId = req.user?.businessId;
       if (businessId) {
         emitToBusinesss(businessId, socketEvents.INVENTORY_UPDATED, { type: 'created', product });
       }
@@ -139,7 +140,9 @@ export const productController = {
       const { id } = req.params;
       const data = req.body;
 
-      const existing = await prisma.product.findFirst({ where: { id, deletedAt: null } });
+      const existing = await prisma.product.findFirst({
+        where: { id, deletedAt: null, businessId: req.user!.businessId },
+      });
       if (!existing) throw new AppError('Producto no encontrado', 404);
 
       const product = await prisma.product.update({
@@ -179,7 +182,9 @@ export const productController = {
   async delete(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const { id } = req.params;
-      const product = await prisma.product.findFirst({ where: { id, deletedAt: null } });
+      const product = await prisma.product.findFirst({
+        where: { id, deletedAt: null, businessId: req.user!.businessId },
+      });
       if (!product) throw new AppError('Producto no encontrado', 404);
 
       await prisma.product.update({ where: { id }, data: { deletedAt: new Date() } });
@@ -196,7 +201,9 @@ export const productController = {
       const { id } = req.params;
       const { quantity, type, reason } = req.body;
 
-      const product = await prisma.product.findFirst({ where: { id, deletedAt: null } });
+      const product = await prisma.product.findFirst({
+        where: { id, deletedAt: null, businessId: req.user!.businessId },
+      });
       if (!product) throw new AppError('Producto no encontrado', 404);
 
       const qty = parseFloat(quantity);
@@ -211,7 +218,7 @@ export const productController = {
       }
 
       await prisma.$transaction([
-        prisma.product.update({ where: { id }, data: { stock: newStock } }),
+        prisma.product.update({ where: { id }, data: { stock: type === 'IN' ? { increment: qty } : type === 'OUT' ? { decrement: qty } : newStock } }),
         prisma.inventoryMovement.create({
           data: {
             productId: id,
@@ -241,12 +248,14 @@ export const productController = {
 
   async getLowStock(req: AuthRequest, res: Response, next: NextFunction) {
     try {
+      const businessId = req.user!.businessId;
       const products = await prisma.$queryRaw`
         SELECT id, code, name, stock, "minStock", "salePrice"
         FROM products
         WHERE stock <= "minStock"
           AND "deletedAt" IS NULL
           AND "isActive" = true
+          AND "businessId" = ${businessId}
         ORDER BY stock ASC
         LIMIT 50
       `;
@@ -259,7 +268,9 @@ export const productController = {
   async duplicate(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const { id } = req.params;
-      const original = await prisma.product.findFirst({ where: { id, deletedAt: null } });
+      const original = await prisma.product.findFirst({
+        where: { id, deletedAt: null, businessId: req.user!.businessId },
+      });
       if (!original) throw new AppError('Producto no encontrado', 404);
 
       const { id: _id, createdAt: _c, updatedAt: _u, code, barcode, ...rest } = original;

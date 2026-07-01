@@ -1,6 +1,6 @@
 import { Response, NextFunction } from 'express';
 import { prisma } from '../config/database';
-import { success, created, paginated } from '../utils/response';
+import { AppError, success, created, paginated } from '../utils/response';
 import { getPagination, getSearch } from '../utils/pagination';
 import { AuthRequest } from '../middlewares/auth';
 
@@ -10,7 +10,8 @@ export const expenseController = {
       const { page, limit, skip } = getPagination(req);
       const search = getSearch(req);
       const { categoryId, startDate, endDate } = req.query;
-      const where: any = { deletedAt: null };
+      const businessId = req.user!.businessId;
+      const where: any = { deletedAt: null, businessId };
       if (search) where.description = { contains: search, mode: 'insensitive' };
       if (categoryId) where.categoryId = categoryId;
       if (startDate || endDate) {
@@ -35,6 +36,7 @@ export const expenseController = {
       const expense = await prisma.expense.create({
         data: {
           ...req.body,
+          businessId: req.user!.businessId,
           amount: parseFloat(req.body.amount),
           date: req.body.date ? new Date(req.body.date) : new Date(),
         },
@@ -45,6 +47,10 @@ export const expenseController = {
 
   async update(req: AuthRequest, res: Response, next: NextFunction) {
     try {
+      const existing = await prisma.expense.findFirst({
+        where: { id: req.params.id, deletedAt: null, businessId: req.user!.businessId },
+      });
+      if (!existing) throw new AppError('Gasto no encontrado', 404);
       const expense = await prisma.expense.update({
         where: { id: req.params.id },
         data: {
@@ -59,6 +65,10 @@ export const expenseController = {
 
   async delete(req: AuthRequest, res: Response, next: NextFunction) {
     try {
+      const existing = await prisma.expense.findFirst({
+        where: { id: req.params.id, deletedAt: null, businessId: req.user!.businessId },
+      });
+      if (!existing) throw new AppError('Gasto no encontrado', 404);
       await prisma.expense.update({ where: { id: req.params.id }, data: { deletedAt: new Date() } });
       return success(res, null, 'Gasto eliminado');
     } catch (err) { next(err); }
@@ -69,18 +79,21 @@ export const expenseController = {
       const { year, month } = req.query;
       const y = parseInt(year as string) || new Date().getFullYear();
       const m = parseInt(month as string) || new Date().getMonth() + 1;
+      const businessId = req.user!.businessId;
 
       const start = new Date(y, m - 1, 1);
       const end = new Date(y, m, 0, 23, 59, 59);
 
       const summary = await prisma.expense.groupBy({
         by: ['categoryId'],
-        where: { date: { gte: start, lte: end }, deletedAt: null },
+        where: { date: { gte: start, lte: end }, deletedAt: null, businessId },
         _sum: { amount: true },
         _count: { id: true },
       });
 
-      const categories = await prisma.expenseCategory.findMany();
+      const categories = await prisma.expenseCategory.findMany({
+        where: { OR: [{ businessId }, { businessId: null }] },
+      });
       const catMap = new Map(categories.map((c) => [c.id, c.name]));
 
       const total = summary.reduce((acc, s) => acc + (s._sum.amount || 0), 0);
@@ -100,14 +113,20 @@ export const expenseController = {
 
   async listCategories(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const categories = await prisma.expenseCategory.findMany({ orderBy: { name: 'asc' } });
+      const businessId = req.user!.businessId;
+      const categories = await prisma.expenseCategory.findMany({
+        where: { OR: [{ businessId }, { businessId: null }] },
+        orderBy: { name: 'asc' },
+      });
       return success(res, categories);
     } catch (err) { next(err); }
   },
 
   async createCategory(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const cat = await prisma.expenseCategory.create({ data: req.body });
+      const cat = await prisma.expenseCategory.create({
+        data: { ...req.body, businessId: req.user!.businessId },
+      });
       return created(res, cat, 'Categoría creada');
     } catch (err) { next(err); }
   },

@@ -45,7 +45,7 @@ export const exportController = {
       end.setUTCHours(23, 59, 59, 999);
 
       const sales = await prisma.sale.findMany({
-        where: { createdAt: { gte: start, lte: end }, deletedAt: null },
+        where: { createdAt: { gte: start, lte: end }, deletedAt: null, branch: { businessId: req.user!.businessId } },
         orderBy: { createdAt: 'asc' },
         include: {
           customer: { select: { name: true } },
@@ -132,7 +132,7 @@ export const exportController = {
       end.setUTCHours(23, 59, 59, 999);
 
       const purchases = await prisma.purchase.findMany({
-        where: { purchaseDate: { gte: start, lte: end }, deletedAt: null },
+        where: { purchaseDate: { gte: start, lte: end }, deletedAt: null, businessId: req.user!.businessId },
         orderBy: { purchaseDate: 'asc' },
         include: {
           supplier: { select: { name: true } },
@@ -212,7 +212,7 @@ export const exportController = {
       end.setUTCHours(23, 59, 59, 999);
 
       const expenses = await prisma.expense.findMany({
-        where: { date: { gte: start, lte: end }, deletedAt: null },
+        where: { date: { gte: start, lte: end }, deletedAt: null, businessId: req.user!.businessId },
         orderBy: { date: 'asc' },
         include: { category: { select: { name: true } } },
       });

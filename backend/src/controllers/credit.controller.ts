@@ -11,17 +11,20 @@ export const creditController = {
       const { page, limit, skip } = getPagination(req);
       const { status, customerId } = req.query;
 
-      // Marca como OVERDUE cualquier crédito vencido que siga PENDING o PARTIAL
+      const businessId = req.user!.businessId;
+
+      // Marca como OVERDUE sólo créditos de este negocio
       await prisma.credit.updateMany({
         where: {
           status: { in: ['PENDING', 'PARTIAL'] },
           dueDate: { lt: new Date() },
           deletedAt: null,
+          customer: { businessId },
         },
         data: { status: 'OVERDUE' },
       }).catch(() => {});
 
-      const where: any = { deletedAt: null };
+      const where: any = { deletedAt: null, customer: { businessId } };
       if (status) where.status = status;
       if (customerId) where.customerId = customerId;
 
@@ -49,7 +52,7 @@ export const creditController = {
   async getOne(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const credit = await prisma.credit.findFirst({
-        where: { id: req.params.id, deletedAt: null },
+        where: { id: req.params.id, deletedAt: null, customer: { businessId: req.user!.businessId } },
         include: {
           customer: true,
           sale: { select: { invoiceNumber: true, details: { include: { product: { select: { name: true } } } } } },
@@ -66,6 +69,11 @@ export const creditController = {
   async create(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const { customerId, totalAmount, dueDate, notes } = req.body;
+
+      const customer = await prisma.customer.findFirst({
+        where: { id: customerId, businessId: req.user!.businessId, deletedAt: null },
+      });
+      if (!customer) throw new AppError('Cliente no encontrado', 404);
 
       const credit = await prisma.$transaction(async (tx) => {
         const newCredit = await tx.credit.create({
@@ -99,7 +107,9 @@ export const creditController = {
       const { id } = req.params;
       const { amount, paymentMethod, notes } = req.body;
 
-      const credit = await prisma.credit.findFirst({ where: { id, deletedAt: null } });
+      const credit = await prisma.credit.findFirst({
+        where: { id, deletedAt: null, customer: { businessId: req.user!.businessId } },
+      });
       if (!credit) throw new AppError('Crédito no encontrado', 404);
       if (credit.status === 'PAID') throw new AppError('Este crédito ya está saldado', 400);
 

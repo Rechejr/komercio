@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { prisma } from '../config/database';
-import { authenticate, authorize } from '../middlewares/auth';
+import { authenticate, authorize, AuthRequest } from '../middlewares/auth';
 import { success, created, paginated } from '../utils/response';
 import { getPagination } from '../utils/pagination';
 import { AppError } from '../utils/response';
@@ -8,28 +8,29 @@ import { AppError } from '../utils/response';
 const router = Router();
 router.use(authenticate);
 
-router.get('/', async (req: any, res, next) => {
+router.get('/', async (req: AuthRequest, res, next) => {
   try {
     const { page, limit, skip } = getPagination(req);
+    const businessId = req.user!.businessId;
     const [purchases, total] = await Promise.all([
       prisma.purchase.findMany({
-        where: { deletedAt: null },
+        where: { deletedAt: null, businessId },
         skip, take: limit, orderBy: { purchaseDate: 'desc' },
         include: {
           supplier: { select: { id: true, name: true } },
           _count: { select: { details: true } },
         },
       }),
-      prisma.purchase.count({ where: { deletedAt: null } }),
+      prisma.purchase.count({ where: { deletedAt: null, businessId } }),
     ]);
     return paginated(res, purchases, total, page, limit);
   } catch (err) { next(err); }
 });
 
-router.get('/:id', async (req, res, next) => {
+router.get('/:id', async (req: AuthRequest, res, next) => {
   try {
     const purchase = await prisma.purchase.findFirst({
-      where: { id: req.params.id, deletedAt: null },
+      where: { id: req.params.id, deletedAt: null, businessId: req.user!.businessId },
       include: {
         supplier: true,
         details: { include: { product: { select: { id: true, name: true, code: true } } } },
@@ -40,10 +41,11 @@ router.get('/:id', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.post('/', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE'), async (req: any, res, next) => {
+router.post('/', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE'), async (req: AuthRequest, res, next) => {
   try {
     const { supplierId, invoiceNumber, items, notes, purchaseDate } = req.body;
     if (!items?.length) throw new AppError('Se requieren productos', 400);
+    const businessId = req.user!.businessId;
 
     const purchase = await prisma.$transaction(async (tx) => {
       let subtotal = 0;
@@ -67,6 +69,7 @@ router.post('/', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE'), async (req: any,
       const newPurchase = await tx.purchase.create({
         data: {
           supplierId,
+          businessId,
           invoiceNumber,
           notes,
           purchaseDate: purchaseDate ? new Date(purchaseDate) : new Date(),
@@ -80,12 +83,13 @@ router.post('/', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE'), async (req: any,
       for (const item of items) {
         const product = await tx.product.findUnique({ where: { id: item.productId } });
         if (product) {
-          const newStock = product.stock + parseFloat(item.quantity);
-          await tx.product.update({ where: { id: product.id }, data: { stock: newStock, costPrice: parseFloat(item.unitCost) } });
+          const qty = parseFloat(item.quantity);
+          const newStock = product.stock + qty;
+          await tx.product.update({ where: { id: product.id }, data: { stock: { increment: qty }, costPrice: parseFloat(item.unitCost) } });
           await tx.inventoryMovement.create({
             data: {
               productId: product.id, type: 'IN',
-              quantity: parseFloat(item.quantity),
+              quantity: qty,
               previousStock: product.stock, newStock,
               reason: 'Compra',
               referenceId: newPurchase.id, referenceType: 'PURCHASE',
@@ -100,31 +104,29 @@ router.post('/', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE'), async (req: any,
   } catch (err) { next(err); }
 });
 
-router.put('/:id', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE'), async (req: any, res, next) => {
+router.put('/:id', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE'), async (req: AuthRequest, res, next) => {
   try {
     const { supplierId, invoiceNumber, items, notes, purchaseDate } = req.body;
     if (!items?.length) throw new AppError('Se requieren productos', 400);
 
     const existing = await prisma.purchase.findFirst({
-      where: { id: req.params.id, deletedAt: null },
+      where: { id: req.params.id, deletedAt: null, businessId: req.user!.businessId },
       include: { details: true },
     });
     if (!existing) throw new AppError('Compra no encontrada', 404);
 
     const updated = await prisma.$transaction(async (tx) => {
-      // Revertir stock de los items anteriores
       for (const old of existing.details) {
         const product = await tx.product.findUnique({ where: { id: old.productId } });
-        if (product) {
-          const restoredStock = product.stock - old.quantity;
-          await tx.product.update({ where: { id: product.id }, data: { stock: Math.max(0, restoredStock) } });
+        if (product && product.stock >= old.quantity) {
+          await tx.product.update({ where: { id: product.id }, data: { stock: { decrement: old.quantity } } });
+        } else if (product) {
+          await tx.product.update({ where: { id: product.id }, data: { stock: 0 } });
         }
       }
 
-      // Eliminar detalles anteriores
       await tx.purchaseDetail.deleteMany({ where: { purchaseId: req.params.id } });
 
-      // Calcular nuevos totales
       let subtotal = 0;
       let taxAmount = 0;
       const details = items.map((item: any) => {
@@ -145,27 +147,23 @@ router.put('/:id', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE'), async (req: an
       const updatedPurchase = await tx.purchase.update({
         where: { id: req.params.id },
         data: {
-          supplierId,
-          invoiceNumber,
-          notes,
+          supplierId, invoiceNumber, notes,
           purchaseDate: purchaseDate ? new Date(purchaseDate) : existing.purchaseDate,
-          subtotal,
-          taxAmount,
-          total: subtotal + taxAmount,
+          subtotal, taxAmount, total: subtotal + taxAmount,
           details: { create: details },
         },
       });
 
-      // Aplicar nuevo stock
       for (const item of items) {
         const product = await tx.product.findUnique({ where: { id: item.productId } });
         if (product) {
-          const newStock = product.stock + parseFloat(item.quantity);
-          await tx.product.update({ where: { id: product.id }, data: { stock: newStock, costPrice: parseFloat(item.unitCost) } });
+          const qty = parseFloat(item.quantity);
+          const newStock = product.stock + qty;
+          await tx.product.update({ where: { id: product.id }, data: { stock: { increment: qty }, costPrice: parseFloat(item.unitCost) } });
           await tx.inventoryMovement.create({
             data: {
               productId: product.id, type: 'IN',
-              quantity: parseFloat(item.quantity),
+              quantity: qty,
               previousStock: product.stock, newStock,
               reason: 'Edición de compra',
               referenceId: req.params.id, referenceType: 'PURCHASE',
@@ -181,16 +179,15 @@ router.put('/:id', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE'), async (req: an
   } catch (err) { next(err); }
 });
 
-router.delete('/:id', authorize('ADMIN', 'SUPERVISOR'), async (req, res, next) => {
+router.delete('/:id', authorize('ADMIN', 'SUPERVISOR'), async (req: AuthRequest, res, next) => {
   try {
     const existing = await prisma.purchase.findFirst({
-      where: { id: req.params.id, deletedAt: null },
+      where: { id: req.params.id, deletedAt: null, businessId: req.user!.businessId },
       include: { details: true },
     });
     if (!existing) throw new AppError('Compra no encontrada', 404);
 
     await prisma.$transaction(async (tx) => {
-      // Revertir el stock que se sumó al registrar esta compra
       for (const detail of existing.details) {
         const product = await tx.product.findUnique({ where: { id: detail.productId } });
         if (product) {
@@ -207,11 +204,7 @@ router.delete('/:id', authorize('ADMIN', 'SUPERVISOR'), async (req, res, next) =
           });
         }
       }
-
-      await tx.purchase.update({
-        where: { id: req.params.id },
-        data: { deletedAt: new Date() },
-      });
+      await tx.purchase.update({ where: { id: req.params.id }, data: { deletedAt: new Date() } });
     });
 
     return success(res, null, 'Compra eliminada y stock revertido');

@@ -40,12 +40,16 @@ app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 // CORS
 app.use(cors({
   origin: (origin, callback) => {
-    // En desarrollo acepta cualquier localhost sin importar el puerto
-    if (!origin || /^http:\/\/localhost(:\d+)?$/.test(origin)) {
+    const isDev = process.env.NODE_ENV !== 'production';
+    // En desarrollo: acepta localhost y cualquier IP de red local
+    if (!origin && isDev) return callback(null, true);
+    if (isDev && origin && /^http:\/\/localhost(:\d+)?$/.test(origin)) return callback(null, true);
+    if (isDev && origin && /^http:\/\/(192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\.)\d+\.\d+(:\d+)?$/.test(origin)) {
       return callback(null, true);
     }
     const allowed = process.env.CORS_ORIGIN?.split(',') || [];
-    callback(allowed.includes(origin) ? null : new Error('CORS'), allowed.includes(origin));
+    const ok = !!origin && allowed.includes(origin);
+    callback(ok ? null : new Error('CORS'), ok);
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
@@ -55,7 +59,7 @@ app.use(cors({
 // Rate limiting
 const limiter = rateLimit({
   windowMs: Number(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000,
-  max: Number(process.env.RATE_LIMIT_MAX) || 100,
+  max: Number(process.env.RATE_LIMIT_MAX) || (process.env.NODE_ENV === 'production' ? 100 : 500),
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Demasiadas solicitudes, intente de nuevo más tarde.' },
