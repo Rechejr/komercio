@@ -48,7 +48,7 @@ export function Header({ onMenuClick }: HeaderProps) {
 
   const title =
     Object.entries(pageLabels).find(([k]) => pathname === k || pathname.startsWith(k + '/'))?.[1] ||
-    'Komercio';
+    'Ventrix';
 
   return (
     <div className="flex flex-col">

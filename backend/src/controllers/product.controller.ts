@@ -160,6 +160,8 @@ export const productController = {
       const product = await prisma.product.update({
         where: { id },
         data: {
+          code: data.code,
+          barcode: data.barcode !== undefined ? (data.barcode || null) : undefined,
           name: data.name,
           description: data.description,
           categoryId: data.categoryId,
@@ -174,6 +176,7 @@ export const productController = {
           image: Array.isArray(data.images) ? (data.images[0] || null) : data.image,
           images: Array.isArray(data.images) ? data.images : undefined,
           isActive: data.isActive,
+          allowNegativeStock: data.allowNegativeStock,
         },
       });
 

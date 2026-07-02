@@ -100,13 +100,13 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
           'flex items-center gap-3 px-4 py-4 border-b border-gray-700/50',
           collapsed && 'md:justify-center md:px-2',
         )}>
-          <Tooltip content="Komercio" side="right" disabled={!collapsed}>
+          <Tooltip content="Ventrix" side="right" disabled={!collapsed}>
             <div className="flex items-center gap-3 flex-1 min-w-0">
               <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center flex-shrink-0">
                 <Store size={18} />
               </div>
               <span className={cn('font-bold text-lg tracking-tight truncate', collapsed && 'md:hidden')}>
-                Komercio
+                Ventrix
               </span>
             </div>
           </Tooltip>

@@ -89,7 +89,7 @@ export const useCartStore = create<CartState>()(
       },
     }),
     {
-      name: 'komercio-pos-cart',
+      name: 'ventrix-pos-cart',
       storage: createJSONStorage(() => sessionStorage),
       // Functions aren't serializable — only persist the cart data itself
       partialize: (state) => ({ items: state.items, customerId: state.customerId, discount: state.discount }),

@@ -173,7 +173,7 @@ export const authController = {
       res.cookie('refreshToken', refreshToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
-        sameSite: 'strict',
+        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'strict',
         maxAge: THIRTY_DAYS,
       });
 
@@ -245,7 +245,7 @@ export const authController = {
       res.cookie('refreshToken', newRefreshToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
-        sameSite: 'strict',
+        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'strict',
         maxAge: THIRTY_DAYS,
       });
 
@@ -262,7 +262,11 @@ export const authController = {
       if (token) {
         await prisma.refreshToken.deleteMany({ where: { token } });
       }
-      res.clearCookie('refreshToken');
+      res.clearCookie('refreshToken', {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'strict',
+      });
       return success(res, null, 'Sesión cerrada');
     } catch (err) {
       next(err);
@@ -479,7 +483,7 @@ export const authController = {
       res.cookie('refreshToken', refreshToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
-        sameSite: 'strict',
+        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'strict',
         maxAge: THIRTY_DAYS,
       });
 

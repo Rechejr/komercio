@@ -12,7 +12,7 @@ import toast from 'react-hot-toast';
 import {
   Plus, Search, Edit, Trash2, Package, AlertTriangle,
   X, Loader2, Barcode, FileUp, FileDown, CheckCircle2,
-  ArrowRight, Lock,
+  ArrowRight, Lock, ArrowUpDown,
 } from 'lucide-react';
 import { useAuthStore } from '@/store/auth.store';
 import { useUpgradeStore } from '@/store/upgrade.store';
@@ -52,6 +52,8 @@ export default function InventarioPage() {
   const [showForm, setShowForm] = useState(false);
   const [editItem, setEditItem] = useState<any>(null);
   const [deleteTarget, setDeleteTarget] = useState<any>(null);
+  const [stockTarget, setStockTarget] = useState<any>(null);
+  const [stockForm, setStockForm] = useState({ quantity: '', reason: '' });
   const [importResult, setImportResult] = useState<{ imported: number; updated: number; errors: { row: number; message: string }[] } | null>(null);
   const [previewData, setPreviewData] = useState<PreviewData | null>(null);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
@@ -125,6 +127,18 @@ export default function InventarioPage() {
       toast.success(`${result.imported} creados, ${result.updated} actualizados`);
     },
     onError: (err: any) => toast.error(err.response?.data?.error || 'Error al importar'),
+  });
+
+  const adjustMutation = useMutation({
+    mutationFn: ({ id, type, quantity, reason }: { id: string; type: string; quantity: number; reason: string }) =>
+      api.patch(`/products/${id}/adjust-stock`, { type, quantity, reason }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['products'] });
+      toast.success('Stock actualizado');
+      setStockTarget(null);
+      setStockForm({ quantity: '', reason: '' });
+    },
+    onError: (err: any) => toast.error(err.response?.data?.error || 'Error al ajustar stock'),
   });
 
   const saveMutation = useMutation({
@@ -352,6 +366,11 @@ export default function InventarioPage() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2 justify-end">
+                        <button type="button" aria-label="Ajustar stock"
+                          onClick={() => { setStockTarget(p); setStockForm({ quantity: String(p.stock), reason: '' }); }}
+                          className="text-gray-400 hover:text-green-600 transition" title="Ajustar stock">
+                          <ArrowUpDown size={15} />
+                        </button>
                         <button type="button" aria-label="Editar producto" onClick={() => openEdit(p)} className="text-gray-400 hover:text-blue-600 transition"><Edit size={15} /></button>
                         <button type="button" aria-label="Eliminar producto" onClick={() => setDeleteTarget(p)} className="text-gray-400 hover:text-red-600 transition"><Trash2 size={15} /></button>
                       </div>
@@ -595,13 +614,26 @@ export default function InventarioPage() {
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Cantidad disponible</label>
+                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+                      Cantidad disponible
+                      {editItem && <span className="ml-1 text-amber-500">*</span>}
+                    </label>
                     <input
                       {...register('stock')}
                       type="number"
                       placeholder="0"
-                      className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                      readOnly={!!editItem}
+                      className={`w-full px-3 py-2 border rounded-lg text-sm focus:outline-none dark:text-white ${
+                        editItem
+                          ? 'border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/50 text-gray-400 dark:text-gray-500 cursor-not-allowed'
+                          : 'border-gray-200 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 dark:bg-gray-700'
+                      }`}
                     />
+                    {editItem && (
+                      <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-1 flex items-center gap-1">
+                        <ArrowUpDown size={10} /> Usa el botón de ajuste en la fila del producto
+                      </p>
+                    )}
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Cantidad mínima</label>
@@ -719,6 +751,128 @@ export default function InventarioPage() {
           </div>
         </div>
       )}
+
+      {/* ── Ajustar Stock Modal ─────────────────────────────────────────────── */}
+      {stockTarget && (() => {
+        const newQty = stockForm.quantity === '' ? null : parseFloat(stockForm.quantity);
+        const hasChange = newQty !== null && newQty !== stockTarget.stock;
+        const isValid = newQty !== null && newQty >= 0;
+        const REASONS = ['Error de conteo', 'Merma o daño', 'Pérdida', 'Edición masiva de unidades', 'Otro'];
+
+        function handleConfirm(skipReason = false) {
+          if (!isValid) return;
+          adjustMutation.mutate({
+            id: stockTarget.id,
+            type: 'ADJUSTMENT',
+            quantity: newQty!,
+            reason: skipReason ? 'Ajuste manual' : stockForm.reason,
+          });
+        }
+
+        return (
+          <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4"
+            onClick={() => setStockTarget(null)}>
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm"
+              onClick={(e) => e.stopPropagation()}>
+
+              {/* Header */}
+              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700">
+                <div>
+                  <h2 className="font-semibold text-gray-800 dark:text-white">Motivos de la edición</h2>
+                  <p className="text-xs text-gray-400 mt-0.5">Registra el motivo para tu historial de inventario</p>
+                </div>
+                <button type="button" aria-label="Cerrar" onClick={() => setStockTarget(null)}
+                  className="w-7 h-7 flex items-center justify-center rounded-full bg-gray-100 dark:bg-gray-700 text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-600 transition">
+                  <X size={14} />
+                </button>
+              </div>
+
+              <div className="p-6 space-y-5">
+                {/* Producto + indicador de cambio */}
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-10 h-10 rounded-xl bg-gray-100 dark:bg-gray-700 flex items-center justify-center flex-shrink-0 overflow-hidden">
+                      {stockTarget.image
+                        ? <img src={stockTarget.image} alt="" className="w-full h-full object-cover" />
+                        : <Package size={18} className="text-gray-400" />}
+                    </div>
+                    <span className="text-sm font-medium text-gray-800 dark:text-white truncate">{stockTarget.name}</span>
+                  </div>
+                  {hasChange && (
+                    <div className="flex items-center gap-1.5 flex-shrink-0 text-sm font-semibold">
+                      <span className="text-gray-400 line-through tabular-nums">{stockTarget.stock}</span>
+                      <ArrowRight size={13} className="text-gray-400" />
+                      <span className={newQty! > stockTarget.stock ? 'text-green-600' : 'text-red-500'}>
+                        {newQty}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Input cantidad */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">
+                    Nueva cantidad
+                    <span className="ml-1.5 text-gray-400 font-normal">— actual: {stockTarget.stock} {stockTarget.unit || ''}</span>
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={stockForm.quantity}
+                    onChange={(e) => setStockForm((f) => ({ ...f, quantity: e.target.value }))}
+                    className="w-full px-3 py-2.5 border border-gray-200 dark:border-gray-600 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 dark:bg-gray-700 dark:text-white"
+                    placeholder={String(stockTarget.stock)}
+                    autoFocus
+                  />
+                </div>
+
+                {/* Chips de motivo */}
+                <div>
+                  <p className="text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2.5">Selecciona un motivo</p>
+                  <div className="flex flex-wrap gap-2">
+                    {REASONS.map((r) => (
+                      <button
+                        key={r}
+                        type="button"
+                        onClick={() => setStockForm((f) => ({ ...f, reason: f.reason === r ? '' : r }))}
+                        className={`px-3 py-1.5 rounded-full border text-xs transition ${
+                          stockForm.reason === r
+                            ? 'border-gray-800 bg-gray-800 text-white dark:border-gray-200 dark:bg-gray-200 dark:text-gray-900'
+                            : 'border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:border-gray-400'
+                        }`}
+                      >
+                        {r}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Acciones */}
+              <div className="flex gap-3 px-6 pb-5">
+                <button
+                  type="button"
+                  disabled={!isValid || adjustMutation.isPending}
+                  onClick={() => handleConfirm(true)}
+                  className="flex-1 py-2.5 border border-gray-200 dark:border-gray-600 rounded-xl text-sm font-semibold hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 transition"
+                >
+                  Omitir
+                </button>
+                <button
+                  type="button"
+                  disabled={!isValid || !stockForm.reason || adjustMutation.isPending}
+                  onClick={() => handleConfirm(false)}
+                  className="flex-1 py-2.5 bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 rounded-xl text-sm font-semibold hover:bg-gray-700 dark:hover:bg-gray-300 disabled:opacity-40 transition flex items-center justify-center gap-2"
+                >
+                  {adjustMutation.isPending && <Loader2 size={14} className="animate-spin" />}
+                  Confirmar cambios
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── Import Results Modal (post-import) ──────────────────────────────── */}
       {importResult && (

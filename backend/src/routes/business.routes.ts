@@ -24,6 +24,13 @@ router.put('/me',
     body('taxRate').optional({ nullable: true }).isFloat({ min: 0, max: 100 }).withMessage('IVA debe estar entre 0 y 100'),
     body('name').optional().trim().notEmpty().withMessage('El nombre no puede estar vacío'),
     body('currency').optional().isLength({ min: 3, max: 3 }).withMessage('Moneda debe ser un código de 3 letras'),
+    body('settings').optional({ nullable: true }).custom((v) => {
+      if (v === null || v === undefined) return true;
+      if (typeof v !== 'object' || Array.isArray(v)) throw new Error('settings debe ser un objeto plano');
+      const forbidden = ['__proto__', 'constructor', 'prototype'];
+      if (Object.keys(v).some((k) => forbidden.includes(k))) throw new Error('settings contiene claves no permitidas');
+      return true;
+    }),
   ],
   validate,
   async (req: any, res: Response, next: NextFunction) => {

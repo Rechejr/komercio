@@ -155,14 +155,23 @@ router.put('/:id', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE'), purchaseItemVa
     }
 
     const updated = await prisma.$transaction(async (tx) => {
-      // Revert stock from old details using atomic decrement.
-      // Previous code used `stock: 0` when stock < old.quantity, which silently
-      // erased any stock added by concurrent sales or other operations.
+      // Revert stock from old details: lock each row and only decrement as much
+      // stock as currently exists — prevents driving stock below 0 when units
+      // were already sold since the original purchase was registered.
+      interface RevertRow { id: string; stock: number; }
       for (const old of existing.details) {
-        await tx.product.update({
-          where: { id: old.productId },
-          data: { stock: { decrement: old.quantity } },
-        });
+        const [locked] = await tx.$queryRawUnsafe<RevertRow[]>(
+          'SELECT id, stock FROM products WHERE id::text = $1 FOR UPDATE',
+          old.productId,
+        );
+        if (!locked) continue;
+        const revertQty = Math.min(Number(old.quantity), locked.stock);
+        if (revertQty > 0) {
+          await tx.product.update({
+            where: { id: old.productId },
+            data: { stock: { decrement: revertQty } },
+          });
+        }
       }
 
       await tx.purchaseDetail.deleteMany({ where: { purchaseId: req.params.id } });

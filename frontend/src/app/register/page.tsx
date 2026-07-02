@@ -193,7 +193,7 @@ export default function RegisterPage() {
             <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-lg">
               <Store size={22} className="text-blue-600" />
             </div>
-            <span className="text-white font-bold text-2xl tracking-tight">Komercio</span>
+            <span className="text-white font-bold text-2xl tracking-tight">Ventrix</span>
           </Link>
 
           {/* Steps */}
@@ -225,7 +225,7 @@ export default function RegisterPage() {
                 <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
                   <Store size={16} className="text-white" />
                 </div>
-                <span className="font-bold text-gray-900">Komercio</span>
+                <span className="font-bold text-gray-900">Ventrix</span>
               </div>
               <div className="flex items-center gap-1.5">
                 {STEPS.map((_, i) => (
@@ -381,7 +381,7 @@ export default function RegisterPage() {
                     className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-semibold py-3.5 rounded-xl text-sm transition-colors flex items-center justify-center gap-2 mt-2"
                   >
                     {loading && <Loader2 size={16} className="animate-spin" />}
-                    {loading ? 'Creando tu cuenta...' : 'Comenzar a usar Komercio'}
+                    {loading ? 'Creando tu cuenta...' : 'Comenzar a usar Ventrix'}
                   </button>
                 </div>
               </form>

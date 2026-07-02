@@ -6,7 +6,7 @@ import { success, created, AppError } from '../utils/response';
 const router = Router();
 router.use(authenticate);
 
-router.get('/current', async (req: any, res, next) => {
+router.get('/current', authorize('ADMIN', 'SUPERVISOR', 'CASHIER'), async (req: any, res, next) => {
   try {
     const register = await prisma.cashRegister.findFirst({
       where: { branchId: req.user.branchId, status: 'OPEN' },

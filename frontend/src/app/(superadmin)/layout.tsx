@@ -59,7 +59,7 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
             <Shield size={16} />
           </div>
           <div>
-            <span className="font-bold text-white">Komercio</span>
+            <span className="font-bold text-white">Ventrix</span>
             <span className="ml-2 text-xs bg-red-600/20 text-red-400 px-2 py-0.5 rounded-full font-medium">
               Super Admin
             </span>

@@ -250,7 +250,7 @@ export default function LoginPage() {
           <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-lg">
             <Store size={22} className="text-blue-600" />
           </div>
-          <span className="text-white font-bold text-2xl tracking-tight">Komercio</span>
+          <span className="text-white font-bold text-2xl tracking-tight">Ventrix</span>
         </div>
 
         <div className="my-auto">
@@ -273,7 +273,7 @@ export default function LoginPage() {
         </div>
 
         <p className="text-blue-200/60 text-xs mt-auto">
-          © 2025 Komercio · Todos los derechos reservados
+          © 2025 Ventrix · Todos los derechos reservados
         </p>
       </div>
 
@@ -284,7 +284,7 @@ export default function LoginPage() {
             <div className="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center">
               <Store size={18} className="text-white" />
             </div>
-            <span className="font-bold text-xl text-gray-900 tracking-tight">Komercio</span>
+            <span className="font-bold text-xl text-gray-900 tracking-tight">Ventrix</span>
           </div>
 
           <h1 className="text-2xl font-bold text-gray-900 mb-1">Iniciar sesión</h1>

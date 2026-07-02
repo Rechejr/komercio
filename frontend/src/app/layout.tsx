@@ -6,7 +6,7 @@ import { Providers } from './providers';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: { default: 'Komercio', template: '%s | Komercio' },
+  title: { default: 'Ventrix', template: '%s | Ventrix' },
   description: 'Plataforma de gestión de negocios para pequeños comercios en Latinoamérica',
   keywords: ['pos', 'inventario', 'ventas', 'negocio', 'colombia'],
   icons: { icon: '/favicon.ico' },

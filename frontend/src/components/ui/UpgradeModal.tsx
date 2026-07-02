@@ -51,7 +51,7 @@ export function UpgradeModal() {
   };
 
   const waText = encodeURIComponent(
-    `¡Hola! Quiero actualizar mi negocio al Plan Pro de Komercio (facturación ${periodLabel[period]}). ¿Me puedes indicar cómo realizar el pago? (Nequi o transferencia BBVA)`,
+    `¡Hola! Quiero actualizar mi negocio al Plan Pro de Ventrix (facturación ${periodLabel[period]}). ¿Me puedes indicar cómo realizar el pago? (Nequi o transferencia BBVA)`,
   );
   const waUrl = `https://wa.me/${WHATSAPP_NUMBER}?text=${waText}`;
 

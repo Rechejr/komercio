@@ -107,6 +107,7 @@ const apiPrefix = '/api/v1';
 app.use(`${apiPrefix}/auth/login`, authLimiter);
 app.use(`${apiPrefix}/auth/forgot-password`, authLimiter);
 app.use(`${apiPrefix}/auth/resend-verification`, authLimiter);
+app.use(`${apiPrefix}/auth/refresh`, authLimiter);
 app.use(`${apiPrefix}/auth`, authRoutes);
 app.use(`${apiPrefix}/users`, userRoutes);
 app.use(`${apiPrefix}/business`, businessRoutes);

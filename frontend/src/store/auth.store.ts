@@ -25,7 +25,7 @@ interface AuthState {
   logout: () => void;
 }
 
-const REMEMBER_KEY = 'komercio-remember';
+const REMEMBER_KEY = 'ventrix-remember';
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
 
 // Saves to localStorage if "remember me" is on, otherwise sessionStorage (clears on tab close)
@@ -86,7 +86,7 @@ export const useAuthStore = create<AuthState>()(
       },
     }),
     {
-      name: 'komercio-auth',
+      name: 'ventrix-auth',
       storage: createJSONStorage(() => smartStorage),
       // accessToken is intentionally excluded — it lives in memory only (never in localStorage/sessionStorage)
       partialize: (state) => ({ user: state.user, isAuthenticated: state.isAuthenticated }),
