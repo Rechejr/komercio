@@ -1,6 +1,3 @@
-[variables]
-NPM_CONFIG_PRODUCTION = "false"
-
 [phases.build]
 cmds = ["npm run build"]
 
