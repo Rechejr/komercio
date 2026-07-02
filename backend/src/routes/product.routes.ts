@@ -10,26 +10,9 @@ import { prisma } from '../config/database';
 import { success, AppError } from '../utils/response';
 
 const router = Router();
-router.use(authenticate);
 
-const xlsxUpload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024 },
-  fileFilter: (_req, file, cb) => {
-    const allowed = [
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      'application/vnd.ms-excel',
-      'text/csv',
-    ];
-    if (!allowed.includes(file.mimetype)) {
-      return cb(new AppError('Solo se permiten archivos Excel (.xlsx, .xls) o CSV', 400));
-    }
-    cb(null, true);
-  },
-});
-
-// ── Template download ────────────────────────────────────────────────────────
-router.get('/import-template', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE'), planLimit.bulkImport(), async (_req, res, next) => {
+// ── Template download (public — generic example file, no user data) ──────────
+router.get('/import-template', async (_req, res, next) => {
   try {
     const wb = new ExcelJS.Workbook();
     const ws = wb.addWorksheet('Productos');
@@ -63,6 +46,25 @@ router.get('/import-template', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE'), pl
     res.end();
   } catch (err) { next(err); }
 });
+
+router.use(authenticate);
+
+const xlsxUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const allowed = [
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'application/vnd.ms-excel',
+      'text/csv',
+    ];
+    if (!allowed.includes(file.mimetype)) {
+      return cb(new AppError('Solo se permiten archivos Excel (.xlsx, .xls) o CSV', 400));
+    }
+    cb(null, true);
+  },
+});
+
 
 // ── Bulk import (supports ?dryRun=true for preview) ──────────────────────────
 router.post('/import',

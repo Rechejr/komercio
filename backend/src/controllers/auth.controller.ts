@@ -137,6 +137,7 @@ export const authController = {
       }
 
       if (!user.isActive) throw new AppError('Cuenta desactivada. Contacta al administrador.', 403);
+      if (!user.isEmailVerified) throw new AppError('Verifica tu correo electrónico antes de iniciar sesión.', 403);
 
       const payload = {
         userId: user.id,
@@ -157,6 +158,12 @@ export const authController = {
           expiresAt: new Date(Date.now() + THIRTY_DAYS),
         },
       });
+
+      // Opportunistic cleanup of expired tokens — keeps the table from growing unbounded.
+      // Fire-and-forget; login must not fail because of cleanup.
+      prisma.refreshToken.deleteMany({
+        where: { userId: user.id, expiresAt: { lt: new Date() } },
+      }).catch(() => {});
 
       await prisma.user.update({
         where: { id: user.id },
@@ -192,7 +199,7 @@ export const authController = {
 
   async refreshToken(req: Request, res: Response, next: NextFunction) {
     try {
-      const token = req.cookies.refreshToken || req.body.refreshToken;
+      const token = req.cookies.refreshToken;
       if (!token) throw new AppError('Refresh token requerido', 401);
 
       const stored = await prisma.refreshToken.findUnique({ where: { token } });
@@ -346,7 +353,24 @@ export const authController = {
       const { accessToken: googleToken } = req.body;
       if (!googleToken) throw new AppError('Token de Google requerido', 400);
 
-      // Verify token and get user info from Google
+      const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
+      if (!GOOGLE_CLIENT_ID) {
+        throw new AppError('Google OAuth no está configurado en el servidor', 503);
+      }
+
+      // Validate audience: tokeninfo verifies the token was issued for THIS application.
+      // userinfo alone cannot do this — a valid token from any Google app would pass.
+      const tokenInfoRes = await fetch(
+        `https://oauth2.googleapis.com/tokeninfo?access_token=${encodeURIComponent(googleToken)}`,
+      );
+      if (!tokenInfoRes.ok) throw new AppError('Token de Google inválido o expirado', 401);
+
+      const tokenInfo = await tokenInfoRes.json() as { aud?: string; sub?: string; error?: string };
+      if (tokenInfo.error || tokenInfo.aud !== GOOGLE_CLIENT_ID) {
+        throw new AppError('Token de Google no válido para esta aplicación', 401);
+      }
+
+      // Token is authentic and scoped to our app — fetch full user profile
       const gRes = await fetch(`https://www.googleapis.com/oauth2/v3/userinfo`, {
         headers: { Authorization: `Bearer ${googleToken}` },
       });
@@ -445,6 +469,11 @@ export const authController = {
       await prisma.refreshToken.create({
         data: { token: refreshToken, userId: user!.id, expiresAt: new Date(Date.now() + THIRTY_DAYS) },
       });
+
+      prisma.refreshToken.deleteMany({
+        where: { userId: user!.id, expiresAt: { lt: new Date() } },
+      }).catch(() => {});
+
       await prisma.user.update({ where: { id: user!.id }, data: { lastLogin: new Date() } });
 
       res.cookie('refreshToken', refreshToken, {

@@ -7,12 +7,14 @@ import { api } from '@/lib/api';
 import { formatCurrency, formatDate, paymentMethodLabel } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import { Plus, X, Loader2, Receipt, Edit, Trash2, FileDown } from 'lucide-react';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { downloadExcel } from '@/lib/exportExcel';
 
 export default function GastosPage() {
   const qc = useQueryClient();
   const [showForm, setShowForm] = useState(false);
   const [editItem, setEditItem] = useState<any>(null);
+  const [deleteTarget, setDeleteTarget] = useState<any>(null);
   const [page, setPage] = useState(1);
 
   const { data, isLoading } = useQuery({
@@ -149,7 +151,7 @@ export default function GastosPage() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => confirm('¿Eliminar este gasto?') && deleteMutation.mutate(e.id)}
+                        onClick={() => setDeleteTarget(e)}
                         aria-label="Eliminar gasto"
                         disabled={deleteMutation.isPending}
                         className="text-gray-400 hover:text-red-500 transition disabled:opacity-40"
@@ -255,6 +257,17 @@ export default function GastosPage() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
+        title="Eliminar gasto"
+        description={deleteTarget ? `¿Eliminar "${deleteTarget.description}"? Esta acción no se puede deshacer.` : undefined}
+        confirmLabel="Eliminar"
+        onConfirm={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
+        loading={deleteMutation.isPending}
+        variant="danger"
+      />
     </div>
   );
 }

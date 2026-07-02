@@ -18,11 +18,12 @@ export const reportController = {
 
       const sales = await prisma.$queryRaw<Array<any>>`
         SELECT
-          TO_CHAR(s."createdAt", ${groupFormat}) AS period,
-          SUM(s.total)::float            AS revenue,
-          COUNT(*)::int                  AS count,
-          SUM(s."taxAmount")::float      AS taxes,
-          SUM(s."discountAmount")::float AS discounts
+          TO_CHAR(s."createdAt", ${groupFormat})          AS period,
+          SUM(s.total)::float                             AS gross_revenue,
+          SUM(s.total - s."taxAmount")::float             AS net_revenue,
+          COUNT(*)::int                                   AS count,
+          SUM(s."taxAmount")::float                       AS taxes,
+          SUM(s."discountAmount")::float                  AS discounts
         FROM sales s
         JOIN branches br ON s."branchId" = br.id
         WHERE s."createdAt" BETWEEN ${start} AND ${end}
@@ -44,19 +45,25 @@ export const reportController = {
         _count: { id: true },
       });
 
+      const grossRevenue = Number(totals._sum.total || 0);
+      const taxCollected = Number(totals._sum.taxAmount || 0);
+
       return success(res, {
         period: { start, end },
         chart: sales.map((s: any) => ({
           period: s.period,
-          revenue: Number(s.revenue ?? 0),
+          grossRevenue: Number(s.gross_revenue ?? 0),
+          // net_revenue = total − IVA = ingresos reales del negocio (sin IVA)
+          netRevenue: Number(s.net_revenue ?? 0),
           count: Number(s.count ?? 0),
           taxes: Number(s.taxes ?? 0),
           discounts: Number(s.discounts ?? 0),
         })),
         totals: {
-          revenue: totals._sum.total || 0,
-          taxes: totals._sum.taxAmount || 0,
-          discounts: totals._sum.discountAmount || 0,
+          grossRevenue,
+          taxCollected,
+          netRevenue: grossRevenue - taxCollected,
+          discounts: Number(totals._sum.discountAmount || 0),
           count: totals._count.id,
         },
       });
@@ -82,9 +89,10 @@ export const reportController = {
             branch: { businessId },
           },
         },
-        _sum: { quantity: true, total: true },
-        orderBy: { _sum: { total: 'desc' } },
-        take: parseInt(limit as string),
+        // subtotal = ingresos netos ex-IVA por línea; total incluye IVA (no es ingreso del negocio)
+        _sum: { quantity: true, subtotal: true, total: true },
+        orderBy: { _sum: { subtotal: 'desc' } },
+        take: Math.min(50, Math.max(1, parseInt(limit as string) || 10)),
       });
 
       const productIds = top.map((t) => t.productId);
@@ -96,8 +104,9 @@ export const reportController = {
 
       return success(res, top.map((t) => ({
         product: productMap.get(t.productId),
-        totalQty: t._sum.quantity,
-        totalRevenue: t._sum.total,
+        totalQty: Number(t._sum.quantity ?? 0),
+        totalRevenue: Number(t._sum.subtotal ?? 0),
+        totalGross: Number(t._sum.total ?? 0),
       })));
     } catch (err) {
       next(err);
@@ -123,7 +132,7 @@ export const reportController = {
         _sum: { total: true },
         _count: { id: true },
         orderBy: { _sum: { total: 'desc' } },
-        take: parseInt(limit as string),
+        take: Math.min(50, Math.max(1, parseInt(limit as string) || 10)),
       });
 
       const customerIds = top.map((t) => t.customerId!);
@@ -135,7 +144,7 @@ export const reportController = {
 
       return success(res, top.map((t) => ({
         customer: customerMap.get(t.customerId!),
-        totalPurchases: t._sum.total,
+        totalPurchases: Number(t._sum.total ?? 0),
         visitCount: t._count.id,
       })));
     } catch (err) {
@@ -176,21 +185,31 @@ export const reportController = {
         `,
       ]);
 
-      const revenue = revenueData._sum.total || 0;
+      // IVA cobrado es un pasivo tributario, no ingreso del negocio.
+      // revenue = total − IVA = subtotal − descuentoGlobal (ingresos netos reales).
+      const grossRevenue = Number(revenueData._sum.total || 0);
+      const taxCollected = Number(revenueData._sum.taxAmount || 0);
+      const discountsGiven = Number(revenueData._sum.discountAmount || 0);
+      const revenue = grossRevenue - taxCollected;        // ingresos netos ex-IVA
+
+      // COGS = costPrice histórico × cantidad (snapshotted en sale_details al momento de la venta)
       const cogs = Number(cogsResult[0]?.cogs || 0);
       const grossProfit = revenue - cogs;
-      const expenses = expenseData._sum.amount || 0;
+      const expenses = Number(expenseData._sum.amount || 0);
       const netProfit = grossProfit - expenses;
 
       return success(res, {
         period: { start, end },
-        revenue,
-        cogs,
+        grossRevenue,                   // total facturado al cliente (incl. IVA)
+        taxCollected,                   // IVA recaudado (pasivo DIAN, no ingreso)
+        discountsGiven,                 // descuentos otorgados
+        revenue,                        // ingresos netos ex-IVA
+        cogs,                           // costo de mercancía vendida (costo histórico)
         grossProfit,
-        grossMargin: revenue > 0 ? ((grossProfit / revenue) * 100).toFixed(2) : 0,
-        expenses,
+        grossMargin: revenue > 0 ? Number(((grossProfit / revenue) * 100).toFixed(2)) : 0,
+        expenses,                       // gastos operativos del período
         netProfit,
-        netMargin: revenue > 0 ? ((netProfit / revenue) * 100).toFixed(2) : 0,
+        netMargin: revenue > 0 ? Number(((netProfit / revenue) * 100).toFixed(2)) : 0,
       });
     } catch (err) {
       next(err);

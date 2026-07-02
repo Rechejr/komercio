@@ -37,12 +37,22 @@ router.get('/', authorize('ADMIN', 'SUPERVISOR'), async (req: any, res, next) =>
 router.post('/', authorize('ADMIN'), planLimit.users(), async (req: any, res, next) => {
   try {
     const { name, email, password, role, branchId } = req.body;
+    const businessId: string = req.user.businessId;
 
     if (role === 'SUPER_ADMIN') {
       return next(new AppError('No puedes asignar el rol SUPER_ADMIN', 403));
     }
 
     if (!password) return next(new AppError('La contraseña es requerida', 400));
+
+    // Verify the branchId belongs to this business (same guard as PATCH)
+    if (branchId) {
+      const validBranch = await prisma.branch.findFirst({
+        where: { id: branchId, businessId, deletedAt: null },
+        select: { id: true },
+      });
+      if (!validBranch) return next(new AppError('Sucursal no válida para este negocio', 403));
+    }
 
     const hashed = await bcrypt.hash(password, 12);
     const user = await prisma.user.create({
@@ -67,6 +77,15 @@ router.patch('/:id', authorize('ADMIN'), async (req: any, res, next) => {
 
     if (role === 'SUPER_ADMIN') {
       return next(new AppError('No puedes asignar el rol SUPER_ADMIN', 403));
+    }
+
+    // Validate branchId belongs to this business if it is being changed
+    if (branchId && branchId !== target.branchId) {
+      const validBranch = await prisma.branch.findFirst({
+        where: { id: branchId, businessId },
+        select: { id: true },
+      });
+      if (!validBranch) return next(new AppError('Sucursal no válida para este negocio', 400));
     }
 
     const user = await prisma.user.update({

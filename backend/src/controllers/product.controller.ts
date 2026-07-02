@@ -53,7 +53,7 @@ export const productController = {
 
   async getOne(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const cacheKey = `product:${req.params.id}`;
+      const cacheKey = `product:${req.user!.businessId}:${req.params.id}`;
       const cached = await cache.get(cacheKey);
       if (cached) return success(res, cached);
 
@@ -83,6 +83,16 @@ export const productController = {
       const data = req.body;
       const businessId = req.user!.businessId;
 
+      // Validate caller-supplied branchId belongs to this business
+      const branchId = data.branchId || req.user?.branchId || null;
+      if (data.branchId && data.branchId !== req.user?.branchId) {
+        const branch = await prisma.branch.findFirst({
+          where: { id: data.branchId, businessId },
+          select: { id: true },
+        });
+        if (!branch) throw new AppError('Sucursal no válida para este negocio', 403);
+      }
+
       const product = await prisma.$transaction(async (tx) => {
         const newProduct = await tx.product.create({
           data: {
@@ -93,7 +103,7 @@ export const productController = {
             categoryId: data.categoryId || null,
             brandId: data.brandId || null,
             supplierId: data.supplierId || null,
-            branchId: data.branchId || req.user?.branchId || null,
+            branchId,
             businessId,
             costPrice: parseFloat(data.costPrice) || 0,
             salePrice: parseFloat(data.salePrice) || 0,
@@ -108,22 +118,24 @@ export const productController = {
         });
 
         if (parseFloat(data.stock) > 0) {
+          const initialCost = parseFloat(data.costPrice) || 0;
+          const initialQty = parseFloat(data.stock);
           await tx.inventoryMovement.create({
             data: {
               productId: newProduct.id,
               type: 'IN',
-              quantity: parseFloat(data.stock),
+              quantity: initialQty,
               previousStock: 0,
-              newStock: parseFloat(data.stock),
+              newStock: initialQty,
               reason: 'Stock inicial',
+              unitCost: initialCost,
+              totalCost: initialCost * initialQty,
             },
           });
         }
 
         return newProduct;
       });
-
-      await cache.delPattern('products:*');
 
       if (businessId) {
         emitToBusinesss(businessId, socketEvents.INVENTORY_UPDATED, { type: 'created', product });
@@ -165,8 +177,7 @@ export const productController = {
         },
       });
 
-      await cache.del(`product:${id}`);
-      await cache.delPattern('products:*');
+      await cache.del(`product:${req.user!.businessId}:${id}`);
 
       const businessId = req.user?.businessId;
       if (businessId) {
@@ -188,7 +199,7 @@ export const productController = {
       if (!product) throw new AppError('Producto no encontrado', 404);
 
       await prisma.product.update({ where: { id }, data: { deletedAt: new Date() } });
-      await cache.del(`product:${id}`);
+      await cache.del(`product:${req.user!.businessId}:${id}`);
 
       return success(res, null, 'Producto eliminado');
     } catch (err) {
@@ -200,42 +211,74 @@ export const productController = {
     try {
       const { id } = req.params;
       const { quantity, type, reason } = req.body;
-
-      const product = await prisma.product.findFirst({
-        where: { id, deletedAt: null, businessId: req.user!.businessId },
-      });
-      if (!product) throw new AppError('Producto no encontrado', 404);
-
       const qty = parseFloat(quantity);
-      const newStock = type === 'IN'
-        ? product.stock + qty
-        : type === 'OUT'
-          ? product.stock - qty
-          : qty; // ADJUSTMENT sets absolute
 
-      if (newStock < 0 && !product.allowNegativeStock) {
-        throw new AppError('Stock insuficiente', 400);
+      interface AdjustProductRow {
+        id: string; stock: number; name: string;
+        allowNegativeStock: boolean; minStock: number; businessId: string;
+        costPrice: number;
       }
 
-      await prisma.$transaction([
-        prisma.product.update({ where: { id }, data: { stock: type === 'IN' ? { increment: qty } : type === 'OUT' ? { decrement: qty } : newStock } }),
-        prisma.inventoryMovement.create({
+      const { newStock, locked } = await prisma.$transaction(async (tx) => {
+        // Lock row before reading — prevents two concurrent adjustments from both reading
+        // the same previousStock value and producing an inconsistent movement log.
+        // costPrice is Decimal(65,30) — ::float8 cast on NUMERIC causes a Prisma
+        // type-resolution error, so receive as string and convert with Number().
+        const rows = await tx.$queryRawUnsafe<any[]>(
+          `SELECT id, stock, name, "allowNegativeStock", "minStock", "businessId", "costPrice"
+           FROM products WHERE id::text = $1 AND "deletedAt" IS NULL FOR UPDATE`,
+          id,
+        );
+        const raw = rows[0];
+        const locked: AdjustProductRow | undefined = raw ? {
+          id: raw.id,
+          stock: Number(raw.stock),
+          name: raw.name,
+          allowNegativeStock: raw.allowNegativeStock,
+          minStock: Number(raw.minStock),
+          businessId: raw.businessId,
+          costPrice: Number(raw.costPrice),
+        } : undefined;
+
+        if (!locked) throw new AppError('Producto no encontrado', 404);
+        if (locked.businessId !== req.user!.businessId) throw new AppError('Producto no encontrado', 404);
+
+        const newStock = type === 'IN'
+          ? locked.stock + qty
+          : type === 'OUT'
+            ? locked.stock - qty
+            : qty; // ADJUSTMENT sets absolute value
+
+        if (newStock < 0 && !locked.allowNegativeStock) {
+          throw new AppError('Stock insuficiente', 400);
+        }
+
+        await tx.product.update({
+          where: { id },
+          data: { stock: type === 'IN' ? { increment: qty } : type === 'OUT' ? { decrement: qty } : newStock },
+        });
+
+        await tx.inventoryMovement.create({
           data: {
             productId: id,
             type: type as any,
             quantity: qty,
-            previousStock: product.stock,
+            previousStock: locked.stock,
             newStock,
             reason,
+            unitCost: locked.costPrice,
+            totalCost: locked.costPrice * qty,
           },
-        }),
-      ]);
+        });
 
-      await cache.del(`product:${id}`);
+        return { newStock, locked };
+      });
+
+      await cache.del(`product:${req.user!.businessId}:${id}`);
 
       const businessId = req.user?.businessId;
-      if (businessId && newStock <= product.minStock) {
-        const lowStockProduct = { id, name: product.name, stock: newStock, minStock: product.minStock };
+      if (businessId && newStock <= locked.minStock) {
+        const lowStockProduct = { id, name: locked.name, stock: newStock, minStock: locked.minStock };
         emitToBusinesss(businessId, socketEvents.LOW_STOCK_ALERT, { product: lowStockProduct });
         await notifyLowStock(businessId, lowStockProduct);
       }

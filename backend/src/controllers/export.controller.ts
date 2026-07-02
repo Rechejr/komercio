@@ -1,7 +1,11 @@
 import { Response, NextFunction } from 'express';
 import ExcelJS from 'exceljs';
 import { prisma } from '../config/database';
+import { AppError } from '../utils/response';
 import { AuthRequest } from '../middlewares/auth';
+
+const MAX_EXPORT_DAYS = 366;
+const MAX_EXPORT_ROWS = 50_000;
 
 function parseDate(val: unknown, fallback: Date): Date {
   if (typeof val === 'string' && val) {
@@ -16,7 +20,7 @@ function fmtDate(d: Date | null | undefined): string {
   return new Date(d).toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
-function fmtMoney(n: number | null | undefined): number {
+function fmtMoney(n: unknown): number {
   return Number(n || 0);
 }
 
@@ -44,9 +48,14 @@ export const exportController = {
       const end = parseDate(req.query.endDate, now);
       end.setUTCHours(23, 59, 59, 999);
 
+      if ((end.getTime() - start.getTime()) / 86_400_000 > MAX_EXPORT_DAYS) {
+        return next(new AppError(`El rango de exportación no puede superar ${MAX_EXPORT_DAYS} días`, 400));
+      }
+
       const sales = await prisma.sale.findMany({
         where: { createdAt: { gte: start, lte: end }, deletedAt: null, branch: { businessId: req.user!.businessId } },
         orderBy: { createdAt: 'asc' },
+        take: MAX_EXPORT_ROWS,
         include: {
           customer: { select: { name: true } },
           user: { select: { name: true } },
@@ -131,9 +140,14 @@ export const exportController = {
       const end = parseDate(req.query.endDate, now);
       end.setUTCHours(23, 59, 59, 999);
 
+      if ((end.getTime() - start.getTime()) / 86_400_000 > MAX_EXPORT_DAYS) {
+        return next(new AppError(`El rango de exportación no puede superar ${MAX_EXPORT_DAYS} días`, 400));
+      }
+
       const purchases = await prisma.purchase.findMany({
         where: { purchaseDate: { gte: start, lte: end }, deletedAt: null, businessId: req.user!.businessId },
         orderBy: { purchaseDate: 'asc' },
+        take: MAX_EXPORT_ROWS,
         include: {
           supplier: { select: { name: true } },
           details: { include: { product: { select: { name: true, code: true } } } },
@@ -211,9 +225,14 @@ export const exportController = {
       const end = parseDate(req.query.endDate, now);
       end.setUTCHours(23, 59, 59, 999);
 
+      if ((end.getTime() - start.getTime()) / 86_400_000 > MAX_EXPORT_DAYS) {
+        return next(new AppError(`El rango de exportación no puede superar ${MAX_EXPORT_DAYS} días`, 400));
+      }
+
       const expenses = await prisma.expense.findMany({
         where: { date: { gte: start, lte: end }, deletedAt: null, businessId: req.user!.businessId },
         orderBy: { date: 'asc' },
+        take: MAX_EXPORT_ROWS,
         include: { category: { select: { name: true } } },
       });
 

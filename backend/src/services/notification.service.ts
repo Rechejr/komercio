@@ -11,33 +11,61 @@ interface NotifyOptions {
 async function notifyUsers(userIds: string[], opts: NotifyOptions) {
   if (userIds.length === 0) return;
 
-  const notifications = await prisma.$transaction(
-    userIds.map((userId) =>
-      prisma.notification.create({
-        data: {
-          userId,
-          title: opts.title,
-          message: opts.message,
-          type: opts.type || 'INFO',
-          data: (opts.data || undefined) as any,
-        },
-      }),
-    ),
-  );
+  // createMany: 1 INSERT for all users instead of N individual inserts in $transaction
+  await prisma.notification.createMany({
+    data: userIds.map((userId) => ({
+      userId,
+      title: opts.title,
+      message: opts.message,
+      type: opts.type || 'INFO',
+      data: (opts.data || undefined) as any,
+    })),
+  });
 
-  notifications.forEach((n) => emitToUser(n.userId, socketEvents.NEW_NOTIFICATION, n));
+  const payload = { title: opts.title, message: opts.message, type: opts.type || 'INFO', data: opts.data };
+  userIds.forEach((userId) => emitToUser(userId, socketEvents.NEW_NOTIFICATION, payload));
 }
 
-export async function notifyLowStock(businessId: string, product: { id: string; name: string; stock: number; minStock: number }) {
+// Batch variant: queries managers ONCE and creates all notifications in a single INSERT.
+// Use this when notifying about multiple low-stock products at once (e.g. after a sale).
+export async function notifyLowStockBatch(
+  businessId: string,
+  products: Array<{ id: string; name: string; stock: number; minStock: number }>,
+) {
+  if (products.length === 0) return;
+
   const managers = await prisma.user.findMany({
     where: { branch: { businessId }, role: { in: ['ADMIN', 'SUPERVISOR'] }, deletedAt: null, isActive: true },
     select: { id: true },
   });
 
-  await notifyUsers(managers.map((m) => m.id), {
-    title: 'Stock bajo',
-    message: `${product.name} tiene ${product.stock} unidades — por debajo del mínimo (${product.minStock}).`,
-    type: 'WARNING',
-    data: { productId: product.id, kind: 'LOW_STOCK' },
+  if (managers.length === 0) return;
+  const managerIds = managers.map((m) => m.id);
+
+  // One createMany for all (manager × product) combinations
+  await prisma.notification.createMany({
+    data: products.flatMap((product) =>
+      managerIds.map((userId) => ({
+        userId,
+        title: 'Stock bajo',
+        message: `${product.name} tiene ${product.stock} unidades — por debajo del mínimo (${product.minStock}).`,
+        type: 'WARNING',
+        data: { productId: product.id, kind: 'LOW_STOCK' } as any,
+      })),
+    ),
   });
+
+  for (const product of products) {
+    const payload = {
+      title: 'Stock bajo',
+      message: `${product.name} tiene ${product.stock} unidades — por debajo del mínimo (${product.minStock}).`,
+      type: 'WARNING',
+      data: { productId: product.id, kind: 'LOW_STOCK' },
+    };
+    managerIds.forEach((userId) => emitToUser(userId, socketEvents.NEW_NOTIFICATION, payload));
+  }
+}
+
+export async function notifyLowStock(businessId: string, product: { id: string; name: string; stock: number; minStock: number }) {
+  await notifyLowStockBatch(businessId, [product]);
 }

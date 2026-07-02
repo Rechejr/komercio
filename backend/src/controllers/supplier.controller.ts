@@ -34,7 +34,7 @@ export const supplierController = {
       const supplier = await prisma.supplier.findFirst({
         where: { id: req.params.id, deletedAt: null, businessId: req.user!.businessId },
         include: {
-          products: { select: { id: true, name: true, code: true, stock: true } },
+          products: { select: { id: true, name: true, code: true, stock: true }, take: 100, orderBy: { name: 'asc' } },
           purchases: { orderBy: { createdAt: 'desc' }, take: 10, select: { id: true, invoiceNumber: true, total: true, purchaseDate: true } },
         },
       });

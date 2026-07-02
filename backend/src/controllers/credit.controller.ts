@@ -107,36 +107,49 @@ export const creditController = {
       const { id } = req.params;
       const { amount, paymentMethod, notes } = req.body;
 
-      const credit = await prisma.credit.findFirst({
-        where: { id, deletedAt: null, customer: { businessId: req.user!.businessId } },
-      });
-      if (!credit) throw new AppError('Crédito no encontrado', 404);
-      if (credit.status === 'PAID') throw new AppError('Este crédito ya está saldado', 400);
-
       const paymentAmount = parseFloat(amount);
-      if (paymentAmount > credit.balance) throw new AppError('El pago supera el saldo pendiente', 400);
+      if (!paymentAmount || paymentAmount <= 0) throw new AppError('El monto debe ser mayor a 0', 400);
 
-      const newPaid = credit.paidAmount + paymentAmount;
-      const newBalance = credit.totalAmount - newPaid;
-      const newStatus = newBalance <= 0 ? 'PAID' : newPaid > 0 ? 'PARTIAL' : 'PENDING';
+      const businessId = req.user!.businessId;
 
-      await prisma.$transaction(async (tx) => {
+      const [newBalance, newStatus, customerId] = await prisma.$transaction(async (tx) => {
+        // Lock the row to prevent concurrent payment race conditions
+        const [locked] = await tx.$queryRaw<any[]>`
+          SELECT c.id, c."totalAmount", c."paidAmount", c.balance, c.status, c."customerId"
+          FROM credits c
+          JOIN customers cu ON c."customerId" = cu.id
+          WHERE c.id::text = ${id}
+            AND c."deletedAt" IS NULL
+            AND cu."businessId" = ${businessId}
+          FOR UPDATE
+        `;
+        if (!locked) throw new AppError('Crédito no encontrado', 404);
+        if (locked.status === 'PAID') throw new AppError('Este crédito ya está saldado', 400);
+
+        const currentBalance = Number(locked.balance);
+        if (paymentAmount > currentBalance) throw new AppError('El pago supera el saldo pendiente', 400);
+
+        const newPaid = Number(locked.paidAmount) + paymentAmount;
+        const balance = Number(locked.totalAmount) - newPaid;
+        const status = balance <= 0 ? 'PAID' : newPaid > 0 ? 'PARTIAL' : 'PENDING';
+
         await tx.creditPayment.create({
           data: { creditId: id, amount: paymentAmount, paymentMethod, notes },
         });
 
         await tx.credit.update({
           where: { id },
-          data: { paidAmount: newPaid, balance: newBalance, status: newStatus as any },
+          data: { paidAmount: newPaid, balance, status: status as any },
         });
 
         await tx.customer.update({
-          where: { id: credit.customerId },
+          where: { id: locked.customerId },
           data: { currentDebt: { decrement: paymentAmount } },
         });
+
+        return [balance, status, locked.customerId];
       });
 
-      const businessId = req.user?.businessId;
       if (businessId) {
         emitToBusinesss(businessId, socketEvents.PAYMENT_RECEIVED, { creditId: id, amount: paymentAmount });
       }

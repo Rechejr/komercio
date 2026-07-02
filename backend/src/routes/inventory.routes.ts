@@ -34,17 +34,21 @@ router.get('/valuation', async (req: AuthRequest, res, next) => {
     const businessId = req.user!.businessId;
     const result = await prisma.$queryRaw<[{ total_cost: number; total_sale: number; count: bigint }]>`
       SELECT
-        SUM("costPrice" * stock) as total_cost,
-        SUM("salePrice" * stock) as total_sale,
-        COUNT(*) as count
+        COALESCE(SUM("costPrice"::float8 * stock), 0)::float AS total_cost,
+        COALESCE(SUM("salePrice"::float8 * stock), 0)::float AS total_sale,
+        COUNT(*) AS count
       FROM products
       WHERE "deletedAt" IS NULL
         AND "isActive" = true
+        AND stock > 0
         AND "businessId" = ${businessId}
     `;
+    const totalCostValue = Number(result[0]?.total_cost || 0);
+    const totalSaleValue = Number(result[0]?.total_sale || 0);
     return success(res, {
-      totalCostValue: Number(result[0]?.total_cost || 0),
-      totalSaleValue: Number(result[0]?.total_sale || 0),
+      totalCostValue,
+      totalSaleValue,
+      potentialProfit: totalSaleValue - totalCostValue,
       totalProducts: Number(result[0]?.count || 0),
     });
   } catch (err) { next(err); }

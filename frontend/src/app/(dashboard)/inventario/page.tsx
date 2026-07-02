@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '@/store/auth.store';
 import { useUpgradeStore } from '@/store/upgrade.store';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 type PreviewData = {
   total: number;
@@ -55,7 +56,17 @@ export default function InventarioPage() {
   const [previewData, setPreviewData] = useState<PreviewData | null>(null);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  function handleDroppedFile(file: File) {
+    const allowed = ['.xlsx', '.xls', '.csv'];
+    const ext = file.name.slice(file.name.lastIndexOf('.')).toLowerCase();
+    if (!allowed.includes(ext)) { toast.error('Solo archivos .xlsx, .xls o .csv'); return; }
+    setPendingFile(file);
+    setIsPreviewOpen(true);
+    previewMutation.mutate(file);
+  }
 
   const { data, isLoading } = useQuery({
     queryKey: ['products', page, search],
@@ -161,7 +172,27 @@ export default function InventarioPage() {
   const pagination = data?.pagination;
 
   return (
-    <div className="space-y-4">
+    <div
+      className="space-y-4 relative"
+      onDragOver={(e) => { if (isFree) return; e.preventDefault(); setIsDragOver(true); }}
+      onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setIsDragOver(false); }}
+      onDrop={(e) => {
+        e.preventDefault();
+        setIsDragOver(false);
+        if (isFree) { openUpgrade(); return; }
+        const file = e.dataTransfer.files[0];
+        if (file) handleDroppedFile(file);
+      }}
+    >
+      {isDragOver && (
+        <div className="pointer-events-none fixed inset-0 z-40 border-4 border-dashed border-blue-400 bg-blue-50/30 dark:bg-blue-900/20 rounded-xl flex items-center justify-center animate-fade-in">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl px-8 py-6 shadow-xl flex flex-col items-center gap-3">
+            <FileUp size={36} className="text-blue-500" />
+            <p className="text-lg font-bold text-gray-800 dark:text-white">Suelta el archivo para importar</p>
+            <p className="text-sm text-gray-400">.xlsx · .xls · .csv</p>
+          </div>
+        </div>
+      )}
       {/* Toolbar */}
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
@@ -492,37 +523,17 @@ export default function InventarioPage() {
         </div>
       )}
 
-      {/* ── Delete Confirm Modal ─────────────────────────────────────────────── */}
-      {deleteTarget && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm">
-            <div className="px-6 py-5">
-              <div className="flex items-start gap-4">
-                <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
-                  <Trash2 size={18} className="text-red-600" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-gray-800 dark:text-white">Eliminar producto</h3>
-                  <p className="text-sm text-gray-500 mt-1">
-                    ¿Eliminar <span className="font-semibold text-gray-700 dark:text-gray-200">{deleteTarget.name}</span>? Esta acción no se puede deshacer.
-                  </p>
-                </div>
-              </div>
-            </div>
-            <div className="flex gap-3 px-6 pb-5">
-              <button type="button" onClick={() => setDeleteTarget(null)}
-                className="flex-1 px-4 py-2.5 border border-gray-200 rounded-lg text-sm font-medium hover:bg-gray-50 transition">
-                Cancelar
-              </button>
-              <button type="button" onClick={() => deleteMutation.mutate(deleteTarget.id)} disabled={deleteMutation.isPending}
-                className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-lg text-sm font-semibold hover:bg-red-700 disabled:opacity-60 flex items-center justify-center gap-2 transition">
-                {deleteMutation.isPending && <Loader2 size={14} className="animate-spin" />}
-                Eliminar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* ── Delete Confirm ───────────────────────────────────────────────────── */}
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
+        title="Eliminar producto"
+        description={deleteTarget ? `¿Eliminar "${deleteTarget.name}"? Esta acción no se puede deshacer.` : undefined}
+        confirmLabel="Eliminar"
+        onConfirm={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
+        loading={deleteMutation.isPending}
+        variant="danger"
+      />
 
       {/* ── Product Form Modal ───────────────────────────────────────────────── */}
       {showForm && (

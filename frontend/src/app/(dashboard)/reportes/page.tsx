@@ -19,7 +19,7 @@ function fillDailySeries(chart: any[], startDate: Date, endDate: Date) {
   const end = new Date(Date.UTC(endDate.getUTCFullYear(), endDate.getUTCMonth(), endDate.getUTCDate()));
   while (cur <= end) {
     const key = cur.toISOString().slice(0, 10);
-    days.push(byDay.get(key) || { period: key, revenue: 0, count: 0, taxes: 0, discounts: 0 });
+    days.push(byDay.get(key) || { period: key, grossRevenue: 0, netRevenue: 0, count: 0, taxes: 0, discounts: 0 });
     cur.setUTCDate(cur.getUTCDate() + 1);
   }
   return days;
@@ -149,13 +149,13 @@ export default function ReportesPage() {
               <XAxis dataKey="period" tick={{ fontSize: 11 }} tickFormatter={formatChartDate} />
               <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
               <Tooltip formatter={(v: number) => formatCurrency(v)} />
-              <Area type="monotone" dataKey="revenue" stroke="#3b82f6" fill="url(#revenueGrad)" strokeWidth={2} name="Ingresos" />
+              <Area type="monotone" dataKey="grossRevenue" stroke="#3b82f6" fill="url(#revenueGrad)" strokeWidth={2} name="Ingresos" />
             </AreaChart>
           </ResponsiveContainer>
           <div className="grid grid-cols-3 gap-4 mt-4 pt-4 border-t border-gray-100">
             <div className="text-center">
               <p className="text-xs text-gray-400">Total ingresos</p>
-              <p className="font-bold text-gray-800 dark:text-white">{formatCurrency(salesData.totals?.revenue || 0)}</p>
+              <p className="font-bold text-gray-800 dark:text-white">{formatCurrency(salesData.totals?.grossRevenue || 0)}</p>
             </div>
             <div className="text-center">
               <p className="text-xs text-gray-400">Número de ventas</p>
@@ -164,7 +164,7 @@ export default function ReportesPage() {
             <div className="text-center">
               <p className="text-xs text-gray-400">Ticket promedio</p>
               <p className="font-bold text-gray-800 dark:text-white">
-                {salesData.totals?.count > 0 ? formatCurrency(salesData.totals.revenue / salesData.totals.count) : '$0'}
+                {salesData.totals?.count > 0 ? formatCurrency(salesData.totals.grossRevenue / salesData.totals.count) : '$0'}
               </p>
             </div>
           </div>

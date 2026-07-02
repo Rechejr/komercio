@@ -19,17 +19,54 @@
     --input: 217.2 32.6% 17.5%;
   }
 
-  * {
+  *,
+  *::before,
+  *::after {
     border-color: hsl(var(--border));
+  }
+
+  html {
+    color-scheme: light;
+  }
+  html.dark {
+    color-scheme: dark;
   }
 
   body {
     background-color: hsl(var(--background));
     color: hsl(var(--foreground));
   }
+
+  /* Theme transition — only colour properties, never layout or transforms */
+  body,
+  body *:not([class*="animate-"]):not([class*="transition"]) {
+    transition-property: background-color, border-color, color, fill, stroke, box-shadow;
+    transition-duration: 150ms;
+    transition-timing-function: ease;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    body,
+    body *:not([class*="animate-"]):not([class*="transition"]) {
+      transition: none !important;
+    }
+  }
+
+  /* Global focus-visible ring */
+  :focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  /* Remove focus outline for mouse users */
+  :focus:not(:focus-visible) {
+    outline: none;
+  }
 }
 
 @layer utilities {
+  /* ── Scrollbars ────────────────────────────────────────────────────────── */
   .scrollbar-thin {
     scrollbar-width: thin;
     scrollbar-color: hsl(var(--border)) transparent;
@@ -39,5 +76,65 @@
   .scrollbar-thin::-webkit-scrollbar-thumb {
     background-color: hsl(var(--border));
     border-radius: 9999px;
+  }
+
+  /* ── Skeleton loading ──────────────────────────────────────────────────── */
+  .skeleton {
+    background: linear-gradient(
+      90deg,
+      rgb(243 244 246) 25%,
+      rgb(229 231 235) 50%,
+      rgb(243 244 246) 75%
+    );
+    background-size: 200% 100%;
+    animation: skeleton-wave 1.6s ease-in-out infinite;
+    border-radius: 6px;
+  }
+  .dark .skeleton {
+    background: linear-gradient(
+      90deg,
+      rgb(55 65 81) 25%,
+      rgb(75 85 99) 50%,
+      rgb(55 65 81) 75%
+    );
+    background-size: 200% 100%;
+    animation: skeleton-wave 1.6s ease-in-out infinite;
+  }
+
+  @keyframes skeleton-wave {
+    0%   { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+
+  /* ── Page animations ───────────────────────────────────────────────────── */
+  .animate-fade-in {
+    animation: fade-in 200ms ease both;
+  }
+  .animate-scale-in {
+    animation: scale-in 180ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  .animate-slide-up {
+    animation: slide-up 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+  @keyframes scale-in {
+    from { opacity: 0; transform: scale(0.94); }
+    to   { opacity: 1; transform: scale(1); }
+  }
+  @keyframes slide-up {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .animate-fade-in,
+    .animate-scale-in,
+    .animate-slide-up {
+      animation: none;
+    }
   }
 }

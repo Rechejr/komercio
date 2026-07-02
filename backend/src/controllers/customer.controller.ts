@@ -71,10 +71,17 @@ export const customerController = {
 
   async create(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const { creditLimit, ...rest } = req.body;
+      const { name, email, phone, document, documentType, address, city, notes, creditLimit } = req.body;
       const customer = await prisma.customer.create({
         data: {
-          ...rest,
+          name,
+          email: email || null,
+          phone: phone || null,
+          document: document || null,
+          documentType: documentType || null,
+          address: address || null,
+          city: city || null,
+          notes: notes || null,
           businessId: req.user!.businessId,
           creditLimit: creditLimit != null && creditLimit !== '' ? parseFloat(creditLimit) : 0,
         },
@@ -93,10 +100,20 @@ export const customerController = {
       });
       if (!existing) throw new AppError('Cliente no encontrado', 404);
 
-      const { creditLimit, ...rest } = req.body;
+      const { name, email, phone, document, documentType, address, city, notes, creditLimit } = req.body;
       const customer = await prisma.customer.update({
         where: { id },
-        data: { ...rest, ...(creditLimit != null && creditLimit !== '' ? { creditLimit: parseFloat(creditLimit) } : {}) },
+        data: {
+          name,
+          email: email !== undefined ? (email || null) : undefined,
+          phone: phone !== undefined ? (phone || null) : undefined,
+          document: document !== undefined ? (document || null) : undefined,
+          documentType,
+          address: address !== undefined ? (address || null) : undefined,
+          city: city !== undefined ? (city || null) : undefined,
+          notes,
+          ...(creditLimit != null && creditLimit !== '' ? { creditLimit: parseFloat(creditLimit) } : {}),
+        },
       });
       return success(res, customer, 'Cliente actualizado');
     } catch (err) {
@@ -131,13 +148,13 @@ export const customerController = {
 
       const [sales, total] = await Promise.all([
         prisma.sale.findMany({
-          where: { customerId: id, deletedAt: null },
+          where: { customerId: id, deletedAt: null, branch: { businessId: req.user!.businessId } },
           skip,
           take: limit,
           orderBy: { createdAt: 'desc' },
           include: { details: { include: { product: { select: { name: true } } } } },
         }),
-        prisma.sale.count({ where: { customerId: id, deletedAt: null } }),
+        prisma.sale.count({ where: { customerId: id, deletedAt: null, branch: { businessId: req.user!.businessId } } }),
       ]);
 
       return paginated(res, sales, total, page, limit);

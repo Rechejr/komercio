@@ -34,6 +34,16 @@ import uploadRoutes from './routes/upload.routes';
 
 const app = express();
 
+// Serialize Prisma Decimal values as plain JS numbers in all JSON responses.
+// Without this, res.json() would emit Decimal fields as strings (Decimal.toJSON() returns a string),
+// which breaks the frontend that expects numeric types.
+app.set('json replacer', (_key: string, value: unknown) => {
+  if (value !== null && typeof value === 'object' && (value as any).constructor?.name === 'Decimal') {
+    return parseFloat((value as any).toString());
+  }
+  return value;
+});
+
 // Security
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 
@@ -66,6 +76,16 @@ const limiter = rateLimit({
 });
 app.use('/api/', limiter);
 
+// Strict rate limit for auth endpoints — protects login/forgot-password from brute-force
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: true,
+  message: { error: 'Demasiados intentos, espere 15 minutos antes de reintentar.' },
+});
+
 // Body parsing
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
@@ -84,6 +104,9 @@ app.get('/health', (_req, res) => {
 
 // API Routes
 const apiPrefix = '/api/v1';
+app.use(`${apiPrefix}/auth/login`, authLimiter);
+app.use(`${apiPrefix}/auth/forgot-password`, authLimiter);
+app.use(`${apiPrefix}/auth/resend-verification`, authLimiter);
 app.use(`${apiPrefix}/auth`, authRoutes);
 app.use(`${apiPrefix}/users`, userRoutes);
 app.use(`${apiPrefix}/business`, businessRoutes);

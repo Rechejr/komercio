@@ -28,11 +28,28 @@ export function Providers({ children }: { children: React.ReactNode }) {
           {children}
           <Toaster
             position="top-right"
+            gutter={8}
+            containerStyle={{ top: 16, right: 16 }}
             toastOptions={{
               duration: 3000,
-              style: { borderRadius: '8px', fontSize: '14px' },
-              success: { iconTheme: { primary: '#22c55e', secondary: '#fff' } },
-              error: { iconTheme: { primary: '#ef4444', secondary: '#fff' } },
+              style: {
+                borderRadius: '10px',
+                fontSize: '14px',
+                fontWeight: 500,
+                padding: '12px 16px',
+                maxWidth: '420px',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08)',
+              },
+              success: {
+                duration: 2500,
+                iconTheme: { primary: '#22c55e', secondary: '#fff' },
+                style: { background: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0' },
+              },
+              error: {
+                duration: 4500,
+                iconTheme: { primary: '#ef4444', secondary: '#fff' },
+                style: { background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca' },
+              },
             }}
           />
           {process.env.NODE_ENV === 'development' && <ReactQueryDevtools />}

@@ -7,6 +7,7 @@ import { api } from '@/lib/api';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import { Plus, ShoppingBag, X, Loader2, Trash2, Edit, ChevronRight, FileDown, Search } from 'lucide-react';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { downloadExcel } from '@/lib/exportExcel';
 
 export default function ComprasPage() {
@@ -270,37 +271,16 @@ export default function ComprasPage() {
         </div>
       )}
 
-      {/* Delete Confirm Modal */}
-      {deleteTarget && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm">
-            <div className="px-6 py-5">
-              <div className="flex items-start gap-4">
-                <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
-                  <Trash2 size={18} className="text-red-600" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-gray-800 dark:text-white">Eliminar compra</h3>
-                  <p className="text-sm text-gray-500 mt-1">
-                    ¿Eliminar la compra de <span className="font-semibold text-gray-700 dark:text-gray-200">{deleteTarget.supplier?.name}</span>? El stock se revertirá automáticamente.
-                  </p>
-                </div>
-              </div>
-            </div>
-            <div className="flex gap-3 px-6 pb-5">
-              <button type="button" onClick={() => setDeleteTarget(null)}
-                className="flex-1 px-4 py-2.5 border border-gray-200 rounded-lg text-sm font-medium hover:bg-gray-50 transition">
-                Cancelar
-              </button>
-              <button type="button" onClick={() => deleteMutation.mutate(deleteTarget.id)} disabled={deleteMutation.isPending}
-                className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-lg text-sm font-semibold hover:bg-red-700 disabled:opacity-60 flex items-center justify-center gap-2 transition">
-                {deleteMutation.isPending && <Loader2 size={14} className="animate-spin" />}
-                Eliminar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
+        title="Eliminar compra"
+        description={deleteTarget ? `¿Eliminar la compra de "${deleteTarget.supplier?.name}"? El stock se revertirá automáticamente.` : undefined}
+        confirmLabel="Eliminar"
+        onConfirm={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
+        loading={deleteMutation.isPending}
+        variant="danger"
+      />
 
       {/* Modal formulario */}
       {showForm && (

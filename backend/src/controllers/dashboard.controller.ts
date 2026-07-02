@@ -19,7 +19,10 @@ export const dashboardController = {
       weekStart.setDate(weekStart.getDate() - 7);
       const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
-      const [summaryRaw, recentSales, topProducts] = await Promise.all([
+      const [
+        summaryRaw, recentSales, topProducts,
+        totalProducts, lowStockRaw, totalCustomers, customersWithDebt, pendingCredits,
+      ] = await Promise.all([
         prisma.$queryRaw<any[]>`
           SELECT
             COALESCE(SUM(CASE WHEN s."createdAt" >= ${todayStart} AND s.status = 'COMPLETED' THEN s.total END), 0)   AS today_total,
@@ -61,29 +64,26 @@ export const dashboardController = {
           ORDER BY total_qty DESC
           LIMIT 5
         `,
-      ]);
 
-      const [totalProducts, lowStockRaw, totalCustomers, customersWithDebt, pendingCredits] =
-        await Promise.all([
-          prisma.product.count({ where: { deletedAt: null, isActive: true, businessId } }),
-          prisma.$queryRaw<[{ c: bigint }]>`
-            SELECT COUNT(*)::int AS c FROM products
-            WHERE stock <= "minStock"
-              AND "deletedAt" IS NULL
-              AND "isActive" = true
-              AND "businessId" = ${businessId}
-          `,
-          prisma.customer.count({ where: { deletedAt: null, isActive: true, businessId } }),
-          prisma.customer.count({ where: { currentDebt: { gt: 0 }, businessId } }),
-          prisma.credit.aggregate({
-            where: {
-              status: { in: ['PENDING', 'PARTIAL', 'OVERDUE'] },
-              customer: { businessId },
-            },
-            _sum: { balance: true },
-            _count: { id: true },
-          }),
-        ]);
+        prisma.product.count({ where: { deletedAt: null, isActive: true, businessId } }),
+        prisma.$queryRaw<[{ c: bigint }]>`
+          SELECT COUNT(*)::int AS c FROM products
+          WHERE stock <= "minStock"
+            AND "deletedAt" IS NULL
+            AND "isActive" = true
+            AND "businessId" = ${businessId}
+        `,
+        prisma.customer.count({ where: { deletedAt: null, isActive: true, businessId } }),
+        prisma.customer.count({ where: { currentDebt: { gt: 0 }, businessId } }),
+        prisma.credit.aggregate({
+          where: {
+            status: { in: ['PENDING', 'PARTIAL', 'OVERDUE'] },
+            customer: { businessId },
+          },
+          _sum: { balance: true },
+          _count: { id: true },
+        }),
+      ]);
       const lowStock = Number(lowStockRaw[0]?.c || 0);
 
       const sr = summaryRaw[0] || {};

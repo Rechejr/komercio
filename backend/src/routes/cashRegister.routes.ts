@@ -29,7 +29,7 @@ router.get('/current', async (req: any, res, next) => {
 
     const totalIn = Number(inAgg._sum.amount || 0);
     const totalOut = Number(outAgg._sum.amount || 0);
-    const expectedAmount = register.openingAmount + totalIn - totalOut;
+    const expectedAmount = Number(register.openingAmount) + totalIn - totalOut;
 
     return success(res, { ...register, totalIn, totalOut, expectedAmount });
   } catch (err) { next(err); }
@@ -84,7 +84,7 @@ router.post('/:id/close', authorize('ADMIN', 'SUPERVISOR', 'CASHIER'), async (re
 
     const totalIn = Number(inAgg._sum.amount || 0);
     const totalOut = Number(outAgg._sum.amount || 0);
-    const expectedAmount = register.openingAmount + totalIn - totalOut;
+    const expectedAmount = Number(register.openingAmount) + totalIn - totalOut;
     const difference = closingAmount - expectedAmount;
 
     const closed = await prisma.cashRegister.update({

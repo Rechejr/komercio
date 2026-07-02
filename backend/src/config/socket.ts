@@ -2,6 +2,7 @@ import { Server as HTTPServer } from 'http';
 import { Server as SocketServer } from 'socket.io';
 import { logger } from './logger';
 import { verifyAccessToken } from '../utils/jwt';
+import { prisma } from './database';
 
 let io: SocketServer;
 
@@ -38,7 +39,23 @@ export function initSocket(httpServer: HTTPServer): SocketServer {
     if (user?.businessId) socket.join(`business:${user.businessId}`);
     if (user?.branchId) socket.join(`branch:${user.branchId}`);
 
+    // Revalidate user every 60 s — forces disconnect if deactivated or deleted
+    const revalidateInterval = setInterval(async () => {
+      try {
+        const dbUser = await prisma.user.findUnique({
+          where: { id: user?.userId },
+          select: { isActive: true, deletedAt: true },
+        });
+        if (!dbUser || !dbUser.isActive || dbUser.deletedAt) {
+          socket.disconnect(true);
+        }
+      } catch {
+        // best-effort — don't disconnect on transient DB error
+      }
+    }, 60_000);
+
     socket.on('disconnect', () => {
+      clearInterval(revalidateInterval);
       logger.debug(`Socket disconnected: ${socket.id}`);
     });
   });

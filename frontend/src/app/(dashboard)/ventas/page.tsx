@@ -7,6 +7,7 @@ import { api } from '@/lib/api';
 import { formatCurrency, formatDateTime, statusColor, statusLabel, paymentMethodLabel } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import { Search, X, ShoppingCart, Ban, ChevronRight, FileDown, Loader2, AlertTriangle, Trash2 } from 'lucide-react';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import Link from 'next/link';
 import { downloadExcel } from '@/lib/exportExcel';
 
@@ -330,37 +331,16 @@ export default function VentasPage() {
         </div>
       )}
 
-      {/* Permanent Delete Modal */}
-      {showDeleteModal && detail && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md">
-            <div className="px-6 py-5">
-              <div className="flex items-start gap-4">
-                <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
-                  <Trash2 size={20} className="text-red-600" />
-                </div>
-                <div className="flex-1">
-                  <h3 className="font-bold text-gray-800 dark:text-white text-base">Eliminar permanentemente</h3>
-                  <p className="text-sm text-gray-500 mt-1">
-                    Esta acción <strong>no se puede deshacer</strong>. La factura <span className="font-mono font-semibold text-blue-600">{detail.invoiceNumber}</span> por {formatCurrency(detail.total)} será eliminada del sistema para siempre.
-                  </p>
-                </div>
-              </div>
-            </div>
-            <div className="flex gap-3 px-6 pb-5">
-              <button type="button" onClick={() => setShowDeleteModal(false)}
-                className="flex-1 px-4 py-2.5 border border-gray-200 rounded-lg text-sm font-medium hover:bg-gray-50 transition">
-                Cancelar
-              </button>
-              <button type="button" onClick={() => deleteMutation.mutate(detail.id)} disabled={deleteMutation.isPending}
-                className="flex-1 px-4 py-2.5 bg-red-700 text-white rounded-lg text-sm font-semibold hover:bg-red-800 disabled:opacity-60 flex items-center justify-center gap-2 transition">
-                {deleteMutation.isPending && <Loader2 size={14} className="animate-spin" />}
-                Eliminar definitivamente
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmDialog
+        open={showDeleteModal && !!detail}
+        onOpenChange={(open) => { if (!open) setShowDeleteModal(false); }}
+        title="Eliminar permanentemente"
+        description={detail ? `La factura ${detail.invoiceNumber} por ${formatCurrency(detail.total)} será eliminada para siempre. Esta acción no se puede deshacer.` : undefined}
+        confirmLabel="Eliminar definitivamente"
+        onConfirm={() => detail && deleteMutation.mutate(detail.id)}
+        loading={deleteMutation.isPending}
+        variant="danger"
+      />
     </div>
   );
 }

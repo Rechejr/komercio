@@ -33,12 +33,17 @@ export const expenseController = {
 
   async create(req: AuthRequest, res: Response, next: NextFunction) {
     try {
+      const { description, amount, date, categoryId, notes, paymentMethod } = req.body;
+      if (parseFloat(amount) <= 0) throw new AppError('El monto debe ser mayor a 0', 400);
       const expense = await prisma.expense.create({
         data: {
-          ...req.body,
+          description,
+          amount: parseFloat(amount),
+          date: date ? new Date(date) : new Date(),
+          categoryId: categoryId || null,
+          notes: notes || null,
+          paymentMethod: paymentMethod || null,
           businessId: req.user!.businessId,
-          amount: parseFloat(req.body.amount),
-          date: req.body.date ? new Date(req.body.date) : new Date(),
         },
       });
       return created(res, expense, 'Gasto registrado');
@@ -51,12 +56,17 @@ export const expenseController = {
         where: { id: req.params.id, deletedAt: null, businessId: req.user!.businessId },
       });
       if (!existing) throw new AppError('Gasto no encontrado', 404);
+      const { description, amount, date, categoryId, notes, paymentMethod } = req.body;
+      if (amount !== undefined && parseFloat(amount) <= 0) throw new AppError('El monto debe ser mayor a 0', 400);
       const expense = await prisma.expense.update({
         where: { id: req.params.id },
         data: {
-          ...req.body,
-          amount: req.body.amount ? parseFloat(req.body.amount) : undefined,
-          date: req.body.date ? new Date(req.body.date) : undefined,
+          description,
+          amount: amount !== undefined ? parseFloat(amount) : undefined,
+          date: date !== undefined ? new Date(date) : undefined,
+          categoryId: categoryId !== undefined ? (categoryId || null) : undefined,
+          notes,
+          paymentMethod,
         },
       });
       return success(res, expense, 'Gasto actualizado');
@@ -96,7 +106,7 @@ export const expenseController = {
       });
       const catMap = new Map(categories.map((c) => [c.id, c.name]));
 
-      const total = summary.reduce((acc, s) => acc + (s._sum.amount || 0), 0);
+      const total = summary.reduce((acc, s) => acc + Number(s._sum.amount || 0), 0);
 
       return success(res, {
         period: `${y}-${String(m).padStart(2, '0')}`,
@@ -124,8 +134,9 @@ export const expenseController = {
 
   async createCategory(req: AuthRequest, res: Response, next: NextFunction) {
     try {
+      const { name } = req.body;
       const cat = await prisma.expenseCategory.create({
-        data: { ...req.body, businessId: req.user!.businessId },
+        data: { name, businessId: req.user!.businessId },
       });
       return created(res, cat, 'Categoría creada');
     } catch (err) { next(err); }

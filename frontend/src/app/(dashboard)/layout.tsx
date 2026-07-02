@@ -8,6 +8,7 @@ import { useSocket } from '@/hooks/useSocket';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { Header } from '@/components/layout/Header';
 import { UpgradeModal } from '@/components/ui/UpgradeModal';
+import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, accessToken, setAccessToken, restoreSession, logout } = useAuthStore();
@@ -80,7 +81,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
         <Header onMenuClick={() => setMobileMenuOpen(true)} />
         <main className="flex-1 overflow-auto p-4 md:p-6 animate-fade-in">
-          {children}
+          <ErrorBoundary>
+            {children}
+          </ErrorBoundary>
         </main>
       </div>
       <UpgradeModal />

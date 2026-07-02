@@ -55,33 +55,35 @@ enum MovementType {
 
 // ─── USERS ────────────────────────────────────────────────────────────────────
 model User {
-  id               String    @id @default(uuid())
-  name             String
-  email            String    @unique
-  phone            String?
-  password         String
-  googleId         String?   @unique
-  role             UserRole  @default(CASHIER)
-  isActive         Boolean   @default(true)
-  isEmailVerified  Boolean   @default(false)
-  emailVerifyToken String?
-  resetPasswordToken String?
+  id                   String         @id @default(uuid())
+  name                 String
+  email                String         @unique
+  phone                String?
+  password             String
+  googleId             String?        @unique
+  role                 UserRole       @default(CASHIER)
+  isActive             Boolean        @default(true)
+  isEmailVerified      Boolean        @default(false)
+  emailVerifyToken     String?
+  resetPasswordToken   String?
   resetPasswordExpires DateTime?
-  avatar           String?
-  lastLogin        DateTime?
-  refreshTokens    RefreshToken[]
-  business         Business? @relation("BusinessOwner")
-  branchId         String?
-  branch           Branch?   @relation(fields: [branchId], references: [id])
-  sales            Sale[]
-  auditLogs        AuditLog[]
-  notifications    Notification[]
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
-  deletedAt        DateTime?
+  avatar               String?
+  lastLogin            DateTime?
+  refreshTokens        RefreshToken[]
+  business             Business?      @relation("BusinessOwner")
+  branchId             String?
+  branch               Branch?        @relation(fields: [branchId], references: [id])
+  sales                Sale[]
+  auditLogs            AuditLog[]
+  notifications        Notification[]
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+  deletedAt            DateTime?
 
   @@index([email])
   @@index([branchId])
+  @@index([emailVerifyToken])
+  @@index([resetPasswordToken])
   @@map("users")
 }
 
@@ -94,59 +96,61 @@ model RefreshToken {
   createdAt DateTime @default(now())
 
   @@index([userId])
+  @@index([userId, expiresAt])
+  @@index([expiresAt])
   @@map("refresh_tokens")
 }
 
 // ─── BUSINESS ─────────────────────────────────────────────────────────────────
 model Business {
-  id          String   @id @default(uuid())
-  name        String
-  category    String?
-  legalName   String?
-  nit         String?
-  phone       String?
-  email       String?
-  address     String?
-  city        String?
-  country     String   @default("Colombia")
-  logo        String?
-  currency    String   @default("COP")
-  taxRate     Float    @default(0)
-  ownerId     String   @unique
-  owner       User     @relation("BusinessOwner", fields: [ownerId], references: [id])
-  branches    Branch[]
-  categories  Category[]
-  customers   Customer[]
-  suppliers   Supplier[]
-  brands      Brand[]
-  purchases   Purchase[]
-  expenses    Expense[]
+  id                String            @id @default(uuid())
+  name              String
+  category          String?
+  legalName         String?
+  nit               String?
+  phone             String?
+  email             String?
+  address           String?
+  city              String?
+  country           String            @default("Colombia")
+  logo              String?
+  currency          String            @default("COP")
+  taxRate           Decimal           @default(0)
+  ownerId           String            @unique
+  owner             User              @relation("BusinessOwner", fields: [ownerId], references: [id])
+  branches          Branch[]
+  categories        Category[]
+  customers         Customer[]
+  suppliers         Supplier[]
+  brands            Brand[]
+  purchases         Purchase[]
+  expenses          Expense[]
   expenseCategories ExpenseCategory[]
-  products    Product[]
-  plan           String   @default("free")
-  planExpiresAt  DateTime?
-  settings    Json?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  deletedAt   DateTime?
+  products          Product[]
+  plan              String            @default("free")
+  planExpiresAt     DateTime?
+  settings          Json?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  deletedAt         DateTime?
 
   @@map("businesses")
 }
 
 model Branch {
-  id          String    @id @default(uuid())
-  name        String
-  address     String?
-  phone       String?
-  businessId  String
-  business    Business  @relation(fields: [businessId], references: [id])
-  users       User[]
-  products    Product[]
-  sales       Sale[]
+  id            String         @id @default(uuid())
+  name          String
+  address       String?
+  phone         String?
+  businessId    String
+  business      Business       @relation(fields: [businessId], references: [id])
+  users         User[]
+  products      Product[]
+  sales         Sale[]
   cashRegisters CashRegister[]
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  deletedAt   DateTime?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  deletedAt     DateTime?
 
   @@index([businessId])
   @@map("branches")
@@ -154,19 +158,19 @@ model Branch {
 
 // ─── CATEGORIES & BRANDS ──────────────────────────────────────────────────────
 model Category {
-  id          String    @id @default(uuid())
+  id          String     @id @default(uuid())
   businessId  String?
-  business    Business? @relation(fields: [businessId], references: [id])
+  business    Business?  @relation(fields: [businessId], references: [id])
   name        String
   description String?
   color       String?
   icon        String?
   parentId    String?
-  parent      Category? @relation("CategoryChildren", fields: [parentId], references: [id])
+  parent      Category?  @relation("CategoryChildren", fields: [parentId], references: [id])
   children    Category[] @relation("CategoryChildren")
   products    Product[]
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
   deletedAt   DateTime?
 
   @@unique([businessId, name])
@@ -175,15 +179,15 @@ model Category {
 }
 
 model Brand {
-  id          String    @id @default(uuid())
-  name        String
-  logo        String?
-  businessId  String?
-  business    Business? @relation(fields: [businessId], references: [id])
-  products    Product[]
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  deletedAt   DateTime?
+  id         String    @id @default(uuid())
+  name       String
+  logo       String?
+  businessId String?
+  business   Business? @relation(fields: [businessId], references: [id])
+  products   Product[]
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  deletedAt  DateTime?
 
   @@index([businessId])
   @@map("brands")
@@ -191,41 +195,45 @@ model Brand {
 
 // ─── PRODUCTS ─────────────────────────────────────────────────────────────────
 model Product {
-  id              String    @id @default(uuid())
-  code            String    @unique
-  barcode         String?   @unique
-  name            String
-  description     String?
-  categoryId      String?
-  category        Category? @relation(fields: [categoryId], references: [id])
-  brandId         String?
-  brand           Brand?    @relation(fields: [brandId], references: [id])
-  supplierId      String?
-  supplier        Supplier? @relation(fields: [supplierId], references: [id])
-  branchId        String?
-  branch          Branch?   @relation(fields: [branchId], references: [id])
-  businessId      String?
-  business        Business? @relation(fields: [businessId], references: [id])
-  costPrice       Float     @default(0)
-  salePrice       Float     @default(0)
-  wholesalePrice  Float?
-  stock           Float     @default(0)
-  minStock        Float     @default(0)
-  unit            String    @default("unit")
-  image           String?
-  images          String[]
-  taxRate         Float     @default(0)
-  isActive        Boolean   @default(true)
-  allowNegativeStock Boolean @default(false)
-  saleDetails     SaleDetail[]
-  purchaseDetails PurchaseDetail[]
+  id                 String              @id @default(uuid())
+  // code is unique per business, not globally — two businesses can share the same code
+  code               String
+  barcode            String?
+  name               String
+  description        String?
+  categoryId         String?
+  category           Category?           @relation(fields: [categoryId], references: [id])
+  brandId            String?
+  brand              Brand?              @relation(fields: [brandId], references: [id])
+  supplierId         String?
+  supplier           Supplier?           @relation(fields: [supplierId], references: [id])
+  branchId           String?
+  branch             Branch?             @relation(fields: [branchId], references: [id])
+  businessId         String?
+  business           Business?           @relation(fields: [businessId], references: [id])
+  costPrice          Decimal             @default(0)
+  salePrice          Decimal             @default(0)
+  wholesalePrice     Decimal?
+  // stock and minStock stay Float — they represent inventory quantities, not monetary values
+  stock              Float               @default(0)
+  minStock           Float               @default(0)
+  unit               String              @default("unit")
+  image              String?
+  images             String[]
+  taxRate            Decimal             @default(0)
+  isActive           Boolean             @default(true)
+  allowNegativeStock Boolean             @default(false)
+  saleDetails        SaleDetail[]
+  purchaseDetails    PurchaseDetail[]
   inventoryMovements InventoryMovement[]
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  deletedAt       DateTime?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  deletedAt          DateTime?
 
-  @@index([code])
-  @@index([barcode])
+  @@unique([businessId, code])
+  @@index([businessId, barcode])
+  @@index([businessId, name])
+  @@index([businessId, isActive])
   @@index([categoryId])
   @@index([branchId])
   @@index([businessId])
@@ -234,58 +242,66 @@ model Product {
 
 // ─── INVENTORY MOVEMENTS ──────────────────────────────────────────────────────
 model InventoryMovement {
-  id          String       @id @default(uuid())
-  productId   String
-  product     Product      @relation(fields: [productId], references: [id])
-  type        MovementType
-  quantity    Float
+  id            String       @id @default(uuid())
+  productId     String
+  product       Product      @relation(fields: [productId], references: [id])
+  type          MovementType
+  // quantity/previousStock/newStock stay Float — inventory quantities, not money
+  quantity      Float
   previousStock Float
-  newStock    Float
-  reason      String?
-  referenceId String?
+  newStock      Float
+  // Monetary cost fields — enable a proper accounting ledger per movement
+  unitCost      Decimal      @default(0)
+  totalCost     Decimal      @default(0)
+  reason        String?
+  referenceId   String?
   referenceType String?
-  notes       String?
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  notes         String?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
 
   @@index([productId])
+  @@index([referenceId])
+  @@index([productId, createdAt])
   @@map("inventory_movements")
 }
 
 // ─── CUSTOMERS ────────────────────────────────────────────────────────────────
 model Customer {
-  id           String    @id @default(uuid())
-  businessId   String?
-  business     Business? @relation(fields: [businessId], references: [id])
-  name         String
-  document     String?
-  documentType String?   @default("CC")
-  phone        String?
-  email        String?
-  address      String?
-  city         String?
-  notes        String?
-  creditLimit  Float     @default(0)
-  currentDebt  Float     @default(0)
-  loyaltyPoints Int      @default(0)
-  isActive     Boolean   @default(true)
-  sales        Sale[]
-  credits      Credit[]
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  deletedAt    DateTime?
+  id            String    @id @default(uuid())
+  businessId    String?
+  business      Business? @relation(fields: [businessId], references: [id])
+  name          String
+  document      String?
+  documentType  String?   @default("CC")
+  phone         String?
+  email         String?
+  address       String?
+  city          String?
+  notes         String?
+  creditLimit   Decimal   @default(0)
+  currentDebt   Decimal   @default(0)
+  loyaltyPoints Int       @default(0)
+  isActive      Boolean   @default(true)
+  sales         Sale[]
+  credits       Credit[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deletedAt     DateTime?
 
   @@unique([businessId, document])
   @@index([businessId])
+  @@index([businessId, name])
+  @@index([businessId, currentDebt])
   @@index([document])
   @@map("customers")
 }
 
 // ─── SUPPLIERS ────────────────────────────────────────────────────────────────
 model Supplier {
-  id          String    @id @default(uuid())
+  id          String     @id @default(uuid())
   businessId  String?
-  business    Business? @relation(fields: [businessId], references: [id])
+  business    Business?  @relation(fields: [businessId], references: [id])
   name        String
   legalName   String?
   document    String?
@@ -296,11 +312,11 @@ model Supplier {
   city        String?
   contactName String?
   notes       String?
-  isActive    Boolean   @default(true)
+  isActive    Boolean    @default(true)
   products    Product[]
   purchases   Purchase[]
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
   deletedAt   DateTime?
 
   @@index([businessId])
@@ -309,30 +325,31 @@ model Supplier {
 
 // ─── SALES ────────────────────────────────────────────────────────────────────
 model Sale {
-  id              String      @id @default(uuid())
-  invoiceNumber   String      @unique
-  customerId      String?
-  customer        Customer?   @relation(fields: [customerId], references: [id])
-  userId          String
-  user            User        @relation(fields: [userId], references: [id])
-  branchId        String
-  branch          Branch      @relation(fields: [branchId], references: [id])
-  status          SaleStatus  @default(COMPLETED)
-  subtotal        Float
-  taxAmount       Float       @default(0)
-  discountAmount  Float       @default(0)
-  total           Float
-  paidAmount      Float
-  changeAmount    Float       @default(0)
-  paymentMethod   PaymentMethod @default(CASH)
-  paymentDetails  Json?
-  notes           String?
-  details         SaleDetail[]
-  credit          Credit?
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
-  deletedAt       DateTime?
+  id             String        @id @default(uuid())
+  invoiceNumber  String
+  customerId     String?
+  customer       Customer?     @relation(fields: [customerId], references: [id])
+  userId         String
+  user           User          @relation(fields: [userId], references: [id])
+  branchId       String
+  branch         Branch        @relation(fields: [branchId], references: [id])
+  status         SaleStatus    @default(COMPLETED)
+  subtotal       Decimal
+  taxAmount      Decimal       @default(0)
+  discountAmount Decimal       @default(0)
+  total          Decimal
+  paidAmount     Decimal
+  changeAmount   Decimal       @default(0)
+  paymentMethod  PaymentMethod @default(CASH)
+  paymentDetails Json?
+  notes          String?
+  details        SaleDetail[]
+  credit         Credit?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  deletedAt      DateTime?
 
+  @@unique([branchId, invoiceNumber])
   @@index([customerId])
   @@index([userId])
   @@index([branchId])
@@ -349,12 +366,12 @@ model SaleDetail {
   productId   String
   product     Product  @relation(fields: [productId], references: [id])
   quantity    Float
-  unitPrice   Float
-  costPrice   Float
-  discountPct Float    @default(0)
-  taxRate     Float    @default(0)
-  subtotal    Float
-  total       Float
+  unitPrice   Decimal
+  costPrice   Decimal
+  discountPct Decimal  @default(0)
+  taxRate     Decimal  @default(0)
+  subtotal    Decimal
+  total       Decimal
   createdAt   DateTime @default(now())
 
   @@index([saleId])
@@ -364,41 +381,42 @@ model SaleDetail {
 
 // ─── PURCHASES ────────────────────────────────────────────────────────────────
 model Purchase {
-  id              String    @id @default(uuid())
-  businessId      String?
-  business        Business? @relation(fields: [businessId], references: [id])
-  invoiceNumber   String?
-  supplierId      String
-  supplier        Supplier  @relation(fields: [supplierId], references: [id])
-  status          PurchaseStatus @default(COMPLETED)
-  subtotal        Float
-  taxAmount       Float     @default(0)
-  total           Float
-  invoicePdf      String?
-  notes           String?
-  purchaseDate    DateTime  @default(now())
-  details         PurchaseDetail[]
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  deletedAt       DateTime?
+  id            String          @id @default(uuid())
+  businessId    String?
+  business      Business?       @relation(fields: [businessId], references: [id])
+  invoiceNumber String?
+  supplierId    String
+  supplier      Supplier        @relation(fields: [supplierId], references: [id])
+  status        PurchaseStatus  @default(COMPLETED)
+  subtotal      Decimal
+  taxAmount     Decimal         @default(0)
+  total         Decimal
+  invoicePdf    String?
+  notes         String?
+  purchaseDate  DateTime        @default(now())
+  details       PurchaseDetail[]
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  deletedAt     DateTime?
 
   @@index([supplierId])
   @@index([businessId])
+  @@index([businessId, purchaseDate])
   @@map("purchases")
 }
 
 model PurchaseDetail {
-  id          String    @id @default(uuid())
-  purchaseId  String
-  purchase    Purchase  @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
-  productId   String
-  product     Product   @relation(fields: [productId], references: [id])
-  quantity    Float
-  unitCost    Float
-  taxRate     Float     @default(0)
-  subtotal    Float
-  total       Float
-  createdAt   DateTime  @default(now())
+  id         String   @id @default(uuid())
+  purchaseId String
+  purchase   Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  productId  String
+  product    Product  @relation(fields: [productId], references: [id])
+  quantity   Float
+  unitCost   Decimal
+  taxRate    Decimal  @default(0)
+  subtotal   Decimal
+  total      Decimal
+  createdAt  DateTime @default(now())
 
   @@index([purchaseId])
   @@index([productId])
@@ -421,58 +439,61 @@ model ExpenseCategory {
 }
 
 model Expense {
-  id          String          @id @default(uuid())
-  businessId  String?
-  business    Business?       @relation(fields: [businessId], references: [id])
-  categoryId  String?
-  category    ExpenseCategory? @relation(fields: [categoryId], references: [id])
-  description String
-  amount      Float
-  paymentMethod PaymentMethod  @default(CASH)
-  receiptUrl  String?
-  date        DateTime        @default(now())
-  notes       String?
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
-  deletedAt   DateTime?
+  id            String           @id @default(uuid())
+  businessId    String?
+  business      Business?        @relation(fields: [businessId], references: [id])
+  categoryId    String?
+  category      ExpenseCategory? @relation(fields: [categoryId], references: [id])
+  description   String
+  amount        Decimal
+  paymentMethod PaymentMethod    @default(CASH)
+  receiptUrl    String?
+  date          DateTime         @default(now())
+  notes         String?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  deletedAt     DateTime?
 
   @@index([businessId])
   @@index([categoryId])
   @@index([date])
+  @@index([businessId, date])
   @@map("expenses")
 }
 
-// ─── CREDITS / FIADOS ────────────────────────────────────────────────────────
+// ─── CREDITS / FIADOS ─────────────────────────────────────────────────────────
 model Credit {
-  id          String       @id @default(uuid())
-  saleId      String?      @unique
-  sale        Sale?        @relation(fields: [saleId], references: [id])
+  id          String          @id @default(uuid())
+  saleId      String?         @unique
+  sale        Sale?           @relation(fields: [saleId], references: [id])
   customerId  String
-  customer    Customer     @relation(fields: [customerId], references: [id])
-  totalAmount Float
-  paidAmount  Float        @default(0)
-  balance     Float
-  status      CreditStatus @default(PENDING)
+  customer    Customer        @relation(fields: [customerId], references: [id])
+  totalAmount Decimal
+  paidAmount  Decimal         @default(0)
+  balance     Decimal
+  status      CreditStatus    @default(PENDING)
   dueDate     DateTime?
   notes       String?
   payments    CreditPayment[]
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
   deletedAt   DateTime?
 
   @@index([customerId])
   @@index([status])
+  @@index([dueDate])
+  @@index([status, dueDate])
   @@map("credits")
 }
 
 model CreditPayment {
-  id            String   @id @default(uuid())
+  id            String        @id @default(uuid())
   creditId      String
-  credit        Credit   @relation(fields: [creditId], references: [id], onDelete: Cascade)
-  amount        Float
+  credit        Credit        @relation(fields: [creditId], references: [id], onDelete: Cascade)
+  amount        Decimal
   paymentMethod PaymentMethod @default(CASH)
   notes         String?
-  createdAt     DateTime @default(now())
+  createdAt     DateTime      @default(now())
 
   @@index([creditId])
   @@map("credit_payments")
@@ -480,22 +501,22 @@ model CreditPayment {
 
 // ─── CASH REGISTER ────────────────────────────────────────────────────────────
 model CashRegister {
-  id            String    @id @default(uuid())
-  branchId      String
-  branch        Branch    @relation(fields: [branchId], references: [id])
-  openedBy      String
-  closedBy      String?
-  openingAmount Float
-  closingAmount Float?
-  expectedAmount Float?
-  difference    Float?
-  status        String    @default("OPEN")
-  openedAt      DateTime  @default(now())
-  closedAt      DateTime?
-  notes         String?
-  movements     CashMovement[]
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id             String         @id @default(uuid())
+  branchId       String
+  branch         Branch         @relation(fields: [branchId], references: [id])
+  openedBy       String
+  closedBy       String?
+  openingAmount  Decimal
+  closingAmount  Decimal?
+  expectedAmount Decimal?
+  difference     Decimal?
+  status         String         @default("OPEN")
+  openedAt       DateTime       @default(now())
+  closedAt       DateTime?
+  notes          String?
+  movements      CashMovement[]
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
 
   @@index([branchId])
   @@index([status])
@@ -508,7 +529,7 @@ model CashMovement {
   cashRegisterId String
   cashRegister   CashRegister @relation(fields: [cashRegisterId], references: [id])
   type           MovementType
-  amount         Float
+  amount         Decimal
   description    String
   referenceId    String?
   createdAt      DateTime     @default(now())
@@ -531,6 +552,7 @@ model Notification {
 
   @@index([userId])
   @@index([isRead])
+  @@index([userId, isRead])
   @@map("notifications")
 }
 
@@ -551,5 +573,6 @@ model AuditLog {
   @@index([userId])
   @@index([module])
   @@index([createdAt])
+  @@index([entityId])
   @@map("audit_logs")
 }

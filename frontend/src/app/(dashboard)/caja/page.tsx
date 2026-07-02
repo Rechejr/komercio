@@ -46,7 +46,15 @@ export default function CajaPage() {
     onError: (err: any) => toast.error(err.response?.data?.error || 'Error al registrar movimiento'),
   });
 
-  if (isLoading) return <div className="text-center py-12 text-gray-400">Cargando...</div>;
+  if (isLoading) return (
+    <div className="space-y-4 max-w-3xl mx-auto">
+      <div className="skeleton h-28 w-full rounded-2xl" />
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {Array.from({ length: 4 }).map((_, i) => <div key={i} className="skeleton h-20 rounded-xl" />)}
+      </div>
+      <div className="skeleton h-64 w-full rounded-2xl" />
+    </div>
+  );
 
   if (!cashRegister) {
     return (

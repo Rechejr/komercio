@@ -208,31 +208,46 @@ export default function POSPage() {
 
   if (lastSale) {
     return (
-      <div className="max-w-md mx-auto mt-12 text-center space-y-4">
-        <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto">
-          <CheckCircle className="text-green-500" size={40} />
-        </div>
-        <h2 className="text-2xl font-bold text-gray-900">¡Venta exitosa!</h2>
-        <p className="text-gray-500">Factura: <span className="font-mono font-bold text-blue-600">{lastSale.invoiceNumber}</span></p>
-        <p className="text-3xl font-bold text-gray-900">{formatCurrency(lastSale.total)}</p>
-        {lastSale.changeAmount > 0 && (
-          <p className="text-green-600 font-semibold">Cambio: {formatCurrency(lastSale.changeAmount)}</p>
-        )}
-        <div className="flex gap-3 justify-center pt-4">
-          <button
-            type="button"
-            onClick={() => window.print()}
-            className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50 transition"
-          >
-            <Printer size={16} /> Imprimir ticket
-          </button>
-          <button
-            type="button"
-            onClick={() => setLastSale(null)}
-            className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition"
-          >
-            Nueva venta
-          </button>
+      <div className="flex items-center justify-center min-h-[60vh] p-4">
+        <div className="max-w-sm w-full text-center animate-scale-in">
+          {/* Icon */}
+          <div className="w-24 h-24 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg shadow-green-200 dark:shadow-green-900/20">
+            <CheckCircle className="text-green-500" size={48} />
+          </div>
+
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-1">¡Venta exitosa!</h2>
+          <p className="text-sm text-gray-400 mb-5">
+            Factura <span className="font-mono font-bold text-blue-600 dark:text-blue-400">{lastSale.invoiceNumber}</span>
+          </p>
+
+          {/* Amount card */}
+          <div className="bg-gray-50 dark:bg-gray-800 rounded-2xl p-5 mb-4 border border-gray-100 dark:border-gray-700">
+            <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide font-semibold mb-1">Total cobrado</p>
+            <p className="text-4xl font-bold text-gray-900 dark:text-white">{formatCurrency(lastSale.total)}</p>
+            {lastSale.changeAmount > 0 && (
+              <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+                <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide font-semibold mb-0.5">Cambio</p>
+                <p className="text-xl font-bold text-green-600 dark:text-green-400">{formatCurrency(lastSale.changeAmount)}</p>
+              </div>
+            )}
+          </div>
+
+          <div className="flex gap-3 justify-center">
+            <button
+              type="button"
+              onClick={() => window.print()}
+              className="flex items-center gap-2 px-4 py-2.5 border border-gray-200 dark:border-gray-600 rounded-xl text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition"
+            >
+              <Printer size={16} /> Imprimir ticket
+            </button>
+            <button
+              type="button"
+              onClick={() => setLastSale(null)}
+              className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 transition"
+            >
+              Nueva venta
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -285,13 +300,28 @@ export default function POSPage() {
           </div>
 
           {/* Product grid */}
-          <div className="mt-3 max-h-72 overflow-y-auto">
+          <div className="mt-3 max-h-72 overflow-y-auto scrollbar-thin">
             {isLoading ? (
-              <div className="flex items-center justify-center py-10 text-gray-400">
-                <Loader2 size={20} className="animate-spin" />
+              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2.5">
+                {Array.from({ length: 10 }).map((_, i) => (
+                  <div key={i} className="flex flex-col rounded-xl p-2.5 bg-gray-50 dark:bg-gray-700/40">
+                    <div className="skeleton aspect-square w-full rounded-lg mb-2" />
+                    <div className="skeleton h-3.5 w-3/4 mb-1.5" />
+                    <div className="skeleton h-3 w-full mb-1.5" />
+                    <div className="skeleton h-4 w-1/2 rounded-full" />
+                  </div>
+                ))}
               </div>
             ) : productsData?.length === 0 ? (
-              <p className="text-sm text-gray-400 text-center py-8">Sin resultados</p>
+              <div className="flex flex-col items-center justify-center py-10 gap-2 text-gray-400">
+                <Package size={36} className="opacity-25" />
+                <p className="text-sm">{search ? `Sin resultados para "${search}"` : 'No hay productos disponibles'}</p>
+                {search && (
+                  <button type="button" onClick={() => setSearch('')} className="text-xs text-blue-500 hover:underline">
+                    Limpiar búsqueda
+                  </button>
+                )}
+              </div>
             ) : (
               <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2.5">
                 {productsData?.map((p: any) => {
