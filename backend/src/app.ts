@@ -34,6 +34,9 @@ import uploadRoutes from './routes/upload.routes';
 
 const app = express();
 
+// Trust Railway/Vercel reverse proxy so rate-limit and IP detection work correctly
+app.set('trust proxy', 1);
+
 // Serialize Prisma Decimal values as plain JS numbers in all JSON responses.
 // Without this, res.json() would emit Decimal fields as strings (Decimal.toJSON() returns a string),
 // which breaks the frontend that expects numeric types.
