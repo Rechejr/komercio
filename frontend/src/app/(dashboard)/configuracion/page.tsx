@@ -1,14 +1,18 @@
 'use client';
 
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useRef, useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { api } from '@/lib/api';
 import toast from 'react-hot-toast';
-import { Loader2, Store, Lock } from 'lucide-react';
+import { Loader2, Store, Lock, ImagePlus, X } from 'lucide-react';
 import { useAuthStore } from '@/store/auth.store';
 
 export default function ConfiguracionPage() {
   const { user } = useAuthStore();
+  const qc = useQueryClient();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
 
   const { data: business } = useQuery({
     queryKey: ['business'],
@@ -20,7 +24,10 @@ export default function ConfiguracionPage() {
 
   const businessMutation = useMutation({
     mutationFn: (data: any) => api.put('/business/me', data),
-    onSuccess: () => toast.success('Negocio actualizado'),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['business'] });
+      toast.success('Negocio actualizado');
+    },
     onError: () => toast.error('Error al actualizar'),
   });
 
@@ -29,6 +36,45 @@ export default function ConfiguracionPage() {
     onSuccess: () => { toast.success('Contraseña actualizada'); resetPwd(); },
     onError: (err: any) => toast.error(err.response?.data?.error || 'Error al cambiar contraseña'),
   });
+
+  async function handleLogoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error('La imagen no puede superar 2 MB');
+      return;
+    }
+    setUploadingLogo(true);
+    try {
+      const form = new FormData();
+      form.append('images', file);
+      const upload = await api.post('/uploads/images', form, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      const logoUrl: string = upload.data.data.urls[0];
+      await api.put('/business/me', { logo: logoUrl });
+      qc.invalidateQueries({ queryKey: ['business'] });
+      toast.success('Logo actualizado');
+    } catch {
+      toast.error('Error al subir el logo');
+    } finally {
+      setUploadingLogo(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  }
+
+  async function handleRemoveLogo() {
+    setUploadingLogo(true);
+    try {
+      await api.put('/business/me', { logo: null });
+      qc.invalidateQueries({ queryKey: ['business'] });
+      toast.success('Logo eliminado');
+    } catch {
+      toast.error('Error al eliminar el logo');
+    } finally {
+      setUploadingLogo(false);
+    }
+  }
 
   return (
     <div className="max-w-2xl space-y-6">
@@ -39,6 +85,54 @@ export default function ConfiguracionPage() {
             <Store size={18} className="text-blue-500" />
             <h2 className="font-semibold text-gray-800 dark:text-white">Información del negocio</h2>
           </div>
+
+          {/* Logo uploader */}
+          <div className="px-6 pt-5 pb-2 border-b border-gray-50 dark:border-gray-700/60">
+            <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-3">Logo del negocio</p>
+            <div className="flex items-center gap-4">
+              <div className="w-16 h-16 rounded-xl border-2 border-dashed border-gray-200 dark:border-gray-600 flex items-center justify-center overflow-hidden flex-shrink-0 bg-gray-50 dark:bg-gray-700">
+                {uploadingLogo ? (
+                  <Loader2 size={22} className="animate-spin text-blue-500" />
+                ) : business?.logo ? (
+                  <img src={business.logo} alt="Logo" className="w-full h-full object-cover" />
+                ) : (
+                  <Store size={22} className="text-gray-300" />
+                )}
+              </div>
+              <div className="space-y-1.5">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  aria-label="Subir logo del negocio"
+                  className="hidden"
+                  onChange={handleLogoChange}
+                />
+                <button
+                  type="button"
+                  disabled={uploadingLogo}
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 transition disabled:opacity-50"
+                >
+                  <ImagePlus size={15} />
+                  {business?.logo ? 'Cambiar logo' : 'Subir logo'}
+                </button>
+                {business?.logo && (
+                  <button
+                    type="button"
+                    disabled={uploadingLogo}
+                    onClick={handleRemoveLogo}
+                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-red-500 border border-red-100 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition disabled:opacity-50"
+                  >
+                    <X size={15} />
+                    Quitar logo
+                  </button>
+                )}
+                <p className="text-xs text-gray-400">JPG, PNG o WebP · máx. 2 MB</p>
+              </div>
+            </div>
+          </div>
+
           <form onSubmit={handleBusiness((d) => businessMutation.mutate(d))} className="p-6 grid grid-cols-2 gap-4">
             {[
               { name: 'name', label: 'Nombre del negocio', col: 2 },

@@ -3,9 +3,11 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useQuery } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth.store';
 import { useUpgradeStore } from '@/store/upgrade.store';
+import { api } from '@/lib/api';
 import { Tooltip } from '@/components/ui/Tooltip';
 import {
   LayoutDashboard, Package, ShoppingCart, Users, Truck,
@@ -65,10 +67,18 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
   const { user, logout } = useAuthStore();
   const openUpgrade = useUpgradeStore((s) => s.open);
 
+  const { data: business } = useQuery({
+    queryKey: ['business'],
+    queryFn: () => api.get('/business/me').then((r) => r.data.data),
+    staleTime: 5 * 60 * 1000,
+    enabled: !!user?.businessId,
+  });
+
   const isFree     = !user?.plan || user.plan === 'free';
   const roleLabel  = ROLE_LABELS[user?.role ?? ''] ?? user?.role ?? '';
   const bizName    = user?.businessName ?? 'Mi negocio';
   const bizInitial = bizName.charAt(0).toUpperCase();
+  const bizLogo    = business?.logo as string | undefined;
 
   function handleNavClick(item: { pro: boolean }, e: React.MouseEvent) {
     if (item.pro && isFree) { e.preventDefault(); openUpgrade(); return; }
@@ -127,8 +137,14 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
         )}>
           <Tooltip content={`${bizName} · ${roleLabel}`} side="right" disabled={!collapsed}>
             <div className={cn('flex items-center gap-3', collapsed && 'md:justify-center')}>
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
-                {bizInitial}
+              <div className="w-8 h-8 rounded-lg flex-shrink-0 overflow-hidden">
+                {bizLogo ? (
+                  <img src={bizLogo} alt={bizName} className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center text-white text-sm font-bold">
+                    {bizInitial}
+                  </div>
+                )}
               </div>
               <div className={cn('flex-1 min-w-0', collapsed && 'md:hidden')}>
                 <p className="text-sm font-semibold text-white truncate">{bizName}</p>
