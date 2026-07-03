@@ -8,16 +8,6 @@ import { redis } from './config/redis';
 
 const PORT = process.env.PORT || 4000;
 
-// DEBUG TEMPORAL — eliminar después de confirmar que las variables llegan
-console.log('[ENV-CHECK]', JSON.stringify({
-  NODE_ENV: process.env.NODE_ENV,
-  PORT: process.env.PORT,
-  DATABASE_URL: process.env.DATABASE_URL ? 'SET(' + process.env.DATABASE_URL.slice(0, 20) + '...)' : 'MISSING',
-  JWT_SECRET_LEN: process.env.JWT_SECRET?.length ?? 'UNDEFINED',
-  JWT_REFRESH_LEN: process.env.JWT_REFRESH_SECRET?.length ?? 'UNDEFINED',
-  CORS_ORIGIN: process.env.CORS_ORIGIN ?? 'UNDEFINED',
-}));
-
 async function bootstrap() {
   try {
     await prisma.$connect();
