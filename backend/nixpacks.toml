@@ -1,6 +1,9 @@
 [phases.setup]
 nixPkgs = ["openssl_1_1"]
 
+[phases.install]
+cmds = ["npm install --include=dev"]
+
 [phases.build]
 cmds = ["npm run build"]
 
