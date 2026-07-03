@@ -8,43 +8,69 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 import {
-  ShoppingCart, CreditCard,
-  TrendingUp, AlertTriangle, ArrowUpRight, Info,
+  ShoppingCart, CreditCard, TrendingUp, AlertTriangle,
+  ArrowUpRight, Info, Package,
 } from 'lucide-react';
 import Link from 'next/link';
 import { Tooltip as InfoTooltip } from '@/components/ui/Tooltip';
 
+// ── Stat card ─────────────────────────────────────────────────────────────────
 interface StatCardProps {
-  title: string;
-  value: string;
-  sub: string;
-  icon: React.ElementType;
-  color: string;
+  title: string; value: string; sub: string;
+  icon: React.ElementType; accent: string; iconBg: string;
   tooltip?: string;
 }
 
-function StatCard({ title, value, sub, icon: Icon, color, tooltip }: StatCardProps) {
+function StatCard({ title, value, sub, icon: Icon, accent, iconBg, tooltip }: StatCardProps) {
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 p-5 flex gap-4">
-      <div className={`w-12 h-12 ${color} rounded-xl flex items-center justify-center flex-shrink-0`}>
-        <Icon size={22} className="text-white" />
+    <div className="card p-5 flex items-start gap-4 card-hover">
+      <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${iconBg}`}>
+        <Icon size={18} className={accent} strokeWidth={2} />
       </div>
-      <div>
-        <div className="flex items-center gap-1">
-          <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">{title}</p>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1 mb-1">
+          <p className="text-[12px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">{title}</p>
           {tooltip && (
             <InfoTooltip content={tooltip} side="top">
-              <Info size={11} className="text-gray-300 dark:text-gray-500 cursor-help" />
+              <Info size={11} className="text-slate-300 dark:text-slate-600 cursor-help flex-shrink-0" />
             </InfoTooltip>
           )}
         </div>
-        <p className="text-2xl font-bold text-gray-900 dark:text-white">{value}</p>
-        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{sub}</p>
+        <p className="text-[22px] font-bold text-slate-900 dark:text-white tabular leading-none">{value}</p>
+        <p className="text-[12px] text-slate-500 dark:text-slate-400 mt-1">{sub}</p>
       </div>
     </div>
   );
 }
 
+// ── Skeleton ──────────────────────────────────────────────────────────────────
+function SkeletonCard() {
+  return (
+    <div className="card p-5 flex gap-4">
+      <div className="skeleton w-10 h-10 rounded-xl flex-shrink-0" />
+      <div className="flex-1 space-y-2">
+        <div className="skeleton h-3 w-24 rounded" />
+        <div className="skeleton h-6 w-32 rounded" />
+        <div className="skeleton h-3 w-20 rounded" />
+      </div>
+    </div>
+  );
+}
+
+// ── Custom tooltip for chart ──────────────────────────────────────────────────
+function ChartTooltip({ active, payload, label }: any) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-white/[0.08] rounded-xl shadow-modal px-3 py-2.5">
+      <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-1">{label}</p>
+      <p className="text-[14px] font-bold text-slate-900 dark:text-white">
+        {formatCurrency(payload[0].value)}
+      </p>
+    </div>
+  );
+}
+
+// ── Page ──────────────────────────────────────────────────────────────────────
 export default function DashboardPage() {
   const { data: summaryData, isLoading: loadingSummary } = useQuery({
     queryKey: ['dashboard-summary'],
@@ -57,143 +83,215 @@ export default function DashboardPage() {
     queryFn: () => api.get('/dashboard/sales-chart?period=30d').then((r) => r.data.data),
   });
 
-  if (loadingSummary) {
-    return (
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {[...Array(4)].map((_, i) => (
-          <div key={i} className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 p-5 h-28 animate-pulse" />
-        ))}
-      </div>
-    );
-  }
-
   const s = summaryData;
 
+  // Top products max for relative bar
+  const maxQty: number = s?.topProducts?.[0]?._sum?.quantity ?? 1;
+
   return (
-    <div className="space-y-6">
-      {/* KPIs */}
+    <div className="space-y-5 animate-fade-up">
+
+      {/* ── KPI cards ──────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          title="Ventas hoy"
-          value={formatCurrency(s?.sales?.today?.total || 0)}
-          sub={`${s?.sales?.today?.count || 0} transacciones`}
-          icon={ShoppingCart}
-          color="bg-blue-500"
-        />
-        <StatCard
-          title="Ventas del mes"
-          value={formatCurrency(s?.sales?.month?.total || 0)}
-          sub={`${s?.sales?.month?.count || 0} ventas`}
-          icon={TrendingUp}
-          color="bg-green-500"
-        />
-        <StatCard
-          title="Stock bajo"
-          value={String(s?.inventory?.lowStock || 0)}
-          sub={`de ${s?.inventory?.totalProducts || 0} productos`}
-          icon={AlertTriangle}
-          color="bg-yellow-500"
-          tooltip="Productos cuya cantidad disponible llegó al mínimo configurado. El total es la cantidad de productos activos en tu inventario."
-        />
-        <StatCard
-          title="Créditos pendientes"
-          value={formatCurrency(s?.credits?.totalBalance || 0)}
-          sub={`${s?.credits?.count || 0} clientes`}
-          icon={CreditCard}
-          color="bg-red-500"
-        />
+        {loadingSummary ? (
+          [...Array(4)].map((_, i) => <SkeletonCard key={i} />)
+        ) : (
+          <>
+            <StatCard
+              title="Ventas hoy"
+              value={formatCurrency(s?.sales?.today?.total || 0)}
+              sub={`${s?.sales?.today?.count || 0} transacciones`}
+              icon={ShoppingCart}
+              accent="text-blue-600 dark:text-blue-400"
+              iconBg="bg-blue-50 dark:bg-blue-500/10"
+            />
+            <StatCard
+              title="Ventas del mes"
+              value={formatCurrency(s?.sales?.month?.total || 0)}
+              sub={`${s?.sales?.month?.count || 0} ventas`}
+              icon={TrendingUp}
+              accent="text-emerald-600 dark:text-emerald-400"
+              iconBg="bg-emerald-50 dark:bg-emerald-500/10"
+            />
+            <StatCard
+              title="Stock bajo"
+              value={String(s?.inventory?.lowStock || 0)}
+              sub={`de ${s?.inventory?.totalProducts || 0} productos`}
+              icon={AlertTriangle}
+              accent="text-amber-600 dark:text-amber-400"
+              iconBg="bg-amber-50 dark:bg-amber-500/10"
+              tooltip="Productos cuya cantidad disponible llegó al mínimo configurado."
+            />
+            <StatCard
+              title="Créditos pendientes"
+              value={formatCurrency(s?.credits?.totalBalance || 0)}
+              sub={`${s?.credits?.count || 0} clientes`}
+              icon={CreditCard}
+              accent="text-red-600 dark:text-red-400"
+              iconBg="bg-red-50 dark:bg-red-500/10"
+            />
+          </>
+        )}
       </div>
 
-      {/* Charts Row */}
+      {/* ── Chart + Top products ────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Sales Chart */}
-        <div className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 p-5">
-          <h3 className="font-semibold text-gray-800 dark:text-white mb-4">Ventas últimos 30 días</h3>
-          <ResponsiveContainer width="100%" height={220}>
-            <AreaChart data={chartData || []}>
+
+        {/* Sales chart */}
+        <div className="card lg:col-span-2 p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="text-[14px] font-semibold text-slate-800 dark:text-white">Ventas últimos 30 días</h3>
+              <p className="text-[12px] text-slate-500 dark:text-slate-400 mt-0.5">Ingresos diarios acumulados</p>
+            </div>
+          </div>
+          <ResponsiveContainer width="100%" height={210}>
+            <AreaChart data={chartData || []} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
               <defs>
                 <linearGradient id="salesGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.15} />
-                  <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                  <stop offset="5%"  stopColor="#3b82f6" stopOpacity={0.18} />
+                  <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}    />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="date" tick={{ fontSize: 11 }} tickFormatter={formatChartDate} />
-              <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
-              <Tooltip
-                formatter={(v: number) => formatCurrency(v)}
-                labelFormatter={(l) => `Fecha: ${l}`}
+              <CartesianGrid
+                strokeDasharray="3 3"
+                stroke="rgba(148,163,184,0.12)"
+                vertical={false}
               />
-              <Area type="monotone" dataKey="total" stroke="#3b82f6" fill="url(#salesGrad)" strokeWidth={2} />
+              <XAxis
+                dataKey="date"
+                tick={{ fontSize: 10, fill: '#94a3b8' }}
+                axisLine={false}
+                tickLine={false}
+                tickFormatter={formatChartDate}
+              />
+              <YAxis
+                tick={{ fontSize: 10, fill: '#94a3b8' }}
+                axisLine={false}
+                tickLine={false}
+                tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`}
+                width={40}
+              />
+              <Tooltip content={<ChartTooltip />} cursor={{ stroke: 'rgba(59,130,246,0.2)', strokeWidth: 1 }} />
+              <Area
+                type="monotone"
+                dataKey="total"
+                stroke="#3b82f6"
+                fill="url(#salesGrad)"
+                strokeWidth={2}
+                dot={false}
+                activeDot={{ r: 4, fill: '#3b82f6', strokeWidth: 0 }}
+              />
             </AreaChart>
           </ResponsiveContainer>
         </div>
 
-        {/* Top Products */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 p-5">
-          <h3 className="font-semibold text-gray-800 dark:text-white mb-4">Productos más vendidos</h3>
+        {/* Top products */}
+        <div className="card p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <Package size={14} className="text-slate-400" />
+            <h3 className="text-[14px] font-semibold text-slate-800 dark:text-white">Más vendidos</h3>
+          </div>
           {s?.topProducts?.length > 0 ? (
-            <div className="space-y-3">
-              {s.topProducts.slice(0, 5).map((p: any, i: number) => (
-                <div key={p.productId} className="flex items-center gap-3">
-                  <span className="text-xs text-gray-400 w-4">{i + 1}</span>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-800 dark:text-white truncate">
-                      {p.product?.name || 'N/A'}
-                    </p>
-                    <p className="text-xs text-gray-500">{p._sum?.quantity} uds</p>
+            <div className="space-y-3.5">
+              {s.topProducts.slice(0, 5).map((p: any, i: number) => {
+                const pct = Math.round(((p._sum?.quantity ?? 0) / maxQty) * 100);
+                return (
+                  <div key={p.productId}>
+                    <div className="flex items-center gap-2.5 mb-1.5">
+                      <span className="text-[10px] font-bold text-slate-400 dark:text-slate-600 w-4 tabular">{i + 1}</span>
+                      <p className="text-[13px] font-medium text-slate-800 dark:text-slate-200 flex-1 truncate">
+                        {p.product?.name || 'N/A'}
+                      </p>
+                      <span className="text-[12px] text-slate-500 dark:text-slate-400 tabular flex-shrink-0">
+                        {p._sum?.quantity} uds
+                      </span>
+                    </div>
+                    <div className="ml-6 h-1 rounded-full bg-slate-100 dark:bg-white/[0.06] overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-blue-500 transition-all duration-500"
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           ) : (
-            <p className="text-sm text-gray-400 text-center py-8">Sin datos</p>
+            <div className="flex flex-col items-center justify-center py-8 text-slate-400 dark:text-slate-600">
+              <Package size={28} strokeWidth={1.5} className="mb-2" />
+              <p className="text-[13px]">Sin datos aún</p>
+            </div>
           )}
         </div>
       </div>
 
-      {/* Recent Sales */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700">
-        <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
-          <h3 className="font-semibold text-gray-800 dark:text-white">Últimas ventas</h3>
-          <Link href="/ventas?status=CANCELLED" className="text-sm text-blue-600 hover:underline flex items-center gap-1">
-            Ver anuladas <ArrowUpRight size={14} />
+      {/* ── Recent sales table ──────────────────────────────────────────────── */}
+      <div className="card overflow-hidden">
+        <div className="px-5 py-4 border-b border-slate-100 dark:border-white/[0.06] flex items-center justify-between">
+          <div>
+            <h3 className="text-[14px] font-semibold text-slate-800 dark:text-white">Últimas ventas</h3>
+            <p className="text-[12px] text-slate-500 dark:text-slate-400 mt-0.5">Transacciones recientes</p>
+          </div>
+          <Link
+            href="/ventas?status=CANCELLED"
+            className="flex items-center gap-1 text-[12px] text-blue-600 dark:text-blue-400 hover:underline font-medium"
+          >
+            Ver anuladas <ArrowUpRight size={13} />
           </Link>
         </div>
+
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full">
             <thead>
-              <tr className="text-xs text-gray-500 dark:text-gray-400 border-b border-gray-100 dark:border-gray-700">
-                <th className="text-left px-5 py-3 font-medium">Factura</th>
-                <th className="text-left px-5 py-3 font-medium">Cliente</th>
-                <th className="text-left px-5 py-3 font-medium">Vendedor</th>
-                <th className="text-right px-5 py-3 font-medium">Total</th>
-                <th className="text-left px-5 py-3 font-medium">Estado</th>
-                <th className="text-left px-5 py-3 font-medium">Fecha</th>
+              <tr className="border-b border-slate-100 dark:border-white/[0.06]">
+                {['Factura', 'Cliente', 'Vendedor', 'Total', 'Estado', 'Fecha'].map((h, i) => (
+                  <th
+                    key={h}
+                    className={`px-5 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 ${i === 3 ? 'text-right' : 'text-left'}`}
+                  >
+                    {h}
+                  </th>
+                ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-50 dark:divide-gray-700">
+            <tbody className="divide-y divide-slate-50 dark:divide-white/[0.04]">
               {s?.recentSales?.map((sale: any) => (
-                <tr key={sale.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition">
-                  <td className="px-5 py-3 font-mono text-xs text-blue-600">{sale.invoiceNumber}</td>
-                  <td className="px-5 py-3">{sale.customer?.name || 'Mostrador'}</td>
-                  <td className="px-5 py-3 text-gray-500">{sale.user?.name}</td>
-                  <td className="px-5 py-3 text-right font-semibold">{formatCurrency(sale.total)}</td>
+                <tr key={sale.id} className="hover:bg-slate-50/60 dark:hover:bg-white/[0.02] transition-colors">
+                  <td className="px-5 py-3 font-mono text-[12px] text-blue-600 dark:text-blue-400">
+                    {sale.invoiceNumber}
+                  </td>
+                  <td className="px-5 py-3 text-[13px] text-slate-700 dark:text-slate-300">
+                    {sale.customer?.name || <span className="text-slate-400">Mostrador</span>}
+                  </td>
+                  <td className="px-5 py-3 text-[13px] text-slate-500 dark:text-slate-400">
+                    {sale.user?.name}
+                  </td>
+                  <td className="px-5 py-3 text-right text-[13px] font-semibold text-slate-900 dark:text-white tabular">
+                    {formatCurrency(sale.total)}
+                  </td>
                   <td className="px-5 py-3">
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusColor(sale.status)}`}>
+                    <span className={`badge ${statusColor(sale.status)}`}>
                       {statusLabel(sale.status)}
                     </span>
                   </td>
-                  <td className="px-5 py-3 text-gray-500 text-xs">{formatDateTime(sale.createdAt)}</td>
+                  <td className="px-5 py-3 text-[12px] text-slate-400 dark:text-slate-500 tabular">
+                    {formatDateTime(sale.createdAt)}
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
+
           {(!s?.recentSales || s.recentSales.length === 0) && (
-            <p className="text-center text-gray-400 py-8 text-sm">No hay ventas recientes</p>
+            <div className="flex flex-col items-center justify-center py-10 text-slate-400 dark:text-slate-600">
+              <ShoppingCart size={28} strokeWidth={1.5} className="mb-2" />
+              <p className="text-[13px]">No hay ventas recientes</p>
+            </div>
           )}
         </div>
       </div>
+
     </div>
   );
 }
