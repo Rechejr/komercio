@@ -123,7 +123,7 @@ export default function ComprasPage() {
         })),
       });
       setShowForm(true);
-    });
+    }).catch((err: any) => toast.error(err.response?.data?.error || 'No se pudo cargar la compra'));
   }
 
   function handleDelete(purchase: any) {

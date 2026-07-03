@@ -279,7 +279,7 @@ export default function InventarioPage() {
         />
         <button
           type="button"
-          onClick={() => { setEditItem(null); reset({ images: [] }); setShowForm(true); }}
+          onClick={() => { setEditItem(null); reset({ images: [], isActive: true }); setShowForm(true); }}
           className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition"
         >
           <Plus size={16} /> Nuevo producto
@@ -619,7 +619,7 @@ export default function InventarioPage() {
                       {editItem && <span className="ml-1 text-amber-500">*</span>}
                     </label>
                     <input
-                      {...register('stock')}
+                      {...register('stock', { valueAsNumber: true })}
                       type="number"
                       placeholder="0"
                       readOnly={!!editItem}
@@ -638,7 +638,7 @@ export default function InventarioPage() {
                   <div>
                     <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Cantidad mínima</label>
                     <input
-                      {...register('minStock')}
+                      {...register('minStock', { valueAsNumber: true })}
                       type="number"
                       placeholder="5"
                       className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
@@ -650,7 +650,7 @@ export default function InventarioPage() {
                   <div>
                     <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Precio de venta *</label>
                     <input
-                      {...register('salePrice')}
+                      {...register('salePrice', { valueAsNumber: true })}
                       type="number"
                       placeholder="0"
                       className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
@@ -659,7 +659,7 @@ export default function InventarioPage() {
                   <div>
                     <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Costo</label>
                     <input
-                      {...register('costPrice')}
+                      {...register('costPrice', { valueAsNumber: true })}
                       type="number"
                       placeholder="0"
                       className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
@@ -671,7 +671,7 @@ export default function InventarioPage() {
                   <div>
                     <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Precio mayorista</label>
                     <input
-                      {...register('wholesalePrice')}
+                      {...register('wholesalePrice', { valueAsNumber: true })}
                       type="number"
                       placeholder="0"
                       className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
@@ -718,7 +718,7 @@ export default function InventarioPage() {
                   <h4 className="text-xs font-bold text-gray-700 dark:text-gray-300 mb-2">Impuestos del producto</h4>
                   <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">IVA (%)</label>
                   <input
-                    {...register('taxRate')}
+                    {...register('taxRate', { valueAsNumber: true })}
                     type="number"
                     placeholder="0"
                     className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"

@@ -31,10 +31,10 @@ export default function CreditosPage() {
   const { register, handleSubmit, reset } = useForm();
 
   const paymentMutation = useMutation({
-    mutationFn: (data: any) => api.post(`/credits/${selected.id}/payments`, data),
-    onSuccess: () => {
+    mutationFn: ({ creditId, ...data }: any) => api.post(`/credits/${creditId}/payments`, data),
+    onSuccess: (_res, { creditId }) => {
       qc.invalidateQueries({ queryKey: ['credits'] });
-      qc.invalidateQueries({ queryKey: ['credit', selected?.id] });
+      qc.invalidateQueries({ queryKey: ['credit', creditId] });
       toast.success('Pago registrado');
       setShowPayment(false);
       reset();
@@ -240,7 +240,7 @@ export default function CreditosPage() {
                 <p className="text-xs text-gray-500">Saldo pendiente de <span className="font-medium">{selected.customer?.name}</span></p>
                 <p className="text-2xl font-bold text-red-600">{formatCurrency(selected.balance)}</p>
               </div>
-              <form onSubmit={handleSubmit((d) => paymentMutation.mutate(d))} className="space-y-3">
+              <form onSubmit={handleSubmit((d) => paymentMutation.mutate({ ...d, creditId: selected.id }))} className="space-y-3">
                 <div>
                   <label className="text-xs font-medium text-gray-600 mb-1 block">Monto del abono *</label>
                   <input {...register('amount', { required: true, min: 0.01 })} type="number" step="0.01" min="0.01"

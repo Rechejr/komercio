@@ -35,11 +35,11 @@ export default function CajaPage() {
   });
 
   const movementMutation = useMutation({
-    mutationFn: (data: any) =>
-      api.post(`/cash-register/${cashRegister.id}/movement`, { ...data, type: movementType, amount: parseFloat(data.amount) }),
-    onSuccess: () => {
+    mutationFn: ({ registerId, type, ...data }: any) =>
+      api.post(`/cash-register/${registerId}/movement`, { ...data, type, amount: parseFloat(data.amount) }),
+    onSuccess: (_res, { type }) => {
       qc.invalidateQueries({ queryKey: ['cash-register-current'] });
-      toast.success(movementType === 'IN' ? 'Ingreso registrado' : 'Retiro registrado');
+      toast.success(type === 'IN' ? 'Ingreso registrado' : 'Retiro registrado');
       setShowMovement(false);
       resetMov();
     },
@@ -203,7 +203,7 @@ export default function CajaPage() {
                 <X size={20} className="text-gray-400" />
               </button>
             </div>
-            <form onSubmit={handleMov((d) => movementMutation.mutate(d))} className="p-6 space-y-4">
+            <form onSubmit={handleMov((d) => movementMutation.mutate({ ...d, registerId: cashRegister?.id, type: movementType }))} className="p-6 space-y-4">
               <div>
                 <label className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1 block">Monto ($) *</label>
                 <input
