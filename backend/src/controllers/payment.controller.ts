@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import crypto from 'crypto';
+import https from 'https';
 import { prisma } from '../config/database';
 import { cache } from '../config/redis';
 import { AppError, success } from '../utils/response';
@@ -8,8 +9,8 @@ import { AuthRequest } from '../middlewares/auth';
 
 const isTestMode = process.env.WOMPI_PRIVATE_KEY?.startsWith('prv_test_');
 const WOMPI_BASE = isTestMode
-  ? 'https://sandbox.wompi.co/v1'
-  : 'https://production.wompi.co/v1';
+  ? 'sandbox.wompi.co'
+  : 'production.wompi.co';
 
 const PLAN_PRICES: Record<string, number> = {
   monthly:   19900,
@@ -29,8 +30,34 @@ const PERIOD_LABELS: Record<string, string> = {
   annual:    'Anual',
 };
 
-function cop(n: number) {
-  return `$${n.toLocaleString('es-CO')}`;
+function wompiPost(path: string, body: unknown): Promise<{ ok: boolean; status: number; data: any }> {
+  return new Promise((resolve, reject) => {
+    const payload = JSON.stringify(body);
+    const options: https.RequestOptions = {
+      hostname: WOMPI_BASE,
+      path,
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.WOMPI_PRIVATE_KEY}`,
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(payload),
+      },
+    };
+    const req = https.request(options, (res) => {
+      let raw = '';
+      res.on('data', (chunk) => { raw += chunk; });
+      res.on('end', () => {
+        try {
+          resolve({ ok: (res.statusCode ?? 0) >= 200 && (res.statusCode ?? 0) < 300, status: res.statusCode ?? 0, data: JSON.parse(raw) });
+        } catch (e) {
+          reject(e);
+        }
+      });
+    });
+    req.on('error', reject);
+    req.write(payload);
+    req.end();
+  });
 }
 
 export const paymentController = {
@@ -50,37 +77,29 @@ export const paymentController = {
       const frontendUrl = process.env.FRONTEND_URL || process.env.APP_URL || 'https://ventrix.lat';
       const redirectUrl = `${frontendUrl}/payment-result`;
 
-      const wompiRes = await fetch(`${WOMPI_BASE}/payment_links`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${process.env.WOMPI_PRIVATE_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          name: `Plan Pro Ventrix — ${label}`,
-          description: `Ventrix ilimitado por ${months} mes${months > 1 ? 'es' : ''} (${cop(amountCOP)}/mes)`,
-          single_use: true,
-          collect_shipping: false,
-          currency: 'COP',
-          amount_in_cents: amountCOP * 100,
-          redirect_url: redirectUrl,
-        }),
+      const wompiRes = await wompiPost('/v1/payment_links', {
+        name: `Plan Pro Ventrix — ${label}`,
+        description: `Ventrix ilimitado por ${months} mes${months > 1 ? 'es' : ''}`,
+        single_use: true,
+        collect_shipping: false,
+        currency: 'COP',
+        amount_in_cents: amountCOP * 100,
+        redirect_url: redirectUrl,
       });
 
       if (!wompiRes.ok) {
-        const errText = await wompiRes.text();
-        logger.error('Wompi createLink error', { status: wompiRes.status, body: errText });
+        logger.error('Wompi createLink error', { status: wompiRes.status, body: wompiRes.data });
         throw new AppError('Error al crear el enlace de pago', 502);
       }
 
-      const { data: linkData } = await wompiRes.json() as { data: { id: string; url: string } };
+      const linkData = wompiRes.data?.data as { id: string; url: string };
 
       // Primary: Redis (TTL 2h)
       await cache.set(`wompi_link:${linkData.id}`, { businessId, period, months }, 7200);
 
-      // Fallback: store in Business.settings
+      // Fallback: Business.settings
       const biz = await prisma.business.findUnique({ where: { id: businessId }, select: { settings: true } });
-      const currentSettings = (biz?.settings as Record<string, unknown>) || {};
+      const currentSettings = (biz?.settings as Record<string, any>) || {};
       await prisma.business.update({
         where: { id: businessId },
         data: { settings: { ...currentSettings, pendingPayment: { linkId: linkData.id, period, months } } },
@@ -94,8 +113,7 @@ export const paymentController = {
 
   async webhook(req: Request, res: Response, next: NextFunction) {
     try {
-      // Verify Wompi signature
-      const signature   = req.headers['x-event-signature'] as string | undefined;
+      const signature    = req.headers['x-event-signature'] as string | undefined;
       const eventsSecret = process.env.WOMPI_EVENTS_SECRET || '';
 
       if (signature && eventsSecret) {
@@ -116,7 +134,6 @@ export const paymentController = {
       const linkId = tx.payment_link_id as string | undefined;
       if (!linkId) return res.json({ received: true });
 
-      // Resolve businessId — Redis first, DB fallback
       let meta = await cache.get<{ businessId: string; period: string; months: number }>(`wompi_link:${linkId}`);
 
       if (!meta) {
@@ -135,11 +152,9 @@ export const paymentController = {
         return res.json({ received: true });
       }
 
-      const now = new Date();
-      const expiresAt = new Date(now);
+      const expiresAt = new Date();
       expiresAt.setMonth(expiresAt.getMonth() + meta.months);
 
-      // Activate plan
       const bizNow = await prisma.business.findUnique({ where: { id: meta.businessId }, select: { settings: true } });
       const { pendingPayment: _removed, ...cleanSettings } = ((bizNow?.settings as Record<string, any>) || {});
       await prisma.business.update({
