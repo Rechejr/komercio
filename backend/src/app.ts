@@ -31,6 +31,7 @@ import dashboardRoutes from './routes/dashboard.routes';
 import exportRoutes from './routes/export.routes';
 import superadminRoutes from './routes/superadmin.routes';
 import uploadRoutes from './routes/upload.routes';
+import paymentRoutes from './routes/payment.routes';
 
 const app = express();
 
@@ -89,8 +90,11 @@ const authLimiter = rateLimit({
   message: { error: 'Demasiados intentos, espere 15 minutos antes de reintentar.' },
 });
 
-// Body parsing
-app.use(express.json({ limit: '10mb' }));
+// Body parsing — capture raw body for Wompi webhook signature verification
+app.use(express.json({
+  limit: '10mb',
+  verify: (req: any, _res, buf) => { req.rawBody = buf.toString('utf8'); },
+}));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cookieParser());
 app.use(compression());
@@ -131,6 +135,7 @@ app.use(`${apiPrefix}/dashboard`, dashboardRoutes);
 app.use(`${apiPrefix}/exports`, exportRoutes);
 app.use(`${apiPrefix}/superadmin`, superadminRoutes);
 app.use(`${apiPrefix}/uploads`, uploadRoutes);
+app.use(`${apiPrefix}/payments`, paymentRoutes);
 
 // Error handling
 app.use(notFound);
