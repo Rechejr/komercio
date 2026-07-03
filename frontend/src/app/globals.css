@@ -3,156 +3,225 @@
 @tailwind utilities;
 
 @layer base {
+  /* ── Design tokens ───────────────────────────────────────────────────────── */
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 221.2 83.2% 53.3%;
-    --radius: 0.5rem;
+    /* Surfaces */
+    --bg:          255 255 255;
+    --bg-subtle:   248 250 252;   /* slate-50 */
+    --surface:     255 255 255;
+    --surface-2:   241 245 249;   /* slate-100 */
+    --overlay:     255 255 255;
+
+    /* Borders */
+    --border:      226 232 240;   /* slate-200 */
+    --border-subtle: 241 245 249; /* slate-100 */
+    --border-strong: 203 213 225; /* slate-300 */
+
+    /* Text */
+    --text-primary:   15  23  42;  /* slate-900 */
+    --text-secondary: 100 116 139; /* slate-500 */
+    --text-tertiary:  148 163 184; /* slate-400 */
+    --text-disabled:  203 213 225; /* slate-300 */
+
+    /* Brand / action */
+    --primary:     59  130 246;   /* blue-500 */
+    --primary-fg:  255 255 255;
+    --primary-hover: 37 99 235;   /* blue-600 */
+
+    /* Status */
+    --success:     34  197 94;    /* green-500 */
+    --warning:     245 158 11;    /* amber-500 */
+    --danger:      239 68  68;    /* red-500 */
+    --info:        99  102 241;   /* indigo-500 */
+
+    /* Radius & shadow tokens */
+    --radius-sm:   4px;
+    --radius:      8px;
+    --radius-md:   10px;
+    --radius-lg:   12px;
+    --radius-xl:   16px;
+    --radius-2xl:  20px;
+    --radius-full: 9999px;
+
+    /* Focus ring */
+    --ring: 59 130 246;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
+    --bg:          10  15  28;    /* near black */
+    --bg-subtle:   15  23  42;    /* slate-900 */
+    --surface:     22  33  55;    /* slate-800 */
+    --surface-2:   30  41  59;    /* slate-700 */
+    --overlay:     22  33  55;
+
+    --border:       30  41  59;   /* slate-700 */
+    --border-subtle: 22 33  55;   /* slate-800 */
+    --border-strong: 51 65  85;   /* slate-600 */
+
+    --text-primary:   248 250 252; /* slate-50 */
+    --text-secondary: 148 163 184; /* slate-400 */
+    --text-tertiary:  71  85  105; /* slate-600 */
+    --text-disabled:  51  65  85;  /* slate-700 */
+
+    --primary:     99  102 241;   /* indigo-500 */
+    --primary-fg:  255 255 255;
+    --primary-hover: 79 70 229;   /* indigo-600 */
   }
 
+  /* ── Base resets ─────────────────────────────────────────────────────────── */
   *,
   *::before,
   *::after {
-    border-color: hsl(var(--border));
+    border-color: rgb(var(--border));
   }
 
   html {
     color-scheme: light;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
   }
   html.dark {
     color-scheme: dark;
   }
 
   body {
-    background-color: hsl(var(--background));
-    color: hsl(var(--foreground));
+    background-color: rgb(var(--bg-subtle));
+    color: rgb(var(--text-primary));
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    font-feature-settings: 'cv11', 'ss01';
   }
 
-  /* Theme transition — only colour properties, never layout or transforms */
+  /* ── Color transitions (layout only) ────────────────────────────────────── */
   body,
-  body *:not([class*="animate-"]):not([class*="transition"]) {
+  body *:not([class*="animate-"]):not([class*="transition"]):not([class*="motion"]) {
     transition-property: background-color, border-color, color, fill, stroke, box-shadow;
     transition-duration: 150ms;
     transition-timing-function: ease;
   }
 
   @media (prefers-reduced-motion: reduce) {
-    body,
-    body *:not([class*="animate-"]):not([class*="transition"]) {
-      transition: none !important;
-    }
+    body, body * { transition: none !important; animation: none !important; }
   }
 
-  /* Global focus-visible ring */
+  /* ── Focus visible ───────────────────────────────────────────────────────── */
   :focus-visible {
-    outline: 2px solid hsl(var(--ring));
+    outline: 2px solid rgb(var(--ring) / 0.6);
     outline-offset: 2px;
     border-radius: 4px;
   }
+  :focus:not(:focus-visible) { outline: none; }
 
-  /* Remove focus outline for mouse users */
-  :focus:not(:focus-visible) {
-    outline: none;
-  }
-
-  /* Fix iOS Safari autofill making text invisible */
+  /* ── iOS Safari autofill fix ─────────────────────────────────────────────── */
   input:-webkit-autofill,
   input:-webkit-autofill:hover,
   input:-webkit-autofill:focus,
   input:-webkit-autofill:active {
     -webkit-box-shadow: 0 0 0 1000px #ffffff inset !important;
-    -webkit-text-fill-color: #111827 !important;
-    caret-color: #111827;
+    -webkit-text-fill-color: #0f172a !important;
+    caret-color: #0f172a;
   }
   .dark input:-webkit-autofill,
   .dark input:-webkit-autofill:hover,
   .dark input:-webkit-autofill:focus,
   .dark input:-webkit-autofill:active {
-    -webkit-box-shadow: 0 0 0 1000px #1f2937 inset !important;
-    -webkit-text-fill-color: #f9fafb !important;
-    caret-color: #f9fafb;
+    -webkit-box-shadow: 0 0 0 1000px #162137 inset !important;
+    -webkit-text-fill-color: #f8fafc !important;
+    caret-color: #f8fafc;
   }
 }
 
 @layer utilities {
-  /* ── Scrollbars ────────────────────────────────────────────────────────── */
+  /* ── Scrollbars ──────────────────────────────────────────────────────────── */
   .scrollbar-thin {
     scrollbar-width: thin;
-    scrollbar-color: hsl(var(--border)) transparent;
+    scrollbar-color: rgb(var(--border)) transparent;
   }
-  .scrollbar-thin::-webkit-scrollbar { width: 6px; height: 6px; }
-  .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
-  .scrollbar-thin::-webkit-scrollbar-thumb {
-    background-color: hsl(var(--border));
+  .scrollbar-thin::-webkit-scrollbar        { width: 4px; height: 4px; }
+  .scrollbar-thin::-webkit-scrollbar-track  { background: transparent; }
+  .scrollbar-thin::-webkit-scrollbar-thumb  {
+    background-color: rgb(var(--border));
     border-radius: 9999px;
   }
 
-  /* ── Skeleton loading ──────────────────────────────────────────────────── */
+  /* ── Skeleton loading ────────────────────────────────────────────────────── */
   .skeleton {
     background: linear-gradient(
       90deg,
-      rgb(243 244 246) 25%,
-      rgb(229 231 235) 50%,
-      rgb(243 244 246) 75%
+      rgb(var(--surface-2)) 25%,
+      rgb(var(--surface))   50%,
+      rgb(var(--surface-2)) 75%
     );
     background-size: 200% 100%;
     animation: skeleton-wave 1.6s ease-in-out infinite;
     border-radius: 6px;
   }
-  .dark .skeleton {
-    background: linear-gradient(
-      90deg,
-      rgb(55 65 81) 25%,
-      rgb(75 85 99) 50%,
-      rgb(55 65 81) 75%
-    );
-    background-size: 200% 100%;
-    animation: skeleton-wave 1.6s ease-in-out infinite;
-  }
-
   @keyframes skeleton-wave {
     0%   { background-position: 200% 0; }
     100% { background-position: -200% 0; }
   }
 
-  /* ── Page animations ───────────────────────────────────────────────────── */
-  .animate-fade-in {
-    animation: fade-in 200ms ease both;
+  /* ── Page / modal animations ─────────────────────────────────────────────── */
+  .animate-fade-in  { animation: fadeIn  0.18s ease-out both; }
+  .animate-fade-up  { animation: fadeUp  0.22s cubic-bezier(0.16,1,0.3,1) both; }
+  .animate-scale-in { animation: scaleIn 0.18s cubic-bezier(0.16,1,0.3,1) both; }
+  .animate-slide-up { animation: slideUp 0.22s cubic-bezier(0.16,1,0.3,1) both; }
+
+  @keyframes fadeIn  { from { opacity: 0 }                                   to { opacity: 1 } }
+  @keyframes fadeUp  { from { opacity: 0; transform: translateY(6px) }       to { opacity: 1; transform: translateY(0) } }
+  @keyframes scaleIn { from { opacity: 0; transform: scale(0.95) }           to { opacity: 1; transform: scale(1) } }
+  @keyframes slideUp { from { opacity: 0; transform: translateY(10px) }      to { opacity: 1; transform: translateY(0) } }
+
+  /* ── Glassmorphism helper ────────────────────────────────────────────────── */
+  .glass {
+    background: rgb(255 255 255 / 0.75);
+    backdrop-filter: blur(12px) saturate(180%);
+    -webkit-backdrop-filter: blur(12px) saturate(180%);
   }
-  .animate-scale-in {
-    animation: scale-in 180ms cubic-bezier(0.16, 1, 0.3, 1) both;
-  }
-  .animate-slide-up {
-    animation: slide-up 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  .dark .glass {
+    background: rgb(15 23 42 / 0.80);
   }
 
-  @keyframes fade-in {
-    from { opacity: 0; }
-    to   { opacity: 1; }
+  /* ── Card primitive ──────────────────────────────────────────────────────── */
+  .card {
+    background: rgb(var(--surface));
+    border: 1px solid rgb(var(--border));
+    border-radius: var(--radius-lg);
+    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.04);
   }
-  @keyframes scale-in {
-    from { opacity: 0; transform: scale(0.94); }
-    to   { opacity: 1; transform: scale(1); }
+  .card-hover {
+    transition: box-shadow 200ms, border-color 200ms;
   }
-  @keyframes slide-up {
-    from { opacity: 0; transform: translateY(12px); }
-    to   { opacity: 1; transform: translateY(0); }
+  .card-hover:hover {
+    box-shadow: 0 4px 12px -2px rgb(0 0 0 / 0.10), 0 2px 4px -1px rgb(0 0 0 / 0.06);
+    border-color: rgb(var(--border-strong));
   }
 
-  @media (prefers-reduced-motion: reduce) {
-    .animate-fade-in,
-    .animate-scale-in,
-    .animate-slide-up {
-      animation: none;
-    }
+  /* ── Badge primitives ────────────────────────────────────────────────────── */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 9999px;
+    line-height: 1.4;
   }
+  .badge-blue    { background: rgb(59 130 246 / 0.10); color: #3b82f6; }
+  .badge-green   { background: rgb(34 197  94 / 0.10); color: #16a34a; }
+  .badge-amber   { background: rgb(245 158 11 / 0.10); color: #d97706; }
+  .badge-red     { background: rgb(239  68  68 / 0.10); color: #dc2626; }
+  .badge-slate   { background: rgb(100 116 139 / 0.10); color: #64748b; }
+  .badge-indigo  { background: rgb(99 102 241 / 0.10); color: #6366f1; }
+
+  .dark .badge-blue   { background: rgb(59 130 246 / 0.15); color: #60a5fa; }
+  .dark .badge-green  { background: rgb(34 197  94 / 0.15); color: #4ade80; }
+  .dark .badge-amber  { background: rgb(245 158 11 / 0.15); color: #fbbf24; }
+  .dark .badge-red    { background: rgb(239  68  68 / 0.15); color: #f87171; }
+  .dark .badge-slate  { background: rgb(100 116 139 / 0.15); color: #94a3b8; }
+  .dark .badge-indigo { background: rgb(99 102 241 / 0.15); color: #a5b4fc; }
+
+  /* ── Tabular numbers ─────────────────────────────────────────────────────── */
+  .tabular { font-variant-numeric: tabular-nums; }
 }
