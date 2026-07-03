@@ -814,7 +814,7 @@ export default function POSPage() {
                       </div>
                       <div className="text-right">
                         <p className="text-sm font-bold text-red-600">Saldo: {formatCurrency(credit.balance)}</p>
-                        <span className={`text-xs px-1.5 py-0.5 rounded-full ${statusColor(credit.status)}`}>
+                        <span className={`badge ${statusColor(credit.status)}`}>
                           {statusLabel(credit.status)}
                         </span>
                       </div>

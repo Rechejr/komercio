@@ -52,15 +52,15 @@ export function getInitials(name: string): string {
 
 export function statusColor(status: string): string {
   const map: Record<string, string> = {
-    COMPLETED: 'text-green-600 bg-green-50',
-    PENDING: 'text-yellow-600 bg-yellow-50',
-    CANCELLED: 'text-red-600 bg-red-50',
-    REFUNDED: 'text-purple-600 bg-purple-50',
-    PAID: 'text-green-600 bg-green-50',
-    OVERDUE: 'text-red-600 bg-red-50',
-    PARTIAL: 'text-blue-600 bg-blue-50',
+    COMPLETED: 'badge-green',
+    PENDING:   'badge-amber',
+    CANCELLED: 'badge-red',
+    REFUNDED:  'badge-indigo',
+    PAID:      'badge-green',
+    OVERDUE:   'badge-red',
+    PARTIAL:   'badge-blue',
   };
-  return map[status] || 'text-gray-600 bg-gray-50';
+  return map[status] || 'badge-slate';
 }
 
 export function statusLabel(status: string): string {

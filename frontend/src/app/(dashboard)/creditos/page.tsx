@@ -111,7 +111,7 @@ export default function CreditosPage() {
                   <td className="px-4 py-3 text-right font-bold text-red-600">{formatCurrency(c.balance)}</td>
                   <td className="px-4 py-3 text-gray-500 text-xs">{c.dueDate ? formatDate(c.dueDate) : '-'}</td>
                   <td className="px-4 py-3">
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusColor(c.status)}`}>{statusLabel(c.status)}</span>
+                    <span className={`badge ${statusColor(c.status)}`}>{statusLabel(c.status)}</span>
                   </td>
                   <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                     <div className="flex items-center gap-2">
@@ -186,7 +186,7 @@ export default function CreditosPage() {
               </div>
 
               <div className="flex items-center justify-between text-sm">
-                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusColor(selected.status)}`}>{statusLabel(selected.status)}</span>
+                <span className={`badge ${statusColor(selected.status)}`}>{statusLabel(selected.status)}</span>
                 {selected.dueDate && (
                   <span className="text-xs text-gray-500 flex items-center gap-1">
                     <Clock size={12} /> Vence: {formatDate(selected.dueDate)}

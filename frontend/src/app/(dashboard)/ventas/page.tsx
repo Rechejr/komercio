@@ -163,7 +163,7 @@ export default function VentasPage() {
                   <td className="hidden md:table-cell px-4 py-3 text-gray-500 text-xs">{paymentMethodLabel[s.paymentMethod] || s.paymentMethod}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusColor(s.status)}`}>{statusLabel(s.status)}</span>
+                      <span className={`badge ${statusColor(s.status)}`}>{statusLabel(s.status)}</span>
                       {s.credit && (
                         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${s.credit.status === 'PAID' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>
                           {s.credit.status === 'PAID' ? 'Fiado pagado' : 'Fiado'}
@@ -223,7 +223,7 @@ export default function VentasPage() {
                 <div>
                   <p className="text-gray-400 text-xs">Estado</p>
                   <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusColor(detail.status)}`}>{statusLabel(detail.status)}</span>
+                    <span className={`badge ${statusColor(detail.status)}`}>{statusLabel(detail.status)}</span>
                     {detail.credit && (
                       <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${detail.credit.status === 'PAID' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>
                         {detail.credit.status === 'PAID' ? 'Fiado pagado' : `Fiado: ${formatCurrency(detail.credit.balance)}`}
