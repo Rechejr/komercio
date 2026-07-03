@@ -1,0 +1,117 @@
+<svg viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+
+    <!-- LEFT ARM: bright outer-left edge → medium cobalt → dark navy shadow → inner bevel bright -->
+    <linearGradient id="la" x1="0%" y1="50%" x2="100%" y2="50%">
+      <stop offset="0%"   stop-color="#C8E2FF"/>
+      <stop offset="10%"  stop-color="#62A0F0"/>
+      <stop offset="38%"  stop-color="#2B5ACC"/>
+      <stop offset="72%"  stop-color="#10288A"/>
+      <stop offset="86%"  stop-color="#162E98"/>
+      <stop offset="93%"  stop-color="#4272DC"/>
+      <stop offset="100%" stop-color="#7AAEF0"/>
+    </linearGradient>
+
+    <!-- RIGHT ARM: mirror of left arm -->
+    <linearGradient id="ra" x1="100%" y1="50%" x2="0%" y2="50%">
+      <stop offset="0%"   stop-color="#C8E2FF"/>
+      <stop offset="10%"  stop-color="#62A0F0"/>
+      <stop offset="38%"  stop-color="#2B5ACC"/>
+      <stop offset="72%"  stop-color="#10288A"/>
+      <stop offset="86%"  stop-color="#162E98"/>
+      <stop offset="93%"  stop-color="#4272DC"/>
+      <stop offset="100%" stop-color="#7AAEF0"/>
+    </linearGradient>
+
+    <!-- TOP BEVEL faces (brighter, simulating top crystal face) -->
+    <linearGradient id="lt" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%"   stop-color="#E4F0FF"/>
+      <stop offset="100%" stop-color="#8CB8F4"/>
+    </linearGradient>
+    <linearGradient id="rt" x1="100%" y1="0%" x2="0%" y2="0%">
+      <stop offset="0%"   stop-color="#E4F0FF"/>
+      <stop offset="100%" stop-color="#8CB8F4"/>
+    </linearGradient>
+
+    <!-- GEM — upper-left face (brightest, catching most light) -->
+    <linearGradient id="gul" x1="100%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%"   stop-color="#A8F8E0"/>
+      <stop offset="100%" stop-color="#00CC9A"/>
+    </linearGradient>
+    <!-- GEM — upper-right face (slightly less lit) -->
+    <linearGradient id="gur" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%"   stop-color="#80ECC8"/>
+      <stop offset="100%" stop-color="#00B082"/>
+    </linearGradient>
+    <!-- GEM — lower-left face (shadow zone) -->
+    <linearGradient id="gll" x1="100%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%"   stop-color="#00C092"/>
+      <stop offset="100%" stop-color="#005045"/>
+    </linearGradient>
+    <!-- GEM — lower-right face (deepest shadow) -->
+    <linearGradient id="glr" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%"   stop-color="#00A878"/>
+      <stop offset="100%" stop-color="#004438"/>
+    </linearGradient>
+
+    <!-- Ambient glow behind V -->
+    <radialGradient id="glow" cx="50%" cy="38%" r="52%">
+      <stop offset="0%"   stop-color="#1A4EAA" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="#0C1829"  stop-opacity="0"/>
+    </radialGradient>
+
+  </defs>
+
+  <!-- Ambient glow (renders behind everything) -->
+  <ellipse cx="100" cy="78" rx="88" ry="68" fill="url(#glow)"/>
+
+  <!-- ══════════════ LEFT ARM ══════════════ -->
+
+  <!-- Main front face of left arm -->
+  <path d="M 10,10 L 46,10 L 100,116 L 100,190 Z" fill="url(#la)"/>
+
+  <!-- Top bevel face (the top surface of the crystal, visible from slight above angle) -->
+  <path d="M 10,10 L 46,10 L 53,19 L 17,19 Z" fill="url(#lt)"/>
+
+  <!-- Far-left edge specular highlight (thin bright strip along outer edge) -->
+  <path d="M 10,10 L 21,10 L 100,190 Z" fill="white" opacity="0.22"/>
+
+  <!-- Inner-edge bevel glow (thin bright strip along right/inner edge of left arm) -->
+  <path d="M 42,10 L 46,10 L 100,116 L 100,122 Z" fill="#88C0FF" opacity="0.55"/>
+
+  <!-- ══════════════ RIGHT ARM ══════════════ -->
+
+  <!-- Main front face of right arm -->
+  <path d="M 190,10 L 154,10 L 100,116 L 100,190 Z" fill="url(#ra)"/>
+
+  <!-- Top bevel face (mirror) -->
+  <path d="M 190,10 L 154,10 L 147,19 L 183,19 Z" fill="url(#rt)"/>
+
+  <!-- Far-right edge specular highlight (mirror of left) -->
+  <path d="M 190,10 L 179,10 L 100,190 Z" fill="white" opacity="0.22"/>
+
+  <!-- Inner-edge bevel glow (mirror) -->
+  <path d="M 158,10 L 154,10 L 100,116 L 100,122 Z" fill="#88C0FF" opacity="0.55"/>
+
+  <!-- ══════════════ GEM ══════════════ -->
+  <!-- Diamond sits from y=116 (inner V junction) to y=190 (outer V tip) -->
+  <!-- Widest at y=152, spanning x=76 to x=124 -->
+
+  <!-- Upper-left face -->
+  <polygon points="100,116 76,152 100,136" fill="url(#gul)"/>
+  <!-- Upper-right face -->
+  <polygon points="100,116 124,152 100,136" fill="url(#gur)"/>
+  <!-- Lower-left face -->
+  <polygon points="100,190 76,152 100,164" fill="url(#gll)"/>
+  <!-- Lower-right face -->
+  <polygon points="100,190 124,152 100,164" fill="url(#glr)"/>
+
+  <!-- Horizontal edge line at gem equator (subtle separator between upper/lower halves) -->
+  <line x1="76" y1="152" x2="124" y2="152" stroke="#005A48" stroke-width="0.6" opacity="0.6"/>
+
+  <!-- Top flash highlight (the brightest point at the very tip of the gem) -->
+  <polygon points="100,116 113,137 100,130 87,137" fill="white" opacity="0.52"/>
+  <!-- Bright specular dot at gem tip -->
+  <circle cx="100" cy="119" r="3" fill="white" opacity="0.68"/>
+
+</svg>

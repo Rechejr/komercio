@@ -11,7 +11,7 @@ import { api } from '@/lib/api';
 import { Tooltip } from '@/components/ui/Tooltip';
 import {
   LayoutDashboard, Package, ShoppingCart, Users, Truck,
-  Receipt, CreditCard, TrendingUp, Settings, Store,
+  Receipt, CreditCard, TrendingUp, Settings,
   ChevronLeft, ChevronRight, ShoppingBag, DollarSign,
   LogOut, Calculator, X, Zap,
 } from 'lucide-react';
@@ -112,9 +112,14 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
         )}>
           <Tooltip content="Ventrix" side="right" disabled={!collapsed}>
             <div className="flex items-center gap-3 flex-1 min-w-0">
-              <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center flex-shrink-0">
-                <Store size={18} />
-              </div>
+              <img
+                src="/ventrix-logo.svg"
+                alt="Ventrix"
+                width={32}
+                height={32}
+                className="w-8 h-8 flex-shrink-0 object-contain"
+                draggable={false}
+              />
               <span className={cn('font-bold text-lg tracking-tight truncate', collapsed && 'md:hidden')}>
                 Ventrix
               </span>
