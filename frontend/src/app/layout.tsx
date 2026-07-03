@@ -9,7 +9,11 @@ export const metadata: Metadata = {
   title: { default: 'Ventrix', template: '%s | Ventrix' },
   description: 'Plataforma de gestión de negocios para pequeños comercios en Latinoamérica',
   keywords: ['pos', 'inventario', 'ventas', 'negocio', 'colombia'],
-  icons: { icon: '/favicon.ico' },
+  icons: {
+    icon: [
+      { url: '/ventrix-logo.svg', type: 'image/svg+xml' },
+    ],
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
