@@ -75,8 +75,9 @@ export const paymentController = {
       const amountCOP = PLAN_PRICES[period];
       const months    = PLAN_MONTHS[period];
       const label     = PERIOD_LABELS[period];
-      const frontendUrl = process.env.FRONTEND_URL || process.env.APP_URL || 'https://ventrix.lat';
+      const frontendUrl = (process.env.FRONTEND_URL || 'https://ventrix.lat').trim().replace(/\/+$/, '');
       const redirectUrl = `${frontendUrl}/payment-result`;
+      logger.info(`Wompi redirect_url: ${redirectUrl}`);
 
       const wompiRes = await wompiPost('/v1/payment_links', {
         name: `Plan Pro Ventrix — ${label}`,
