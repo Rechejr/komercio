@@ -94,7 +94,9 @@ export const paymentController = {
         throw new AppError('Error al crear el enlace de pago', 502);
       }
 
-      const linkData = wompiRes.data?.data as { id: string; url: string };
+      const linkData = wompiRes.data?.data as { id: string };
+      // Wompi no devuelve campo "url" — la URL de checkout se construye con el id
+      const paymentUrl = `https://checkout.wompi.co/l/${linkData.id}`;
 
       // Primary: Redis (TTL 2h)
       await cache.set(`wompi_link:${linkData.id}`, { businessId, period, months }, 7200);
@@ -107,7 +109,7 @@ export const paymentController = {
         data: { settings: { ...currentSettings, pendingPayment: { linkId: linkData.id, period, months } } },
       });
 
-      return success(res, { url: linkData.url });
+      return success(res, { url: paymentUrl });
     } catch (err) {
       next(err);
     }
