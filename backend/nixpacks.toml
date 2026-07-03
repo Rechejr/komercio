@@ -1,3 +1,6 @@
+[phases.setup]
+nixPkgs = ["openssl"]
+
 [phases.build]
 cmds = ["npm run build"]
 
