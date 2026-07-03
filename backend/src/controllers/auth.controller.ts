@@ -21,8 +21,6 @@ export const authController = {
       if (bodyRole === 'SUPER_ADMIN') throw new AppError('No autorizado', 403);
 
       const hashedPassword = await bcrypt.hash(password, 12);
-      const emailVerifyToken = crypto.randomBytes(32).toString('hex');
-      const emailVerifyTokenHash = crypto.createHash('sha256').update(emailVerifyToken).digest('hex');
 
       const user = await prisma.$transaction(async (tx) => {
         const newUser = await tx.user.create({
@@ -31,7 +29,7 @@ export const authController = {
             email,
             password: hashedPassword,
             role: 'ADMIN',
-            emailVerifyToken: emailVerifyTokenHash,
+            isEmailVerified: true,
           },
           select: { id: true, name: true, email: true, role: true },
         });
@@ -64,10 +62,7 @@ export const authController = {
         return newUser;
       });
 
-      // Send verification email (non-blocking)
-      emailService.sendVerification(email, name, emailVerifyToken);
-
-      return created(res, user, 'Cuenta creada exitosamente. Revisa tu correo para verificar tu cuenta.');
+      return created(res, user, 'Cuenta creada exitosamente. Ya puedes iniciar sesión.');
     } catch (err) {
       next(err);
     }
