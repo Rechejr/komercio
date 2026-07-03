@@ -66,6 +66,7 @@ export const paymentController = {
       const { period = 'monthly' } = req.body;
       const businessId = req.user!.businessId;
 
+      logger.info(`Wompi createLink: key=${process.env.WOMPI_PRIVATE_KEY?.slice(0, 12)}... host=${WOMPI_BASE} period=${period}`);
       if (!businessId) throw new AppError('No tienes un negocio registrado', 400);
       if (!['monthly', 'quarterly', 'annual'].includes(period)) {
         throw new AppError('Período no válido', 400);
@@ -88,7 +89,7 @@ export const paymentController = {
       });
 
       if (!wompiRes.ok) {
-        logger.error('Wompi createLink error', { status: wompiRes.status, body: wompiRes.data });
+        logger.error(`Wompi createLink HTTP ${wompiRes.status}: ${JSON.stringify(wompiRes.data)}`);
         throw new AppError('Error al crear el enlace de pago', 502);
       }
 
