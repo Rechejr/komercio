@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils';
 
 // ─── Config ────────────────────────────────────────────────────────────────────
 const WHATSAPP_NUMBER = '573102979527';
-const BASE_PRICE      = 49900;
+const BASE_PRICE      = 19900;
 
 const PERIODS = [
   { key: 'monthly',   label: 'Mensual',    badge: null,   months: 1,  discount: 0    },

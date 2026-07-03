@@ -447,9 +447,12 @@ model Expense {
   description   String
   amount        Decimal
   paymentMethod PaymentMethod    @default(CASH)
-  receiptUrl    String?
-  date          DateTime         @default(now())
-  notes         String?
+  receiptUrl        String?
+  date              DateTime         @default(now())
+  notes             String?
+  recipientName     String?
+  recipientDocument String?
+  recipientPhone    String?
   createdAt     DateTime         @default(now())
   updatedAt     DateTime         @updatedAt
   deletedAt     DateTime?

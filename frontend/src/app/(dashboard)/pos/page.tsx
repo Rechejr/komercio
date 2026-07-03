@@ -34,6 +34,8 @@ export default function POSPage() {
   const [showCreateCustomer, setShowCreateCustomer] = useState(false);
   const [newCustName, setNewCustName] = useState('');
   const [newCustPhone, setNewCustPhone] = useState('');
+  const [newCustDoc, setNewCustDoc] = useState('');
+  const [newCustAddress, setNewCustAddress] = useState('');
   const [mixedPayments, setMixedPayments] = useState<Array<{ method: string; amount: number }>>([]);
   const [splitMethod, setSplitMethod] = useState('CASH');
   const [splitAmount, setSplitAmount] = useState('');
@@ -133,14 +135,13 @@ export default function POSPage() {
   });
 
   const createCustomerMutation = useMutation({
-    mutationFn: (d: { name: string; phone?: string }) =>
+    mutationFn: (d: { name: string; phone?: string; document?: string; address?: string }) =>
       api.post('/customers', d).then((r) => r.data.data),
     onSuccess: (customer) => {
       setCustomer(customer.id);
       setCustomerSearch(customer.name);
       setShowCreateCustomer(false);
-      setNewCustName('');
-      setNewCustPhone('');
+      setNewCustName(''); setNewCustPhone(''); setNewCustDoc(''); setNewCustAddress('');
       qc.invalidateQueries({ queryKey: ['customers-search'] });
       toast.success('Cliente creado');
     },
@@ -880,35 +881,28 @@ export default function POSPage() {
     {/* Inline customer creation modal */}
     {showCreateCustomer && (
       <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
-        onClick={() => { setShowCreateCustomer(false); setNewCustName(''); setNewCustPhone(''); }}>
+        onClick={() => { setShowCreateCustomer(false); setNewCustName(''); setNewCustPhone(''); setNewCustDoc(''); setNewCustAddress(''); }}>
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-sm p-5 space-y-3"
           onClick={(e) => e.stopPropagation()}>
           <h3 className="font-semibold text-gray-800 dark:text-white">Crear cliente</h3>
-          <input
-            type="text"
-            placeholder="Nombre *"
-            value={newCustName}
-            onChange={(e) => setNewCustName(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && newCustName.trim() && createCustomerMutation.mutate({ name: newCustName.trim(), phone: newCustPhone.trim() || undefined })}
-            autoFocus
-            className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-          />
-          <input
-            type="text"
-            placeholder="Teléfono (opcional)"
-            value={newCustPhone}
-            onChange={(e) => setNewCustPhone(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && newCustName.trim() && createCustomerMutation.mutate({ name: newCustName.trim(), phone: newCustPhone.trim() || undefined })}
-            className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-          />
+          <input type="text" placeholder="Nombre completo *" value={newCustName} onChange={(e) => setNewCustName(e.target.value)} autoFocus
+            className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white" />
+          <div className="grid grid-cols-2 gap-2">
+            <input type="text" placeholder="Cédula / NIT" value={newCustDoc} onChange={(e) => setNewCustDoc(e.target.value)}
+              className="px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white" />
+            <input type="tel" placeholder="Celular / WhatsApp" value={newCustPhone} onChange={(e) => setNewCustPhone(e.target.value)}
+              className="px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white" />
+          </div>
+          <input type="text" placeholder="Dirección (opcional)" value={newCustAddress} onChange={(e) => setNewCustAddress(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white" />
           <div className="flex gap-2 pt-1">
             <button type="button"
-              onClick={() => { setShowCreateCustomer(false); setNewCustName(''); setNewCustPhone(''); }}
+              onClick={() => { setShowCreateCustomer(false); setNewCustName(''); setNewCustPhone(''); setNewCustDoc(''); setNewCustAddress(''); }}
               className="flex-1 px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700">
               Cancelar
             </button>
             <button type="button"
-              onClick={() => newCustName.trim() && createCustomerMutation.mutate({ name: newCustName.trim(), phone: newCustPhone.trim() || undefined })}
+              onClick={() => newCustName.trim() && createCustomerMutation.mutate({ name: newCustName.trim(), phone: newCustPhone.trim() || undefined, document: newCustDoc.trim() || undefined, address: newCustAddress.trim() || undefined })}
               disabled={!newCustName.trim() || createCustomerMutation.isPending}
               className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50">
               {createCustomerMutation.isPending ? 'Guardando...' : 'Guardar'}

@@ -33,7 +33,8 @@ export const expenseController = {
 
   async create(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const { description, amount, date, categoryId, notes, paymentMethod } = req.body;
+      const { description, amount, date, categoryId, notes, paymentMethod,
+              recipientName, recipientDocument, recipientPhone } = req.body;
       if (parseFloat(amount) <= 0) throw new AppError('El monto debe ser mayor a 0', 400);
       const expense = await prisma.expense.create({
         data: {
@@ -44,6 +45,9 @@ export const expenseController = {
           notes: notes || null,
           paymentMethod: paymentMethod || null,
           businessId: req.user!.businessId,
+          recipientName: recipientName || null,
+          recipientDocument: recipientDocument || null,
+          recipientPhone: recipientPhone || null,
         },
       });
       return created(res, expense, 'Gasto registrado');
@@ -56,7 +60,8 @@ export const expenseController = {
         where: { id: req.params.id, deletedAt: null, businessId: req.user!.businessId },
       });
       if (!existing) throw new AppError('Gasto no encontrado', 404);
-      const { description, amount, date, categoryId, notes, paymentMethod } = req.body;
+      const { description, amount, date, categoryId, notes, paymentMethod,
+              recipientName, recipientDocument, recipientPhone } = req.body;
       if (amount !== undefined && parseFloat(amount) <= 0) throw new AppError('El monto debe ser mayor a 0', 400);
       const expense = await prisma.expense.update({
         where: { id: req.params.id },
@@ -67,6 +72,9 @@ export const expenseController = {
           categoryId: categoryId !== undefined ? (categoryId || null) : undefined,
           notes,
           paymentMethod,
+          recipientName: recipientName !== undefined ? (recipientName || null) : undefined,
+          recipientDocument: recipientDocument !== undefined ? (recipientDocument || null) : undefined,
+          recipientPhone: recipientPhone !== undefined ? (recipientPhone || null) : undefined,
         },
       });
       return success(res, expense, 'Gasto actualizado');

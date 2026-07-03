@@ -138,7 +138,14 @@ export const saleController = {
 
       const effectiveBranchId = branchId || req.user?.branchId || null;
 
-      const result = await prisma.$transaction(async (tx) => {
+      // Retry up to 3 times if a concurrent request collides on the invoice number.
+      // This can happen under connection-pool transaction-mode (PgBouncer) where
+      // session-level advisory locks may not persist across pool hops.
+      let result: any;
+      let attempt = 0;
+      while (true) {
+        try {
+          result = await prisma.$transaction(async (tx) => {
         // SELECT FOR UPDATE locks these rows for the duration of the transaction.
         // Concurrent sales on the same products will block here until this tx commits,
         // eliminating the check-then-decrement race that allows overselling.
@@ -290,8 +297,20 @@ export const saleController = {
           });
         }
 
-        return { newSale, lowStockProducts };
-      }, { timeout: 30000 });
+          return { newSale, lowStockProducts };
+          }, { timeout: 30000 });
+          break; // success — exit retry loop
+        } catch (err: any) {
+          const isInvoiceCollision =
+            err?.code === 'P2002' &&
+            (err?.meta?.target as string[] | undefined)?.some((f: string) => f.includes('invoiceNumber'));
+          if (isInvoiceCollision && attempt < 2) {
+            attempt++;
+            continue;
+          }
+          throw err;
+        }
+      }
 
       const { newSale: sale, lowStockProducts } = result;
 

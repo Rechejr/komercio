@@ -23,6 +23,8 @@ export default function ComprasPage() {
   const [showCreateSupplier, setShowCreateSupplier] = useState(false);
   const [newSupName, setNewSupName] = useState('');
   const [newSupPhone, setNewSupPhone] = useState('');
+  const [newSupLegal, setNewSupLegal] = useState('');
+  const [newSupDoc, setNewSupDoc] = useState('');
 
   const { data, isLoading } = useQuery({
     queryKey: ['purchases', page],
@@ -88,15 +90,14 @@ export default function ComprasPage() {
   });
 
   const createSupplierMutation = useMutation({
-    mutationFn: (d: { name: string; phone?: string }) =>
+    mutationFn: (d: { name: string; legalName?: string; document?: string; phone?: string }) =>
       api.post('/suppliers', d).then((r) => r.data.data),
     onSuccess: (supplier) => {
       setValue('supplierId', supplier.id);
       setSelectedSupplierName(supplier.name);
       setSupplierSearch('');
       setShowCreateSupplier(false);
-      setNewSupName('');
-      setNewSupPhone('');
+      setNewSupName(''); setNewSupPhone(''); setNewSupLegal(''); setNewSupDoc('');
       qc.invalidateQueries({ queryKey: ['suppliers-list'] });
       toast.success('Proveedor creado');
     },
@@ -430,35 +431,28 @@ export default function ComprasPage() {
       {/* Inline supplier creation modal */}
       {showCreateSupplier && (
         <div className="fixed inset-0 bg-black/40 z-[60] flex items-center justify-center p-4"
-          onClick={() => { setShowCreateSupplier(false); setNewSupName(''); setNewSupPhone(''); }}>
+          onClick={() => { setShowCreateSupplier(false); setNewSupName(''); setNewSupPhone(''); setNewSupLegal(''); setNewSupDoc(''); }}>
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-sm p-5 space-y-3"
             onClick={(e) => e.stopPropagation()}>
             <h3 className="font-semibold text-gray-800 dark:text-white">Crear proveedor</h3>
-            <input
-              type="text"
-              placeholder="Nombre *"
-              value={newSupName}
-              onChange={(e) => setNewSupName(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && newSupName.trim() && createSupplierMutation.mutate({ name: newSupName.trim(), phone: newSupPhone.trim() || undefined })}
-              autoFocus
-              className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-            />
-            <input
-              type="text"
-              placeholder="Teléfono (opcional)"
-              value={newSupPhone}
-              onChange={(e) => setNewSupPhone(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && newSupName.trim() && createSupplierMutation.mutate({ name: newSupName.trim(), phone: newSupPhone.trim() || undefined })}
-              className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-            />
+            <input type="text" placeholder="Nombre comercial *" value={newSupName} onChange={(e) => setNewSupName(e.target.value)} autoFocus
+              className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white" />
+            <input type="text" placeholder="Razón social (opcional)" value={newSupLegal} onChange={(e) => setNewSupLegal(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white" />
+            <div className="grid grid-cols-2 gap-2">
+              <input type="text" placeholder="NIT / Documento" value={newSupDoc} onChange={(e) => setNewSupDoc(e.target.value)}
+                className="px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white" />
+              <input type="tel" placeholder="Celular / Teléfono" value={newSupPhone} onChange={(e) => setNewSupPhone(e.target.value)}
+                className="px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white" />
+            </div>
             <div className="flex gap-2 pt-1">
               <button type="button"
-                onClick={() => { setShowCreateSupplier(false); setNewSupName(''); setNewSupPhone(''); }}
+                onClick={() => { setShowCreateSupplier(false); setNewSupName(''); setNewSupPhone(''); setNewSupLegal(''); setNewSupDoc(''); }}
                 className="flex-1 px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700">
                 Cancelar
               </button>
               <button type="button"
-                onClick={() => newSupName.trim() && createSupplierMutation.mutate({ name: newSupName.trim(), phone: newSupPhone.trim() || undefined })}
+                onClick={() => newSupName.trim() && createSupplierMutation.mutate({ name: newSupName.trim(), legalName: newSupLegal.trim() || undefined, document: newSupDoc.trim() || undefined, phone: newSupPhone.trim() || undefined })}
                 disabled={!newSupName.trim() || createSupplierMutation.isPending}
                 className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50">
                 {createSupplierMutation.isPending ? 'Guardando...' : 'Guardar'}

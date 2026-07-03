@@ -61,6 +61,9 @@ export default function GastosPage() {
       paymentMethod: expense.paymentMethod,
       date: expense.date ? expense.date.split('T')[0] : new Date().toISOString().split('T')[0],
       notes: expense.notes || '',
+      recipientName: expense.recipientName || '',
+      recipientDocument: expense.recipientDocument || '',
+      recipientPhone: expense.recipientPhone || '',
     });
     setShowForm(true);
   }
@@ -74,6 +77,9 @@ export default function GastosPage() {
       paymentMethod: 'CASH',
       date: new Date().toISOString().split('T')[0],
       notes: '',
+      recipientName: '',
+      recipientDocument: '',
+      recipientPhone: '',
     });
     setShowForm(true);
   }
@@ -243,6 +249,23 @@ export default function GastosPage() {
                   className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
                   placeholder="Opcional"
                 />
+              </div>
+              <div className="border-t border-gray-100 dark:border-gray-700 pt-3">
+                <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2 uppercase tracking-wide">A quién se le paga (opcional)</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="col-span-2">
+                    <label className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1 block">Nombre completo</label>
+                    <input {...register('recipientName')} placeholder="Ej: Juan Pérez" className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1 block">Cédula / NIT</label>
+                    <input {...register('recipientDocument')} placeholder="Ej: 1234567890" className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1 block">Celular</label>
+                    <input {...register('recipientPhone')} placeholder="Ej: 3001234567" type="tel" className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white" />
+                  </div>
+                </div>
               </div>
               <div className="flex justify-end gap-3 pt-2 border-t border-gray-100 dark:border-gray-700">
                 <button type="button" onClick={() => { setShowForm(false); setEditItem(null); }} className="px-4 py-2 border border-gray-200 rounded-lg text-sm hover:bg-gray-50 transition">
