@@ -7,6 +7,21 @@ import { api } from '@/lib/api';
 import toast from 'react-hot-toast';
 import { Plus, Search, Edit, Truck, X, Loader2, Phone } from 'lucide-react';
 
+const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition';
+
+const FIELDS = [
+  { name: 'name',        label: 'Nombre comercial *',  col: 2 },
+  { name: 'legalName',   label: 'Razón social',         col: 2 },
+  { name: 'document',    label: 'NIT / Documento',      col: 1 },
+  { name: 'contactName', label: 'Persona de contacto',  col: 1 },
+  { name: 'phone',       label: 'Teléfono',             col: 1 },
+  { name: 'mobile',      label: 'Celular',              col: 1, type: 'tel' },
+  { name: 'email',       label: 'Correo',               col: 2, type: 'email' },
+  { name: 'address',     label: 'Dirección',            col: 2 },
+  { name: 'city',        label: 'Ciudad',               col: 1 },
+  { name: 'notes',       label: 'Notas',                col: 1 },
+];
+
 export default function ProveedoresPage() {
   const qc = useQueryClient();
   const [search, setSearch] = useState('');
@@ -36,63 +51,103 @@ export default function ProveedoresPage() {
   const pagination = data?.pagination;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 animate-fade-up">
+
+      {/* ── Toolbar ──────────────────────────────────────────────────────────── */}
       <div className="flex gap-3">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-          <input value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} placeholder="Buscar proveedor..."
-            className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 dark:text-white dark:border-gray-600" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={15} />
+          <input
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+            placeholder="Buscar proveedor..."
+            className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition"
+          />
         </div>
-        <button onClick={() => { setEditItem(null); reset({}); setShowForm(true); }}
-          className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition">
-          <Plus size={16} /> Nuevo proveedor
+        <button
+          type="button"
+          onClick={() => { setEditItem(null); reset({}); setShowForm(true); }}
+          className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 shadow-sm shadow-blue-600/25 transition"
+        >
+          <Plus size={15} /> Nuevo proveedor
         </button>
       </div>
 
-      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 overflow-hidden">
+      {/* ── Tabla ─────────────────────────────────────────────────────────────── */}
+      <div className="card overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-xs text-gray-500 border-b border-gray-100 bg-gray-50 dark:bg-gray-700/50 dark:text-gray-400">
-                <th className="text-left px-4 py-3 font-medium">Nombre</th>
-                <th className="hidden md:table-cell text-left px-4 py-3 font-medium">Razón social</th>
-                <th className="hidden sm:table-cell text-left px-4 py-3 font-medium">Contacto</th>
-                <th className="text-left px-4 py-3 font-medium">Teléfonos</th>
-                <th className="hidden lg:table-cell text-left px-4 py-3 font-medium">Email</th>
-                <th className="text-center px-4 py-3 font-medium">Productos</th>
+              <tr className="border-b border-slate-100 dark:border-white/[0.06]">
+                <th className="text-left px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Nombre</th>
+                <th className="hidden md:table-cell text-left px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Razón social</th>
+                <th className="hidden sm:table-cell text-left px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Contacto</th>
+                <th className="text-left px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Teléfonos</th>
+                <th className="hidden lg:table-cell text-left px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Email</th>
+                <th className="text-center px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Productos</th>
                 <th className="w-16 sr-only">Acciones</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-50 dark:divide-gray-700">
+            <tbody className="divide-y divide-slate-50 dark:divide-white/[0.04]">
               {isLoading ? (
-                [...Array(5)].map((_, i) => <tr key={i}>{[...Array(7)].map((_, j) => <td key={j} className="px-4 py-3"><div className="h-4 bg-gray-100 dark:bg-gray-700 rounded animate-pulse" /></td>)}</tr>)
+                [...Array(5)].map((_, i) => (
+                  <tr key={i}>
+                    {[...Array(7)].map((_, j) => (
+                      <td key={j} className="px-4 py-3">
+                        <div className="h-4 bg-slate-100 dark:bg-slate-800 rounded-lg animate-pulse" />
+                      </td>
+                    ))}
+                  </tr>
+                ))
               ) : suppliers.length === 0 ? (
-                <tr><td colSpan={7} className="text-center py-12 text-gray-400"><Truck size={40} className="mx-auto mb-3 opacity-30" /><p>No hay proveedores</p></td></tr>
-              ) : suppliers.map((s: any) => (
-                <tr key={s.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition">
-                  <td className="px-4 py-3">
-                    <p className="font-medium text-gray-800 dark:text-white">{s.name}</p>
-                    {s.document && <p className="text-xs text-gray-400 mt-0.5">NIT: {s.document}</p>}
+                <tr>
+                  <td colSpan={7} className="text-center py-16">
+                    <div className="flex flex-col items-center gap-3 text-slate-400 dark:text-slate-600">
+                      <Truck size={36} strokeWidth={1.5} />
+                      <p className="text-[13px]">No hay proveedores{search ? ` para "${search}"` : ''}</p>
+                    </div>
                   </td>
-                  <td className="hidden md:table-cell px-4 py-3 text-gray-500 text-sm">{s.legalName || <span className="text-gray-300">—</span>}</td>
-                  <td className="hidden sm:table-cell px-4 py-3 text-gray-500 text-sm">{s.contactName || <span className="text-gray-300">—</span>}</td>
-                  <td className="px-4 py-3 text-sm">
+                </tr>
+              ) : suppliers.map((s: any) => (
+                <tr key={s.id} className="hover:bg-slate-50/60 dark:hover:bg-white/[0.02] transition-colors">
+                  <td className="px-4 py-3">
+                    <p className="text-[13px] font-medium text-slate-800 dark:text-white">{s.name}</p>
+                    {s.document && <p className="text-[11px] text-slate-400 mt-0.5">NIT: {s.document}</p>}
+                  </td>
+                  <td className="hidden md:table-cell px-4 py-3 text-[13px] text-slate-500 dark:text-slate-400">
+                    {s.legalName || <span className="text-slate-300 dark:text-slate-600">—</span>}
+                  </td>
+                  <td className="hidden sm:table-cell px-4 py-3 text-[13px] text-slate-500 dark:text-slate-400">
+                    {s.contactName || <span className="text-slate-300 dark:text-slate-600">—</span>}
+                  </td>
+                  <td className="px-4 py-3">
                     {s.phone && (
-                      <p className="flex items-center gap-1 text-gray-500">
-                        <Phone size={11} className="text-gray-300" /> {s.phone}
+                      <p className="flex items-center gap-1 text-[13px] text-slate-500 dark:text-slate-400">
+                        <Phone size={11} className="text-slate-300 dark:text-slate-600" /> {s.phone}
                       </p>
                     )}
                     {s.mobile && (
-                      <p className="flex items-center gap-1 text-gray-500 mt-0.5">
-                        <Phone size={11} className="text-blue-300" /> {s.mobile}
+                      <p className="flex items-center gap-1 text-[13px] text-slate-500 dark:text-slate-400 mt-0.5">
+                        <Phone size={11} className="text-blue-400" /> {s.mobile}
                       </p>
                     )}
-                    {!s.phone && !s.mobile && <span className="text-gray-300">—</span>}
+                    {!s.phone && !s.mobile && <span className="text-slate-300 dark:text-slate-600">—</span>}
                   </td>
-                  <td className="hidden lg:table-cell px-4 py-3 text-gray-500 text-sm">{s.email || <span className="text-gray-300">—</span>}</td>
-                  <td className="px-4 py-3 text-center text-gray-600 text-sm">{s._count?.products || 0}</td>
+                  <td className="hidden lg:table-cell px-4 py-3 text-[13px] text-slate-500 dark:text-slate-400">
+                    {s.email || <span className="text-slate-300 dark:text-slate-600">—</span>}
+                  </td>
+                  <td className="px-4 py-3 text-center text-[13px] text-slate-600 dark:text-slate-400 tabular-nums">
+                    {s._count?.products || 0}
+                  </td>
                   <td className="px-4 py-3">
-                    <button type="button" aria-label="Editar proveedor" onClick={() => { setEditItem(s); reset(s); setShowForm(true); }} className="text-gray-400 hover:text-blue-600 transition"><Edit size={15} /></button>
+                    <button
+                      type="button"
+                      aria-label="Editar proveedor"
+                      onClick={() => { setEditItem(s); reset(s); setShowForm(true); }}
+                      className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-500/10 transition"
+                    >
+                      <Edit size={14} />
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -101,16 +156,16 @@ export default function ProveedoresPage() {
         </div>
 
         {pagination && pagination.totalPages > 1 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 dark:border-gray-700 text-sm text-gray-500">
+          <div className="flex items-center justify-between px-4 py-3 border-t border-slate-100 dark:border-white/[0.06] text-[13px] text-slate-500">
             <span>{pagination.total} proveedores</span>
             <div className="flex gap-2">
               <button type="button" disabled={page === 1} onClick={() => setPage(p => p - 1)}
-                className="px-3 py-1 border border-gray-200 dark:border-gray-600 rounded-lg disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-gray-700 transition">
+                className="px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg disabled:opacity-40 hover:bg-slate-50 dark:hover:bg-slate-800 transition text-[12px]">
                 Anterior
               </button>
-              <span className="px-3 py-1">{page} / {pagination.totalPages}</span>
+              <span className="px-3 py-1.5 text-slate-400">{page} / {pagination.totalPages}</span>
               <button type="button" disabled={page === pagination.totalPages} onClick={() => setPage(p => p + 1)}
-                className="px-3 py-1 border border-gray-200 dark:border-gray-600 rounded-lg disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-gray-700 transition">
+                className="px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg disabled:opacity-40 hover:bg-slate-50 dark:hover:bg-slate-800 transition text-[12px]">
                 Siguiente
               </button>
             </div>
@@ -118,38 +173,47 @@ export default function ProveedoresPage() {
         )}
       </div>
 
+      {/* ── Form Modal ───────────────────────────────────────────────────────── */}
       {showForm && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700">
-              <h2 className="font-semibold text-gray-800 dark:text-white">{editItem ? 'Editar proveedor' : 'Nuevo proveedor'}</h2>
-              <button type="button" aria-label="Cerrar" onClick={() => { setShowForm(false); setEditItem(null); }}><X size={20} className="text-gray-400" /></button>
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-[2px] z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/[0.08] rounded-2xl shadow-modal w-full max-w-md max-h-[90vh] overflow-y-auto animate-scale-in">
+
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-white/[0.06] sticky top-0 bg-white dark:bg-slate-900 z-10">
+              <h2 className="text-[15px] font-semibold text-slate-800 dark:text-white">
+                {editItem ? 'Editar proveedor' : 'Nuevo proveedor'}
+              </h2>
+              <button
+                type="button"
+                aria-label="Cerrar"
+                onClick={() => { setShowForm(false); setEditItem(null); }}
+                className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/[0.06] transition"
+              >
+                <X size={16} />
+              </button>
             </div>
-            <form onSubmit={handleSubmit((d) => saveMutation.mutate(d))} className="p-6 grid grid-cols-2 gap-4">
-              {[
-                { name: 'name',        label: 'Nombre comercial *',   col: 2 },
-                { name: 'legalName',   label: 'Razón social',         col: 2 },
-                { name: 'document',    label: 'NIT / Documento',      col: 1 },
-                { name: 'contactName', label: 'Persona de contacto',  col: 1 },
-                { name: 'phone',       label: 'Teléfono',             col: 1 },
-                { name: 'mobile',      label: 'Celular',              col: 1, type: 'tel' },
-                { name: 'email',       label: 'Correo',               col: 2, type: 'email' },
-                { name: 'address',     label: 'Dirección',            col: 2 },
-                { name: 'city',        label: 'Ciudad',               col: 1 },
-                { name: 'notes',       label: 'Notas',                col: 1 },
-              ].map((f) => (
+
+            <form onSubmit={handleSubmit((d: any) => saveMutation.mutate(d))} className="p-6 grid grid-cols-2 gap-4">
+              {FIELDS.map((f) => (
                 <div key={f.name} className={f.col === 2 ? 'col-span-2' : ''}>
-                  <label className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1 block">{f.label}</label>
-                  <input {...register(f.name)} type={f.type || 'text'}
-                    className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white" />
+                  <label className="block text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5">{f.label}</label>
+                  <input {...register(f.name)} type={f.type || 'text'} className={inputCls} />
                 </div>
               ))}
-              <div className="col-span-2 flex justify-end gap-3 border-t border-gray-100 pt-4">
-                <button type="button" onClick={() => { setShowForm(false); setEditItem(null); }} className="px-4 py-2 border border-gray-200 rounded-lg text-sm hover:bg-gray-50">Cancelar</button>
-                <button type="submit" disabled={saveMutation.isPending}
-                  className="px-6 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 disabled:opacity-60 flex items-center gap-2">
+              <div className="col-span-2 flex justify-end gap-3 border-t border-slate-100 dark:border-white/[0.06] pt-4">
+                <button
+                  type="button"
+                  onClick={() => { setShowForm(false); setEditItem(null); }}
+                  className="px-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-xl text-[13px] font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={saveMutation.isPending}
+                  className="px-6 py-2.5 bg-blue-600 text-white rounded-xl text-[13px] font-semibold hover:bg-blue-700 disabled:opacity-60 shadow-sm shadow-blue-600/25 flex items-center gap-2 transition"
+                >
                   {saveMutation.isPending && <Loader2 size={14} className="animate-spin" />}
-                  {editItem ? 'Actualizar' : 'Crear'}
+                  {editItem ? 'Actualizar' : 'Crear proveedor'}
                 </button>
               </div>
             </form>
