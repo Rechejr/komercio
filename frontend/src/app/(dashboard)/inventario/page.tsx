@@ -40,6 +40,8 @@ const fieldLabel: Record<string, string> = {
   description: 'Descripción',
 };
 
+const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition';
+
 export default function InventarioPage() {
   const qc = useQueryClient();
   const searchParams = useSearchParams();
@@ -92,7 +94,6 @@ export default function InventarioPage() {
 
   const { register, handleSubmit, reset, control, formState: { isSubmitting } } = useForm();
 
-  // Step 1: dry-run preview
   const previewMutation = useMutation({
     mutationFn: (file: File) => {
       const fd = new FormData();
@@ -109,7 +110,6 @@ export default function InventarioPage() {
     },
   });
 
-  // Step 2: actual import
   const importMutation = useMutation({
     mutationFn: (file: File) => {
       const fd = new FormData();
@@ -171,7 +171,6 @@ export default function InventarioPage() {
     setPendingFile(null);
   }
 
-  // Open edit modal when arriving from a low-stock notification
   useEffect(() => {
     const productId = searchParams.get('productId');
     if (!productId) return;
@@ -187,7 +186,7 @@ export default function InventarioPage() {
 
   return (
     <div
-      className="space-y-4 relative"
+      className="space-y-5 animate-fade-up relative"
       onDragOver={(e) => { if (isFree) return; e.preventDefault(); setIsDragOver(true); }}
       onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setIsDragOver(false); }}
       onDrop={(e) => {
@@ -198,69 +197,76 @@ export default function InventarioPage() {
         if (file) handleDroppedFile(file);
       }}
     >
+      {/* Drag overlay */}
       {isDragOver && (
-        <div className="pointer-events-none fixed inset-0 z-40 border-4 border-dashed border-blue-400 bg-blue-50/30 dark:bg-blue-900/20 rounded-xl flex items-center justify-center animate-fade-in">
-          <div className="bg-white dark:bg-gray-800 rounded-2xl px-8 py-6 shadow-xl flex flex-col items-center gap-3">
-            <FileUp size={36} className="text-blue-500" />
-            <p className="text-lg font-bold text-gray-800 dark:text-white">Suelta el archivo para importar</p>
-            <p className="text-sm text-gray-400">.xlsx · .xls · .csv</p>
+        <div className="pointer-events-none fixed inset-0 z-40 border-2 border-dashed border-blue-400 bg-blue-500/5 backdrop-blur-[2px] flex items-center justify-center">
+          <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-white/[0.08] rounded-2xl px-10 py-8 shadow-modal flex flex-col items-center gap-3">
+            <div className="w-14 h-14 rounded-2xl bg-blue-50 dark:bg-blue-500/10 flex items-center justify-center">
+              <FileUp size={26} className="text-blue-500" />
+            </div>
+            <p className="text-[15px] font-semibold text-slate-800 dark:text-white">Suelta para importar</p>
+            <p className="text-[13px] text-slate-400">.xlsx · .xls · .csv</p>
           </div>
         </div>
       )}
-      {/* Toolbar */}
+
+      {/* ── Toolbar ──────────────────────────────────────────────────────────── */}
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={15} />
           <input
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(1); }}
             placeholder="Buscar por nombre, código o código de barras..."
-            className="w-full pl-9 pr-4 py-2.5 border border-gray-200 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 dark:text-white"
+            className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition"
           />
         </div>
+
         {isFree ? (
           <button
             type="button"
             onClick={openUpgrade}
-            className="flex items-center gap-2 px-4 py-2.5 border border-gray-200 dark:border-gray-600 rounded-lg text-sm font-semibold text-gray-400 dark:text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition"
+            className="flex items-center gap-2 px-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-medium text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
           >
-            <FileDown size={16} />
+            <FileDown size={15} />
             Plantilla
-            <span className="ml-0.5 px-1.5 py-0.5 bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400 text-[10px] font-bold rounded-full leading-none">PRO</span>
+            <span className="px-1.5 py-0.5 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 text-[10px] font-bold rounded-full leading-none">PRO</span>
           </button>
         ) : (
           <a
             href={`${process.env.NEXT_PUBLIC_API_URL}/products/import-template`}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-2 px-4 py-2.5 border border-gray-200 dark:border-gray-600 rounded-lg text-sm font-semibold text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition"
+            className="flex items-center gap-2 px-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
           >
-            <FileDown size={16} /> Plantilla
+            <FileDown size={15} /> Plantilla
           </a>
         )}
+
         {isFree ? (
           <button
             type="button"
             onClick={openUpgrade}
-            className="flex items-center gap-2 px-4 py-2.5 border border-gray-200 dark:border-gray-600 rounded-lg text-sm font-semibold text-gray-400 dark:text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition"
+            className="flex items-center gap-2 px-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-medium text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
           >
-            <Lock size={15} />
+            <Lock size={14} />
             Importar Excel
-            <span className="ml-0.5 px-1.5 py-0.5 bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400 text-[10px] font-bold rounded-full leading-none">PRO</span>
+            <span className="px-1.5 py-0.5 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 text-[10px] font-bold rounded-full leading-none">PRO</span>
           </button>
         ) : (
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={previewMutation.isPending || importMutation.isPending}
-            className="flex items-center gap-2 px-4 py-2.5 border border-green-300 dark:border-green-700 rounded-lg text-sm font-semibold text-green-700 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 transition disabled:opacity-60"
+            className="flex items-center gap-2 px-4 py-2.5 border border-emerald-200 dark:border-emerald-700/50 rounded-xl text-sm font-medium text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 disabled:opacity-50 transition"
           >
             {(previewMutation.isPending || importMutation.isPending)
-              ? <Loader2 size={16} className="animate-spin" />
-              : <FileUp size={16} />}
+              ? <Loader2 size={15} className="animate-spin" />
+              : <FileUp size={15} />}
             Importar Excel
           </button>
         )}
+
         <input
           ref={fileInputRef}
           type="file"
@@ -277,102 +283,134 @@ export default function InventarioPage() {
             e.target.value = '';
           }}
         />
+
         <button
           type="button"
           onClick={() => { setEditItem(null); reset({ images: [], isActive: true }); setShowForm(true); }}
-          className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition"
+          className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 shadow-sm shadow-blue-600/25 transition"
         >
-          <Plus size={16} /> Nuevo producto
+          <Plus size={15} /> Nuevo producto
         </button>
       </div>
 
-      {/* Table */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 overflow-hidden">
+      {/* ── Products table ───────────────────────────────────────────────────── */}
+      <div className="card overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-xs text-gray-500 dark:text-gray-400 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50">
+              <tr className="border-b border-slate-100 dark:border-white/[0.06]">
                 <th className="w-14 px-4 py-3 sr-only">Imagen</th>
-                <th className="hidden sm:table-cell text-left px-4 py-3 font-medium">Código</th>
-                <th className="text-left px-4 py-3 font-medium">Nombre</th>
-                <th className="hidden md:table-cell text-left px-4 py-3 font-medium">Categoría</th>
-                <th className="hidden md:table-cell text-right px-4 py-3 font-medium">Costo</th>
-                <th className="text-right px-4 py-3 font-medium">Precio</th>
-                <th className="hidden lg:table-cell text-right px-4 py-3 font-medium">Margen</th>
-                <th className="text-center px-4 py-3 font-medium">Stock</th>
-                <th className="hidden sm:table-cell text-center px-4 py-3 font-medium">Estado</th>
-                <th className="w-20 sr-only">Acciones</th>
+                <th className="hidden sm:table-cell text-left px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Código</th>
+                <th className="text-left px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Nombre</th>
+                <th className="hidden md:table-cell text-left px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Categoría</th>
+                <th className="hidden md:table-cell text-right px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Costo</th>
+                <th className="text-right px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Precio</th>
+                <th className="hidden lg:table-cell text-right px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Margen</th>
+                <th className="text-center px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Stock</th>
+                <th className="hidden sm:table-cell text-center px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Estado</th>
+                <th className="w-24 sr-only">Acciones</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-50 dark:divide-gray-700">
+            <tbody className="divide-y divide-slate-50 dark:divide-white/[0.04]">
               {isLoading ? (
                 [...Array(5)].map((_, i) => (
                   <tr key={i}>
                     {[...Array(10)].map((_, j) => (
-                      <td key={j} className="px-4 py-3"><div className="h-4 bg-gray-100 dark:bg-gray-700 rounded animate-pulse" /></td>
+                      <td key={j} className="px-4 py-3">
+                        <div className="h-4 bg-slate-100 dark:bg-slate-800 rounded-lg animate-pulse" />
+                      </td>
                     ))}
                   </tr>
                 ))
               ) : products.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="text-center py-12 text-gray-400">
-                    <Package size={40} className="mx-auto mb-3 opacity-30" />
-                    <p>No hay productos</p>
+                  <td colSpan={10} className="text-center py-16">
+                    <div className="flex flex-col items-center gap-3 text-slate-400 dark:text-slate-600">
+                      <Package size={36} strokeWidth={1.5} />
+                      <p className="text-[13px]">No hay productos</p>
+                    </div>
                   </td>
                 </tr>
               ) : products.map((p: any) => {
                 const margin = p.costPrice > 0
                   ? (((p.salePrice - p.costPrice) / p.costPrice) * 100).toFixed(1)
                   : null;
+                const isLowStock = p.stock <= p.minStock;
                 return (
-                  <tr key={p.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition">
+                  <tr key={p.id} className="hover:bg-slate-50/60 dark:hover:bg-white/[0.02] transition-colors">
                     <td className="px-4 py-3">
                       {p.image ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={p.image} alt={p.name} className="w-10 h-10 rounded-lg object-cover border border-gray-100 dark:border-gray-600" />
+                        <img src={p.image} alt={p.name} className="w-10 h-10 rounded-xl object-cover border border-slate-100 dark:border-white/[0.06]" />
                       ) : (
-                        <div className="w-10 h-10 rounded-lg bg-gray-100 dark:bg-gray-700 flex items-center justify-center flex-shrink-0">
-                          <Package size={16} className="text-gray-300 dark:text-gray-500" />
+                        <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center flex-shrink-0">
+                          <Package size={16} className="text-slate-300 dark:text-slate-600" />
                         </div>
                       )}
                     </td>
-                    <td className="hidden sm:table-cell px-4 py-3 font-mono text-xs text-gray-500">{p.code}</td>
+                    <td className="hidden sm:table-cell px-4 py-3 font-mono text-[12px] text-slate-400 dark:text-slate-500">{p.code}</td>
                     <td className="px-4 py-3">
-                      <p className="font-medium text-gray-800 dark:text-white">{p.name}</p>
-                      {p.barcode && <p className="text-xs text-gray-400">{p.barcode}</p>}
+                      <p className="text-[13px] font-medium text-slate-800 dark:text-white">{p.name}</p>
+                      {p.barcode && <p className="text-[11px] text-slate-400 mt-0.5">{p.barcode}</p>}
                     </td>
-                    <td className="hidden md:table-cell px-4 py-3 text-gray-500">{p.category?.name || '-'}</td>
-                    <td className="hidden md:table-cell px-4 py-3 text-right text-gray-600">{formatCurrency(p.costPrice)}</td>
-                    <td className="px-4 py-3 text-right font-semibold text-gray-800 dark:text-white">{formatCurrency(p.salePrice)}</td>
+                    <td className="hidden md:table-cell px-4 py-3 text-[13px] text-slate-500 dark:text-slate-400">{p.category?.name || '—'}</td>
+                    <td className="hidden md:table-cell px-4 py-3 text-right text-[13px] text-slate-500 dark:text-slate-400 tabular-nums">{formatCurrency(p.costPrice)}</td>
+                    <td className="px-4 py-3 text-right text-[13px] font-semibold text-slate-900 dark:text-white tabular-nums">{formatCurrency(p.salePrice)}</td>
                     <td className="hidden lg:table-cell px-4 py-3 text-right">
                       {margin !== null ? (
-                        <span className={`text-xs font-semibold px-1.5 py-0.5 rounded ${parseFloat(margin) >= 20 ? 'text-green-700 bg-green-50' : parseFloat(margin) >= 0 ? 'text-yellow-700 bg-yellow-50' : 'text-red-700 bg-red-50'}`}>
+                        <span className={`badge ${
+                          parseFloat(margin) >= 20
+                            ? 'badge-green'
+                            : parseFloat(margin) >= 0
+                            ? 'badge-amber'
+                            : 'badge-red'
+                        }`}>
                           {margin}%
                         </span>
-                      ) : <span className="text-gray-300 text-xs">—</span>}
+                      ) : <span className="text-slate-300 dark:text-slate-600 text-[12px]">—</span>}
                     </td>
                     <td className="px-4 py-3 text-center">
-                      <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${
-                        p.stock <= p.minStock ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'
+                      <span className={`inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full ${
+                        isLowStock
+                          ? 'bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-400'
+                          : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400'
                       }`}>
-                        {p.stock <= p.minStock && <AlertTriangle size={11} />}
+                        {isLowStock && <AlertTriangle size={10} />}
                         {p.stock} {p.unit || ''}
                       </span>
                     </td>
                     <td className="hidden sm:table-cell px-4 py-3 text-center">
-                      <span className={`text-xs px-2 py-0.5 rounded-full ${p.isActive ? 'bg-green-50 text-green-600' : 'bg-gray-100 text-gray-500'}`}>
+                      <span className={`badge ${p.isActive ? 'badge-green' : 'badge-slate'}`}>
                         {p.isActive ? 'Activo' : 'Inactivo'}
                       </span>
                     </td>
                     <td className="px-4 py-3">
-                      <div className="flex items-center gap-2 justify-end">
-                        <button type="button" aria-label="Ajustar stock"
+                      <div className="flex items-center gap-1.5 justify-end">
+                        <button
+                          type="button"
+                          aria-label="Ajustar stock"
                           onClick={() => { setStockTarget(p); setStockForm({ quantity: String(p.stock), reason: '' }); }}
-                          className="text-gray-400 hover:text-green-600 transition" title="Ajustar stock">
-                          <ArrowUpDown size={15} />
+                          className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 transition"
+                          title="Ajustar stock"
+                        >
+                          <ArrowUpDown size={14} />
                         </button>
-                        <button type="button" aria-label="Editar producto" onClick={() => openEdit(p)} className="text-gray-400 hover:text-blue-600 transition"><Edit size={15} /></button>
-                        <button type="button" aria-label="Eliminar producto" onClick={() => setDeleteTarget(p)} className="text-gray-400 hover:text-red-600 transition"><Trash2 size={15} /></button>
+                        <button
+                          type="button"
+                          aria-label="Editar producto"
+                          onClick={() => openEdit(p)}
+                          className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-500/10 transition"
+                        >
+                          <Edit size={14} />
+                        </button>
+                        <button
+                          type="button"
+                          aria-label="Eliminar producto"
+                          onClick={() => setDeleteTarget(p)}
+                          className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 transition"
+                        >
+                          <Trash2 size={14} />
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -383,14 +421,26 @@ export default function InventarioPage() {
         </div>
 
         {pagination && pagination.totalPages > 1 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 dark:border-gray-700 text-sm text-gray-500">
+          <div className="flex items-center justify-between px-4 py-3 border-t border-slate-100 dark:border-white/[0.06] text-[13px] text-slate-500">
             <span>{pagination.total} productos</span>
             <div className="flex gap-2">
-              <button type="button" disabled={page === 1} onClick={() => setPage(p => p - 1)}
-                className="px-3 py-1 border border-gray-200 rounded-lg disabled:opacity-40 hover:bg-gray-50 transition">Anterior</button>
-              <span className="px-3 py-1">{page} / {pagination.totalPages}</span>
-              <button type="button" disabled={page === pagination.totalPages} onClick={() => setPage(p => p + 1)}
-                className="px-3 py-1 border border-gray-200 rounded-lg disabled:opacity-40 hover:bg-gray-50 transition">Siguiente</button>
+              <button
+                type="button"
+                disabled={page === 1}
+                onClick={() => setPage(p => p - 1)}
+                className="px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg disabled:opacity-40 hover:bg-slate-50 dark:hover:bg-slate-800 transition text-[12px]"
+              >
+                Anterior
+              </button>
+              <span className="px-3 py-1.5 text-slate-400">{page} / {pagination.totalPages}</span>
+              <button
+                type="button"
+                disabled={page === pagination.totalPages}
+                onClick={() => setPage(p => p + 1)}
+                className="px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg disabled:opacity-40 hover:bg-slate-50 dark:hover:bg-slate-800 transition text-[12px]"
+              >
+                Siguiente
+              </button>
             </div>
           </div>
         )}
@@ -398,65 +448,63 @@ export default function InventarioPage() {
 
       {/* ── Import Preview Modal ─────────────────────────────────────────────── */}
       {isPreviewOpen && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg flex flex-col max-h-[90vh]">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-[2px] z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/[0.08] rounded-2xl shadow-modal w-full max-w-lg flex flex-col max-h-[90vh] animate-scale-in">
 
-            {/* Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700">
-              <h2 className="font-semibold text-gray-800 dark:text-white flex items-center gap-2">
-                <FileUp size={18} className="text-blue-500" />
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-white/[0.06]">
+              <h2 className="text-[15px] font-semibold text-slate-800 dark:text-white flex items-center gap-2">
+                <FileUp size={16} className="text-blue-500" />
                 Vista previa de importación
               </h2>
-              <button type="button" aria-label="Cerrar" onClick={closePreview}
-                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition">
-                <X size={20} />
+              <button
+                type="button"
+                aria-label="Cerrar"
+                onClick={closePreview}
+                className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/[0.06] transition"
+              >
+                <X size={16} />
               </button>
             </div>
 
-            {/* Body */}
             {previewMutation.isPending ? (
-              /* Loading state */
               <div className="flex flex-col items-center justify-center py-16 gap-3">
-                <Loader2 size={36} className="animate-spin text-blue-500" />
-                <p className="text-sm text-gray-500 dark:text-gray-400">Analizando archivo...</p>
+                <Loader2 size={32} className="animate-spin text-blue-500" />
+                <p className="text-[13px] text-slate-500 dark:text-slate-400">Analizando archivo...</p>
               </div>
             ) : previewData ? (
               <div className="p-6 space-y-5 overflow-y-auto">
 
-                {/* Total */}
-                <p className="text-sm text-gray-600 dark:text-gray-400">
+                <p className="text-[13px] text-slate-600 dark:text-slate-400">
                   Se encontraron{' '}
-                  <span className="font-bold text-gray-800 dark:text-white">{previewData.total}</span>{' '}
+                  <span className="font-bold text-slate-800 dark:text-white">{previewData.total}</span>{' '}
                   producto{previewData.total !== 1 ? 's' : ''} en el archivo
                 </p>
 
-                {/* Stats */}
                 <div className="grid grid-cols-3 gap-3">
-                  <div className="bg-green-50 dark:bg-green-900/20 rounded-xl p-3 text-center">
-                    <p className="text-2xl font-bold text-green-700 dark:text-green-400">{previewData.valid}</p>
-                    <p className="text-xs text-green-600 dark:text-green-500 mt-0.5">Válidos</p>
+                  <div className="bg-emerald-50 dark:bg-emerald-500/10 rounded-xl p-3 text-center">
+                    <p className="text-[22px] font-bold text-emerald-700 dark:text-emerald-400 tabular-nums">{previewData.valid}</p>
+                    <p className="text-[11px] text-emerald-600 dark:text-emerald-500 mt-0.5 uppercase tracking-wide font-medium">Válidos</p>
                   </div>
-                  <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-3 text-center">
-                    <p className="text-2xl font-bold text-blue-700 dark:text-blue-400">{previewData.toCreate}</p>
-                    <p className="text-xs text-blue-600 dark:text-blue-500 mt-0.5">Nuevos</p>
+                  <div className="bg-blue-50 dark:bg-blue-500/10 rounded-xl p-3 text-center">
+                    <p className="text-[22px] font-bold text-blue-700 dark:text-blue-400 tabular-nums">{previewData.toCreate}</p>
+                    <p className="text-[11px] text-blue-600 dark:text-blue-500 mt-0.5 uppercase tracking-wide font-medium">Nuevos</p>
                   </div>
-                  <div className="bg-violet-50 dark:bg-violet-900/20 rounded-xl p-3 text-center">
-                    <p className="text-2xl font-bold text-violet-700 dark:text-violet-400">{previewData.toUpdate}</p>
-                    <p className="text-xs text-violet-600 dark:text-violet-500 mt-0.5">Actualizan</p>
+                  <div className="bg-violet-50 dark:bg-violet-500/10 rounded-xl p-3 text-center">
+                    <p className="text-[22px] font-bold text-violet-700 dark:text-violet-400 tabular-nums">{previewData.toUpdate}</p>
+                    <p className="text-[11px] text-violet-600 dark:text-violet-500 mt-0.5 uppercase tracking-wide font-medium">Actualizan</p>
                   </div>
                 </div>
 
-                {/* Detected columns */}
                 <div>
-                  <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">
+                  <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide mb-2">
                     Columnas reconocidas ({previewData.detectedColumns.length})
                   </p>
                   <div className="flex flex-wrap gap-1.5">
                     {previewData.detectedColumns.map(({ field, header }) => (
                       <span
                         key={field}
-                        className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 text-xs rounded-full font-medium"
                         title={`Campo: ${fieldLabel[field] ?? field}`}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 text-[11px] rounded-full font-medium"
                       >
                         <CheckCircle2 size={10} />
                         {header}
@@ -465,32 +513,31 @@ export default function InventarioPage() {
                   </div>
                 </div>
 
-                {/* Issues */}
                 {previewData.issues.length > 0 && (
                   <div>
-                    <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">
+                    <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide mb-2">
                       {previewData.issues.filter(i => i.type === 'error').length > 0 && (
                         <span className="text-red-500">{previewData.issues.filter(i => i.type === 'error').length} error{previewData.issues.filter(i => i.type === 'error').length > 1 ? 'es' : ''}</span>
                       )}
                       {previewData.issues.filter(i => i.type === 'error').length > 0 && previewData.issues.filter(i => i.type === 'warning').length > 0 && ' · '}
                       {previewData.issues.filter(i => i.type === 'warning').length > 0 && (
-                        <span className="text-yellow-600">{previewData.issues.filter(i => i.type === 'warning').length} advertencia{previewData.issues.filter(i => i.type === 'warning').length > 1 ? 's' : ''}</span>
+                        <span className="text-amber-500">{previewData.issues.filter(i => i.type === 'warning').length} advertencia{previewData.issues.filter(i => i.type === 'warning').length > 1 ? 's' : ''}</span>
                       )}
                     </p>
-                    <div className="rounded-xl border border-gray-100 dark:border-gray-700 divide-y divide-gray-100 dark:divide-gray-700 max-h-44 overflow-y-auto text-xs">
+                    <div className="rounded-xl border border-slate-100 dark:border-white/[0.06] divide-y divide-slate-100 dark:divide-white/[0.04] max-h-44 overflow-y-auto text-[12px]">
                       {previewData.issues.map((issue, i) => (
                         <div
                           key={i}
                           className={`flex gap-2 items-start px-3 py-2 ${
                             issue.type === 'error'
-                              ? 'bg-red-50 dark:bg-red-900/10'
-                              : 'bg-yellow-50 dark:bg-yellow-900/10'
+                              ? 'bg-red-50 dark:bg-red-500/10'
+                              : 'bg-amber-50 dark:bg-amber-500/10'
                           }`}
                         >
-                          <span className={`font-mono flex-shrink-0 font-semibold ${issue.type === 'error' ? 'text-red-500' : 'text-yellow-600'}`}>
+                          <span className={`font-mono flex-shrink-0 font-semibold ${issue.type === 'error' ? 'text-red-500' : 'text-amber-500'}`}>
                             Fila {issue.row}
                           </span>
-                          <span className={`min-w-0 ${issue.type === 'error' ? 'text-red-700 dark:text-red-300' : 'text-yellow-700 dark:text-yellow-300'}`}>
+                          <span className={`min-w-0 ${issue.type === 'error' ? 'text-red-700 dark:text-red-300' : 'text-amber-700 dark:text-amber-300'}`}>
                             {issue.type === 'warning' ? '⚠ ' : '✕ '}
                             <span className="font-medium">{issue.name}</span> — {issue.message}
                           </span>
@@ -498,7 +545,7 @@ export default function InventarioPage() {
                       ))}
                     </div>
                     {previewData.issues.some(i => i.type === 'error') && (
-                      <p className="text-xs text-gray-400 mt-1.5">
+                      <p className="text-[11px] text-slate-400 mt-1.5">
                         Las filas con error no se importarán. Las advertencias sí se incluyen.
                       </p>
                     )}
@@ -506,23 +553,22 @@ export default function InventarioPage() {
                 )}
 
                 {previewData.valid === 0 && (
-                  <div className="bg-red-50 dark:bg-red-900/20 rounded-xl p-4 text-center">
-                    <p className="text-sm text-red-700 dark:text-red-300 font-medium">
+                  <div className="bg-red-50 dark:bg-red-500/10 border border-red-100 dark:border-red-500/20 rounded-xl p-4 text-center">
+                    <p className="text-[13px] text-red-700 dark:text-red-300 font-medium">
                       No hay filas válidas para importar.
                     </p>
-                    <p className="text-xs text-red-500 mt-1">Revisa los errores y corrige el archivo.</p>
+                    <p className="text-[12px] text-red-500 mt-1">Revisa los errores y corrige el archivo.</p>
                   </div>
                 )}
               </div>
             ) : null}
 
-            {/* Footer */}
             {!previewMutation.isPending && previewData && (
-              <div className="flex gap-3 px-6 pb-5 pt-3 border-t border-gray-100 dark:border-gray-700">
+              <div className="flex gap-3 px-6 pb-5 pt-4 border-t border-slate-100 dark:border-white/[0.06]">
                 <button
                   type="button"
                   onClick={closePreview}
-                  className="flex-1 px-4 py-2.5 border border-gray-200 dark:border-gray-600 rounded-xl text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-700 transition"
+                  className="flex-1 px-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-xl text-[13px] font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
                 >
                   Cancelar
                 </button>
@@ -530,7 +576,7 @@ export default function InventarioPage() {
                   type="button"
                   disabled={previewData.valid === 0 || importMutation.isPending}
                   onClick={() => pendingFile && importMutation.mutate(pendingFile)}
-                  className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 disabled:opacity-60 transition flex items-center justify-center gap-2"
+                  className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-xl text-[13px] font-semibold hover:bg-blue-700 disabled:opacity-50 shadow-sm shadow-blue-600/25 transition flex items-center justify-center gap-2"
                 >
                   {importMutation.isPending
                     ? <><Loader2 size={14} className="animate-spin" /> Importando...</>
@@ -556,14 +602,20 @@ export default function InventarioPage() {
 
       {/* ── Product Form Modal ───────────────────────────────────────────────── */}
       {showForm && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-800 z-10">
-              <h2 className="text-lg font-semibold text-gray-800 dark:text-white">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-[2px] z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/[0.08] rounded-2xl shadow-modal w-full max-w-4xl max-h-[90vh] overflow-y-auto animate-scale-in">
+
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-white/[0.06] sticky top-0 bg-white dark:bg-slate-900 z-10">
+              <h2 className="text-[16px] font-semibold text-slate-800 dark:text-white">
                 {editItem ? 'Editar producto' : 'Nuevo producto'}
               </h2>
-              <button type="button" aria-label="Cerrar" onClick={() => { setShowForm(false); setEditItem(null); }} className="text-gray-400 hover:text-gray-600 transition">
-                <X size={20} />
+              <button
+                type="button"
+                aria-label="Cerrar"
+                onClick={() => { setShowForm(false); setEditItem(null); }}
+                className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/[0.06] transition"
+              >
+                <X size={16} />
               </button>
             </div>
 
@@ -571,7 +623,7 @@ export default function InventarioPage() {
 
               {/* ── Columna izquierda ──────────────────── */}
               <div className="space-y-4">
-                <h3 className="text-sm font-bold text-gray-800 dark:text-white">Datos del producto</h3>
+                <h3 className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide">Datos del producto</h3>
 
                 <Controller
                   name="images"
@@ -583,38 +635,30 @@ export default function InventarioPage() {
                 />
 
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Código *</label>
+                  <label className="block text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5">Código *</label>
                   <div className="relative">
-                    <Barcode className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={15} />
+                    <Barcode className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
                     <input
                       {...register('code')}
-                      placeholder="Escanea o escribe el código del producto"
-                      className="w-full pl-9 pr-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                      placeholder="Escanea o escribe el código"
+                      className="w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Código de barras</label>
-                  <input
-                    {...register('barcode')}
-                    placeholder="7701234567890"
-                    className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-                  />
+                  <label className="block text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5">Código de barras</label>
+                  <input {...register('barcode')} placeholder="7701234567890" className={inputCls} />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Nombre del producto *</label>
-                  <input
-                    {...register('name')}
-                    placeholder="Camiseta, perfume, aretes..."
-                    className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-                  />
+                  <label className="block text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5">Nombre del producto *</label>
+                  <input {...register('name')} placeholder="Camiseta, perfume, aretes..." className={inputCls} />
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+                    <label className="block text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5">
                       Cantidad disponible
                       {editItem && <span className="ml-1 text-amber-500">*</span>}
                     </label>
@@ -623,77 +667,53 @@ export default function InventarioPage() {
                       type="number"
                       placeholder="0"
                       readOnly={!!editItem}
-                      className={`w-full px-3 py-2 border rounded-lg text-sm focus:outline-none dark:text-white ${
+                      className={`w-full px-3 py-2.5 border rounded-xl text-sm focus:outline-none dark:text-white transition ${
                         editItem
-                          ? 'border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/50 text-gray-400 dark:text-gray-500 cursor-not-allowed'
-                          : 'border-gray-200 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 dark:bg-gray-700'
+                          ? 'border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/50 text-slate-400 dark:text-slate-500 cursor-not-allowed'
+                          : 'bg-slate-50 border-slate-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 dark:bg-slate-800 dark:border-slate-700'
                       }`}
                     />
                     {editItem && (
                       <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-1 flex items-center gap-1">
-                        <ArrowUpDown size={10} /> Usa el botón de ajuste en la fila del producto
+                        <ArrowUpDown size={10} /> Usa el botón de ajuste en la fila
                       </p>
                     )}
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Cantidad mínima</label>
-                    <input
-                      {...register('minStock', { valueAsNumber: true })}
-                      type="number"
-                      placeholder="5"
-                      className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-                    />
+                    <label className="block text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5">Cantidad mínima</label>
+                    <input {...register('minStock', { valueAsNumber: true })} type="number" placeholder="5" className={inputCls} />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Precio de venta *</label>
-                    <input
-                      {...register('salePrice', { valueAsNumber: true })}
-                      type="number"
-                      placeholder="0"
-                      className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-                    />
+                    <label className="block text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5">Precio de venta *</label>
+                    <input {...register('salePrice', { valueAsNumber: true })} type="number" placeholder="0" className={inputCls} />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Costo</label>
-                    <input
-                      {...register('costPrice', { valueAsNumber: true })}
-                      type="number"
-                      placeholder="0"
-                      className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-                    />
+                    <label className="block text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5">Costo</label>
+                    <input {...register('costPrice', { valueAsNumber: true })} type="number" placeholder="0" className={inputCls} />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Precio mayorista</label>
-                    <input
-                      {...register('wholesalePrice', { valueAsNumber: true })}
-                      type="number"
-                      placeholder="0"
-                      className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-                    />
+                    <label className="block text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5">Precio mayorista</label>
+                    <input {...register('wholesalePrice', { valueAsNumber: true })} type="number" placeholder="0" className={inputCls} />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Unidad</label>
-                    <input
-                      {...register('unit')}
-                      placeholder="und, kg, lt..."
-                      className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-                    />
+                    <label className="block text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5">Unidad</label>
+                    <input {...register('unit')} placeholder="und, kg, lt..." className={inputCls} />
                   </div>
                 </div>
               </div>
 
               {/* ── Columna derecha ──────────────────── */}
-              <div className="space-y-4 md:border-l md:border-gray-100 md:dark:border-gray-700 md:pl-8">
-                <h3 className="text-sm font-bold text-gray-800 dark:text-white">Información adicional</h3>
+              <div className="space-y-4 md:border-l md:border-slate-100 md:dark:border-white/[0.06] md:pl-8">
+                <h3 className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide">Información adicional</h3>
 
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Categoría</label>
+                  <label className="block text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5">Categoría</label>
                   <Controller
                     name="categoryId"
                     control={control}
@@ -705,46 +725,48 @@ export default function InventarioPage() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Descripción</label>
+                  <label className="block text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5">Descripción</label>
                   <textarea
                     {...register('description')}
                     rows={3}
                     placeholder="Añadir una descripción ayudará a identificar mejor el producto"
-                    className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white resize-none"
+                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition resize-none"
                   />
                 </div>
 
                 <div>
-                  <h4 className="text-xs font-bold text-gray-700 dark:text-gray-300 mb-2">Impuestos del producto</h4>
-                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">IVA (%)</label>
-                  <input
-                    {...register('taxRate', { valueAsNumber: true })}
-                    type="number"
-                    placeholder="0"
-                    className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-                  />
+                  <h4 className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide mb-3">Impuestos</h4>
+                  <label className="block text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5">IVA (%)</label>
+                  <input {...register('taxRate', { valueAsNumber: true })} type="number" placeholder="0" className={inputCls} />
                 </div>
 
-                <div className="flex items-center gap-3 pt-1">
-                  <input type="checkbox" id="isActive" {...register('isActive')} className="w-4 h-4 accent-blue-600" defaultChecked />
-                  <label htmlFor="isActive" className="text-sm text-gray-600 dark:text-gray-300">Producto activo</label>
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <input type="checkbox" id="allowNegativeStock" {...register('allowNegativeStock')} className="w-4 h-4 accent-blue-600" />
-                  <label htmlFor="allowNegativeStock" className="text-sm text-gray-600 dark:text-gray-300">Permitir stock negativo</label>
+                <div className="space-y-3 pt-1">
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input type="checkbox" id="isActive" {...register('isActive')} defaultChecked className="w-4 h-4 accent-blue-600 rounded" />
+                    <span className="text-[13px] text-slate-600 dark:text-slate-300">Producto activo</span>
+                  </label>
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input type="checkbox" id="allowNegativeStock" {...register('allowNegativeStock')} className="w-4 h-4 accent-blue-600 rounded" />
+                    <span className="text-[13px] text-slate-600 dark:text-slate-300">Permitir stock negativo</span>
+                  </label>
                 </div>
               </div>
 
-              <div className="md:col-span-2 flex justify-end gap-3 pt-4 border-t border-gray-100 dark:border-gray-700">
-                <button type="button" onClick={() => { setShowForm(false); setEditItem(null); }}
-                  className="px-4 py-2 border border-gray-200 rounded-lg text-sm hover:bg-gray-50 transition">
+              <div className="md:col-span-2 flex justify-end gap-3 pt-4 border-t border-slate-100 dark:border-white/[0.06]">
+                <button
+                  type="button"
+                  onClick={() => { setShowForm(false); setEditItem(null); }}
+                  className="px-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-xl text-[13px] font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+                >
                   Cancelar
                 </button>
-                <button type="submit" disabled={isSubmitting || saveMutation.isPending}
-                  className="px-6 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 disabled:opacity-60 transition flex items-center gap-2">
+                <button
+                  type="submit"
+                  disabled={isSubmitting || saveMutation.isPending}
+                  className="px-6 py-2.5 bg-blue-600 text-white rounded-xl text-[13px] font-semibold hover:bg-blue-700 disabled:opacity-50 shadow-sm shadow-blue-600/25 transition flex items-center gap-2"
+                >
                   {(isSubmitting || saveMutation.isPending) && <Loader2 size={14} className="animate-spin" />}
-                  {editItem ? 'Actualizar' : 'Crear'}
+                  {editItem ? 'Actualizar' : 'Crear producto'}
                 </button>
               </div>
             </form>
@@ -770,50 +792,54 @@ export default function InventarioPage() {
         }
 
         return (
-          <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4"
-            onClick={() => setStockTarget(null)}>
-            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm"
-              onClick={(e) => e.stopPropagation()}>
-
-              {/* Header */}
-              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700">
+          <div
+            className="fixed inset-0 bg-black/50 backdrop-blur-[2px] z-50 flex items-center justify-center p-4"
+            onClick={() => setStockTarget(null)}
+          >
+            <div
+              className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/[0.08] rounded-2xl shadow-modal w-full max-w-sm animate-scale-in"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-white/[0.06]">
                 <div>
-                  <h2 className="font-semibold text-gray-800 dark:text-white">Motivos de la edición</h2>
-                  <p className="text-xs text-gray-400 mt-0.5">Registra el motivo para tu historial de inventario</p>
+                  <h2 className="text-[15px] font-semibold text-slate-800 dark:text-white">Ajustar stock</h2>
+                  <p className="text-[12px] text-slate-400 mt-0.5">Registra el motivo en tu historial</p>
                 </div>
-                <button type="button" aria-label="Cerrar" onClick={() => setStockTarget(null)}
-                  className="w-7 h-7 flex items-center justify-center rounded-full bg-gray-100 dark:bg-gray-700 text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-600 transition">
+                <button
+                  type="button"
+                  aria-label="Cerrar"
+                  onClick={() => setStockTarget(null)}
+                  className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/[0.06] transition"
+                >
                   <X size={14} />
                 </button>
               </div>
 
               <div className="p-6 space-y-5">
-                {/* Producto + indicador de cambio */}
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-10 h-10 rounded-xl bg-gray-100 dark:bg-gray-700 flex items-center justify-center flex-shrink-0 overflow-hidden">
+                    <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center flex-shrink-0 overflow-hidden">
                       {stockTarget.image
                         ? <img src={stockTarget.image} alt="" className="w-full h-full object-cover" />
-                        : <Package size={18} className="text-gray-400" />}
+                        : <Package size={18} className="text-slate-400" />}
                     </div>
-                    <span className="text-sm font-medium text-gray-800 dark:text-white truncate">{stockTarget.name}</span>
+                    <span className="text-[13px] font-medium text-slate-800 dark:text-white truncate">{stockTarget.name}</span>
                   </div>
                   {hasChange && (
-                    <div className="flex items-center gap-1.5 flex-shrink-0 text-sm font-semibold">
-                      <span className="text-gray-400 line-through tabular-nums">{stockTarget.stock}</span>
-                      <ArrowRight size={13} className="text-gray-400" />
-                      <span className={newQty! > stockTarget.stock ? 'text-green-600' : 'text-red-500'}>
+                    <div className="flex items-center gap-1.5 flex-shrink-0 text-[13px] font-semibold">
+                      <span className="text-slate-400 line-through tabular-nums">{stockTarget.stock}</span>
+                      <ArrowRight size={12} className="text-slate-400" />
+                      <span className={newQty! > stockTarget.stock ? 'text-emerald-600' : 'text-red-500'}>
                         {newQty}
                       </span>
                     </div>
                   )}
                 </div>
 
-                {/* Input cantidad */}
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">
+                  <label className="block text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5">
                     Nueva cantidad
-                    <span className="ml-1.5 text-gray-400 font-normal">— actual: {stockTarget.stock} {stockTarget.unit || ''}</span>
+                    <span className="ml-1.5 text-slate-400 font-normal">— actual: {stockTarget.stock} {stockTarget.unit || ''}</span>
                   </label>
                   <input
                     type="number"
@@ -821,25 +847,24 @@ export default function InventarioPage() {
                     step="any"
                     value={stockForm.quantity}
                     onChange={(e) => setStockForm((f) => ({ ...f, quantity: e.target.value }))}
-                    className="w-full px-3 py-2.5 border border-gray-200 dark:border-gray-600 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 dark:bg-gray-700 dark:text-white"
+                    className={inputCls}
                     placeholder={String(stockTarget.stock)}
                     autoFocus
                   />
                 </div>
 
-                {/* Chips de motivo */}
                 <div>
-                  <p className="text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2.5">Selecciona un motivo</p>
+                  <p className="text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-2.5">Selecciona un motivo</p>
                   <div className="flex flex-wrap gap-2">
                     {REASONS.map((r) => (
                       <button
                         key={r}
                         type="button"
                         onClick={() => setStockForm((f) => ({ ...f, reason: f.reason === r ? '' : r }))}
-                        className={`px-3 py-1.5 rounded-full border text-xs transition ${
+                        className={`px-3 py-1.5 rounded-full border text-[12px] transition ${
                           stockForm.reason === r
-                            ? 'border-gray-800 bg-gray-800 text-white dark:border-gray-200 dark:bg-gray-200 dark:text-gray-900'
-                            : 'border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:border-gray-400'
+                            ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-400 dark:bg-blue-500/10 dark:text-blue-400'
+                            : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-600'
                         }`}
                       >
                         {r}
@@ -849,24 +874,23 @@ export default function InventarioPage() {
                 </div>
               </div>
 
-              {/* Acciones */}
               <div className="flex gap-3 px-6 pb-5">
                 <button
                   type="button"
                   disabled={!isValid || adjustMutation.isPending}
                   onClick={() => handleConfirm(true)}
-                  className="flex-1 py-2.5 border border-gray-200 dark:border-gray-600 rounded-xl text-sm font-semibold hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 transition"
+                  className="flex-1 py-2.5 border border-slate-200 dark:border-slate-700 rounded-xl text-[13px] font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 transition"
                 >
-                  Omitir
+                  Omitir motivo
                 </button>
                 <button
                   type="button"
                   disabled={!isValid || !stockForm.reason || adjustMutation.isPending}
                   onClick={() => handleConfirm(false)}
-                  className="flex-1 py-2.5 bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 rounded-xl text-sm font-semibold hover:bg-gray-700 dark:hover:bg-gray-300 disabled:opacity-40 transition flex items-center justify-center gap-2"
+                  className="flex-1 py-2.5 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-xl text-[13px] font-semibold hover:bg-slate-700 dark:hover:bg-slate-100 disabled:opacity-40 transition flex items-center justify-center gap-2"
                 >
                   {adjustMutation.isPending && <Loader2 size={14} className="animate-spin" />}
-                  Confirmar cambios
+                  Confirmar
                 </button>
               </div>
             </div>
@@ -874,42 +898,50 @@ export default function InventarioPage() {
         );
       })()}
 
-      {/* ── Import Results Modal (post-import) ──────────────────────────────── */}
+      {/* ── Import Results Modal ─────────────────────────────────────────────── */}
       {importResult && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
-          onClick={() => setImportResult(null)}>
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md max-h-[80vh] flex flex-col"
-            onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700">
-              <h2 className="font-semibold text-gray-800 dark:text-white flex items-center gap-2">
-                <CheckCircle2 size={18} className="text-green-500" /> Importación completada
+        <div
+          className="fixed inset-0 bg-black/50 backdrop-blur-[2px] z-50 flex items-center justify-center p-4"
+          onClick={() => setImportResult(null)}
+        >
+          <div
+            className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/[0.08] rounded-2xl shadow-modal w-full max-w-md max-h-[80vh] flex flex-col animate-scale-in"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-white/[0.06]">
+              <h2 className="text-[15px] font-semibold text-slate-800 dark:text-white flex items-center gap-2">
+                <CheckCircle2 size={16} className="text-emerald-500" /> Importación completada
               </h2>
-              <button type="button" aria-label="Cerrar" onClick={() => setImportResult(null)}
-                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
-                <X size={20} />
+              <button
+                type="button"
+                aria-label="Cerrar"
+                onClick={() => setImportResult(null)}
+                className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/[0.06] transition"
+              >
+                <X size={16} />
               </button>
             </div>
 
             <div className="p-6 space-y-4 overflow-y-auto">
               <div className="grid grid-cols-2 gap-3">
-                <div className="bg-green-50 dark:bg-green-900/20 rounded-xl p-4 text-center">
-                  <p className="text-2xl font-bold text-green-700 dark:text-green-400">{importResult.imported}</p>
-                  <p className="text-xs text-green-600 dark:text-green-500 mt-0.5">Productos creados</p>
+                <div className="bg-emerald-50 dark:bg-emerald-500/10 rounded-xl p-4 text-center">
+                  <p className="text-[22px] font-bold text-emerald-700 dark:text-emerald-400 tabular-nums">{importResult.imported}</p>
+                  <p className="text-[11px] text-emerald-600 dark:text-emerald-500 mt-0.5 uppercase tracking-wide font-medium">Creados</p>
                 </div>
-                <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-4 text-center">
-                  <p className="text-2xl font-bold text-blue-700 dark:text-blue-400">{importResult.updated}</p>
-                  <p className="text-xs text-blue-600 dark:text-blue-500 mt-0.5">Productos actualizados</p>
+                <div className="bg-blue-50 dark:bg-blue-500/10 rounded-xl p-4 text-center">
+                  <p className="text-[22px] font-bold text-blue-700 dark:text-blue-400 tabular-nums">{importResult.updated}</p>
+                  <p className="text-[11px] text-blue-600 dark:text-blue-500 mt-0.5 uppercase tracking-wide font-medium">Actualizados</p>
                 </div>
               </div>
 
               {importResult.errors.length > 0 && (
                 <div>
-                  <p className="text-xs font-semibold text-red-600 mb-2">
+                  <p className="text-[11px] font-semibold text-red-600 mb-2 uppercase tracking-wide">
                     {importResult.errors.length} fila{importResult.errors.length > 1 ? 's' : ''} con error:
                   </p>
-                  <div className="bg-red-50 dark:bg-red-900/20 rounded-lg divide-y divide-red-100 dark:divide-red-800 max-h-48 overflow-y-auto">
+                  <div className="bg-red-50 dark:bg-red-500/10 border border-red-100 dark:border-red-500/20 rounded-xl divide-y divide-red-100 dark:divide-red-500/10 max-h-48 overflow-y-auto">
                     {importResult.errors.map((e, i) => (
-                      <div key={i} className="px-3 py-2 flex gap-2 text-xs">
+                      <div key={i} className="px-3 py-2 flex gap-2 text-[12px]">
                         <span className="font-mono text-red-400 flex-shrink-0">Fila {e.row}</span>
                         <span className="text-red-700 dark:text-red-300">{e.message}</span>
                       </div>
@@ -919,13 +951,16 @@ export default function InventarioPage() {
               )}
 
               {importResult.imported === 0 && importResult.updated === 0 && importResult.errors.length === 0 && (
-                <p className="text-sm text-gray-400 text-center">El archivo no contenía filas válidas.</p>
+                <p className="text-[13px] text-slate-400 text-center py-2">El archivo no contenía filas válidas.</p>
               )}
             </div>
 
             <div className="px-6 pb-5">
-              <button type="button" onClick={() => setImportResult(null)}
-                className="w-full py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 transition">
+              <button
+                type="button"
+                onClick={() => setImportResult(null)}
+                className="w-full py-2.5 bg-blue-600 text-white rounded-xl text-[13px] font-semibold hover:bg-blue-700 shadow-sm shadow-blue-600/25 transition"
+              >
                 Entendido
               </button>
             </div>
