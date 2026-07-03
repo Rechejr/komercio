@@ -6,7 +6,7 @@ import toast from 'react-hot-toast';
 import Link from 'next/link';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
-import { Loader2, Store, Eye, EyeOff, Check, X } from 'lucide-react';
+import { Loader2, Eye, EyeOff, Check, X } from 'lucide-react';
 
 // ── Business categories ───────────────────────────────────────────────────────
 const CATEGORIES = [
@@ -190,9 +190,7 @@ export default function RegisterPage() {
 
           {/* Logo */}
           <Link href="/" className="flex items-center gap-3 group">
-            <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-lg">
-              <Store size={22} className="text-blue-600" />
-            </div>
+            <img src="/ventrix-logo.svg" alt="Ventrix" width={40} height={40} className="w-10 h-10 drop-shadow-lg" draggable={false} />
             <span className="text-white font-bold text-2xl tracking-tight">Ventrix</span>
           </Link>
 
@@ -222,9 +220,7 @@ export default function RegisterPage() {
             {/* Mobile header */}
             <div className="flex items-center justify-between mb-8 lg:hidden">
               <div className="flex items-center gap-2">
-                <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-                  <Store size={16} className="text-white" />
-                </div>
+                <img src="/ventrix-logo.svg" alt="Ventrix" width={32} height={32} className="w-8 h-8" draggable={false} />
                 <span className="font-bold text-gray-900">Ventrix</span>
               </div>
               <div className="flex items-center gap-1.5">

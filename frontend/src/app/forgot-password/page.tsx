@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
-import { Store, ArrowLeft, Loader2, Mail, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, Loader2, Mail, CheckCircle2 } from 'lucide-react';
 
 export default function ForgotPasswordPage() {
   const [email, setEmail]       = useState('');
@@ -39,9 +39,7 @@ export default function ForgotPasswordPage() {
         <div className="absolute -bottom-20 -left-20 w-72 h-72 rounded-full bg-white/5 pointer-events-none" />
 
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-lg">
-            <Store size={22} className="text-blue-600" />
-          </div>
+          <img src="/ventrix-logo.svg" alt="Ventrix" width={40} height={40} className="w-10 h-10 drop-shadow-lg" draggable={false} />
           <span className="text-white font-bold text-2xl tracking-tight">Ventrix</span>
         </div>
 
@@ -64,9 +62,7 @@ export default function ForgotPasswordPage() {
 
           {/* Mobile logo */}
           <div className="flex items-center gap-2 mb-8 lg:hidden">
-            <div className="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center">
-              <Store size={18} className="text-white" />
-            </div>
+            <img src="/ventrix-logo.svg" alt="Ventrix" width={36} height={36} className="w-9 h-9" draggable={false} />
             <span className="font-bold text-xl text-gray-900 tracking-tight">Ventrix</span>
           </div>
 

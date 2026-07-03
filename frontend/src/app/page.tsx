@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { BarChart3, Package, ShoppingCart, Check, Store } from 'lucide-react';
+import { BarChart3, Package, ShoppingCart, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 // ── Feature slides ────────────────────────────────────────────────────────────
@@ -161,9 +161,7 @@ export default function LandingPage() {
 
         {/* Logo */}
         <div className="flex items-center gap-3 relative z-10">
-          <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-lg">
-            <Store size={22} className="text-blue-600" />
-          </div>
+          <img src="/ventrix-logo.svg" alt="Ventrix" width={40} height={40} className="w-10 h-10 drop-shadow-lg" draggable={false} />
           <span className="text-white font-bold text-2xl tracking-tight">Ventrix</span>
         </div>
 
@@ -206,9 +204,7 @@ export default function LandingPage() {
       <div className="flex-1 flex flex-col items-center justify-center bg-white p-8 min-h-screen lg:min-h-0">
         {/* Mobile logo */}
         <div className="flex items-center gap-2 mb-10 lg:hidden">
-          <div className="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center">
-            <Store size={18} className="text-white" />
-          </div>
+          <img src="/ventrix-logo.svg" alt="Ventrix" width={36} height={36} className="w-9 h-9" draggable={false} />
           <span className="font-bold text-xl text-gray-900 tracking-tight">Ventrix</span>
         </div>
 
