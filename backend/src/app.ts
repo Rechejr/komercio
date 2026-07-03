@@ -57,8 +57,8 @@ app.use(cors({
     if (isDev && origin && /^http:\/\/(192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\.)\d+\.\d+(:\d+)?$/.test(origin)) {
       return callback(null, true);
     }
-    const allowed = process.env.CORS_ORIGIN?.split(',') || [];
-    const ok = !!origin && allowed.includes(origin);
+    const allowed = (process.env.CORS_ORIGIN?.split(',') || []).map(s => s.trim());
+    const ok = !origin || allowed.includes(origin);
     callback(ok ? null : new Error('CORS'), ok);
   },
   credentials: true,
