@@ -16,10 +16,10 @@ async function generateInvoiceNumber(tx: any, branchId: string | null): Promise<
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(74296518)`;
   }
 
-  const date = new Date();
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
+  const coDate = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Bogota' }));
+  const y = coDate.getFullYear();
+  const m = String(coDate.getMonth() + 1).padStart(2, '0');
+  const d = String(coDate.getDate()).padStart(2, '0');
   const prefix = `FAC-${y}${m}${d}-`;
 
   // Scoped to this branch: each branch has its own independent daily sequence.
@@ -316,9 +316,16 @@ export const saleController = {
 
       // Registrar ingreso en caja abierta para ventas en efectivo (best effort)
       try {
-        if ((paymentMethod === 'CASH' || !paymentMethod) && sale.branchId) {
-          const netCash = Number(sale.paidAmount) - Number(sale.changeAmount);
-          if (netCash > 0) {
+        if (sale.branchId) {
+          let cashAmount = 0;
+          if (paymentMethod === 'CASH' || !paymentMethod) {
+            cashAmount = Number(sale.paidAmount) - Number(sale.changeAmount);
+          } else if (paymentMethod === 'MIXED') {
+            const splits: Array<{ method: string; amount: number }> = (sale.paymentDetails as any)?.splits || [];
+            const cashSplit = splits.find((s) => s.method === 'CASH');
+            cashAmount = cashSplit ? Number(cashSplit.amount) : 0;
+          }
+          if (cashAmount > 0) {
             const openRegister = await prisma.cashRegister.findFirst({
               where: { branchId: sale.branchId, status: 'OPEN' },
             });
@@ -327,7 +334,7 @@ export const saleController = {
                 data: {
                   cashRegisterId: openRegister.id,
                   type: 'IN',
-                  amount: netCash,
+                  amount: cashAmount,
                   description: `Venta ${sale.invoiceNumber}`,
                   referenceId: sale.id,
                 },

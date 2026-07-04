@@ -46,10 +46,10 @@ export default function ReportesPage() {
     end.setHours(23, 59, 59, 999);
     const start = new Date();
     start.setHours(0, 0, 0, 0);
-    if      (period === '7d')   start.setDate(start.getDate() - 7);
-    else if (period === '30d')  start.setDate(start.getDate() - 30);
-    else if (period === '90d')  start.setDate(start.getDate() - 90);
-    else                        start.setFullYear(start.getFullYear() - 1);
+    if      (period === '7d')   start.setDate(start.getDate() - 6);
+    else if (period === '30d')  start.setDate(start.getDate() - 29);
+    else if (period === '90d')  start.setDate(start.getDate() - 89);
+    else                        start.setDate(start.getDate() - 364);
     return { startDate: start.toISOString(), endDate: end.toISOString() };
   };
 
@@ -86,7 +86,7 @@ export default function ReportesPage() {
       {profitData && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           {[
-            { label: 'Ingresos',        value: formatCurrency(profitData.revenue),     icon: DollarSign,  bg: 'bg-blue-50 dark:bg-blue-500/10',   ic: 'text-blue-600 dark:text-blue-400'   },
+            { label: 'Ingresos netos',   value: formatCurrency(profitData.revenue),     icon: DollarSign,  bg: 'bg-blue-50 dark:bg-blue-500/10',   ic: 'text-blue-600 dark:text-blue-400'   },
             { label: 'Costo mercancía', value: formatCurrency(profitData.cogs),        icon: TrendingDown, bg: 'bg-red-50 dark:bg-red-500/10',     ic: 'text-red-600 dark:text-red-400'     },
             { label: 'Utilidad bruta',  value: formatCurrency(profitData.grossProfit), icon: TrendingUp,   bg: 'bg-emerald-50 dark:bg-emerald-500/10', ic: 'text-emerald-600 dark:text-emerald-400' },
             { label: 'Utilidad neta',   value: formatCurrency(profitData.netProfit),   icon: DollarSign,  bg: 'bg-indigo-50 dark:bg-indigo-500/10', ic: 'text-indigo-600 dark:text-indigo-400' },

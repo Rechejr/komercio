@@ -33,7 +33,7 @@ export default function ConfiguracionPage() {
   });
 
   const { register: regBusiness, handleSubmit: handleBusiness, formState: { isSubmitting: savingBusiness } } = useForm({ values: business });
-  const { register: regPwd, handleSubmit: handlePwd, reset: resetPwd, formState: { isSubmitting: savingPwd } } = useForm();
+  const { register: regPwd, handleSubmit: handlePwd, reset: resetPwd, watch: watchPwd, formState: { isSubmitting: savingPwd } } = useForm();
 
   const businessMutation = useMutation({
     mutationFn: (data: any) => api.put('/business/me', data),
@@ -171,20 +171,26 @@ export default function ConfiguracionPage() {
           </div>
           <h2 className="text-[14px] font-semibold text-slate-800 dark:text-white">Cambiar contraseña</h2>
         </div>
-        <form onSubmit={handlePwd((d: any) => pwdMutation.mutate(d))} className="p-6 space-y-4">
-          {[
-            { name: 'currentPassword', label: 'Contraseña actual',  min: 1 },
-            { name: 'newPassword',     label: 'Nueva contraseña',   min: 8 },
-          ].map((f) => (
-            <div key={f.name}>
-              <label className="block text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5">{f.label}</label>
-              <input
-                {...regPwd(f.name, { required: 'Campo requerido', minLength: { value: f.min, message: `Mínimo ${f.min} caracteres` } })}
-                type="password"
-                className={inputCls}
-              />
-            </div>
-          ))}
+        <form onSubmit={handlePwd((d: any) => { const { confirmNewPassword: _, ...body } = d; pwdMutation.mutate(body); })} className="p-6 space-y-4">
+          <div>
+            <label className="block text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5">Contraseña actual</label>
+            <input {...regPwd('currentPassword', { required: 'Campo requerido', minLength: { value: 1, message: 'Mínimo 1 carácter' } })} type="password" className={inputCls} />
+          </div>
+          <div>
+            <label className="block text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5">Nueva contraseña</label>
+            <input {...regPwd('newPassword', { required: 'Campo requerido', minLength: { value: 8, message: 'Mínimo 8 caracteres' } })} type="password" className={inputCls} />
+          </div>
+          <div>
+            <label className="block text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5">Confirmar nueva contraseña</label>
+            <input
+              {...regPwd('confirmNewPassword', {
+                required: 'Campo requerido',
+                validate: (v: string) => v === watchPwd('newPassword') || 'Las contraseñas no coinciden',
+              })}
+              type="password"
+              className={inputCls}
+            />
+          </div>
           <div className="flex justify-end border-t border-slate-100 dark:border-white/[0.06] pt-4">
             <button
               type="submit"

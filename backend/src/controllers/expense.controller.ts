@@ -50,6 +50,28 @@ export const expenseController = {
           recipientPhone: recipientPhone || null,
         },
       });
+      // Registrar egreso en caja abierta cuando se paga en efectivo (best effort)
+      if (paymentMethod === 'CASH') {
+        try {
+          const branchId = req.user!.branchId;
+          if (branchId) {
+            const openRegister = await prisma.cashRegister.findFirst({
+              where: { branchId, status: 'OPEN' },
+            });
+            if (openRegister) {
+              await prisma.cashMovement.create({
+                data: {
+                  cashRegisterId: openRegister.id,
+                  type: 'OUT',
+                  amount: parseFloat(amount),
+                  description: description || 'Gasto',
+                  referenceId: expense.id,
+                },
+              });
+            }
+          }
+        } catch { /* no debe fallar el gasto */ }
+      }
       return created(res, expense, 'Gasto registrado');
     } catch (err) { next(err); }
   },

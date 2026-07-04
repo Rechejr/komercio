@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { api } from '@/lib/api';
 import toast from 'react-hot-toast';
-import { Plus, Search, Edit, Truck, X, Loader2, Phone } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, Truck, X, Loader2, Phone } from 'lucide-react';
 
 const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition';
 
@@ -45,6 +45,16 @@ export default function ProveedoresPage() {
       setShowForm(false); setEditItem(null); reset();
     },
     onError: (err: any) => toast.error(err.response?.data?.error || 'Error'),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => api.delete(`/suppliers/${id}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['suppliers'] });
+      qc.invalidateQueries({ queryKey: ['suppliers-list'] });
+      toast.success('Proveedor eliminado');
+    },
+    onError: (err: any) => toast.error(err.response?.data?.error || 'Error al eliminar'),
   });
 
   const suppliers = data?.data || [];
@@ -140,14 +150,24 @@ export default function ProveedoresPage() {
                     {s._count?.products || 0}
                   </td>
                   <td className="px-4 py-3">
-                    <button
-                      type="button"
-                      aria-label="Editar proveedor"
-                      onClick={() => { setEditItem(s); reset(s); setShowForm(true); }}
-                      className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-500/10 transition"
-                    >
-                      <Edit size={14} />
-                    </button>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        aria-label="Editar proveedor"
+                        onClick={() => { setEditItem(s); reset(s); setShowForm(true); }}
+                        className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-500/10 transition"
+                      >
+                        <Edit size={14} />
+                      </button>
+                      <button
+                        type="button"
+                        aria-label="Eliminar proveedor"
+                        onClick={() => { if (window.confirm(`¿Eliminar a "${s.name}"?`)) deleteMutation.mutate(s.id); }}
+                        className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 transition"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

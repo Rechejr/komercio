@@ -7,7 +7,7 @@ import { PriceInput } from '@/components/ui/PriceInput';
 import { api } from '@/lib/api';
 import { formatCurrency, formatDate, formatDateTime, statusColor, statusLabel } from '@/lib/utils';
 import toast from 'react-hot-toast';
-import { CreditCard, X, Loader2, Plus, DollarSign, ChevronRight, Clock } from 'lucide-react';
+import { CreditCard, X, Loader2, Plus, DollarSign, ChevronRight, Clock, Search } from 'lucide-react';
 
 const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition';
 
@@ -18,6 +18,7 @@ export default function CreditosPage() {
   const [selected, setSelected] = useState<any>(null);
   const [showPayment, setShowPayment] = useState(false);
   const [showDetail, setShowDetail] = useState(false);
+  const [showNewCredit, setShowNewCredit] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ['credits', statusFilter, page],
@@ -31,17 +32,39 @@ export default function CreditosPage() {
   });
 
   const { register, handleSubmit, reset, control, formState: { errors: payErrors } } = useForm();
+  const { register: regNew, handleSubmit: handleNew, reset: resetNew, control: controlNew, formState: { errors: newErrors } } = useForm();
+
+  const [customerSearch, setCustomerSearch] = useState('');
+  const { data: customersData } = useQuery({
+    queryKey: ['customers-list', customerSearch],
+    queryFn: () => api.get(`/customers?limit=20&search=${encodeURIComponent(customerSearch)}`).then((r) => r.data),
+  });
+  const customerList = customersData?.data || [];
 
   const paymentMutation = useMutation({
     mutationFn: ({ creditId, ...data }: any) => api.post(`/credits/${creditId}/payments`, data),
     onSuccess: (_res: any, { creditId }: any) => {
       qc.invalidateQueries({ queryKey: ['credits'] });
       qc.invalidateQueries({ queryKey: ['credit', creditId] });
+      qc.invalidateQueries({ queryKey: ['customers'] });
       toast.success('Pago registrado');
       setShowPayment(false);
       reset();
     },
     onError: (err: any) => toast.error(err.response?.data?.error || 'Error al registrar pago'),
+  });
+
+  const newCreditMutation = useMutation({
+    mutationFn: (data: any) => api.post('/credits', data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['credits'] });
+      qc.invalidateQueries({ queryKey: ['customers'] });
+      toast.success('Crédito creado');
+      setShowNewCredit(false);
+      resetNew();
+      setCustomerSearch('');
+    },
+    onError: (err: any) => toast.error(err.response?.data?.error || 'Error al crear crédito'),
   });
 
   const credits = data?.data || [];
@@ -67,6 +90,13 @@ export default function CreditosPage() {
           <option value="OVERDUE">Vencidos</option>
           <option value="PAID">Pagados</option>
         </select>
+        <button
+          type="button"
+          onClick={() => { setShowNewCredit(true); resetNew(); setCustomerSearch(''); }}
+          className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 shadow-sm shadow-blue-600/25 transition ml-auto"
+        >
+          <Plus size={15} /> Nuevo crédito
+        </button>
       </div>
 
       {/* ── Tabla ─────────────────────────────────────────────────────────────── */}
@@ -256,6 +286,77 @@ export default function CreditosPage() {
                 )}
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── New Credit Modal ─────────────────────────────────────────────────── */}
+      {showNewCredit && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-[2px] z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/[0.08] rounded-2xl shadow-modal w-full max-w-sm animate-scale-in">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-white/[0.06]">
+              <h2 className="text-[15px] font-semibold text-slate-800 dark:text-white">Nuevo crédito manual</h2>
+              <button
+                type="button"
+                aria-label="Cerrar"
+                onClick={() => { setShowNewCredit(false); resetNew(); }}
+                className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/[0.06] transition"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <form onSubmit={handleNew((d: any) => newCreditMutation.mutate(d))} className="p-6 space-y-4">
+              <div>
+                <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5 block">Cliente *</label>
+                <div className="relative mb-2">
+                  <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    value={customerSearch}
+                    onChange={(e) => setCustomerSearch(e.target.value)}
+                    placeholder="Buscar cliente..."
+                    className={`${inputCls} pl-8`}
+                  />
+                </div>
+                <select
+                  {...regNew('customerId', { required: 'Selecciona un cliente' })}
+                  className={inputCls}
+                  size={4}
+                >
+                  {customerList.map((c: any) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+                {newErrors.customerId && <p className="text-[11px] text-red-500 mt-1">{newErrors.customerId.message as string}</p>}
+              </div>
+              <div>
+                <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5 block">Monto total *</label>
+                <Controller
+                  control={controlNew}
+                  name="totalAmount"
+                  rules={{ required: 'El monto es obligatorio', min: { value: 0.01, message: 'Debe ser mayor a 0' } }}
+                  render={({ field }) => (
+                    <PriceInput {...field} onChange={(n) => field.onChange(n ?? 0)} className={inputCls} placeholder="0" />
+                  )}
+                />
+                {newErrors.totalAmount && <p className="text-[11px] text-red-500 mt-1">{newErrors.totalAmount.message as string}</p>}
+              </div>
+              <div>
+                <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5 block">Fecha de vencimiento</label>
+                <input {...regNew('dueDate')} type="date" className={inputCls} />
+              </div>
+              <div>
+                <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5 block">Notas</label>
+                <input {...regNew('notes')} type="text" className={inputCls} placeholder="Descripción del crédito..." />
+              </div>
+              <button
+                type="submit"
+                disabled={newCreditMutation.isPending}
+                className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-semibold py-2.5 rounded-xl shadow-sm shadow-blue-600/20 transition flex items-center justify-center gap-2 text-[13px]"
+              >
+                {newCreditMutation.isPending ? <Loader2 size={15} className="animate-spin" /> : <CreditCard size={15} />}
+                Crear crédito
+              </button>
+            </form>
           </div>
         </div>
       )}

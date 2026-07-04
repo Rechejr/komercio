@@ -56,7 +56,7 @@ router.post('/', authorize('ADMIN'), planLimit.users(), async (req: any, res, ne
 
     const hashed = await bcrypt.hash(password, 12);
     const user = await prisma.user.create({
-      data: { name, email, password: hashed, role, branchId },
+      data: { name, email, password: hashed, role, branchId, isEmailVerified: true },
       select: { id: true, name: true, email: true, role: true },
     });
     return created(res, user, 'Usuario creado');
