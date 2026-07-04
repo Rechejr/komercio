@@ -1,7 +1,10 @@
 import { Response, NextFunction } from 'express';
 import { prisma } from '../config/database';
+import { cache } from '../config/redis';
 import { success } from '../utils/response';
 import { AuthRequest } from '../middlewares/auth';
+
+const REPORT_TTL = 300; // 5 min — suficiente frescura para analítica
 
 export const reportController = {
   async salesReport(req: AuthRequest, res: Response, next: NextFunction) {
@@ -9,8 +12,15 @@ export const reportController = {
       const { startDate, endDate, groupBy = 'day' } = req.query;
       const businessId = req.user!.businessId!;
 
-      const start = startDate ? new Date(startDate as string) : new Date(new Date().setDate(1));
-      const end = endDate ? new Date(endDate as string) : new Date();
+      const startStr = (startDate as string) || new Date(new Date().setDate(1)).toISOString().split('T')[0];
+      const endStr = (endDate as string) || new Date().toISOString().split('T')[0];
+      const cacheKey = `report:sales:${businessId}:${startStr}:${endStr}:${groupBy}`;
+
+      const cached = await cache.get<object>(cacheKey);
+      if (cached) return success(res, cached);
+
+      const start = new Date(startStr);
+      const end = new Date(endStr);
 
       let groupFormat = 'YYYY-MM-DD';
       if (groupBy === 'week') groupFormat = 'YYYY-WW';
@@ -48,12 +58,11 @@ export const reportController = {
       const grossRevenue = Number(totals._sum.total || 0);
       const taxCollected = Number(totals._sum.taxAmount || 0);
 
-      return success(res, {
+      const data = {
         period: { start, end },
         chart: sales.map((s: any) => ({
           period: s.period,
           grossRevenue: Number(s.gross_revenue ?? 0),
-          // net_revenue = total − IVA = ingresos reales del negocio (sin IVA)
           netRevenue: Number(s.net_revenue ?? 0),
           count: Number(s.count ?? 0),
           taxes: Number(s.taxes ?? 0),
@@ -66,7 +75,10 @@ export const reportController = {
           discounts: Number(totals._sum.discountAmount || 0),
           count: totals._count.id,
         },
-      });
+      };
+
+      await cache.set(cacheKey, data, REPORT_TTL);
+      return success(res, data);
     } catch (err) {
       next(err);
     }
@@ -76,8 +88,17 @@ export const reportController = {
     try {
       const { startDate, endDate, limit = '10' } = req.query;
       const businessId = req.user!.businessId!;
-      const start = startDate ? new Date(startDate as string) : new Date(new Date().setDate(1));
-      const end = endDate ? new Date(endDate as string) : new Date();
+
+      const startStr = (startDate as string) || new Date(new Date().setDate(1)).toISOString().split('T')[0];
+      const endStr = (endDate as string) || new Date().toISOString().split('T')[0];
+      const limitNum = Math.min(50, Math.max(1, parseInt(limit as string) || 10));
+      const cacheKey = `report:top-products:${businessId}:${startStr}:${endStr}:${limitNum}`;
+
+      const cached = await cache.get<object[]>(cacheKey);
+      if (cached) return success(res, cached);
+
+      const start = new Date(startStr);
+      const end = new Date(endStr);
 
       const top = await prisma.saleDetail.groupBy({
         by: ['productId'],
@@ -89,10 +110,9 @@ export const reportController = {
             branch: { businessId },
           },
         },
-        // subtotal = ingresos netos ex-IVA por línea; total incluye IVA (no es ingreso del negocio)
         _sum: { quantity: true, subtotal: true, total: true },
         orderBy: { _sum: { subtotal: 'desc' } },
-        take: Math.min(50, Math.max(1, parseInt(limit as string) || 10)),
+        take: limitNum,
       });
 
       const productIds = top.map((t) => t.productId);
@@ -102,12 +122,15 @@ export const reportController = {
       });
       const productMap = new Map(products.map((p) => [p.id, p]));
 
-      return success(res, top.map((t) => ({
+      const data = top.map((t) => ({
         product: productMap.get(t.productId),
         totalQty: Number(t._sum.quantity ?? 0),
         totalRevenue: Number(t._sum.subtotal ?? 0),
         totalGross: Number(t._sum.total ?? 0),
-      })));
+      }));
+
+      await cache.set(cacheKey, data, REPORT_TTL);
+      return success(res, data);
     } catch (err) {
       next(err);
     }
@@ -117,8 +140,17 @@ export const reportController = {
     try {
       const { startDate, endDate, limit = '10' } = req.query;
       const businessId = req.user!.businessId!;
-      const start = startDate ? new Date(startDate as string) : new Date(new Date().setDate(1));
-      const end = endDate ? new Date(endDate as string) : new Date();
+
+      const startStr = (startDate as string) || new Date(new Date().setDate(1)).toISOString().split('T')[0];
+      const endStr = (endDate as string) || new Date().toISOString().split('T')[0];
+      const limitNum = Math.min(50, Math.max(1, parseInt(limit as string) || 10));
+      const cacheKey = `report:top-customers:${businessId}:${startStr}:${endStr}:${limitNum}`;
+
+      const cached = await cache.get<object[]>(cacheKey);
+      if (cached) return success(res, cached);
+
+      const start = new Date(startStr);
+      const end = new Date(endStr);
 
       const top = await prisma.sale.groupBy({
         by: ['customerId'],
@@ -132,7 +164,7 @@ export const reportController = {
         _sum: { total: true },
         _count: { id: true },
         orderBy: { _sum: { total: 'desc' } },
-        take: Math.min(50, Math.max(1, parseInt(limit as string) || 10)),
+        take: limitNum,
       });
 
       const customerIds = top.map((t) => t.customerId!);
@@ -142,11 +174,14 @@ export const reportController = {
       });
       const customerMap = new Map(customers.map((c) => [c.id, c]));
 
-      return success(res, top.map((t) => ({
+      const data = top.map((t) => ({
         customer: customerMap.get(t.customerId!),
         totalPurchases: Number(t._sum.total ?? 0),
         visitCount: t._count.id,
-      })));
+      }));
+
+      await cache.set(cacheKey, data, REPORT_TTL);
+      return success(res, data);
     } catch (err) {
       next(err);
     }
@@ -156,8 +191,16 @@ export const reportController = {
     try {
       const { startDate, endDate } = req.query;
       const businessId = req.user!.businessId!;
-      const start = startDate ? new Date(startDate as string) : new Date(new Date().setDate(1));
-      const end = endDate ? new Date(endDate as string) : new Date();
+
+      const startStr = (startDate as string) || new Date(new Date().setDate(1)).toISOString().split('T')[0];
+      const endStr = (endDate as string) || new Date().toISOString().split('T')[0];
+      const cacheKey = `report:profit:${businessId}:${startStr}:${endStr}`;
+
+      const cached = await cache.get<object>(cacheKey);
+      if (cached) return success(res, cached);
+
+      const start = new Date(startStr);
+      const end = new Date(endStr);
 
       const [revenueData, expenseData, cogsResult] = await Promise.all([
         prisma.sale.aggregate({
@@ -186,31 +229,31 @@ export const reportController = {
       ]);
 
       // IVA cobrado es un pasivo tributario, no ingreso del negocio.
-      // revenue = total − IVA = subtotal − descuentoGlobal (ingresos netos reales).
       const grossRevenue = Number(revenueData._sum.total || 0);
       const taxCollected = Number(revenueData._sum.taxAmount || 0);
       const discountsGiven = Number(revenueData._sum.discountAmount || 0);
-      const revenue = grossRevenue - taxCollected;        // ingresos netos ex-IVA
-
-      // COGS = costPrice histórico × cantidad (snapshotted en sale_details al momento de la venta)
+      const revenue = grossRevenue - taxCollected;
       const cogs = Number(cogsResult[0]?.cogs || 0);
       const grossProfit = revenue - cogs;
       const expenses = Number(expenseData._sum.amount || 0);
       const netProfit = grossProfit - expenses;
 
-      return success(res, {
+      const data = {
         period: { start, end },
-        grossRevenue,                   // total facturado al cliente (incl. IVA)
-        taxCollected,                   // IVA recaudado (pasivo DIAN, no ingreso)
-        discountsGiven,                 // descuentos otorgados
-        revenue,                        // ingresos netos ex-IVA
-        cogs,                           // costo de mercancía vendida (costo histórico)
+        grossRevenue,
+        taxCollected,
+        discountsGiven,
+        revenue,
+        cogs,
         grossProfit,
         grossMargin: revenue > 0 ? Number(((grossProfit / revenue) * 100).toFixed(2)) : 0,
-        expenses,                       // gastos operativos del período
+        expenses,
         netProfit,
         netMargin: revenue > 0 ? Number(((netProfit / revenue) * 100).toFixed(2)) : 0,
-      });
+      };
+
+      await cache.set(cacheKey, data, REPORT_TTL);
+      return success(res, data);
     } catch (err) {
       next(err);
     }

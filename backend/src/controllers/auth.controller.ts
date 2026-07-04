@@ -333,8 +333,8 @@ export const authController = {
 
   async me(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const user = await prisma.user.findUnique({
-        where: { id: req.user!.userId },
+      const user = await prisma.user.findFirst({
+        where: { id: req.user!.userId, isActive: true, deletedAt: null },
         select: {
           id: true, name: true, email: true, phone: true,
           role: true, avatar: true, isEmailVerified: true,

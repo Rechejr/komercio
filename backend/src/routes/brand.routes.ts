@@ -12,6 +12,7 @@ router.get('/', async (req: AuthRequest, res, next) => {
     const brands = await prisma.brand.findMany({
       where: { deletedAt: null, businessId: req.user!.businessId },
       orderBy: { name: 'asc' },
+      take: 500,
     });
     return success(res, brands);
   } catch (err) { next(err); }

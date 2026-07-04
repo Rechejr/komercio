@@ -52,6 +52,7 @@
     "pdfkit": "^0.15.0",
     "prisma": "^5.10.0",
     "qrcode": "^1.5.3",
+    "rate-limit-redis": "^5.0.0",
     "sharp": "^0.33.2",
     "socket.io": "^4.7.4",
     "typescript": "^5.4.2",

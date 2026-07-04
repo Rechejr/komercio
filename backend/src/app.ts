@@ -5,10 +5,24 @@ import morgan from 'morgan';
 import compression from 'compression';
 import cookieParser from 'cookie-parser';
 import { rateLimit } from 'express-rate-limit';
+import { RedisStore } from 'rate-limit-redis';
 
 import { errorHandler } from './middlewares/errorHandler';
 import { notFound } from './middlewares/notFound';
 import { logger } from './config/logger';
+import { redis } from './config/redis';
+
+// Rate-limit Redis store — only when REDIS_URL is set; falls back to memory store otherwise
+function makeRateLimitStore() {
+  if (!process.env.REDIS_URL) return undefined;
+  return new RedisStore({
+    sendCommand: (...args: string[]) =>
+      redis.call(args[0], ...args.slice(1)) as Promise<number>,
+    prefix: 'rl:',
+  });
+}
+
+const rateLimitStore = makeRateLimitStore();
 
 // Routes
 import authRoutes from './routes/auth.routes';
@@ -76,6 +90,7 @@ const limiter = rateLimit({
   max: Number(process.env.RATE_LIMIT_MAX) || (process.env.NODE_ENV === 'production' ? 100 : 500),
   standardHeaders: true,
   legacyHeaders: false,
+  store: rateLimitStore,
   message: { error: 'Demasiadas solicitudes, intente de nuevo más tarde.' },
 });
 app.use('/api/', limiter);
@@ -87,6 +102,7 @@ const authLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   skipSuccessfulRequests: true,
+  store: rateLimitStore,
   message: { error: 'Demasiados intentos, espere 15 minutos antes de reintentar.' },
 });
 
