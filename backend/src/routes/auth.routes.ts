@@ -7,7 +7,7 @@ import { validate } from '../middlewares/validate';
 
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 5,
+  max: process.env.NODE_ENV === 'test' ? 1_000 : 5,
   standardHeaders: true,
   legacyHeaders: false,
   skipSuccessfulRequests: true,

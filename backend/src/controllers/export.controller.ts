@@ -6,6 +6,7 @@ import { AuthRequest } from '../middlewares/auth';
 
 const MAX_EXPORT_DAYS = 366;
 const MAX_EXPORT_ROWS = 50_000;
+const BATCH_SIZE = 1_000;
 
 function parseDate(val: unknown, fallback: Date): Date {
   if (typeof val === 'string' && val) {
@@ -24,20 +25,19 @@ function fmtMoney(n: unknown): number {
   return Number(n || 0);
 }
 
-async function sendExcel(res: Response, wb: ExcelJS.Workbook, filename: string) {
+function initStreamWriter(res: Response, filename: string) {
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-  await wb.xlsx.write(res);
-  res.end();
+  return new ExcelJS.stream.xlsx.WorkbookWriter({ stream: res });
 }
 
-function styleHeader(ws: ExcelJS.Worksheet) {
-  const headerRow = ws.getRow(1);
-  headerRow.font = { bold: true };
-  headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2563EB' } };
-  headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-  headerRow.alignment = { vertical: 'middle' };
-  headerRow.height = 18;
+function styleHeaderStream(ws: ExcelJS.Worksheet) {
+  const row = ws.getRow(1);
+  row.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+  row.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2563EB' } };
+  row.alignment = { vertical: 'middle' };
+  row.height = 18;
+  row.commit();
 }
 
 export const exportController = {
@@ -52,22 +52,10 @@ export const exportController = {
         return next(new AppError(`El rango de exportación no puede superar ${MAX_EXPORT_DAYS} días`, 400));
       }
 
-      const sales = await prisma.sale.findMany({
-        where: { createdAt: { gte: start, lte: end }, deletedAt: null, branch: { businessId: req.user!.businessId } },
-        orderBy: { createdAt: 'asc' },
-        take: MAX_EXPORT_ROWS,
-        include: {
-          customer: { select: { name: true } },
-          user: { select: { name: true } },
-          details: { include: { product: { select: { name: true, code: true } } } },
-        },
-      });
+      const start0 = start.toISOString().split('T')[0];
+      const end0 = end.toISOString().split('T')[0];
+      const wb = initStreamWriter(res, `ventas-${start0}-${end0}.xlsx`);
 
-      const wb = new ExcelJS.Workbook();
-      wb.creator = 'Komercio';
-      wb.created = new Date();
-
-      // Sheet 1: Summary
       const ws1 = wb.addWorksheet('Ventas');
       ws1.columns = [
         { header: 'N° Factura',     key: 'invoice',  width: 20 },
@@ -81,23 +69,8 @@ export const exportController = {
         { header: 'IVA ($)',        key: 'tax',      width: 14 },
         { header: 'Total ($)',      key: 'total',    width: 16 },
       ];
-      styleHeader(ws1);
-      for (const s of sales) {
-        ws1.addRow({
-          invoice: s.invoiceNumber,
-          date: fmtDate(s.createdAt),
-          customer: s.customer?.name || 'Mostrador',
-          seller: s.user?.name || '',
-          method: String(s.paymentMethod),
-          status: s.status,
-          subtotal: fmtMoney(s.subtotal),
-          discount: fmtMoney(s.discountAmount),
-          tax: fmtMoney(s.taxAmount),
-          total: fmtMoney(s.total),
-        });
-      }
+      styleHeaderStream(ws1);
 
-      // Sheet 2: Detail
       const ws2 = wb.addWorksheet('Detalle productos');
       ws2.columns = [
         { header: 'N° Factura',       key: 'invoice',  width: 20 },
@@ -110,26 +83,63 @@ export const exportController = {
         { header: 'Desc. %',          key: 'disc',     width: 10 },
         { header: 'Total Línea ($)',  key: 'lineTotal', width: 18 },
       ];
-      styleHeader(ws2);
-      for (const s of sales) {
-        for (const d of s.details) {
-          ws2.addRow({
+      styleHeaderStream(ws2);
+
+      const where = { createdAt: { gte: start, lte: end }, deletedAt: null, branch: { businessId: req.user!.businessId } };
+      let lastId: string | undefined;
+      let fetched = 0;
+
+      while (fetched < MAX_EXPORT_ROWS) {
+        const batch = await prisma.sale.findMany({
+          where,
+          orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+          take: Math.min(BATCH_SIZE, MAX_EXPORT_ROWS - fetched),
+          ...(lastId ? { skip: 1, cursor: { id: lastId } } : {}),
+          include: {
+            customer: { select: { name: true } },
+            user: { select: { name: true } },
+            details: { include: { product: { select: { name: true, code: true } } } },
+          },
+        });
+
+        if (batch.length === 0) break;
+
+        for (const s of batch) {
+          ws1.addRow({
             invoice: s.invoiceNumber,
             date: fmtDate(s.createdAt),
             customer: s.customer?.name || 'Mostrador',
-            code: d.product?.code || '',
-            product: d.product?.name || '',
-            qty: d.quantity,
-            price: fmtMoney(d.unitPrice),
-            disc: d.discountPct,
-            lineTotal: fmtMoney(d.total),
-          });
+            seller: s.user?.name || '',
+            method: String(s.paymentMethod),
+            status: s.status,
+            subtotal: fmtMoney(s.subtotal),
+            discount: fmtMoney(s.discountAmount),
+            tax: fmtMoney(s.taxAmount),
+            total: fmtMoney(s.total),
+          }).commit();
+          for (const d of s.details) {
+            ws2.addRow({
+              invoice: s.invoiceNumber,
+              date: fmtDate(s.createdAt),
+              customer: s.customer?.name || 'Mostrador',
+              code: d.product?.code || '',
+              product: d.product?.name || '',
+              qty: d.quantity,
+              price: fmtMoney(d.unitPrice),
+              disc: d.discountPct,
+              lineTotal: fmtMoney(d.total),
+            }).commit();
+          }
         }
+
+        fetched += batch.length;
+        lastId = batch[batch.length - 1].id;
+        if (batch.length < BATCH_SIZE) break;
       }
 
-      const start0 = start.toISOString().split('T')[0];
-      const end0 = end.toISOString().split('T')[0];
-      await sendExcel(res, wb, `ventas-${start0}-${end0}.xlsx`);
+      ws1.commit();
+      ws2.commit();
+      await wb.commit();
     } catch (err) { next(err); }
   },
 
@@ -144,19 +154,9 @@ export const exportController = {
         return next(new AppError(`El rango de exportación no puede superar ${MAX_EXPORT_DAYS} días`, 400));
       }
 
-      const purchases = await prisma.purchase.findMany({
-        where: { purchaseDate: { gte: start, lte: end }, deletedAt: null, businessId: req.user!.businessId },
-        orderBy: { purchaseDate: 'asc' },
-        take: MAX_EXPORT_ROWS,
-        include: {
-          supplier: { select: { name: true } },
-          details: { include: { product: { select: { name: true, code: true } } } },
-        },
-      });
-
-      const wb = new ExcelJS.Workbook();
-      wb.creator = 'Komercio';
-      wb.created = new Date();
+      const start0 = start.toISOString().split('T')[0];
+      const end0 = end.toISOString().split('T')[0];
+      const wb = initStreamWriter(res, `compras-${start0}-${end0}.xlsx`);
 
       const ws1 = wb.addWorksheet('Compras');
       ws1.columns = [
@@ -169,19 +169,7 @@ export const exportController = {
         { header: 'Total ($)',           key: 'total',    width: 16 },
         { header: 'Notas',               key: 'notes',    width: 30 },
       ];
-      styleHeader(ws1);
-      for (const p of purchases) {
-        ws1.addRow({
-          invoice: p.invoiceNumber || '',
-          date: fmtDate(p.purchaseDate),
-          supplier: p.supplier?.name || '',
-          items: p.details.length,
-          subtotal: fmtMoney(p.subtotal),
-          tax: fmtMoney(p.taxAmount),
-          total: fmtMoney(p.total),
-          notes: p.notes || '',
-        });
-      }
+      styleHeaderStream(ws1);
 
       const ws2 = wb.addWorksheet('Detalle productos');
       ws2.columns = [
@@ -195,26 +183,60 @@ export const exportController = {
         { header: 'IVA %',               key: 'taxRate',  width: 10 },
         { header: 'Total Línea ($)',     key: 'lineTotal', width: 18 },
       ];
-      styleHeader(ws2);
-      for (const p of purchases) {
-        for (const d of p.details) {
-          ws2.addRow({
+      styleHeaderStream(ws2);
+
+      const where = { purchaseDate: { gte: start, lte: end }, deletedAt: null, businessId: req.user!.businessId };
+      let lastId: string | undefined;
+      let fetched = 0;
+
+      while (fetched < MAX_EXPORT_ROWS) {
+        const batch = await prisma.purchase.findMany({
+          where,
+          orderBy: [{ purchaseDate: 'asc' }, { id: 'asc' }],
+          take: Math.min(BATCH_SIZE, MAX_EXPORT_ROWS - fetched),
+          ...(lastId ? { skip: 1, cursor: { id: lastId } } : {}),
+          include: {
+            supplier: { select: { name: true } },
+            details: { include: { product: { select: { name: true, code: true } } } },
+          },
+        });
+
+        if (batch.length === 0) break;
+
+        for (const p of batch) {
+          ws1.addRow({
             invoice: p.invoiceNumber || '',
             date: fmtDate(p.purchaseDate),
             supplier: p.supplier?.name || '',
-            code: d.product?.code || '',
-            product: d.product?.name || '',
-            qty: d.quantity,
-            cost: fmtMoney(d.unitCost),
-            taxRate: d.taxRate,
-            lineTotal: fmtMoney(d.total),
-          });
+            items: p.details.length,
+            subtotal: fmtMoney(p.subtotal),
+            tax: fmtMoney(p.taxAmount),
+            total: fmtMoney(p.total),
+            notes: p.notes || '',
+          }).commit();
+          for (const d of p.details) {
+            ws2.addRow({
+              invoice: p.invoiceNumber || '',
+              date: fmtDate(p.purchaseDate),
+              supplier: p.supplier?.name || '',
+              code: d.product?.code || '',
+              product: d.product?.name || '',
+              qty: d.quantity,
+              cost: fmtMoney(d.unitCost),
+              taxRate: d.taxRate,
+              lineTotal: fmtMoney(d.total),
+            }).commit();
+          }
         }
+
+        fetched += batch.length;
+        lastId = batch[batch.length - 1].id;
+        if (batch.length < BATCH_SIZE) break;
       }
 
-      const start0 = start.toISOString().split('T')[0];
-      const end0 = end.toISOString().split('T')[0];
-      await sendExcel(res, wb, `compras-${start0}-${end0}.xlsx`);
+      ws1.commit();
+      ws2.commit();
+      await wb.commit();
     } catch (err) { next(err); }
   },
 
@@ -229,16 +251,9 @@ export const exportController = {
         return next(new AppError(`El rango de exportación no puede superar ${MAX_EXPORT_DAYS} días`, 400));
       }
 
-      const expenses = await prisma.expense.findMany({
-        where: { date: { gte: start, lte: end }, deletedAt: null, businessId: req.user!.businessId },
-        orderBy: { date: 'asc' },
-        take: MAX_EXPORT_ROWS,
-        include: { category: { select: { name: true } } },
-      });
-
-      const wb = new ExcelJS.Workbook();
-      wb.creator = 'Komercio';
-      wb.created = new Date();
+      const start0 = start.toISOString().split('T')[0];
+      const end0 = end.toISOString().split('T')[0];
+      const wb = initStreamWriter(res, `gastos-${start0}-${end0}.xlsx`);
 
       const ws = wb.addWorksheet('Gastos');
       ws.columns = [
@@ -249,29 +264,50 @@ export const exportController = {
         { header: 'Monto ($)',    key: 'amount',   width: 16 },
         { header: 'Notas',        key: 'notes',    width: 30 },
       ];
-      styleHeader(ws);
-      for (const e of expenses) {
-        ws.addRow({
-          date: fmtDate(e.date),
-          desc: e.description,
-          category: e.category?.name || 'Sin categoría',
-          method: String(e.paymentMethod),
-          amount: fmtMoney(e.amount),
-          notes: e.notes || '',
+      styleHeaderStream(ws);
+
+      const where = { date: { gte: start, lte: end }, deletedAt: null, businessId: req.user!.businessId };
+      let lastId: string | undefined;
+      let fetched = 0;
+      let total = 0;
+
+      while (fetched < MAX_EXPORT_ROWS) {
+        const batch = await prisma.expense.findMany({
+          where,
+          orderBy: [{ date: 'asc' }, { id: 'asc' }],
+          take: Math.min(BATCH_SIZE, MAX_EXPORT_ROWS - fetched),
+          ...(lastId ? { skip: 1, cursor: { id: lastId } } : {}),
+          include: { category: { select: { name: true } } },
         });
+
+        if (batch.length === 0) break;
+
+        for (const e of batch) {
+          total += Number(e.amount || 0);
+          ws.addRow({
+            date: fmtDate(e.date),
+            desc: e.description,
+            category: e.category?.name || 'Sin categoría',
+            method: String(e.paymentMethod),
+            amount: fmtMoney(e.amount),
+            notes: e.notes || '',
+          }).commit();
+        }
+
+        fetched += batch.length;
+        lastId = batch[batch.length - 1].id;
+        if (batch.length < BATCH_SIZE) break;
       }
 
-      // Total row
-      if (expenses.length > 0) {
-        const total = expenses.reduce((acc, e) => acc + Number(e.amount || 0), 0);
+      if (fetched > 0) {
         const totalRow = ws.addRow({ date: '', desc: 'TOTAL', category: '', method: '', amount: total, notes: '' });
         totalRow.font = { bold: true };
         totalRow.getCell('amount').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDBEAFE' } };
+        totalRow.commit();
       }
 
-      const start0 = start.toISOString().split('T')[0];
-      const end0 = end.toISOString().split('T')[0];
-      await sendExcel(res, wb, `gastos-${start0}-${end0}.xlsx`);
+      ws.commit();
+      await wb.commit();
     } catch (err) { next(err); }
   },
 };
