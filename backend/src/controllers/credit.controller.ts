@@ -1,4 +1,4 @@
-import { Response, NextFunction } from 'express';
+﻿import { Response, NextFunction } from 'express';
 import { prisma } from '../config/database';
 import { AppError, success, created, paginated } from '../utils/response';
 import { getPagination } from '../utils/pagination';
@@ -12,17 +12,6 @@ export const creditController = {
       const { status, customerId } = req.query;
 
       const businessId = req.user!.businessId;
-
-      // Marca como OVERDUE sólo créditos de este negocio
-      await prisma.credit.updateMany({
-        where: {
-          status: { in: ['PENDING', 'PARTIAL'] },
-          dueDate: { lt: new Date() },
-          deletedAt: null,
-          customer: { businessId },
-        },
-        data: { status: 'OVERDUE' },
-      }).catch(() => {});
 
       const where: any = { deletedAt: null, customer: { businessId } };
       if (status) where.status = status;
@@ -59,7 +48,7 @@ export const creditController = {
           payments: { orderBy: { createdAt: 'desc' } },
         },
       });
-      if (!credit) throw new AppError('Crédito no encontrado', 404);
+      if (!credit) throw new AppError('CrÃ©dito no encontrado', 404);
       return success(res, credit);
     } catch (err) {
       next(err);
@@ -96,7 +85,7 @@ export const creditController = {
         return newCredit;
       });
 
-      return created(res, credit, 'Crédito registrado');
+      return created(res, credit, 'CrÃ©dito registrado');
     } catch (err) {
       next(err);
     }
@@ -112,7 +101,7 @@ export const creditController = {
 
       const businessId = req.user!.businessId;
 
-      const [newBalance, newStatus, customerId] = await prisma.$transaction(async (tx) => {
+      const [newBalance, newStatus] = await prisma.$transaction(async (tx) => {
         // Lock the row to prevent concurrent payment race conditions
         const [locked] = await tx.$queryRaw<any[]>`
           SELECT c.id, c."totalAmount", c."paidAmount", c.balance, c.status, c."customerId"
@@ -123,8 +112,8 @@ export const creditController = {
             AND cu."businessId" = ${businessId}
           FOR UPDATE
         `;
-        if (!locked) throw new AppError('Crédito no encontrado', 404);
-        if (locked.status === 'PAID') throw new AppError('Este crédito ya está saldado', 400);
+        if (!locked) throw new AppError('CrÃ©dito no encontrado', 404);
+        if (locked.status === 'PAID') throw new AppError('Este crÃ©dito ya estÃ¡ saldado', 400);
 
         const currentBalance = Number(locked.balance);
         if (paymentAmount > currentBalance) throw new AppError('El pago supera el saldo pendiente', 400);
@@ -149,7 +138,7 @@ export const creditController = {
           data: { currentDebt: { decrement: safeDecrement } },
         });
 
-        return [balance, status, locked.customerId];
+        return [balance, status];
       });
 
       if (businessId) {
@@ -162,3 +151,4 @@ export const creditController = {
     }
   },
 };
+

@@ -5,11 +5,15 @@ import { initSocket } from './config/socket';
 import { logger } from './config/logger';
 import { prisma } from './config/database';
 import { redis } from './config/redis';
+import { initSentry } from './config/sentry';
+import { startCreditOverdueJob } from './jobs/creditOverdue.job';
 
 const PORT = process.env.PORT || 4000;
 
 async function bootstrap() {
   try {
+    initSentry();
+
     await prisma.$connect();
     logger.info('Database connected');
 
@@ -27,6 +31,8 @@ async function bootstrap() {
     httpServer.listen(PORT, () => {
       logger.info(`Komercio API running on port ${PORT} [${process.env.NODE_ENV}]`);
     });
+
+    startCreditOverdueJob();
   } catch (error) {
     logger.error('Failed to start server:', error);
     process.exit(1);

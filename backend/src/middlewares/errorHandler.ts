@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { AppError } from '../utils/response';
 import { logger } from '../config/logger';
 import { Prisma } from '@prisma/client';
+import { Sentry } from '../config/sentry';
 
 export function errorHandler(
   err: Error,
@@ -47,6 +48,8 @@ export function errorHandler(
     res.status(401).json({ success: false, error: 'Token inválido o expirado' });
     return;
   }
+
+  Sentry.captureException(err, { extra: { method: req.method, path: req.path } });
 
   res.status(500).json({
     success: false,

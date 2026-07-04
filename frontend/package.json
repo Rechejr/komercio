@@ -22,6 +22,7 @@
     "@radix-ui/react-tabs": "^1.0.4",
     "@radix-ui/react-tooltip": "^1.0.7",
     "@react-oauth/google": "^0.13.5",
+    "@sentry/nextjs": "^10.63.0",
     "@tanstack/react-query": "^5.28.4",
     "@tanstack/react-query-devtools": "^5.28.4",
     "axios": "^1.6.8",
