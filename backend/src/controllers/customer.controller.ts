@@ -31,7 +31,8 @@ export const customerController = {
           orderBy: { name: 'asc' },
           select: {
             id: true, name: true, document: true, phone: true,
-            email: true, city: true, currentDebt: true, loyaltyPoints: true, isActive: true,
+            email: true, city: true, address: true, notes: true, creditLimit: true,
+            currentDebt: true, loyaltyPoints: true, isActive: true,
             _count: { select: { sales: true } },
           },
         }),

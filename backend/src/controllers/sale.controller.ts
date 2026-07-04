@@ -116,6 +116,7 @@ export const saleController = {
       } = req.body;
 
       if (!items || items.length === 0) throw new AppError('La venta debe tener productos', 400);
+      if (isCredit && !customerId) throw new AppError('Se requiere un cliente para registrar una venta a crédito', 400);
 
       const productIds: string[] = items.map((i: any) => i.productId);
 

@@ -19,8 +19,20 @@ export function errorHandler(
   // Prisma errors
   if (err instanceof Prisma.PrismaClientKnownRequestError) {
     if (err.code === 'P2002') {
-      const field = (err.meta?.target as string[])?.join(', ');
-      res.status(409).json({ success: false, error: `Ya existe un registro con ese ${field}` });
+      const FIELD_LABELS: Record<string, string> = {
+        email: 'correo electrónico',
+        code: 'código de producto',
+        barcode: 'código de barras',
+        invoiceNumber: 'número de factura',
+        document: 'número de documento',
+        name: 'nombre',
+        nit: 'NIT',
+        phone: 'teléfono',
+      };
+      const raw = (err.meta?.target as string[] | undefined) || [];
+      const friendly = raw.map((f) => FIELD_LABELS[f] || null).filter(Boolean);
+      const label = friendly.length > 0 ? friendly.join(' / ') : 'ese campo';
+      res.status(409).json({ success: false, error: `Ya existe un registro con ${label}` });
       return;
     }
     if (err.code === 'P2025') {
