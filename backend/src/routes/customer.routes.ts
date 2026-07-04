@@ -10,9 +10,10 @@ router.use(authenticate);
 
 const customerBodyValidators = [
   body('name').trim().notEmpty().withMessage('El nombre es requerido'),
-  body('email').optional({ nullable: true }).isEmail().normalizeEmail().withMessage('Email inválido'),
-  body('phone').optional({ nullable: true }).trim(),
-  body('creditLimit').optional({ nullable: true }).isFloat({ min: 0 }).withMessage('Límite de crédito inválido'),
+  body('email').optional({ nullable: true, checkFalsy: true }).isEmail().normalizeEmail().withMessage('Email inválido'),
+  body('phone').optional({ nullable: true, checkFalsy: true }).trim(),
+  // checkFalsy: true so an empty string "" is treated as absent (not validated)
+  body('creditLimit').optional({ nullable: true, checkFalsy: true }).isFloat({ min: 0 }).withMessage('Límite de crédito inválido'),
 ];
 
 router.get('/', customerController.list);
@@ -29,9 +30,9 @@ router.put('/:id',
   authorize('ADMIN', 'SUPERVISOR', 'CASHIER', 'SELLER'),
   [
     body('name').optional().trim().notEmpty().withMessage('El nombre no puede estar vacío'),
-    body('email').optional({ nullable: true }).isEmail().normalizeEmail().withMessage('Email inválido'),
-    body('phone').optional({ nullable: true }).trim(),
-    body('creditLimit').optional({ nullable: true }).isFloat({ min: 0 }).withMessage('Límite de crédito inválido'),
+    body('email').optional({ nullable: true, checkFalsy: true }).isEmail().normalizeEmail().withMessage('Email inválido'),
+    body('phone').optional({ nullable: true, checkFalsy: true }).trim(),
+    body('creditLimit').optional({ nullable: true, checkFalsy: true }).isFloat({ min: 0 }).withMessage('Límite de crédito inválido'),
   ],
   validate,
   customerController.update,

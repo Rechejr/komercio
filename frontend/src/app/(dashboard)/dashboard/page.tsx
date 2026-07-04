@@ -78,10 +78,26 @@ export default function DashboardPage() {
     refetchInterval: 60000,
   });
 
-  const { data: chartData } = useQuery({
+  const { data: rawChart } = useQuery({
     queryKey: ['dashboard-chart'],
     queryFn: () => api.get('/dashboard/sales-chart?period=30d').then((r) => r.data.data),
   });
+
+  // Fill gaps so every day in the last 30 days has a data point (0 if no sales)
+  const chartData = (() => {
+    if (!rawChart) return [];
+    const byDay = new Map(rawChart.map((d: any) => [d.date, d]));
+    const days: any[] = [];
+    const end = new Date();
+    const cur = new Date();
+    cur.setDate(cur.getDate() - 29);
+    while (cur <= end) {
+      const key = cur.toISOString().slice(0, 10);
+      days.push(byDay.get(key) ?? { date: key, total: 0, count: 0 });
+      cur.setDate(cur.getDate() + 1);
+    }
+    return days;
+  })();
 
   const s = summaryData;
 
