@@ -22,7 +22,7 @@ export default function CajaPage() {
     refetchInterval: 30000,
   });
 
-  const { register, handleSubmit, reset, control } = useForm();
+  const { register, handleSubmit, reset, control, formState: { errors: cajaErrors } } = useForm();
   const { register: regMov, handleSubmit: handleMov, reset: resetMov, control: controlMov, formState: { isSubmitting: submittingMov } } = useForm();
 
   const openMutation = useMutation({
@@ -165,9 +165,10 @@ export default function CajaPage() {
         <form onSubmit={handleSubmit((d: any) => closeMutation.mutate({ id: cashRegister.id, data: d }))} className="space-y-3">
           <div>
             <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5 block">Efectivo contado en caja ($)</label>
-            <Controller control={control} name="closingAmount" rules={{ required: true }} render={({ field }) => (
+            <Controller control={control} name="closingAmount" rules={{ required: 'Ingresa el efectivo contado' }} render={({ field }) => (
               <PriceInput {...field} onChange={(n) => field.onChange(n ?? 0)} className={inputCls} placeholder={String(expected)} />
             )} />
+            {cajaErrors.closingAmount && <p className="text-[11px] text-red-500 mt-1">{cajaErrors.closingAmount.message as string}</p>}
           </div>
           <div>
             <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5 block">Notas (opcional)</label>

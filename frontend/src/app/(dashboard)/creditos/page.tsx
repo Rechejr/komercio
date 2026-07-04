@@ -30,7 +30,7 @@ export default function CreditosPage() {
     enabled: !!selected?.id && showDetail,
   });
 
-  const { register, handleSubmit, reset, control } = useForm();
+  const { register, handleSubmit, reset, control, formState: { errors: payErrors } } = useForm();
 
   const paymentMutation = useMutation({
     mutationFn: ({ creditId, ...data }: any) => api.post(`/credits/${creditId}/payments`, data),
@@ -288,9 +288,15 @@ export default function CreditosPage() {
               <form onSubmit={handleSubmit((d: any) => paymentMutation.mutate({ ...d, creditId: selected.id }))} className="space-y-3">
                 <div>
                   <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5 block">Monto del abono *</label>
-                  <Controller control={control} name="amount" rules={{ required: true, min: 0.01 }} render={({ field }) => (
-                    <PriceInput {...field} onChange={(n) => field.onChange(n ?? 0)} className={inputCls} placeholder="0" autoFocus />
-                  )} />
+                  <Controller
+                    control={control}
+                    name="amount"
+                    rules={{ required: 'El monto es obligatorio', min: { value: 0.01, message: 'El monto debe ser mayor a 0' }, max: { value: selected?.balance ?? Infinity, message: 'No puede superar el saldo pendiente' } }}
+                    render={({ field }) => (
+                      <PriceInput {...field} onChange={(n) => field.onChange(n ?? 0)} className={inputCls} placeholder="0" autoFocus />
+                    )}
+                  />
+                  {payErrors.amount && <p className="text-[11px] text-red-500 mt-1">{payErrors.amount.message as string}</p>}
                 </div>
                 <div>
                   <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5 block">Método de pago</label>

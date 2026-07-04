@@ -43,7 +43,9 @@ export default function ReportesPage() {
 
   const getDateRange = () => {
     const end   = new Date();
+    end.setHours(23, 59, 59, 999);
     const start = new Date();
+    start.setHours(0, 0, 0, 0);
     if      (period === '7d')   start.setDate(start.getDate() - 7);
     else if (period === '30d')  start.setDate(start.getDate() - 30);
     else if (period === '90d')  start.setDate(start.getDate() - 90);
@@ -52,11 +54,12 @@ export default function ReportesPage() {
   };
 
   const dates = getDateRange();
+  const dateKey = dates.startDate.slice(0, 10);
 
-  const { data: salesData    } = useQuery({ queryKey: ['report-sales',     period], queryFn: () => api.get(`/reports/sales?${new URLSearchParams(dates)}`).then((r) => r.data.data) });
-  const { data: topProducts  } = useQuery({ queryKey: ['report-products',  period], queryFn: () => api.get(`/reports/top-products?${new URLSearchParams(dates)}&limit=10`).then((r) => r.data.data) });
-  const { data: topCustomers } = useQuery({ queryKey: ['report-customers', period], queryFn: () => api.get(`/reports/top-customers?${new URLSearchParams(dates)}&limit=10`).then((r) => r.data.data) });
-  const { data: profitData   } = useQuery({ queryKey: ['report-profit',    period], queryFn: () => api.get(`/reports/profit?${new URLSearchParams(dates)}`).then((r) => r.data.data) });
+  const { data: salesData    } = useQuery({ queryKey: ['report-sales',     period, dateKey], queryFn: () => api.get(`/reports/sales?${new URLSearchParams(dates)}`).then((r) => r.data.data) });
+  const { data: topProducts  } = useQuery({ queryKey: ['report-products',  period, dateKey], queryFn: () => api.get(`/reports/top-products?${new URLSearchParams(dates)}&limit=10`).then((r) => r.data.data) });
+  const { data: topCustomers } = useQuery({ queryKey: ['report-customers', period, dateKey], queryFn: () => api.get(`/reports/top-customers?${new URLSearchParams(dates)}&limit=10`).then((r) => r.data.data) });
+  const { data: profitData   } = useQuery({ queryKey: ['report-profit',    period, dateKey], queryFn: () => api.get(`/reports/profit?${new URLSearchParams(dates)}`).then((r) => r.data.data) });
 
   return (
     <div className="space-y-5 animate-fade-up">

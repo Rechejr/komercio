@@ -43,7 +43,7 @@ export default function GastosPage() {
     queryFn: () => api.get('/expenses/categories').then((r) => r.data.data),
   });
 
-  const { register, handleSubmit, reset, control, formState: { isSubmitting } } = useForm();
+  const { register, handleSubmit, reset, control, formState: { isSubmitting, errors } } = useForm();
 
   const saveMutation = useMutation({
     mutationFn: (data: any) => editItem
@@ -280,11 +280,12 @@ export default function GastosPage() {
               <div>
                 <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5 block">Descripción *</label>
                 <input
-                  {...register('description', { required: true })}
+                  {...register('description', { required: 'La descripción es obligatoria' })}
                   className={inputCls}
                   placeholder="Ej: Pago arriendo local"
                   autoFocus
                 />
+                {errors.description && <p className="text-[11px] text-red-500 mt-1">{errors.description.message as string}</p>}
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -297,9 +298,10 @@ export default function GastosPage() {
                 </div>
                 <div>
                   <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5 block">Monto ($) *</label>
-                  <Controller control={control} name="amount" rules={{ required: true, min: 0.01 }} render={({ field }) => (
+                  <Controller control={control} name="amount" rules={{ required: 'El monto es obligatorio', min: { value: 0.01, message: 'El monto debe ser mayor a 0' } }} render={({ field }) => (
                     <PriceInput {...field} onChange={(n) => field.onChange(n ?? 0)} className={inputCls} placeholder="0" />
                   )} />
+                  {errors.amount && <p className="text-[11px] text-red-500 mt-1">{errors.amount.message as string}</p>}
                 </div>
               </div>
 
@@ -315,8 +317,14 @@ export default function GastosPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5 block">Fecha</label>
-                  <input {...register('date')} type="date" className={inputCls} />
+                  <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5 block">Fecha *</label>
+                  <input
+                    {...register('date', { required: 'La fecha es obligatoria', validate: (v) => !v || v <= new Date().toISOString().slice(0, 10) || 'La fecha no puede ser futura' })}
+                    type="date"
+                    max={new Date().toISOString().slice(0, 10)}
+                    className={inputCls}
+                  />
+                  {errors.date && <p className="text-[11px] text-red-500 mt-1">{errors.date.message as string}</p>}
                 </div>
               </div>
 

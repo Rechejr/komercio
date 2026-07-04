@@ -8,6 +8,7 @@ router.use(authenticate);
 
 router.get('/current', authorize('ADMIN', 'SUPERVISOR', 'CASHIER'), async (req: any, res, next) => {
   try {
+    if (!req.user.branchId) return next(new AppError('No tienes una sucursal asignada', 403));
     const register = await prisma.cashRegister.findFirst({
       where: { branchId: req.user.branchId, status: 'OPEN' },
       include: { movements: { orderBy: { createdAt: 'desc' }, take: 50 } },
@@ -37,6 +38,7 @@ router.get('/current', authorize('ADMIN', 'SUPERVISOR', 'CASHIER'), async (req: 
 
 router.post('/open', authorize('ADMIN', 'SUPERVISOR', 'CASHIER'), async (req: any, res, next) => {
   try {
+    if (!req.user.branchId) return next(new AppError('No tienes una sucursal asignada', 403));
     const existing = await prisma.cashRegister.findFirst({
       where: { branchId: req.user.branchId, status: 'OPEN' },
     });

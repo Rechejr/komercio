@@ -118,15 +118,21 @@ export const paymentController = {
   async webhook(req: Request, res: Response, next: NextFunction) {
     try {
       const signature    = req.headers['x-event-signature'] as string | undefined;
-      const eventsSecret = process.env.WOMPI_EVENTS_SECRET || '';
+      const eventsSecret = process.env.WOMPI_EVENTS_SECRET;
 
-      if (signature && eventsSecret) {
-        const rawBody = (req as any).rawBody as string || '';
-        const expected = `sha256=${crypto.createHmac('sha256', eventsSecret).update(rawBody).digest('hex')}`;
-        if (signature !== expected) {
-          logger.warn('Wompi webhook: firma inválida');
-          return res.status(401).json({ error: 'Firma inválida' });
-        }
+      if (!eventsSecret) {
+        logger.error('WOMPI_EVENTS_SECRET no configurado — rechazando webhook');
+        return res.status(500).json({ error: 'Webhook no configurado' });
+      }
+      if (!signature) {
+        logger.warn('Wompi webhook: cabecera x-event-signature ausente');
+        return res.status(401).json({ error: 'Firma requerida' });
+      }
+      const rawBody = (req as any).rawBody as string || '';
+      const expected = `sha256=${crypto.createHmac('sha256', eventsSecret).update(rawBody).digest('hex')}`;
+      if (signature !== expected) {
+        logger.warn('Wompi webhook: firma inválida');
+        return res.status(401).json({ error: 'Firma inválida' });
       }
 
       const event = req.body as any;

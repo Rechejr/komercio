@@ -142,9 +142,11 @@ export const creditController = {
           data: { paidAmount: newPaid, balance, status: status as any },
         });
 
+        const customer = await tx.customer.findUnique({ where: { id: locked.customerId }, select: { currentDebt: true } });
+        const safeDecrement = Math.min(paymentAmount, Math.max(0, Number(customer?.currentDebt ?? paymentAmount)));
         await tx.customer.update({
           where: { id: locked.customerId },
-          data: { currentDebt: { decrement: paymentAmount } },
+          data: { currentDebt: { decrement: safeDecrement } },
         });
 
         return [balance, status, locked.customerId];

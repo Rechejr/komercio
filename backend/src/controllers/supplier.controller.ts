@@ -45,8 +45,9 @@ export const supplierController = {
 
   async create(req: AuthRequest, res: Response, next: NextFunction) {
     try {
+      const { name, legalName, document, phone, mobile, email, address, city, contactName, notes, paymentTerms } = req.body;
       const supplier = await prisma.supplier.create({
-        data: { ...req.body, businessId: req.user!.businessId },
+        data: { name, legalName, document, phone, mobile, email, address, city, contactName, notes, paymentTerms, businessId: req.user!.businessId },
       });
       return created(res, supplier, 'Proveedor creado');
     } catch (err) { next(err); }
@@ -59,7 +60,8 @@ export const supplierController = {
         where: { id, deletedAt: null, businessId: req.user!.businessId },
       });
       if (!existing) throw new AppError('Proveedor no encontrado', 404);
-      const supplier = await prisma.supplier.update({ where: { id }, data: req.body });
+      const { name, legalName, document, phone, mobile, email, address, city, contactName, notes, paymentTerms } = req.body;
+      const supplier = await prisma.supplier.update({ where: { id }, data: { name, legalName, document, phone, mobile, email, address, city, contactName, notes, paymentTerms } });
       return success(res, supplier, 'Proveedor actualizado');
     } catch (err) { next(err); }
   },

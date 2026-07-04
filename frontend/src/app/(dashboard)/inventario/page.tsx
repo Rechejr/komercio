@@ -93,7 +93,7 @@ export default function InventarioPage() {
     onError: () => toast.error('Error al eliminar'),
   });
 
-  const { register, handleSubmit, reset, control, formState: { isSubmitting } } = useForm();
+  const { register, handleSubmit, reset, control, formState: { isSubmitting, errors } } = useForm();
 
   const previewMutation = useMutation({
     mutationFn: (file: File) => {
@@ -640,11 +640,12 @@ export default function InventarioPage() {
                   <div className="relative">
                     <Barcode className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
                     <input
-                      {...register('code')}
+                      {...register('code', { required: 'El código es obligatorio' })}
                       placeholder="Escanea o escribe el código"
                       className="w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition"
                     />
                   </div>
+                  {errors.code && <p className="text-[11px] text-red-500 mt-1">{errors.code.message as string}</p>}
                 </div>
 
                 <div>
@@ -654,7 +655,8 @@ export default function InventarioPage() {
 
                 <div>
                   <label className="block text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5">Nombre del producto *</label>
-                  <input {...register('name')} placeholder="Camiseta, perfume, aretes..." className={inputCls} />
+                  <input {...register('name', { required: 'El nombre es obligatorio' })} placeholder="Camiseta, perfume, aretes..." className={inputCls} />
+                  {errors.name && <p className="text-[11px] text-red-500 mt-1">{errors.name.message as string}</p>}
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
@@ -689,9 +691,10 @@ export default function InventarioPage() {
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5">Precio de venta *</label>
-                    <Controller control={control} name="salePrice" render={({ field }) => (
+                    <Controller control={control} name="salePrice" rules={{ required: 'El precio es obligatorio', min: { value: 1, message: 'El precio debe ser mayor a 0' } }} render={({ field }) => (
                       <PriceInput {...field} onChange={(n) => field.onChange(n ?? 0)} className={inputCls} placeholder="0" />
                     )} />
+                    {errors.salePrice && <p className="text-[11px] text-red-500 mt-1">{errors.salePrice.message as string}</p>}
                   </div>
                   <div>
                     <label className="block text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5">Costo</label>

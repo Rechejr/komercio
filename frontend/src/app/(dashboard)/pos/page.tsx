@@ -126,6 +126,7 @@ export default function POSPage() {
       setSplitAmount('');
       setSplitMethod('CASH');
       setSaleNotes('');
+      setPaidAmount('');
       toast.success('¡Venta registrada!');
       qc.invalidateQueries({ queryKey: ['sales'] });
       qc.invalidateQueries({ queryKey: ['products'] });
@@ -175,6 +176,10 @@ export default function POSPage() {
   }
 
   function handleAddProduct(product: any) {
+    if (product.stock <= 0 && !product.allowNegativeStock) {
+      toast.error(`"${product.name}" no tiene stock disponible`);
+      return;
+    }
     addItem({
       productId: product.id, name: product.name, code: product.code,
       unitPrice: product.salePrice, quantity: 1, discountPct: 0, taxRate: product.taxRate || 0,
@@ -727,7 +732,7 @@ export default function POSPage() {
                     </button>
                   </div>
                 </div>
-                {parseFloat(paidAmount) > 0 && (
+                {paymentMethod === 'CASH' && parseFloat(paidAmount) > 0 && (
                   <div className="bg-emerald-50 dark:bg-emerald-500/10 rounded-xl p-2.5 text-center border border-emerald-100 dark:border-emerald-500/20">
                     <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold uppercase tracking-wide">Cambio</p>
                     <p className="font-bold text-emerald-700 dark:text-emerald-400 text-[18px] tabular">{formatCurrency(change)}</p>

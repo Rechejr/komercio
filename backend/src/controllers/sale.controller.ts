@@ -370,7 +370,8 @@ export const saleController = {
       if (sale.status === 'CANCELLED') throw new AppError('La venta ya fue anulada', 400);
 
       await prisma.$transaction(async (tx) => {
-        await tx.sale.update({ where: { id }, data: { status: 'CANCELLED', notes: reason } });
+        const cancelNotes = [sale.notes, reason].filter(Boolean).join(' | ') || reason;
+        await tx.sale.update({ where: { id }, data: { status: 'CANCELLED', notes: cancelNotes } });
 
         // 1. Revert stock
         interface CancelProductRow { id: string; stock: number; }

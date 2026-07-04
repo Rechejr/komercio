@@ -127,9 +127,9 @@ function LoginForm() {
   const handleAuthSuccess = (user: any, accessToken: string) => {
     login(user, accessToken, rememberMe);
     toast.success(`¡Bienvenido, ${user.name}!`);
-    const dest = user.role === 'SUPER_ADMIN'
-      ? '/superadmin'
-      : (searchParams.get('redirect') || '/dashboard');
+    const raw = searchParams.get('redirect') || '/dashboard';
+    const safeRedirect = raw.startsWith('/') && !raw.startsWith('//') ? raw : '/dashboard';
+    const dest = user.role === 'SUPER_ADMIN' ? '/superadmin' : safeRedirect;
     router.replace(dest);
   };
 

@@ -62,7 +62,7 @@ app.use(cors({
       return callback(null, true);
     }
     const allowed = (process.env.CORS_ORIGIN?.split(',') || []).map(s => s.trim());
-    const ok = !origin || allowed.includes(origin);
+    const ok = isDev ? (!origin || allowed.includes(origin)) : allowed.includes(origin ?? '');
     callback(ok ? null : new Error('CORS'), ok);
   },
   credentials: true,
@@ -90,12 +90,16 @@ const authLimiter = rateLimit({
   message: { error: 'Demasiados intentos, espere 15 minutos antes de reintentar.' },
 });
 
-// Body parsing — capture raw body for Wompi webhook signature verification
-app.use(express.json({
-  limit: '10mb',
-  verify: (req: any, _res, buf) => { req.rawBody = buf.toString('utf8'); },
-}));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+// Body parsing — rawBody capturado globalmente para la verificación de firma del webhook Wompi
+// El límite global es 1 MB; el webhook de Wompi usa su propio middleware con 10 MB
+app.use((req: any, res, next) => {
+  const isWebhook = req.path === '/api/v1/payments/webhook';
+  express.json({
+    limit: isWebhook ? '10mb' : '1mb',
+    verify: (_req: any, _res, buf) => { (_req as any).rawBody = buf.toString('utf8'); },
+  })(req, res, next);
+});
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 app.use(cookieParser());
 app.use(compression());
 
