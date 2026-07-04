@@ -62,6 +62,10 @@ export const useAuthStore = create<AuthState>()(
       login: (user, accessToken, rememberMe = false) => {
         if (typeof window !== 'undefined') {
           localStorage.setItem(REMEMBER_KEY, String(rememberMe));
+          // Non-sensitive flag cookie so Next.js middleware can redirect unauthenticated users
+          // server-side. This is NOT an auth token — real auth is enforced by the backend.
+          const maxAge = rememberMe ? 60 * 60 * 24 * 30 : 0; // 30 days or session
+          document.cookie = `logged_in=1; path=/; SameSite=Lax${maxAge ? `; max-age=${maxAge}` : ''}`;
         }
         set({ user, accessToken, isAuthenticated: true });
       },
@@ -71,6 +75,7 @@ export const useAuthStore = create<AuthState>()(
         set({ user: null, accessToken: null, isAuthenticated: false });
         if (typeof window !== 'undefined') {
           localStorage.removeItem(REMEMBER_KEY);
+          document.cookie = 'logged_in=; path=/; max-age=0';
           // MUST wait for server to clear the httpOnly cookie before redirecting.
           // If we redirect first, the middleware sees the stale cookie and sends
           // the user back to /dashboard → infinite redirect loop → blank page.

@@ -22,6 +22,9 @@ export const authController = {
 
       const hashedPassword = await bcrypt.hash(password, 12);
 
+      const verificationToken = crypto.randomBytes(32).toString('hex');
+      const tokenHash = crypto.createHash('sha256').update(verificationToken).digest('hex');
+
       const user = await prisma.$transaction(async (tx) => {
         const newUser = await tx.user.create({
           data: {
@@ -29,7 +32,8 @@ export const authController = {
             email,
             password: hashedPassword,
             role: 'ADMIN',
-            isEmailVerified: true,
+            isEmailVerified: false,
+            emailVerifyToken: tokenHash,
           },
           select: { id: true, name: true, email: true, role: true },
         });
@@ -62,7 +66,10 @@ export const authController = {
         return newUser;
       });
 
-      return created(res, user, 'Cuenta creada exitosamente. Ya puedes iniciar sesión.');
+      // Fire-and-forget — no bloqueamos la respuesta si el email falla
+      emailService.sendVerification(email, name, verificationToken).catch(() => {});
+
+      return created(res, user, 'Cuenta creada. Por favor verifica tu correo electrónico para iniciar sesión.');
     } catch (err) {
       next(err);
     }
