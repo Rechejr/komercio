@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useForm } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
+import { PriceInput } from '@/components/ui/PriceInput';
 import { api } from '@/lib/api';
 import { formatCurrency, formatDateTime } from '@/lib/utils';
 import toast from 'react-hot-toast';
@@ -21,8 +22,8 @@ export default function CajaPage() {
     refetchInterval: 30000,
   });
 
-  const { register, handleSubmit, reset } = useForm();
-  const { register: regMov, handleSubmit: handleMov, reset: resetMov, formState: { isSubmitting: submittingMov } } = useForm();
+  const { register, handleSubmit, reset, control } = useForm();
+  const { register: regMov, handleSubmit: handleMov, reset: resetMov, control: controlMov, formState: { isSubmitting: submittingMov } } = useForm();
 
   const openMutation = useMutation({
     mutationFn: (data: any) => api.post('/cash-register/open', data),
@@ -75,13 +76,9 @@ export default function CajaPage() {
           <form onSubmit={handleSubmit((d: any) => openMutation.mutate(d))} className="space-y-3 pt-1">
             <div className="text-left">
               <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5 block">Efectivo inicial ($)</label>
-              <input
-                {...register('openingAmount')}
-                type="number"
-                step="0.01"
-                placeholder="0.00"
-                className={inputCls + ' text-center text-lg font-semibold'}
-              />
+              <Controller control={control} name="openingAmount" render={({ field }) => (
+                <PriceInput {...field} onChange={(n) => field.onChange(n ?? 0)} className={inputCls + ' text-center text-lg font-semibold'} placeholder="0" />
+              )} />
             </div>
             <button
               type="submit"
@@ -168,13 +165,9 @@ export default function CajaPage() {
         <form onSubmit={handleSubmit((d: any) => closeMutation.mutate({ id: cashRegister.id, data: d }))} className="space-y-3">
           <div>
             <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5 block">Efectivo contado en caja ($)</label>
-            <input
-              {...register('closingAmount', { required: true })}
-              type="number"
-              step="0.01"
-              placeholder={String(expected)}
-              className={inputCls}
-            />
+            <Controller control={control} name="closingAmount" rules={{ required: true }} render={({ field }) => (
+              <PriceInput {...field} onChange={(n) => field.onChange(n ?? 0)} className={inputCls} placeholder={String(expected)} />
+            )} />
           </div>
           <div>
             <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5 block">Notas (opcional)</label>
@@ -240,15 +233,9 @@ export default function CajaPage() {
             >
               <div>
                 <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5 block">Monto ($) *</label>
-                <input
-                  {...regMov('amount', { required: true, min: 0.01 })}
-                  type="number"
-                  step="0.01"
-                  min="0.01"
-                  placeholder="0.00"
-                  autoFocus
-                  className={inputCls}
-                />
+                <Controller control={controlMov} name="amount" rules={{ required: true, min: 0.01 }} render={({ field }) => (
+                  <PriceInput {...field} onChange={(n) => field.onChange(n ?? 0)} className={inputCls} placeholder="0" autoFocus />
+                )} />
               </div>
               <div>
                 <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5 block">Descripción *</label>

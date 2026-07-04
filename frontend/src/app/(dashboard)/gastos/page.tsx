@@ -2,12 +2,13 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useForm } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
 import { api } from '@/lib/api';
 import { formatCurrency, formatDate, paymentMethodLabel } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import { Plus, X, Loader2, Receipt, Edit, Trash2, FileDown } from 'lucide-react';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { PriceInput } from '@/components/ui/PriceInput';
 import { downloadExcel } from '@/lib/exportExcel';
 
 const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition';
@@ -42,7 +43,7 @@ export default function GastosPage() {
     queryFn: () => api.get('/expenses/categories').then((r) => r.data.data),
   });
 
-  const { register, handleSubmit, reset, formState: { isSubmitting } } = useForm();
+  const { register, handleSubmit, reset, control, formState: { isSubmitting } } = useForm();
 
   const saveMutation = useMutation({
     mutationFn: (data: any) => editItem
@@ -296,14 +297,9 @@ export default function GastosPage() {
                 </div>
                 <div>
                   <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5 block">Monto ($) *</label>
-                  <input
-                    {...register('amount', { required: true })}
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    className={inputCls}
-                    placeholder="0.00"
-                  />
+                  <Controller control={control} name="amount" rules={{ required: true, min: 0.01 }} render={({ field }) => (
+                    <PriceInput {...field} onChange={(n) => field.onChange(n ?? 0)} className={inputCls} placeholder="0" />
+                  )} />
                 </div>
               </div>
 

@@ -2,12 +2,13 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useForm } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
 import { api } from '@/lib/api';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import { Plus, Search, Edit, Trash2, Users, X, Loader2, AlertCircle, ChevronRight } from 'lucide-react';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { PriceInput } from '@/components/ui/PriceInput';
 
 const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition';
 
@@ -18,7 +19,7 @@ const FIELDS = [
   { name: 'email',       label: 'Correo electrónico',      col: 2, type: 'email' },
   { name: 'address',     label: 'Dirección',               col: 2 },
   { name: 'city',        label: 'Ciudad',                  col: 1 },
-  { name: 'creditLimit', label: 'Límite de crédito ($)',   col: 1, type: 'number' },
+  { name: 'creditLimit', label: 'Límite de crédito ($)',   col: 1 },
   { name: 'notes',       label: 'Observaciones',           col: 2 },
 ];
 
@@ -42,7 +43,7 @@ export default function ClientesPage() {
     enabled: !!selected?.id,
   });
 
-  const { register, handleSubmit, reset } = useForm();
+  const { register, handleSubmit, reset, control } = useForm();
 
   const saveMutation = useMutation({
     mutationFn: (data: any) => editItem
@@ -228,11 +229,13 @@ export default function ClientesPage() {
               {FIELDS.map((f) => (
                 <div key={f.name} className={f.col === 2 ? 'col-span-2' : ''}>
                   <label className="block text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5">{f.label}</label>
-                  <input
-                    {...register(f.name)}
-                    type={f.type || 'text'}
-                    className={inputCls}
-                  />
+                  {f.name === 'creditLimit' ? (
+                    <Controller control={control} name="creditLimit" render={({ field }) => (
+                      <PriceInput {...field} onChange={(n) => field.onChange(n ?? undefined)} className={inputCls} placeholder="0" />
+                    )} />
+                  ) : (
+                    <input {...register(f.name)} type={f.type || 'text'} className={inputCls} />
+                  )}
                 </div>
               ))}
               <div className="col-span-2 flex justify-end gap-3 border-t border-slate-100 dark:border-white/[0.06] pt-4">

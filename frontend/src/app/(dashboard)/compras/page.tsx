@@ -2,13 +2,14 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useForm, useFieldArray } from 'react-hook-form';
+import { useForm, useFieldArray, Controller } from 'react-hook-form';
 import { api } from '@/lib/api';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import { Plus, ShoppingBag, X, Loader2, Trash2, Edit, ChevronRight, FileDown, Search } from 'lucide-react';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { downloadExcel } from '@/lib/exportExcel';
+import { PriceInput } from '@/components/ui/PriceInput';
 
 const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition';
 const inputSmCls = 'w-full px-2 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition';
@@ -531,13 +532,12 @@ export default function ComprasPage() {
                         />
                       </div>
                       <div className="col-span-2 sm:col-span-3">
-                        <input
-                          {...register(`items.${i}.unitCost`, { required: true, valueAsNumber: true })}
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          placeholder="$ costo"
-                          className={inputSmCls}
+                        <Controller
+                          control={control}
+                          name={`items.${i}.unitCost`}
+                          render={({ field }) => (
+                            <PriceInput {...field} onChange={(n) => field.onChange(n ?? 0)} className={inputSmCls} placeholder="$ costo" />
+                          )}
                         />
                       </div>
                       <div className="col-span-2 sm:col-span-1">

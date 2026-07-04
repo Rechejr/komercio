@@ -17,6 +17,7 @@ import {
 import { useAuthStore } from '@/store/auth.store';
 import { useUpgradeStore } from '@/store/upgrade.store';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { PriceInput } from '@/components/ui/PriceInput';
 
 type PreviewData = {
   total: number;
@@ -688,18 +689,24 @@ export default function InventarioPage() {
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5">Precio de venta *</label>
-                    <input {...register('salePrice', { valueAsNumber: true })} type="number" placeholder="0" className={inputCls} />
+                    <Controller control={control} name="salePrice" render={({ field }) => (
+                      <PriceInput {...field} onChange={(n) => field.onChange(n ?? 0)} className={inputCls} placeholder="0" />
+                    )} />
                   </div>
                   <div>
                     <label className="block text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5">Costo</label>
-                    <input {...register('costPrice', { valueAsNumber: true })} type="number" placeholder="0" className={inputCls} />
+                    <Controller control={control} name="costPrice" render={({ field }) => (
+                      <PriceInput {...field} onChange={(n) => field.onChange(n ?? 0)} className={inputCls} placeholder="0" />
+                    )} />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5">Precio mayorista</label>
-                    <input {...register('wholesalePrice', { valueAsNumber: true })} type="number" placeholder="0" className={inputCls} />
+                    <Controller control={control} name="wholesalePrice" render={({ field }) => (
+                      <PriceInput {...field} onChange={(n) => field.onChange(n ?? 0)} className={inputCls} placeholder="0" />
+                    )} />
                   </div>
                   <div>
                     <label className="block text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5">Unidad</label>

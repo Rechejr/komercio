@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useForm } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
+import { PriceInput } from '@/components/ui/PriceInput';
 import { api } from '@/lib/api';
 import { formatCurrency, formatDate, formatDateTime, statusColor, statusLabel } from '@/lib/utils';
 import toast from 'react-hot-toast';
@@ -29,7 +30,7 @@ export default function CreditosPage() {
     enabled: !!selected?.id && showDetail,
   });
 
-  const { register, handleSubmit, reset } = useForm();
+  const { register, handleSubmit, reset, control } = useForm();
 
   const paymentMutation = useMutation({
     mutationFn: ({ creditId, ...data }: any) => api.post(`/credits/${creditId}/payments`, data),
@@ -287,15 +288,9 @@ export default function CreditosPage() {
               <form onSubmit={handleSubmit((d: any) => paymentMutation.mutate({ ...d, creditId: selected.id }))} className="space-y-3">
                 <div>
                   <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5 block">Monto del abono *</label>
-                  <input
-                    {...register('amount', { required: true, min: 0.01 })}
-                    type="number"
-                    step="0.01"
-                    min="0.01"
-                    placeholder="0.00"
-                    autoFocus
-                    className={inputCls}
-                  />
+                  <Controller control={control} name="amount" rules={{ required: true, min: 0.01 }} render={({ field }) => (
+                    <PriceInput {...field} onChange={(n) => field.onChange(n ?? 0)} className={inputCls} placeholder="0" autoFocus />
+                  )} />
                 </div>
                 <div>
                   <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5 block">Método de pago</label>
