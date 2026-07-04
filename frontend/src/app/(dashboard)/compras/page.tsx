@@ -48,7 +48,7 @@ export default function ComprasPage() {
 
   const { data: products } = useQuery({
     queryKey: ['products-list'],
-    queryFn: () => api.get('/products?limit=200&isActive=true').then((r) => r.data.data),
+    queryFn: () => api.get('/products?limit=500&isActive=true').then((r) => r.data.data),
   });
 
   const { register, handleSubmit, control, reset, watch, setValue, formState: { errors } } = useForm({

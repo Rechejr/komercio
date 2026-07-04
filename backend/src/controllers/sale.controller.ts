@@ -274,7 +274,7 @@ export const saleController = {
               totalCost: product.costPrice * item.quantity,
             },
           });
-          if (newStock <= product.minStock) {
+          if (product.minStock > 0 && newStock <= product.minStock) {
             lowStockProducts.push({ id: product.id, name: product.name, stock: newStock, minStock: product.minStock });
           }
         }

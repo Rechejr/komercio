@@ -167,9 +167,21 @@ router.put('/:id', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE'), purchaseItemVa
         if (!locked) continue;
         const revertQty = Math.min(Number(old.quantity), locked.stock);
         if (revertQty > 0) {
+          const newStock = locked.stock - revertQty;
           await tx.product.update({
             where: { id: old.productId },
             data: { stock: { decrement: revertQty } },
+          });
+          await tx.inventoryMovement.create({
+            data: {
+              productId: old.productId, type: 'OUT',
+              quantity: revertQty,
+              previousStock: locked.stock, newStock,
+              reason: 'Reversión de compra (edición)',
+              referenceId: req.params.id, referenceType: 'PURCHASE',
+              unitCost: Number(old.unitCost),
+              totalCost: Number(old.unitCost) * revertQty,
+            },
           });
         }
       }

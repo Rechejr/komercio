@@ -14,15 +14,28 @@ const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded
 export default function CreditosPage() {
   const qc = useQueryClient();
   const [statusFilter, setStatusFilter] = useState('');
+  const [customerFilter, setCustomerFilter] = useState('');
+  const [customerFilterId, setCustomerFilterId] = useState('');
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<any>(null);
   const [showPayment, setShowPayment] = useState(false);
   const [showDetail, setShowDetail] = useState(false);
   const [showNewCredit, setShowNewCredit] = useState(false);
 
+  const { data: filterCustomers } = useQuery({
+    queryKey: ['customers-filter', customerFilter],
+    queryFn: () => api.get(`/customers?limit=10&search=${encodeURIComponent(customerFilter)}`).then((r) => r.data.data),
+    enabled: customerFilter.length > 1,
+  });
+
   const { data, isLoading } = useQuery({
-    queryKey: ['credits', statusFilter, page],
-    queryFn: () => api.get(`/credits?status=${statusFilter}&page=${page}&limit=20`).then((r) => r.data),
+    queryKey: ['credits', statusFilter, customerFilterId, page],
+    queryFn: () => {
+      const params = new URLSearchParams({ page: String(page), limit: '20' });
+      if (statusFilter) params.set('status', statusFilter);
+      if (customerFilterId) params.set('customerId', customerFilterId);
+      return api.get(`/credits?${params}`).then((r) => r.data);
+    },
   });
 
   const { data: detail, isLoading: loadingDetail } = useQuery({
@@ -77,7 +90,7 @@ export default function CreditosPage() {
     <div className="space-y-4 animate-fade-up">
 
       {/* ── Toolbar ──────────────────────────────────────────────────────────── */}
-      <div className="flex gap-3">
+      <div className="flex flex-wrap gap-3">
         <select
           aria-label="Filtrar por estado"
           value={statusFilter}
@@ -90,10 +103,46 @@ export default function CreditosPage() {
           <option value="OVERDUE">Vencidos</option>
           <option value="PAID">Pagados</option>
         </select>
+
+        {/* Customer filter */}
+        <div className="relative flex-1 min-w-[180px]">
+          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            value={customerFilter}
+            onChange={(e) => { setCustomerFilter(e.target.value); if (!e.target.value) { setCustomerFilterId(''); setPage(1); } }}
+            placeholder="Filtrar por cliente..."
+            className="w-full pl-8 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition"
+          />
+          {customerFilter.length > 1 && filterCustomers && filterCustomers.length > 0 && !customerFilterId && (
+            <div className="absolute top-full mt-1 left-0 right-0 bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/[0.08] rounded-xl shadow-lg z-20 overflow-hidden">
+              {filterCustomers.map((c: any) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => { setCustomerFilterId(c.id); setCustomerFilter(c.name); setPage(1); }}
+                  className="w-full text-left px-4 py-2.5 text-[13px] hover:bg-slate-50 dark:hover:bg-white/[0.04] text-slate-700 dark:text-slate-300 transition"
+                >
+                  {c.name}
+                </button>
+              ))}
+            </div>
+          )}
+          {customerFilterId && (
+            <button
+              type="button"
+              aria-label="Limpiar filtro de cliente"
+              onClick={() => { setCustomerFilter(''); setCustomerFilterId(''); setPage(1); }}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+            >
+              <X size={13} />
+            </button>
+          )}
+        </div>
+
         <button
           type="button"
           onClick={() => { setShowNewCredit(true); resetNew(); setCustomerSearch(''); }}
-          className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 shadow-sm shadow-blue-600/25 transition ml-auto"
+          className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 shadow-sm shadow-blue-600/25 transition"
         >
           <Plus size={15} /> Nuevo crédito
         </button>
