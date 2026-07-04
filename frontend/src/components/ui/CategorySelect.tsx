@@ -76,7 +76,7 @@ export function CategorySelect({ value, onChange, categories }: CategorySelectPr
               className="flex-1 text-sm outline-none bg-transparent dark:text-white"
             />
             {search && (
-              <button type="button" aria-label="Limpiar búsqueda" onClick={() => setSearch('')} className="text-gray-400 hover:text-gray-600">
+              <button type="button" aria-label="Limpiar búsqueda" onClick={() => setSearch('')} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
                 <X size={14} />
               </button>
             )}

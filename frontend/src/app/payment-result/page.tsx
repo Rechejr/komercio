@@ -33,16 +33,16 @@ function PaymentResultContent() {
         {approved ? (
           <>
             <CheckCircle size={56} className="text-green-500 mx-auto mb-4" strokeWidth={1.5} />
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">¡Pago exitoso!</h1>
-            <p className="text-gray-500 dark:text-gray-400 text-sm mb-6">
+            <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">¡Pago exitoso!</h1>
+            <p className="text-slate-500 dark:text-slate-400 text-sm mb-6">
               Tu Plan Pro está siendo activado. En unos segundos verás todos los beneficios desbloqueados.
             </p>
           </>
         ) : (
           <>
             <XCircle size={56} className="text-red-500 mx-auto mb-4" strokeWidth={1.5} />
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Pago no completado</h1>
-            <p className="text-gray-500 dark:text-gray-400 text-sm mb-6">
+            <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">Pago no completado</h1>
+            <p className="text-slate-500 dark:text-slate-400 text-sm mb-6">
               {status === 'DECLINED'
                 ? 'El pago fue rechazado. Verifica los datos de tu método de pago e intenta de nuevo.'
                 : 'El pago fue cancelado o expiró. Puedes volver a intentarlo desde tu cuenta.'}
@@ -50,7 +50,7 @@ function PaymentResultContent() {
           </>
         )}
 
-        <div className="flex items-center justify-center gap-2 text-xs text-gray-400">
+        <div className="flex items-center justify-center gap-2 text-xs text-slate-400 dark:text-slate-500">
           <Loader2 size={13} className="animate-spin" />
           Redirigiendo al inicio en {seconds}s…
         </div>
