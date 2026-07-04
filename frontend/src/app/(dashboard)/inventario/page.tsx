@@ -640,15 +640,6 @@ export default function InventarioPage() {
               <div className="space-y-4">
                 <h3 className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide">Datos del producto</h3>
 
-                <Controller
-                  name="images"
-                  control={control}
-                  defaultValue={[]}
-                  render={({ field }) => (
-                    <ImageUpload value={field.value || []} onChange={field.onChange} />
-                  )}
-                />
-
                 <div>
                   <label className="block text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5">Código *</label>
                   <div className="relative">
@@ -663,14 +654,14 @@ export default function InventarioPage() {
                 </div>
 
                 <div>
-                  <label className="block text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5">Código de barras</label>
-                  <input {...register('barcode')} placeholder="7701234567890" className={inputCls} />
-                </div>
-
-                <div>
                   <label className="block text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5">Nombre del producto *</label>
                   <input {...register('name', { required: 'El nombre es obligatorio' })} placeholder="Camiseta, perfume, aretes..." className={inputCls} />
                   {errors.name && <p className="text-[11px] text-red-500 mt-1">{errors.name.message as string}</p>}
+                </div>
+
+                <div>
+                  <label className="block text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5">Código de barras</label>
+                  <input {...register('barcode')} placeholder="7701234567890" className={inputCls} />
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
@@ -729,6 +720,18 @@ export default function InventarioPage() {
                     <label className="block text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5">Unidad</label>
                     <input {...register('unit')} placeholder="und, kg, lt..." className={inputCls} />
                   </div>
+                </div>
+
+                <div>
+                  <label className="block text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5">Imágenes del producto</label>
+                  <Controller
+                    name="images"
+                    control={control}
+                    defaultValue={[]}
+                    render={({ field }) => (
+                      <ImageUpload value={field.value || []} onChange={field.onChange} />
+                    )}
+                  />
                 </div>
               </div>
 
