@@ -63,20 +63,20 @@ export function UpgradeModal() {
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4"
       onClick={close}
     >
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" />
 
       <div
-        className="relative bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]"
+        className="relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/[0.08] rounded-2xl shadow-modal w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh] animate-scale-in"
         onClick={(e) => e.stopPropagation()}
       >
         {/* ── Header ─────────────────────────────────────────────────────── */}
         <div className="flex items-center justify-between px-6 pt-6 pb-4 flex-shrink-0">
-          <h2 className="text-xl font-bold text-gray-900 dark:text-white">Cambiar plan</h2>
+          <h2 className="text-xl font-bold text-slate-900 dark:text-white">Cambiar plan</h2>
           <button
             type="button"
             aria-label="Cerrar"
             onClick={close}
-            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
+            className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
           >
             <X size={20} />
           </button>
@@ -84,7 +84,7 @@ export function UpgradeModal() {
 
         <div className="px-6 overflow-y-auto flex-1">
           {/* ── Period tabs ──────────────────────────────────────────────── */}
-          <div className="flex items-center gap-1 bg-gray-100 dark:bg-gray-800 rounded-xl p-1 mb-5">
+          <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 rounded-xl p-1 mb-5">
             {PERIODS.map((opt) => (
               <button
                 key={opt.key}
@@ -93,8 +93,8 @@ export function UpgradeModal() {
                 className={cn(
                   'flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-sm font-medium transition-all',
                   period === opt.key
-                    ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 shadow-sm'
-                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200',
+                    ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 shadow-sm'
+                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200',
                 )}
               >
                 {opt.label}
@@ -102,7 +102,7 @@ export function UpgradeModal() {
                   <span className={cn(
                     'text-xs font-bold px-1.5 py-0.5 rounded-full',
                     period === opt.key
-                      ? 'bg-white/20 text-white dark:bg-black/20 dark:text-gray-900'
+                      ? 'bg-white/20 text-white dark:bg-black/20 dark:text-slate-900'
                       : 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400',
                   )}>
                     {opt.badge}
@@ -133,7 +133,7 @@ export function UpgradeModal() {
               {/* Info */}
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-bold text-gray-900 dark:text-white">Plan Pro</span>
+                  <span className="font-bold text-slate-900 dark:text-white">Plan Pro</span>
                   <span className="inline-flex items-center gap-1 text-xs bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 font-semibold px-2 py-0.5 rounded-full">
                     ⭐ Recomendado
                   </span>
@@ -145,12 +145,12 @@ export function UpgradeModal() {
 
               {/* Price */}
               <div className="text-right flex-shrink-0">
-                <p className="font-bold text-gray-900 dark:text-white text-sm leading-tight">
+                <p className="font-bold text-slate-900 dark:text-white text-sm leading-tight">
                   {cop(monthly)}
-                  <span className="text-gray-400 font-normal"> / mes</span>
+                  <span className="text-slate-400 font-normal"> / mes</span>
                 </p>
                 {period !== 'monthly' && (
-                  <p className="text-xs text-gray-400 mt-0.5">Total {cop(total)}</p>
+                  <p className="text-xs text-slate-400 mt-0.5">Total {cop(total)}</p>
                 )}
               </div>
 
@@ -159,7 +159,7 @@ export function UpgradeModal() {
                 type="button"
                 aria-label="Ver características del plan Pro"
                 onClick={() => setExpanded((v) => !v)}
-                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 flex-shrink-0 ml-1"
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 flex-shrink-0 ml-1"
               >
                 <ChevronDown size={18} className={cn('transition-transform duration-200', expanded && 'rotate-180')} />
               </button>
@@ -170,7 +170,7 @@ export function UpgradeModal() {
               <div className="border-t border-blue-100 dark:border-blue-900/40 px-4 py-3 bg-blue-50/50 dark:bg-blue-900/10">
                 <ul className="space-y-2">
                   {PRO_FEATURES.map((f) => (
-                    <li key={f} className="flex items-start gap-2 text-xs text-gray-600 dark:text-gray-400">
+                    <li key={f} className="flex items-start gap-2 text-xs text-slate-600 dark:text-slate-400">
                       <Check size={13} className="text-blue-500 flex-shrink-0 mt-0.5" strokeWidth={2.5} />
                       {f}
                     </li>
@@ -181,20 +181,20 @@ export function UpgradeModal() {
           </div>
 
           {/* ── Free plan card (current) ──────────────────────────────────── */}
-          <div className="border border-gray-200 dark:border-gray-700 rounded-2xl p-4 flex items-center gap-3 mb-6">
-            <div className="w-5 h-5 rounded-full border-2 border-gray-300 dark:border-gray-600 flex-shrink-0" />
+          <div className="border border-slate-200 dark:border-slate-700 rounded-2xl p-4 flex items-center gap-3 mb-6">
+            <div className="w-5 h-5 rounded-full border-2 border-slate-300 dark:border-slate-600 flex-shrink-0" />
             <div className="flex-1 min-w-0 flex items-center gap-2">
-              <span className="font-semibold text-gray-700 dark:text-gray-300 text-sm">Plan Gratuito</span>
-              <span className="text-xs bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 font-medium px-2 py-0.5 rounded-full">
+              <span className="font-semibold text-slate-700 dark:text-slate-300 text-sm">Plan Gratuito</span>
+              <span className="text-xs bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-medium px-2 py-0.5 rounded-full">
                 Plan actual
               </span>
             </div>
-            <span className="text-gray-400 text-sm font-medium flex-shrink-0">Gratis</span>
+            <span className="text-slate-400 text-sm font-medium flex-shrink-0">Gratis</span>
           </div>
         </div>
 
         {/* ── Sticky CTA ─────────────────────────────────────────────────── */}
-        <div className="px-6 py-4 border-t border-gray-100 dark:border-gray-800 flex-shrink-0 bg-white dark:bg-gray-900">
+        <div className="px-6 py-4 border-t border-slate-100 dark:border-white/[0.06] flex-shrink-0 bg-white dark:bg-slate-900">
           {payError && (
             <p className="text-xs text-red-500 text-center mb-2">{payError}</p>
           )}
@@ -202,7 +202,7 @@ export function UpgradeModal() {
             type="button"
             onClick={handlePay}
             disabled={paying}
-            className="flex items-center justify-between w-full bg-gray-900 dark:bg-white hover:bg-gray-700 dark:hover:bg-gray-100 disabled:opacity-60 disabled:cursor-not-allowed text-white dark:text-gray-900 font-semibold py-4 px-5 rounded-xl transition-colors text-sm"
+            className="flex items-center justify-between w-full bg-slate-900 dark:bg-white hover:bg-slate-700 dark:hover:bg-slate-100 disabled:opacity-60 disabled:cursor-not-allowed text-white dark:text-slate-900 font-semibold py-4 px-5 rounded-xl transition-colors text-sm"
           >
             <div className="flex items-center gap-2.5">
               {paying ? (
@@ -217,7 +217,7 @@ export function UpgradeModal() {
             </div>
             <span className="font-bold">{cop(monthly)} →</span>
           </button>
-          <p className="text-center text-xs text-gray-400 mt-2">
+          <p className="text-center text-xs text-slate-400 mt-2">
             Pago seguro con tarjeta, Nequi o PSE · Wompi
           </p>
         </div>

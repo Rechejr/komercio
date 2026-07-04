@@ -28,8 +28,8 @@ function PaymentResultContent() {
   }, [router]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950 p-6">
-      <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl max-w-sm w-full p-8 text-center">
+    <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 p-6">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/[0.08] rounded-2xl shadow-modal max-w-sm w-full p-8 text-center">
         {approved ? (
           <>
             <CheckCircle size={56} className="text-green-500 mx-auto mb-4" strokeWidth={1.5} />
@@ -58,7 +58,7 @@ function PaymentResultContent() {
         <button
           type="button"
           onClick={() => router.push('/dashboard')}
-          className="mt-4 w-full py-2.5 rounded-xl bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-sm font-semibold hover:bg-gray-700 dark:hover:bg-gray-100 transition-colors"
+          className="mt-4 w-full py-2.5 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-sm font-semibold hover:bg-slate-700 dark:hover:bg-slate-100 transition-colors"
         >
           Ir al inicio ahora
         </button>

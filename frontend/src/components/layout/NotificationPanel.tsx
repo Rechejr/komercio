@@ -66,10 +66,10 @@ export function NotificationPanel({ open, onClose }: NotificationPanelProps) {
   return (
     <div
       ref={ref}
-      className="absolute right-0 top-12 w-80 max-h-[28rem] bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-gray-100 dark:border-gray-700 z-50 flex flex-col"
+      className="absolute right-0 top-12 w-80 max-h-[28rem] bg-white dark:bg-slate-900 rounded-xl shadow-modal border border-slate-100 dark:border-white/[0.08] z-50 flex flex-col"
     >
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-700">
-        <h3 className="font-semibold text-sm text-gray-800 dark:text-white">Notificaciones</h3>
+      <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-white/[0.06]">
+        <h3 className="font-semibold text-sm text-slate-800 dark:text-white">Notificaciones</h3>
         {notifications.some((n: any) => !n.isRead) && (
           <button
             type="button"
@@ -83,8 +83,8 @@ export function NotificationPanel({ open, onClose }: NotificationPanelProps) {
 
       <div className="overflow-y-auto flex-1">
         {notifications.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-10 text-gray-400">
-            <Bell size={28} className="mb-2 opacity-30" />
+          <div className="flex flex-col items-center justify-center py-10 text-slate-400 dark:text-slate-600">
+            <Bell size={28} className="mb-2 opacity-50" />
             <p className="text-xs">No tienes notificaciones</p>
           </div>
         ) : (
@@ -102,24 +102,24 @@ export function NotificationPanel({ open, onClose }: NotificationPanelProps) {
                   }
                 }}
                 className={cn(
-                  'w-full text-left flex items-start gap-3 px-4 py-3 border-b border-gray-50 dark:border-gray-700/50 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors',
+                  'w-full text-left flex items-start gap-3 px-4 py-3 border-b border-slate-50 dark:border-white/[0.04] hover:bg-slate-50 dark:hover:bg-white/[0.02] transition-colors',
                   !n.isRead && 'bg-blue-50/50 dark:bg-blue-900/10',
                   isLowStock && 'cursor-pointer',
                 )}
               >
                 <div className={cn(
                   'w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5',
-                  n.type === 'WARNING' ? 'bg-amber-100 text-amber-600' : 'bg-blue-100 text-blue-600',
+                  n.type === 'WARNING' ? 'bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400' : 'bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400',
                 )}>
                   {n.type === 'WARNING' ? <AlertTriangle size={13} /> : <Info size={13} />}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className={cn('text-xs leading-snug', n.isRead ? 'text-gray-600 dark:text-gray-400' : 'text-gray-800 dark:text-white font-medium')}>
+                  <p className={cn('text-xs leading-snug', n.isRead ? 'text-slate-500 dark:text-slate-400' : 'text-slate-800 dark:text-white font-medium')}>
                     {n.title}
                   </p>
-                  <p className="text-xs text-gray-400 mt-0.5 line-clamp-2">{n.message}</p>
+                  <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5 line-clamp-2">{n.message}</p>
                   <div className="flex items-center gap-2 mt-1">
-                    <p className="text-[11px] text-gray-300">{timeAgo(n.createdAt)}</p>
+                    <p className="text-[11px] text-slate-300 dark:text-slate-600">{timeAgo(n.createdAt)}</p>
                     {isLowStock && (
                       <span className="text-[10px] text-amber-600 dark:text-amber-400 font-medium flex items-center gap-0.5">
                         Ver en inventario <ArrowRight size={9} />
@@ -128,7 +128,7 @@ export function NotificationPanel({ open, onClose }: NotificationPanelProps) {
                   </div>
                 </div>
                 {!n.isRead && <div className="w-1.5 h-1.5 rounded-full bg-blue-500 flex-shrink-0 mt-1.5" />}
-                {n.isRead && <Check size={12} className="text-gray-300 flex-shrink-0 mt-1.5" />}
+                {n.isRead && <Check size={12} className="text-slate-300 dark:text-slate-600 flex-shrink-0 mt-1.5" />}
               </button>
             );
           })

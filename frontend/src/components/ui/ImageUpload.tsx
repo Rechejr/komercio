@@ -61,7 +61,7 @@ export function ImageUpload({ value, onChange }: ImageUploadProps) {
     <div>
       <div className="grid grid-cols-3 gap-2 mb-2">
         {value.map((url) => (
-          <div key={url} className="relative aspect-square rounded-lg overflow-hidden border border-gray-200 dark:border-gray-600 group">
+          <div key={url} className="relative aspect-square rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 group">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={url} alt="Producto" className="w-full h-full object-cover" />
             <button

@@ -29,8 +29,8 @@ export class ErrorBoundary extends React.Component<{ children: React.ReactNode }
           <div className="w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mb-5">
             <AlertTriangle size={28} className="text-red-500" />
           </div>
-          <h2 className="text-lg font-bold text-gray-800 dark:text-white mb-2">Algo salió mal</h2>
-          <p className="text-sm text-gray-500 dark:text-gray-400 max-w-xs mb-6">
+          <h2 className="text-lg font-bold text-slate-800 dark:text-white mb-2">Algo salió mal</h2>
+          <p className="text-sm text-slate-500 dark:text-slate-400 max-w-xs mb-6">
             Ocurrió un error inesperado en esta sección. Puedes intentar recargar la página.
           </p>
           {process.env.NODE_ENV === 'development' && this.state.error && (

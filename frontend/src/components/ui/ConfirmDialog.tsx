@@ -54,7 +54,7 @@ export function ConfirmDialog({
         <Dialog.Content
           className={cn(
             'fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50',
-            'bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm p-0',
+            'bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/[0.08] rounded-2xl shadow-modal w-full max-w-sm p-0',
             'animate-scale-in',
           )}
           onEscapeKeyDown={() => !loading && onOpenChange(false)}
@@ -66,11 +66,11 @@ export function ConfirmDialog({
                 {icons[variant]}
               </div>
               <div className="flex-1 min-w-0">
-                <Dialog.Title className="font-bold text-gray-800 dark:text-white leading-snug">
+                <Dialog.Title className="font-bold text-slate-800 dark:text-white leading-snug">
                   {title}
                 </Dialog.Title>
                 {description && (
-                  <Dialog.Description className="text-sm text-gray-500 dark:text-gray-400 mt-1 leading-relaxed">
+                  <Dialog.Description className="text-sm text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
                     {description}
                   </Dialog.Description>
                 )}
@@ -83,7 +83,7 @@ export function ConfirmDialog({
               type="button"
               onClick={() => onOpenChange(false)}
               disabled={loading}
-              className="flex-1 px-4 py-2.5 border border-gray-200 dark:border-gray-600 rounded-xl text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 transition"
+              className="flex-1 px-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 transition"
             >
               {cancelLabel}
             </button>
