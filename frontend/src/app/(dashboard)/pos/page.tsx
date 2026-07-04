@@ -176,8 +176,9 @@ export default function POSPage() {
   }
 
   function handleAddProduct(product: any) {
-    if (product.stock <= 0 && !product.allowNegativeStock) {
-      toast.error(`"${product.name}" no tiene stock disponible`);
+    const cartQty = items.find((i) => i.productId === product.id)?.quantity ?? 0;
+    if (product.stock <= cartQty && !product.allowNegativeStock) {
+      toast.error(`"${product.name}" sin stock suficiente (${product.stock} disponibles)`);
       return;
     }
     addItem({

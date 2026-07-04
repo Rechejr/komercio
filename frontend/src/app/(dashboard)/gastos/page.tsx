@@ -6,7 +6,7 @@ import { useForm, Controller } from 'react-hook-form';
 import { api } from '@/lib/api';
 import { formatCurrency, formatDate, paymentMethodLabel } from '@/lib/utils';
 import toast from 'react-hot-toast';
-import { Plus, X, Loader2, Receipt, Edit, Trash2, FileDown } from 'lucide-react';
+import { Plus, X, Loader2, Receipt, Edit, Trash2, FileDown, Tag } from 'lucide-react';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { PriceInput } from '@/components/ui/PriceInput';
 import { downloadExcel } from '@/lib/exportExcel';
@@ -27,6 +27,8 @@ export default function GastosPage() {
   const [editItem, setEditItem] = useState<any>(null);
   const [deleteTarget, setDeleteTarget] = useState<any>(null);
   const [page, setPage] = useState(1);
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
 
   const today = new Date().toISOString().split('T')[0];
   const firstOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
@@ -67,6 +69,17 @@ export default function GastosPage() {
       toast.success('Gasto eliminado');
     },
     onError: (err: any) => toast.error(err.response?.data?.error || 'Error al eliminar'),
+  });
+
+  const categoryMutation = useMutation({
+    mutationFn: (name: string) => api.post('/expenses/categories', { name }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['expense-categories'] });
+      toast.success('Categoría creada');
+      setShowCategoryModal(false);
+      setNewCategoryName('');
+    },
+    onError: (err: any) => toast.error(err.response?.data?.error || 'Error al crear categoría'),
   });
 
   function openEdit(expense: any) {
@@ -290,7 +303,13 @@ export default function GastosPage() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5 block">Categoría</label>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400">Categoría</label>
+                    <button type="button" onClick={() => setShowCategoryModal(true)}
+                      className="flex items-center gap-1 text-[11px] text-blue-600 dark:text-blue-400 hover:underline">
+                      <Tag size={11} /> Nueva
+                    </button>
+                  </div>
                   <select {...register('categoryId')} className={inputCls}>
                     <option value="">Sin categoría</option>
                     {categories?.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -378,6 +397,40 @@ export default function GastosPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── Nueva categoría Modal ────────────────────────────────────────────── */}
+      {showCategoryModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-[2px] z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/[0.08] rounded-2xl shadow-modal w-full max-w-xs animate-scale-in">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-white/[0.06]">
+              <h2 className="text-[14px] font-semibold text-slate-800 dark:text-white">Nueva categoría</h2>
+              <button type="button" aria-label="Cerrar" onClick={() => { setShowCategoryModal(false); setNewCategoryName(''); }}
+                className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-white/[0.06] transition">
+                <X size={16} />
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              <input
+                value={newCategoryName}
+                onChange={(e) => setNewCategoryName(e.target.value)}
+                placeholder="Nombre de la categoría"
+                className={inputCls}
+                autoFocus
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (newCategoryName.trim()) categoryMutation.mutate(newCategoryName.trim()); } }}
+              />
+              <button
+                type="button"
+                disabled={!newCategoryName.trim() || categoryMutation.isPending}
+                onClick={() => categoryMutation.mutate(newCategoryName.trim())}
+                className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-semibold py-2.5 rounded-xl text-[13px] flex items-center justify-center gap-2 transition"
+              >
+                {categoryMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Tag size={14} />}
+                Crear categoría
+              </button>
+            </div>
           </div>
         </div>
       )}
