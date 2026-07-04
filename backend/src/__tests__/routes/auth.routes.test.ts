@@ -235,7 +235,7 @@ describe('GET /api/v1/auth/me', () => {
   it('retorna 200 con datos del usuario cuando el token es válido', async () => {
     const payload = { userId: 'user-1', email: 'test@example.com', role: 'ADMIN', businessId: 'biz-1' };
     mockJwt.verifyAccessToken.mockReturnValue(payload);
-    (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue(makeUser());
+    (mockPrisma.user.findFirst as jest.Mock).mockResolvedValue(makeUser());
 
     const res = await request(app)
       .get('/api/v1/auth/me')

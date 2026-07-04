@@ -12,17 +12,16 @@ import { notFound } from './middlewares/notFound';
 import { logger } from './config/logger';
 import { redis } from './config/redis';
 
-// Rate-limit Redis store — only when REDIS_URL is set; falls back to memory store otherwise
-function makeRateLimitStore() {
-  if (!process.env.REDIS_URL) return undefined;
+// Rate-limit Redis store — only in production with REDIS_URL; each limiter gets its own instance
+// (rate-limit-redis v4 forbids sharing one store across multiple limiters)
+function makeRateLimitStore(prefix: string) {
+  if (process.env.NODE_ENV === 'test' || !process.env.REDIS_URL) return undefined;
   return new RedisStore({
     sendCommand: (...args: string[]) =>
       redis.call(args[0], ...args.slice(1)) as Promise<number>,
-    prefix: 'rl:',
+    prefix,
   });
 }
-
-const rateLimitStore = makeRateLimitStore();
 
 // Routes
 import authRoutes from './routes/auth.routes';
@@ -90,7 +89,7 @@ const limiter = rateLimit({
   max: Number(process.env.RATE_LIMIT_MAX) || (process.env.NODE_ENV === 'production' ? 100 : 500),
   standardHeaders: true,
   legacyHeaders: false,
-  store: rateLimitStore,
+  store: makeRateLimitStore('rl:api:'),
   message: { error: 'Demasiadas solicitudes, intente de nuevo más tarde.' },
 });
 app.use('/api/', limiter);
@@ -102,7 +101,7 @@ const authLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   skipSuccessfulRequests: true,
-  store: rateLimitStore,
+  store: makeRateLimitStore('rl:auth:'),
   message: { error: 'Demasiados intentos, espere 15 minutos antes de reintentar.' },
 });
 
