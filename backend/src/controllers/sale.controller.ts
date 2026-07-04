@@ -5,6 +5,7 @@ import { AppError, success, created, paginated } from '../utils/response';
 import { getPagination, getSearch } from '../utils/pagination';
 import { AuthRequest } from '../middlewares/auth';
 import { emitToBusinesss, socketEvents } from '../config/socket';
+import { logger } from '../config/logger';
 import { notifyLowStockBatch } from '../services/notification.service';
 
 async function generateInvoiceNumber(tx: any, branchId: string | null): Promise<string> {
@@ -343,8 +344,9 @@ export const saleController = {
             }
           }
         }
-      } catch {
-        // El movimiento de caja no debe fallar la venta
+      } catch (cashErr) {
+        // El movimiento de caja no debe fallar la venta — best effort
+        logger.warn('Cash register movement failed after sale', { saleId: sale.id, err: cashErr });
       }
 
       const businessId = req.user?.businessId;
