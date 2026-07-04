@@ -731,17 +731,6 @@ export default function InventarioPage() {
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5">Imágenes del producto</label>
-                  <Controller
-                    name="images"
-                    control={control}
-                    defaultValue={[]}
-                    render={({ field }) => (
-                      <ImageUpload value={field.value || []} onChange={field.onChange} />
-                    )}
-                  />
-                </div>
               </div>
 
               {/* ── Columna derecha ──────────────────── */}
