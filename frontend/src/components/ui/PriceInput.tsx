@@ -1,6 +1,6 @@
 'use client';
 
-import { forwardRef } from 'react';
+import { forwardRef, useState, useEffect } from 'react';
 
 function fmt(v: number | string | undefined | null): string {
   if (v === undefined || v === null || v === '') return '';
@@ -16,8 +16,16 @@ interface PriceInputProps extends Omit<React.InputHTMLAttributes<HTMLInputElemen
 
 export const PriceInput = forwardRef<HTMLInputElement, PriceInputProps>(
   function PriceInput({ value, onChange, ...props }, ref) {
+    const [display, setDisplay] = useState(() => fmt(value));
+
+    useEffect(() => {
+      setDisplay(fmt(value));
+    }, [value]);
+
     function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
       const digits = e.target.value.replace(/\D/g, '');
+      const formatted = digits ? parseInt(digits, 10).toLocaleString('es-CO') : '';
+      setDisplay(formatted);
       onChange?.(digits ? parseInt(digits, 10) : undefined);
     }
 
@@ -27,7 +35,7 @@ export const PriceInput = forwardRef<HTMLInputElement, PriceInputProps>(
         ref={ref}
         type="text"
         inputMode="numeric"
-        value={fmt(value)}
+        value={display}
         onChange={handleChange}
       />
     );
