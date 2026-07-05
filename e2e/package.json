@@ -1,0 +1,24 @@
+{
+  "name": "komercio-e2e",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:ui": "playwright test --ui",
+    "test:report": "playwright show-report",
+    "test:dashboard": "playwright test tests/dashboard.spec.ts",
+    "test:ventas": "playwright test tests/ventas.spec.ts",
+    "test:inventario": "playwright test tests/inventario.spec.ts",
+    "test:clientes": "playwright test tests/clientes.spec.ts",
+    "test:proveedores": "playwright test tests/proveedores.spec.ts",
+    "test:compras": "playwright test tests/compras.spec.ts",
+    "test:gastos": "playwright test tests/gastos.spec.ts",
+    "test:caja": "playwright test tests/caja.spec.ts",
+    "test:creditos": "playwright test tests/creditos.spec.ts",
+    "test:reportes": "playwright test tests/reportes.spec.ts"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.45.0"
+  }
+}
