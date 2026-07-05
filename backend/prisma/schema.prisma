@@ -581,3 +581,13 @@ model AuditLog {
   @@index([entityId])
   @@map("audit_logs")
 }
+
+// ─── INVOICE COUNTERS ─────────────────────────────────────────────────────────
+model SaleNumberCounter {
+  branchId  String
+  dayPrefix String
+  lastSeq   Int    @default(0)
+
+  @@id([branchId, dayPrefix])
+  @@map("sale_number_counters")
+}

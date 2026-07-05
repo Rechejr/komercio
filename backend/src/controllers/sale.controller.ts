@@ -8,31 +8,24 @@ import { emitToBusinesss, socketEvents } from '../config/socket';
 import { logger } from '../config/logger';
 import { notifyLowStockBatch } from '../services/notification.service';
 
-async function generateInvoiceNumber(tx: any, branchId: string | null): Promise<string> {
-  // Lock per-branch: concurrent sales in different branches/businesses run in parallel.
-  // Falls back to a single global lock if branchId is null (edge case — branchId is always set).
-  if (branchId) {
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${branchId}))`;
-  } else {
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(74296518)`;
-  }
-
+async function generateInvoiceNumber(tx: any, branchId: string): Promise<string> {
   const coDate = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Bogota' }));
   const y = coDate.getFullYear();
   const m = String(coDate.getMonth() + 1).padStart(2, '0');
   const d = String(coDate.getDate()).padStart(2, '0');
   const prefix = `FAC-${y}${m}${d}-`;
 
-  // Scoped to this branch: each branch has its own independent daily sequence.
-  // Invoice numbers are unique within a branch (@@unique([branchId, invoiceNumber]) in schema).
-  const last = await tx.sale.findFirst({
-    where: { invoiceNumber: { startsWith: prefix }, ...(branchId ? { branchId } : {}) },
-    orderBy: { invoiceNumber: 'desc' },
-    select: { invoiceNumber: true },
-  });
-
-  const lastSeq = last ? parseInt(last.invoiceNumber.slice(prefix.length), 10) : 0;
-  const seq = String(lastSeq + 1).padStart(6, '0');
+  // Atomic counter: INSERT ... ON CONFLICT ... DO UPDATE RETURNING is serialized
+  // by PostgreSQL row-level locking, so concurrent sales never collide even
+  // when pg_advisory_xact_lock is unreliable (Neon connection pooling).
+  const rows = await tx.$queryRaw<Array<{ lastSeq: number }>>`
+    INSERT INTO "sale_number_counters" ("branchId", "dayPrefix", "lastSeq")
+    VALUES (${branchId}, ${prefix}, 1)
+    ON CONFLICT ("branchId", "dayPrefix")
+    DO UPDATE SET "lastSeq" = "sale_number_counters"."lastSeq" + 1
+    RETURNING "lastSeq"
+  `;
+  const seq = String(rows[0].lastSeq).padStart(6, '0');
   return `${prefix}${seq}`;
 }
 
@@ -138,11 +131,11 @@ export const saleController = {
         if (!branch) throw new AppError('Sucursal no válida para este negocio', 403);
       }
 
-      const effectiveBranchId = branchId || req.user?.branchId || null;
+      const effectiveBranchId = branchId || req.user?.branchId;
+      if (!effectiveBranchId) throw new AppError('No se encontró una sucursal para el usuario', 400);
 
-      // Retry up to 3 times if a concurrent request collides on the invoice number.
-      // This can happen under connection-pool transaction-mode (PgBouncer) where
-      // session-level advisory locks may not persist across pool hops.
+      // sale_number_counters guarantees uniqueness atomically; retry loop kept as
+      // a safety net for unrelated P2002 collisions (e.g. concurrent product lock timeouts).
       let result: any;
       let attempt = 0;
       while (true) {
