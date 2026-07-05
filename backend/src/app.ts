@@ -14,8 +14,9 @@ import { redis } from './config/redis';
 
 // Rate-limit Redis store — only in production with REDIS_URL; each limiter gets its own instance
 // (rate-limit-redis v4 forbids sharing one store across multiple limiters)
+// In development we always use the default in-memory store (Redis may not be reachable locally)
 function makeRateLimitStore(prefix: string) {
-  if (process.env.NODE_ENV === 'test' || !process.env.REDIS_URL) return undefined;
+  if (process.env.NODE_ENV !== 'production' || !process.env.REDIS_URL) return undefined;
   return new RedisStore({
     sendCommand: (...args: string[]) =>
       redis.call(args[0], ...args.slice(1)) as Promise<number>,
@@ -97,7 +98,7 @@ app.use('/api/', limiter);
 // Strict rate limit for auth endpoints — protects login/forgot-password from brute-force
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: process.env.NODE_ENV === 'test' ? 1_000 : 5,
+  max: process.env.NODE_ENV === 'production' ? 5 : 1_000,
   standardHeaders: true,
   legacyHeaders: false,
   skipSuccessfulRequests: true,

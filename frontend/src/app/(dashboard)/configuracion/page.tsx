@@ -24,7 +24,7 @@ const BIZ_FIELDS = [
     validation: { pattern: { value: /^[0-9\-]{5,20}$/, message: 'Solo dígitos y guiones (5-20 caracteres)' } },
   },
   {
-    name: 'phone', label: 'Teléfono', col: 1,
+    name: 'phone', label: 'Teléfono', col: 1, maxLength: 10,
     validation: { maxLength: { value: 10, message: 'Máximo 10 dígitos' }, pattern: { value: /^[0-9+\s\-()]{7,10}$/, message: 'Teléfono inválido (máx. 10 dígitos)' } },
   },
   {
@@ -34,7 +34,7 @@ const BIZ_FIELDS = [
   { name: 'address', label: 'Dirección', col: 1, validation: {} },
   { name: 'city',    label: 'Ciudad',    col: 1, validation: {} },
   { name: 'currency', label: 'Moneda',  col: 1, validation: {} },
-] satisfies { name: string; label: string; col: number; type?: string; validation: object }[];
+] satisfies { name: string; label: string; col: number; type?: string; maxLength?: number; validation: object }[];
 
 const ROLE_LABEL: Record<string, string> = {
   ADMIN: 'Administrador',
@@ -228,6 +228,7 @@ export default function ConfiguracionPage() {
                   <input
                     {...regBusiness(f.name, f.validation)}
                     type={f.type || 'text'}
+                    maxLength={f.maxLength}
                     className={`${inputCls} ${err ? 'border-red-400 focus:border-red-400 focus:ring-red-500/20' : ''}`}
                     aria-invalid={err ? 'true' : 'false'}
                     aria-describedby={err ? `${f.name}-error` : undefined}

@@ -26,3 +26,8 @@ if (process.env.NODE_ENV === 'development') {
     logger.debug(`Query: ${e.query} | Duration: ${e.duration}ms`);
   });
 }
+
+// Warm up connection on startup to detect Neon DB issues early
+prisma.$connect().catch((e) => {
+  logger.error('Database connection failed on startup:', e.message);
+});
