@@ -72,7 +72,9 @@ export const customerController = {
 
   async create(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const { name, email, phone, document, documentType, address, city, notes, creditLimit } = req.body;
+      const { email, phone, document, documentType, address, city, notes, creditLimit } = req.body;
+      const name = req.body.name?.toString().trim();
+      if (!name) throw new AppError('El nombre del cliente es requerido', 400);
       const customer = await prisma.customer.create({
         data: {
           name,

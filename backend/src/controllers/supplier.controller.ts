@@ -45,7 +45,9 @@ export const supplierController = {
 
   async create(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const { name, legalName, document, phone, mobile, email, address, city, contactName, notes } = req.body;
+      const name = req.body.name?.toString().trim();
+      if (!name) throw new AppError('El nombre del proveedor es requerido', 400);
+      const { legalName, document, phone, mobile, email, address, city, contactName, notes } = req.body;
       const supplier = await prisma.supplier.create({
         data: { name, legalName, document, phone, mobile, email, address, city, contactName, notes, businessId: req.user!.businessId },
       });

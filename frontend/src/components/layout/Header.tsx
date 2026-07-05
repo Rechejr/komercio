@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { Bell, Sun, Moon, Menu, Sparkles } from 'lucide-react';
@@ -38,6 +38,8 @@ export function Header({ onMenuClick }: HeaderProps) {
   const openUpgrade = useUpgradeStore((s) => s.open);
   const isFree      = !user?.plan || user.plan === 'free';
   const [notifOpen, setNotifOpen] = useState(false);
+  const bellRef = useRef<HTMLButtonElement>(null);
+  const [notifAnchor, setNotifAnchor] = useState<DOMRect | null>(null);
 
   const { data: unreadData } = useQuery({
     queryKey: ['notifications-unread-count'],
@@ -57,7 +59,7 @@ export function Header({ onMenuClick }: HeaderProps) {
       {isFree && (
         <div className="relative overflow-hidden px-4 md:px-6 py-2.5 flex items-center justify-between gap-4 bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700">
           {/* subtle texture */}
-          <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'radial-gradient(ellipse at top right, white 0%, transparent 60%)' }} />
+          <div className="upgrade-banner-texture absolute inset-0 opacity-10" />
           <div className="relative flex items-center gap-2 text-white/90 text-[12px]">
             <Sparkles size={13} className="text-blue-200 flex-shrink-0" />
             <span>
@@ -112,9 +114,13 @@ export function Header({ onMenuClick }: HeaderProps) {
           <div className="relative">
             <Tooltip content="Notificaciones" side="bottom">
               <button
+                ref={bellRef}
                 type="button"
                 aria-label="Notificaciones"
-                onClick={() => setNotifOpen((v) => !v)}
+                onClick={() => {
+                  if (bellRef.current) setNotifAnchor(bellRef.current.getBoundingClientRect());
+                  setNotifOpen((v) => !v);
+                }}
                 className="w-8 h-8 flex items-center justify-center rounded-md text-slate-400 hover:text-slate-900 hover:bg-slate-100 dark:hover:text-white dark:hover:bg-white/[0.06] transition-colors relative"
               >
                 <Bell size={16} />
@@ -123,7 +129,7 @@ export function Header({ onMenuClick }: HeaderProps) {
                 )}
               </button>
             </Tooltip>
-            <NotificationPanel open={notifOpen} onClose={() => setNotifOpen(false)} />
+            <NotificationPanel open={notifOpen} onClose={() => setNotifOpen(false)} anchorRect={notifAnchor} />
           </div>
 
           {/* Divider */}

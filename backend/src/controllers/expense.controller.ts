@@ -164,7 +164,8 @@ export const expenseController = {
 
   async createCategory(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const { name } = req.body;
+      const name = req.body.name?.toString().trim();
+      if (!name) throw new AppError('El nombre de la categoría es requerido', 400);
       const cat = await prisma.expenseCategory.create({
         data: { name, businessId: req.user!.businessId },
       });

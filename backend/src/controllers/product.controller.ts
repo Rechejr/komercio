@@ -81,6 +81,8 @@ export const productController = {
   async create(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const data = req.body;
+      if (!data.name?.toString().trim()) throw new AppError('El nombre del producto es requerido', 400);
+      if (!data.salePrice && data.salePrice !== 0) throw new AppError('El precio de venta es requerido', 400);
       const businessId = req.user!.businessId;
 
       // Validate caller-supplied branchId belongs to this business

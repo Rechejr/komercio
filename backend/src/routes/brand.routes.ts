@@ -20,7 +20,9 @@ router.get('/', async (req: AuthRequest, res, next) => {
 
 router.post('/', authorize('ADMIN', 'SUPERVISOR'), async (req: AuthRequest, res, next) => {
   try {
-    const { name, logo } = req.body;
+    const name = req.body.name?.toString().trim();
+    if (!name) throw new AppError('El nombre de la marca es requerido', 400);
+    const { logo } = req.body;
     const brand = await prisma.brand.create({
       data: { name, logo, businessId: req.user!.businessId },
     });

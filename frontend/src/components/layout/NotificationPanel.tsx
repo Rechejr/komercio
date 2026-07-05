@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
@@ -10,6 +11,7 @@ import { cn } from '@/lib/utils';
 interface NotificationPanelProps {
   open: boolean;
   onClose: () => void;
+  anchorRect?: DOMRect | null;
 }
 
 function timeAgo(dateStr: string) {
@@ -23,10 +25,14 @@ function timeAgo(dateStr: string) {
   return `hace ${days}d`;
 }
 
-export function NotificationPanel({ open, onClose }: NotificationPanelProps) {
+export function NotificationPanel({ open, onClose, anchorRect }: NotificationPanelProps) {
   const qc = useQueryClient();
   const ref = useRef<HTMLDivElement>(null);
   const router = useRouter();
+  // Avoid SSR mismatch — only render portal after mount
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => { setMounted(true); }, []);
 
   const { data } = useQuery({
     queryKey: ['notifications'],
@@ -55,18 +61,30 @@ export function NotificationPanel({ open, onClose }: NotificationPanelProps) {
     function handleClick(e: MouseEvent) {
       if (ref.current && !ref.current.contains(e.target as Node)) onClose();
     }
+    function handleEsc(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose();
+    }
     document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
+    document.addEventListener('keydown', handleEsc);
+    return () => {
+      document.removeEventListener('mousedown', handleClick);
+      document.removeEventListener('keydown', handleEsc);
+    };
   }, [open, onClose]);
 
-  if (!open) return null;
+  if (!open || !mounted) return null;
+
+  const top = anchorRect ? anchorRect.bottom + 6 : 62;
+  const right = anchorRect ? window.innerWidth - anchorRect.right : 16;
 
   const notifications = data || [];
 
-  return (
+  return createPortal(
     <div
       ref={ref}
-      className="absolute right-0 top-12 w-80 max-h-[28rem] bg-white dark:bg-slate-900 rounded-xl shadow-modal border border-slate-100 dark:border-white/[0.08] z-50 flex flex-col"
+      className="w-80 max-h-[28rem] bg-white dark:bg-slate-900 rounded-xl shadow-modal border border-slate-100 dark:border-white/[0.08] z-[9999] flex flex-col fixed"
+      // eslint-disable-next-line react/forbid-dom-props
+      style={{ top, right }}
     >
       <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-white/[0.06]">
         <h3 className="font-semibold text-sm text-slate-800 dark:text-white">Notificaciones</h3>
@@ -134,6 +152,7 @@ export function NotificationPanel({ open, onClose }: NotificationPanelProps) {
           })
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

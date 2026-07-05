@@ -46,7 +46,7 @@ export function errorHandler(
         phone: 'teléfono',
       };
       const raw = (err.meta?.target as string[] | undefined) || [];
-      const friendly = raw.map((f) => FIELD_LABELS[f] || null).filter(Boolean);
+      const friendly = raw.filter((f) => f !== 'businessId').map((f) => FIELD_LABELS[f] || null).filter(Boolean);
       const label = friendly.length > 0 ? friendly.join(' / ') : 'ese campo';
       logger.warn(`${req.method} ${req.path} [409] P2002 duplicate`, { ...requestContext(req), target: raw });
       res.status(409).json({ success: false, error: `Ya existe un registro con ${label}` });
@@ -57,8 +57,26 @@ export function errorHandler(
       res.status(404).json({ success: false, error: 'Registro no encontrado' });
       return;
     }
+    if (err.code === 'P2003') {
+      // Foreign key constraint — the referenced record doesn't exist
+      logger.warn(`${req.method} ${req.path} [400] P2003 FK violation`, { ...requestContext(req), meta: err.meta });
+      res.status(400).json({ success: false, error: 'Referencia inválida: uno de los registros relacionados no existe.' });
+      return;
+    }
+    if (err.code === 'P2011' || err.code === 'P2012') {
+      // Null constraint or missing required value
+      logger.warn(`${req.method} ${req.path} [400] ${err.code} null constraint`, { ...requestContext(req), meta: err.meta });
+      res.status(400).json({ success: false, error: 'Faltan campos obligatorios. Completa todos los datos requeridos.' });
+      return;
+    }
+    if (err.code === 'P2014' || err.code === 'P2015') {
+      // Required relation violation / related record not found
+      logger.warn(`${req.method} ${req.path} [400] ${err.code} relation`, { ...requestContext(req), meta: err.meta });
+      res.status(400).json({ success: false, error: 'Error de relación: un registro relacionado no existe o fue eliminado.' });
+      return;
+    }
     logger.error(`${req.method} ${req.path} Prisma ${err.code}`, { ...requestContext(req), meta: err.meta });
-    res.status(400).json({ success: false, error: 'Error de base de datos' });
+    res.status(400).json({ success: false, error: 'Error al procesar la solicitud. Intenta de nuevo.' });
     return;
   }
 

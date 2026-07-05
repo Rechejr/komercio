@@ -79,7 +79,7 @@ export default function ConfiguracionPage() {
   const businessMutation = useMutation({
     mutationFn: (data: any) => api.put('/business/me', data),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['business'] }); toast.success('Negocio actualizado'); },
-    onError: () => toast.error('Error al actualizar'),
+    onError: (err: any) => toast.error(err.response?.data?.error || 'Error al actualizar'),
   });
 
   const pwdMutation = useMutation({

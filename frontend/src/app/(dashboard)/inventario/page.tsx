@@ -91,7 +91,7 @@ export default function InventarioPage() {
       toast.success('Producto eliminado');
       setDeleteTarget(null);
     },
-    onError: () => toast.error('Error al eliminar'),
+    onError: (err: any) => toast.error(err.response?.data?.error || 'Error al eliminar'),
   });
 
   const { register, handleSubmit, reset, control, formState: { isSubmitting, errors } } = useForm();

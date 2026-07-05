@@ -224,4 +224,9 @@
 
   /* ── Tabular numbers ─────────────────────────────────────────────────────── */
   .tabular { font-variant-numeric: tabular-nums; }
+
+  /* ── Upgrade banner ──────────────────────────────────────────────────────── */
+  .upgrade-banner-texture {
+    background-image: radial-gradient(ellipse at top right, white 0%, transparent 60%);
+  }
 }
