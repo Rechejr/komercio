@@ -11,15 +11,30 @@ import { useAuthStore } from '@/store/auth.store';
 const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition';
 
 const BIZ_FIELDS = [
-  { name: 'name',      label: 'Nombre del negocio', col: 2 },
-  { name: 'legalName', label: 'Razón social',        col: 2 },
-  { name: 'nit',       label: 'NIT / RUT',           col: 1 },
-  { name: 'phone',     label: 'Teléfono',            col: 1 },
-  { name: 'email',     label: 'Correo',              col: 1, type: 'email' },
-  { name: 'address',   label: 'Dirección',           col: 1 },
-  { name: 'city',      label: 'Ciudad',              col: 1 },
-  { name: 'currency',  label: 'Moneda',              col: 1 },
-];
+  {
+    name: 'name', label: 'Nombre del negocio', col: 2,
+    validation: { required: 'El nombre del negocio es obligatorio', minLength: { value: 2, message: 'Mínimo 2 caracteres' } },
+  },
+  {
+    name: 'legalName', label: 'Razón social', col: 2,
+    validation: { minLength: { value: 2, message: 'Mínimo 2 caracteres' } },
+  },
+  {
+    name: 'nit', label: 'NIT / RUT', col: 1,
+    validation: { pattern: { value: /^[0-9\-]{5,20}$/, message: 'Solo dígitos y guiones (5-20 caracteres)' } },
+  },
+  {
+    name: 'phone', label: 'Teléfono', col: 1,
+    validation: { pattern: { value: /^[0-9+\s\-()]{7,15}$/, message: 'Teléfono inválido' } },
+  },
+  {
+    name: 'email', label: 'Correo', col: 1, type: 'email',
+    validation: { pattern: { value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/, message: 'Correo inválido' } },
+  },
+  { name: 'address', label: 'Dirección', col: 1, validation: {} },
+  { name: 'city',    label: 'Ciudad',    col: 1, validation: {} },
+  { name: 'currency', label: 'Moneda',  col: 1, validation: {} },
+] satisfies { name: string; label: string; col: number; type?: string; validation: object }[];
 
 const ROLE_LABEL: Record<string, string> = {
   ADMIN: 'Administrador',
@@ -57,7 +72,7 @@ export default function ConfiguracionPage() {
   const employees = usersData?.data || [];
   const branches: any[] = branchesData || [];
 
-  const { register: regBusiness, handleSubmit: handleBusiness, formState: { isSubmitting: savingBusiness } } = useForm({ values: business });
+  const { register: regBusiness, handleSubmit: handleBusiness, formState: { isSubmitting: savingBusiness, errors: bizErrors } } = useForm({ values: business });
   const { register: regPwd, handleSubmit: handlePwd, reset: resetPwd, watch: watchPwd, formState: { isSubmitting: savingPwd } } = useForm();
   const { register: regEmp, handleSubmit: handleEmp, reset: resetEmp, formState: { errors: empErrors } } = useForm();
 
@@ -205,12 +220,26 @@ export default function ConfiguracionPage() {
           </div>
 
           <form onSubmit={handleBusiness((d: any) => businessMutation.mutate(d))} className="p-6 grid grid-cols-2 gap-4">
-            {BIZ_FIELDS.map((f) => (
-              <div key={f.name} className={f.col === 2 ? 'col-span-2' : ''}>
-                <label className="block text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5">{f.label}</label>
-                <input {...regBusiness(f.name)} type={f.type || 'text'} className={inputCls} />
-              </div>
-            ))}
+            {BIZ_FIELDS.map((f) => {
+              const err = (bizErrors as Record<string, { message?: string } | undefined>)[f.name];
+              return (
+                <div key={f.name} className={f.col === 2 ? 'col-span-2' : ''}>
+                  <label className="block text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5">{f.label}</label>
+                  <input
+                    {...regBusiness(f.name, f.validation)}
+                    type={f.type || 'text'}
+                    className={`${inputCls} ${err ? 'border-red-400 focus:border-red-400 focus:ring-red-500/20' : ''}`}
+                    aria-invalid={err ? 'true' : 'false'}
+                    aria-describedby={err ? `${f.name}-error` : undefined}
+                  />
+                  {err && (
+                    <p id={`${f.name}-error`} className="mt-1 text-[11px] text-red-500 dark:text-red-400">
+                      {err.message as string}
+                    </p>
+                  )}
+                </div>
+              );
+            })}
             <div className="col-span-2 flex justify-end border-t border-slate-100 dark:border-white/[0.06] pt-4">
               <button
                 type="submit"

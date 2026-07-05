@@ -189,6 +189,7 @@ model Brand {
   updatedAt  DateTime  @updatedAt
   deletedAt  DateTime?
 
+  @@unique([businessId, name])
   @@index([businessId])
   @@map("brands")
 }
@@ -434,6 +435,7 @@ model ExpenseCategory {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
+  @@unique([businessId, name])
   @@index([businessId])
   @@map("expense_categories")
 }

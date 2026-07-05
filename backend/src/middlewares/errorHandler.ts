@@ -4,15 +4,30 @@ import { logger } from '../config/logger';
 import { Prisma } from '@prisma/client';
 import { Sentry } from '../config/sentry';
 
+function requestContext(req: Request) {
+  const user = (req as any).user;
+  return {
+    method: req.method,
+    path: req.path,
+    userId: user?.userId,
+    businessId: user?.businessId,
+    ip: req.ip,
+  };
+}
+
 export function errorHandler(
   err: Error,
   req: Request,
   res: Response,
   _next: NextFunction,
 ): void {
-  logger.error(`${req.method} ${req.path} - ${err.message}`, { stack: err.stack });
-
   if (err instanceof AppError) {
+    // 4xx are expected operational errors — log as warn to reduce noise
+    if (err.statusCode >= 500) {
+      logger.error(`${req.method} ${req.path} - ${err.message}`, { ...requestContext(req), stack: err.stack });
+    } else {
+      logger.warn(`${req.method} ${req.path} [${err.statusCode}] - ${err.message}`, requestContext(req));
+    }
     res.status(err.statusCode).json({ success: false, error: err.message });
     return;
   }
@@ -33,23 +48,29 @@ export function errorHandler(
       const raw = (err.meta?.target as string[] | undefined) || [];
       const friendly = raw.map((f) => FIELD_LABELS[f] || null).filter(Boolean);
       const label = friendly.length > 0 ? friendly.join(' / ') : 'ese campo';
+      logger.warn(`${req.method} ${req.path} [409] P2002 duplicate`, { ...requestContext(req), target: raw });
       res.status(409).json({ success: false, error: `Ya existe un registro con ${label}` });
       return;
     }
     if (err.code === 'P2025') {
+      logger.warn(`${req.method} ${req.path} [404] P2025 not found`, requestContext(req));
       res.status(404).json({ success: false, error: 'Registro no encontrado' });
       return;
     }
+    logger.error(`${req.method} ${req.path} Prisma ${err.code}`, { ...requestContext(req), meta: err.meta });
     res.status(400).json({ success: false, error: 'Error de base de datos' });
     return;
   }
 
   if (err.name === 'JsonWebTokenError' || err.name === 'TokenExpiredError') {
+    logger.warn(`${req.method} ${req.path} [401] JWT ${err.name}`, requestContext(req));
     res.status(401).json({ success: false, error: 'Token inválido o expirado' });
     return;
   }
 
-  Sentry.captureException(err, { extra: { method: req.method, path: req.path } });
+  // Unexpected 5xx — log full context and report to Sentry
+  logger.error(`${req.method} ${req.path} - unhandled: ${err.message}`, { ...requestContext(req), stack: err.stack });
+  Sentry.captureException(err, { extra: requestContext(req) });
 
   res.status(500).json({
     success: false,

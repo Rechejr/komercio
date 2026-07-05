@@ -264,6 +264,16 @@ router.post('/import',
           .map(i => ({ row: i.row, message: `"${i.name}": ${i.message}` })),
       };
 
+      // Batch-fetch all existing products by code — eliminates N+1 (one query instead of one per row)
+      const allCodes = validRows.map(r => r.rawCode).filter(Boolean) as string[];
+      const existingProducts = allCodes.length > 0
+        ? await prisma.product.findMany({
+            where: { code: { in: allCodes }, businessId },
+            select: { id: true, code: true },
+          })
+        : [];
+      const existingByCode = new Map(existingProducts.map(p => [p.code!, p]));
+
       for (const r of validRows) {
         try {
           let categoryId: string | undefined;
@@ -291,7 +301,7 @@ router.post('/import',
           };
 
           if (r.rawCode) {
-            const existing = await prisma.product.findFirst({ where: { code: r.rawCode, businessId } });
+            const existing = existingByCode.get(r.rawCode);
             if (existing) {
               await prisma.product.update({ where: { id: existing.id }, data: productData });
               results.updated++;
