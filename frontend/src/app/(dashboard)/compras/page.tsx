@@ -643,6 +643,7 @@ export default function ComprasPage() {
                 placeholder="Celular / Teléfono"
                 value={newSupPhone}
                 onChange={(e) => setNewSupPhone(e.target.value)}
+                maxLength={10}
                 className="px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition"
               />
             </div>

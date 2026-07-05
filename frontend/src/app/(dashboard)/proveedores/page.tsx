@@ -14,8 +14,8 @@ const FIELDS = [
   { name: 'legalName',   label: 'Razón social',         col: 2 },
   { name: 'document',    label: 'NIT / Documento',      col: 1 },
   { name: 'contactName', label: 'Persona de contacto',  col: 1 },
-  { name: 'phone',       label: 'Teléfono',             col: 1 },
-  { name: 'mobile',      label: 'Celular',              col: 1, type: 'tel' },
+  { name: 'phone',       label: 'Teléfono',             col: 1, type: 'tel', maxLength: 10 },
+  { name: 'mobile',      label: 'Celular',              col: 1, type: 'tel', maxLength: 10 },
   { name: 'email',       label: 'Correo',               col: 2, type: 'email' },
   { name: 'address',     label: 'Dirección',            col: 2 },
   { name: 'city',        label: 'Ciudad',               col: 1 },
@@ -216,7 +216,7 @@ export default function ProveedoresPage() {
               {FIELDS.map((f) => (
                 <div key={f.name} className={f.col === 2 ? 'col-span-2' : ''}>
                   <label className="block text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5">{f.label}</label>
-                  <input {...register(f.name)} type={f.type || 'text'} className={inputCls} />
+                  <input {...register(f.name)} type={f.type || 'text'} maxLength={(f as any).maxLength} className={inputCls} />
                 </div>
               ))}
               <div className="col-span-2 flex justify-end gap-3 border-t border-slate-100 dark:border-white/[0.06] pt-4">

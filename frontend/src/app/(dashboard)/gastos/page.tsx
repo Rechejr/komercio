@@ -373,6 +373,7 @@ export default function GastosPage() {
                       {...register('recipientPhone')}
                       type="tel"
                       placeholder="Celular"
+                      maxLength={10}
                       className={inputCls}
                     />
                   </div>

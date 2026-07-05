@@ -15,7 +15,7 @@ const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded
 const FIELDS = [
   { name: 'name',        label: 'Nombre completo *',      col: 2 },
   { name: 'document',    label: 'Número de documento',     col: 1 },
-  { name: 'phone',       label: 'Teléfono / WhatsApp',     col: 1 },
+  { name: 'phone',       label: 'Teléfono / WhatsApp',     col: 1, maxLength: 10, type: 'tel' },
   { name: 'email',       label: 'Correo electrónico',      col: 2, type: 'email' },
   { name: 'address',     label: 'Dirección',               col: 2 },
   { name: 'city',        label: 'Ciudad',                  col: 1 },
@@ -234,7 +234,7 @@ export default function ClientesPage() {
                       <PriceInput {...field} onChange={(n) => field.onChange(n ?? undefined)} className={inputCls} placeholder="0" />
                     )} />
                   ) : (
-                    <input {...register(f.name)} type={f.type || 'text'} className={inputCls} />
+                    <input {...register(f.name)} type={f.type || 'text'} maxLength={(f as any).maxLength} className={inputCls} />
                   )}
                 </div>
               ))}

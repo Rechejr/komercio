@@ -942,7 +942,7 @@ export default function POSPage() {
           />
           <div className="grid grid-cols-2 gap-2">
             <input type="text" placeholder="Cédula / NIT" value={newCustDoc} onChange={(e) => setNewCustDoc(e.target.value)} className={inputCls} />
-            <input type="tel" placeholder="Celular" value={newCustPhone} onChange={(e) => setNewCustPhone(e.target.value)} className={inputCls} />
+            <input type="tel" placeholder="Celular" value={newCustPhone} onChange={(e) => setNewCustPhone(e.target.value)} maxLength={10} className={inputCls} />
           </div>
           <input type="text" placeholder="Dirección (opcional)" value={newCustAddress} onChange={(e) => setNewCustAddress(e.target.value)} className={inputCls} />
           <div className="flex gap-2 pt-1">

@@ -25,7 +25,7 @@ const BIZ_FIELDS = [
   },
   {
     name: 'phone', label: 'Teléfono', col: 1,
-    validation: { pattern: { value: /^[0-9+\s\-()]{7,15}$/, message: 'Teléfono inválido' } },
+    validation: { maxLength: { value: 10, message: 'Máximo 10 dígitos' }, pattern: { value: /^[0-9+\s\-()]{7,10}$/, message: 'Teléfono inválido (máx. 10 dígitos)' } },
   },
   {
     name: 'email', label: 'Correo', col: 1, type: 'email',
