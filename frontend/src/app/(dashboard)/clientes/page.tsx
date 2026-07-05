@@ -209,9 +209,9 @@ export default function ClientesPage() {
       {/* ── Form Modal ───────────────────────────────────────────────────────── */}
       {showForm && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-[2px] z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/[0.08] rounded-2xl shadow-modal w-full max-w-lg max-h-[90vh] overflow-y-auto animate-scale-in">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/[0.08] rounded-2xl shadow-modal w-full max-w-lg max-h-[90vh] flex flex-col animate-scale-in">
 
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-white/[0.06] sticky top-0 bg-white dark:bg-slate-900 z-10">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-white/[0.06] flex-shrink-0 bg-white dark:bg-slate-900">
               <h2 className="text-[15px] font-semibold text-slate-800 dark:text-white">
                 {editItem ? 'Editar cliente' : 'Nuevo cliente'}
               </h2>
@@ -225,7 +225,7 @@ export default function ClientesPage() {
               </button>
             </div>
 
-            <form onSubmit={handleSubmit((d: any) => saveMutation.mutate(d))} className="p-6 grid grid-cols-2 gap-4">
+            <form onSubmit={handleSubmit((d: any) => saveMutation.mutate(d))} className="p-6 grid grid-cols-2 gap-4 overflow-y-auto">
               {FIELDS.map((f) => (
                 <div key={f.name} className={f.col === 2 ? 'col-span-2' : ''}>
                   <label className="block text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5">{f.label}</label>
@@ -263,9 +263,9 @@ export default function ClientesPage() {
       {/* ── Detail Modal ─────────────────────────────────────────────────────── */}
       {selected && detail && !showForm && !deleteTarget && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-[2px] z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/[0.08] rounded-2xl shadow-modal w-full max-w-lg max-h-[90vh] overflow-y-auto animate-scale-in">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/[0.08] rounded-2xl shadow-modal w-full max-w-lg max-h-[90vh] flex flex-col animate-scale-in">
 
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-white/[0.06] sticky top-0 bg-white dark:bg-slate-900 z-10">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-white/[0.06] flex-shrink-0 bg-white dark:bg-slate-900">
               <h2 className="text-[16px] font-bold text-slate-800 dark:text-white">{detail.name}</h2>
               <div className="flex items-center gap-1.5">
                 <button
@@ -295,7 +295,7 @@ export default function ClientesPage() {
               </div>
             </div>
 
-            <div className="p-6 space-y-5">
+            <div className="p-6 space-y-5 overflow-y-auto">
               {/* Info grid */}
               <div className="grid grid-cols-2 gap-3">
                 {[

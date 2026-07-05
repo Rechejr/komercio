@@ -244,9 +244,9 @@ export default function VentasPage() {
       {/* ── Detail Modal ─────────────────────────────────────────────────────── */}
       {selected && detail && !showCancelModal && !showDeleteModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-[2px] z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/[0.08] rounded-2xl shadow-modal w-full max-w-lg max-h-[90vh] overflow-y-auto animate-scale-in">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/[0.08] rounded-2xl shadow-modal w-full max-w-lg max-h-[90vh] flex flex-col animate-scale-in">
 
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-white/[0.06] sticky top-0 bg-white dark:bg-slate-900 z-10">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-white/[0.06] flex-shrink-0 bg-white dark:bg-slate-900">
               <div>
                 <h2 className="text-[16px] font-bold text-slate-800 dark:text-white font-mono">{detail.invoiceNumber}</h2>
                 <p className="text-[12px] text-slate-400 mt-0.5">{formatDateTime(detail.createdAt)}</p>
@@ -281,7 +281,7 @@ export default function VentasPage() {
               </div>
             </div>
 
-            <div className="p-6 space-y-5">
+            <div className="p-6 space-y-5 overflow-y-auto">
               {/* Meta info */}
               <div className="grid grid-cols-2 gap-4">
                 <div>

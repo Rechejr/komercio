@@ -272,9 +272,9 @@ export default function GastosPage() {
       {/* ── Form Modal ───────────────────────────────────────────────────────── */}
       {showForm && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-[2px] z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/[0.08] rounded-2xl shadow-modal w-full max-w-md max-h-[90vh] overflow-y-auto animate-scale-in">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/[0.08] rounded-2xl shadow-modal w-full max-w-md max-h-[90vh] flex flex-col animate-scale-in">
 
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-white/[0.06] sticky top-0 bg-white dark:bg-slate-900 z-10">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-white/[0.06] flex-shrink-0 bg-white dark:bg-slate-900">
               <h2 className="text-[15px] font-semibold text-slate-800 dark:text-white">
                 {editItem ? 'Editar gasto' : 'Registrar gasto'}
               </h2>
@@ -288,7 +288,7 @@ export default function GastosPage() {
               </button>
             </div>
 
-            <form onSubmit={handleSubmit((d: any) => saveMutation.mutate(d))} className="p-6 space-y-4">
+            <form onSubmit={handleSubmit((d: any) => saveMutation.mutate(d))} className="p-6 space-y-4 overflow-y-auto">
 
               <div>
                 <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5 block">Descripción *</label>
