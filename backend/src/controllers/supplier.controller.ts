@@ -48,9 +48,18 @@ export const supplierController = {
       const name = req.body.name?.toString().trim();
       if (!name) throw new AppError('El nombre del proveedor es requerido', 400);
       const { legalName, document, phone, mobile, email, address, city, contactName, notes } = req.body;
-      const supplier = await prisma.supplier.create({
-        data: { name, legalName, document, phone, mobile, email, address, city, contactName, notes, businessId: req.user!.businessId },
-      });
+      const base = { name, document, phone, email, address, city, contactName, notes, businessId: req.user!.businessId };
+      let supplier: any;
+      try {
+        supplier = await prisma.supplier.create({ data: { ...base, legalName, mobile } });
+      } catch (colErr: any) {
+        // Retry without extended columns while migration 20260705100000 is pending.
+        if (colErr?.message?.toLowerCase().includes('column') || colErr?.message?.toLowerCase().includes('does not exist')) {
+          supplier = await prisma.supplier.create({ data: base });
+        } else {
+          throw colErr;
+        }
+      }
       return created(res, supplier, 'Proveedor creado');
     } catch (err) { next(err); }
   },
@@ -63,7 +72,17 @@ export const supplierController = {
       });
       if (!existing) throw new AppError('Proveedor no encontrado', 404);
       const { name, legalName, document, phone, mobile, email, address, city, contactName, notes } = req.body;
-      const supplier = await prisma.supplier.update({ where: { id }, data: { name, legalName, document, phone, mobile, email, address, city, contactName, notes } });
+      const base = { name, document, phone, email, address, city, contactName, notes };
+      let supplier: any;
+      try {
+        supplier = await prisma.supplier.update({ where: { id }, data: { ...base, legalName, mobile } });
+      } catch (colErr: any) {
+        if (colErr?.message?.toLowerCase().includes('column') || colErr?.message?.toLowerCase().includes('does not exist')) {
+          supplier = await prisma.supplier.update({ where: { id }, data: base });
+        } else {
+          throw colErr;
+        }
+      }
       return success(res, supplier, 'Proveedor actualizado');
     } catch (err) { next(err); }
   },

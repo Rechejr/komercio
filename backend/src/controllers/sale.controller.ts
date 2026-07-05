@@ -8,6 +8,19 @@ import { emitToBusinesss, socketEvents } from '../config/socket';
 import { logger } from '../config/logger';
 import { notifyLowStockBatch } from '../services/notification.service';
 
+// Checked once per process on first sale; avoids breaking when migration is pending.
+let _counterTableReady: boolean | undefined;
+async function counterTableReady(): Promise<boolean> {
+  if (_counterTableReady !== undefined) return _counterTableReady;
+  try {
+    await prisma.$executeRaw`SELECT 1 FROM "sale_number_counters" LIMIT 0`;
+    _counterTableReady = true;
+  } catch {
+    _counterTableReady = false;
+  }
+  return _counterTableReady;
+}
+
 async function generateInvoiceNumber(tx: any, branchId: string): Promise<string> {
   const coDate = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Bogota' }));
   const y = coDate.getFullYear();
@@ -15,18 +28,28 @@ async function generateInvoiceNumber(tx: any, branchId: string): Promise<string>
   const d = String(coDate.getDate()).padStart(2, '0');
   const prefix = `FAC-${y}${m}${d}-`;
 
-  // Atomic counter: INSERT ... ON CONFLICT ... DO UPDATE RETURNING is serialized
-  // by PostgreSQL row-level locking, so concurrent sales never collide even
-  // when pg_advisory_xact_lock is unreliable (Neon connection pooling).
-  const rows = await tx.$queryRaw<Array<{ lastSeq: number }>>`
-    INSERT INTO "sale_number_counters" ("branchId", "dayPrefix", "lastSeq")
-    VALUES (${branchId}, ${prefix}, 1)
-    ON CONFLICT ("branchId", "dayPrefix")
-    DO UPDATE SET "lastSeq" = "sale_number_counters"."lastSeq" + 1
-    RETURNING "lastSeq"
-  `;
-  const seq = String(rows[0].lastSeq).padStart(6, '0');
-  return `${prefix}${seq}`;
+  if (await counterTableReady()) {
+    // Atomic counter: INSERT ... ON CONFLICT ... DO UPDATE RETURNING is serialized
+    // by PostgreSQL row-level locking; eliminates collisions even with Neon pooling.
+    const rows = await tx.$queryRaw<Array<{ lastSeq: number }>>`
+      INSERT INTO "sale_number_counters" ("branchId", "dayPrefix", "lastSeq")
+      VALUES (${branchId}, ${prefix}, 1)
+      ON CONFLICT ("branchId", "dayPrefix")
+      DO UPDATE SET "lastSeq" = "sale_number_counters"."lastSeq" + 1
+      RETURNING "lastSeq"
+    `;
+    return `${prefix}${String(rows[0].lastSeq).padStart(6, '0')}`;
+  }
+
+  // Fallback while migration 20260705200000 is pending: advisory lock + scan.
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${branchId}))`;
+  const last = await tx.sale.findFirst({
+    where: { invoiceNumber: { startsWith: prefix }, branchId },
+    orderBy: { invoiceNumber: 'desc' },
+    select: { invoiceNumber: true },
+  });
+  const lastSeq = last ? parseInt(last.invoiceNumber.slice(prefix.length), 10) : 0;
+  return `${prefix}${String(lastSeq + 1).padStart(6, '0')}`;
 }
 
 export const saleController = {

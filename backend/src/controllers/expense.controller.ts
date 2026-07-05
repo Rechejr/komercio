@@ -36,20 +36,28 @@ export const expenseController = {
       const { description, amount, date, categoryId, notes, paymentMethod,
               recipientName, recipientDocument, recipientPhone } = req.body;
       if (parseFloat(amount) <= 0) throw new AppError('El monto debe ser mayor a 0', 400);
-      const expense = await prisma.expense.create({
-        data: {
-          description,
-          amount: parseFloat(amount),
-          date: date ? new Date(date) : new Date(),
-          categoryId: categoryId || null,
-          notes: notes || null,
-          paymentMethod: paymentMethod || null,
-          businessId: req.user!.businessId,
-          recipientName: recipientName || null,
-          recipientDocument: recipientDocument || null,
-          recipientPhone: recipientPhone || null,
-        },
-      });
+      const base = {
+        description,
+        amount: parseFloat(amount),
+        date: date ? new Date(date) : new Date(),
+        categoryId: categoryId || null,
+        notes: notes || null,
+        paymentMethod: paymentMethod || null,
+        businessId: req.user!.businessId,
+      };
+      let expense: any;
+      try {
+        expense = await prisma.expense.create({
+          data: { ...base, recipientName: recipientName || null, recipientDocument: recipientDocument || null, recipientPhone: recipientPhone || null },
+        });
+      } catch (colErr: any) {
+        // Retry without recipient columns while migration 20260703100000 is pending.
+        if (colErr?.message?.toLowerCase().includes('column') || colErr?.message?.toLowerCase().includes('does not exist')) {
+          expense = await prisma.expense.create({ data: base });
+        } else {
+          throw colErr;
+        }
+      }
       // Registrar egreso en caja abierta cuando se paga en efectivo (best effort)
       if (paymentMethod === 'CASH') {
         try {
@@ -85,20 +93,32 @@ export const expenseController = {
       const { description, amount, date, categoryId, notes, paymentMethod,
               recipientName, recipientDocument, recipientPhone } = req.body;
       if (amount !== undefined && parseFloat(amount) <= 0) throw new AppError('El monto debe ser mayor a 0', 400);
-      const expense = await prisma.expense.update({
-        where: { id: req.params.id },
-        data: {
-          description,
-          amount: amount !== undefined ? parseFloat(amount) : undefined,
-          date: date !== undefined ? new Date(date) : undefined,
-          categoryId: categoryId !== undefined ? (categoryId || null) : undefined,
-          notes,
-          paymentMethod,
-          recipientName: recipientName !== undefined ? (recipientName || null) : undefined,
-          recipientDocument: recipientDocument !== undefined ? (recipientDocument || null) : undefined,
-          recipientPhone: recipientPhone !== undefined ? (recipientPhone || null) : undefined,
-        },
-      });
+      const base = {
+        description,
+        amount: amount !== undefined ? parseFloat(amount) : undefined,
+        date: date !== undefined ? new Date(date) : undefined,
+        categoryId: categoryId !== undefined ? (categoryId || null) : undefined,
+        notes,
+        paymentMethod,
+      };
+      let expense: any;
+      try {
+        expense = await prisma.expense.update({
+          where: { id: req.params.id },
+          data: {
+            ...base,
+            recipientName: recipientName !== undefined ? (recipientName || null) : undefined,
+            recipientDocument: recipientDocument !== undefined ? (recipientDocument || null) : undefined,
+            recipientPhone: recipientPhone !== undefined ? (recipientPhone || null) : undefined,
+          },
+        });
+      } catch (colErr: any) {
+        if (colErr?.message?.toLowerCase().includes('column') || colErr?.message?.toLowerCase().includes('does not exist')) {
+          expense = await prisma.expense.update({ where: { id: req.params.id }, data: base });
+        } else {
+          throw colErr;
+        }
+      }
       return success(res, expense, 'Gasto actualizado');
     } catch (err) { next(err); }
   },
