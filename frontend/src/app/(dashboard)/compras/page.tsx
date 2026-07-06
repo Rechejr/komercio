@@ -327,7 +327,7 @@ export default function ComprasPage() {
               </div>
             </div>
 
-            <div className="p-6 space-y-4 overflow-y-auto">
+            <div className="p-6 space-y-4 overflow-y-auto min-h-0">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-slate-100 dark:border-white/[0.06]">
@@ -405,7 +405,7 @@ export default function ComprasPage() {
               </button>
             </div>
 
-            <form onSubmit={handleSubmit((d: any) => saveMutation.mutate(d))} className="p-6 space-y-5 overflow-y-auto">
+            <form onSubmit={handleSubmit((d: any) => saveMutation.mutate(d))} className="p-6 space-y-5 overflow-y-auto min-h-0">
               <div className="grid grid-cols-2 gap-4">
                 {/* Proveedor */}
                 <div>

@@ -487,7 +487,7 @@ export default function InventarioPage() {
                 <p className="text-[13px] text-slate-500 dark:text-slate-400">Analizando archivo...</p>
               </div>
             ) : previewData ? (
-              <div className="p-6 space-y-5 overflow-y-auto">
+              <div className="p-6 space-y-5 overflow-y-auto min-h-0">
 
                 <p className="text-[13px] text-slate-600 dark:text-slate-400">
                   Se encontraron{' '}
@@ -634,7 +634,7 @@ export default function InventarioPage() {
               </button>
             </div>
 
-            <form onSubmit={handleSubmit((d) => saveMutation.mutate(d))} className="p-6 grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-5 overflow-y-auto">
+            <form onSubmit={handleSubmit((d) => saveMutation.mutate(d))} className="p-6 grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-5 overflow-y-auto min-h-0">
 
               {/* ── Columna izquierda ──────────────────── */}
               <div className="space-y-4">
@@ -947,7 +947,7 @@ export default function InventarioPage() {
               </button>
             </div>
 
-            <div className="p-6 space-y-4 overflow-y-auto">
+            <div className="p-6 space-y-4 overflow-y-auto min-h-0">
               <div className="grid grid-cols-2 gap-3">
                 <div className="bg-emerald-50 dark:bg-emerald-500/10 rounded-xl p-4 text-center">
                   <p className="text-[22px] font-bold text-emerald-700 dark:text-emerald-400 tabular-nums">{importResult.imported}</p>

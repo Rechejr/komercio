@@ -288,7 +288,7 @@ export default function GastosPage() {
               </button>
             </div>
 
-            <form onSubmit={handleSubmit((d: any) => saveMutation.mutate(d))} className="p-6 space-y-4 overflow-y-auto">
+            <form onSubmit={handleSubmit((d: any) => saveMutation.mutate(d))} className="p-6 space-y-4 overflow-y-auto min-h-0">
 
               <div>
                 <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5 block">Descripción *</label>

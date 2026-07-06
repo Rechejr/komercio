@@ -280,7 +280,7 @@ export default function CreditosPage() {
               </div>
             </div>
 
-            <div className="p-6 space-y-5 overflow-y-auto">
+            <div className="p-6 space-y-5 overflow-y-auto min-h-0">
               {/* KPI cards */}
               <div className="grid grid-cols-3 gap-3">
                 <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-white/[0.06] rounded-xl p-3 text-center">

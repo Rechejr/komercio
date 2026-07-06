@@ -225,7 +225,7 @@ export default function ClientesPage() {
               </button>
             </div>
 
-            <form onSubmit={handleSubmit((d: any) => saveMutation.mutate(d))} className="p-6 grid grid-cols-2 gap-4 overflow-y-auto">
+            <form onSubmit={handleSubmit((d: any) => saveMutation.mutate(d))} className="p-6 grid grid-cols-2 gap-4 overflow-y-auto min-h-0">
               {FIELDS.map((f) => (
                 <div key={f.name} className={f.col === 2 ? 'col-span-2' : ''}>
                   <label className="block text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5">{f.label}</label>
@@ -295,7 +295,7 @@ export default function ClientesPage() {
               </div>
             </div>
 
-            <div className="p-6 space-y-5 overflow-y-auto">
+            <div className="p-6 space-y-5 overflow-y-auto min-h-0">
               {/* Info grid */}
               <div className="grid grid-cols-2 gap-3">
                 {[
