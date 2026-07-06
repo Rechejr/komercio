@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -11,6 +11,7 @@ import { GoogleOAuthProvider, useGoogleLogin } from '@react-oauth/google';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth.store';
 import { Eye, EyeOff, Loader2, ArrowRight, Zap, Shield, BarChart3 } from 'lucide-react';
+import '../auth.css';
 
 // ── Schemas ───────────────────────────────────────────────────────────────────
 const loginSchema = z.object({
@@ -19,13 +20,13 @@ const loginSchema = z.object({
 });
 type LoginForm = z.infer<typeof loginSchema>;
 
-const FEATURES = [
-  { icon: Zap,       label: 'POS rápido',    desc: 'Vende en segundos desde cualquier dispositivo' },
-  { icon: Shield,    label: 'Inventario',    desc: 'Stock en tiempo real con alertas automáticas'   },
-  { icon: BarChart3, label: 'Reportes',      desc: 'Métricas y estadísticas de tu negocio'          },
-];
-
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '';
+
+const RECEIPT_ITEMS = [
+  { name: 'Arroz 500g',  price: '2.800' },
+  { name: 'Leche 1L',    price: '3.900' },
+  { name: 'Pan tajado',  price: '4.200' },
+];
 
 // ── SVG Icons ─────────────────────────────────────────────────────────────────
 function GoogleIcon() {
@@ -101,13 +102,58 @@ function GoogleBtn({ onSuccess }: { onSuccess: (user: any, token: string) => voi
   return <SocialBtn onClick={() => login()} loading={loading} icon={<GoogleIcon />} label="Google" />;
 }
 
-// ── Input component ───────────────────────────────────────────────────────────
+// ── Field ─────────────────────────────────────────────────────────────────────
 function Field({ label, error, children }: { label: string; error?: string; children: React.ReactNode }) {
   return (
     <div className="space-y-1.5">
       <label className="block text-[13px] font-medium text-slate-700 dark:text-slate-300">{label}</label>
       {children}
-      {error && <p className="text-red-500 dark:text-red-400 text-[12px] flex items-center gap-1">{error}</p>}
+      {error && <p className="text-red-500 dark:text-red-400 text-[12px]">{error}</p>}
+    </div>
+  );
+}
+
+// ── Mini receipt (left panel) ─────────────────────────────────────────────────
+function MiniReceipt() {
+  const [playing, setPlaying] = useState(false);
+
+  useEffect(() => {
+    const start = setTimeout(() => setPlaying(true), 600);
+    const cycle = setInterval(() => {
+      setPlaying(false);
+      setTimeout(() => setPlaying(true), 350);
+    }, 5500);
+    return () => { clearTimeout(start); clearInterval(cycle); };
+  }, []);
+
+  return (
+    <div className={`auth-receipt${playing ? ' play' : ''}`}>
+      <div className="auth-r-head">
+        <div className="auth-r-brand">VENTRIX</div>
+        <div className="auth-r-sub">Tienda Doña Marta · Mocoa</div>
+      </div>
+      <div className="auth-r-meta"><span>VENTA #0042</span><span>14:32</span></div>
+
+      {RECEIPT_ITEMS.map((item, i) => (
+        <div
+          key={item.name}
+          className="auth-r-line"
+          style={playing ? { animationDelay: `${0.18 + i * 0.2}s` } : undefined}
+        >
+          <span>{item.name}</span>
+          <span>{item.price}</span>
+        </div>
+      ))}
+
+      <div className="auth-r-rule" />
+      <div className="auth-r-total"><span>TOTAL</span><span>$ 10.900</span></div>
+      <div
+        className="auth-r-stamp"
+        style={playing ? { animationDelay: '1.2s' } : undefined}
+      >
+        ✓ COBRADO
+      </div>
+      <div className="auth-r-barcode" />
     </div>
   );
 }
@@ -149,8 +195,7 @@ function LoginForm() {
     'border-slate-200 dark:border-slate-700/60',
     'text-slate-900 dark:text-slate-100',
     'placeholder:text-slate-400 dark:placeholder:text-slate-500',
-    'focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500',
-    'dark:focus:border-blue-400',
+    'focus:outline-none focus:ring-2 focus:ring-[#0DA06A]/25 focus:border-[#0DA06A]',
   ].join(' ');
 
   return (
@@ -192,11 +237,11 @@ function LoginForm() {
               type="checkbox"
               checked={rememberMe}
               onChange={(e) => setRememberMe(e.target.checked)}
-              className="w-[15px] h-[15px] rounded border-slate-300 accent-blue-600 cursor-pointer"
+              className="w-[15px] h-[15px] rounded border-slate-300 accent-[#0DA06A] cursor-pointer"
             />
             <span className="text-[13px] text-slate-600 dark:text-slate-400">Mantener sesión</span>
           </label>
-          <Link href="/forgot-password" className="text-[13px] text-blue-600 dark:text-blue-400 hover:underline font-medium">
+          <Link href="/forgot-password" className="text-[13px] text-[#0DA06A] hover:underline font-medium">
             ¿Olvidaste tu contraseña?
           </Link>
         </div>
@@ -205,12 +250,11 @@ function LoginForm() {
           type="submit"
           disabled={isSubmitting}
           className={[
-            'w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-[14px] font-semibold',
-            'bg-blue-600 hover:bg-blue-700 active:bg-blue-800',
+            'w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-[14px] font-semibold mt-1',
+            'bg-[#0DA06A] hover:bg-[#10C07E] active:bg-[#086B4A]',
             'text-white transition-all duration-150',
             'disabled:opacity-60 disabled:cursor-not-allowed',
-            'shadow-sm shadow-blue-600/25 hover:shadow-md hover:shadow-blue-600/25',
-            'mt-1',
+            'shadow-sm shadow-[#0DA06A]/30 hover:shadow-md hover:shadow-[#0DA06A]/30',
           ].join(' ')}
         >
           {isSubmitting ? (
@@ -262,68 +306,40 @@ function LoginForm() {
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default function LoginPage() {
   return (
-    <div className="min-h-screen flex flex-col lg:flex-row bg-slate-50 dark:bg-[#080c14]">
+    <div className="min-h-screen flex flex-col lg:flex-row">
 
-      {/* ── Left panel — brand ───────────────────────────────────────────── */}
-      <div
-        className="hidden lg:flex flex-col w-[42%] relative overflow-hidden p-10"
-        style={{ background: 'linear-gradient(135deg, #0d1117 0%, #0f172a 40%, #1a1040 100%)' }}
-      >
-        {/* Glow orbs */}
-        <div className="absolute top-0 left-0 w-[500px] h-[500px] rounded-full opacity-20 pointer-events-none"
-             style={{ background: 'radial-gradient(circle, #3b82f6 0%, transparent 70%)', transform: 'translate(-30%, -30%)' }} />
-        <div className="absolute bottom-0 right-0 w-[400px] h-[400px] rounded-full opacity-10 pointer-events-none"
-             style={{ background: 'radial-gradient(circle, #6366f1 0%, transparent 70%)', transform: 'translate(30%, 30%)' }} />
-
-        {/* Grid texture */}
-        <div className="absolute inset-0 pointer-events-none opacity-[0.03]"
-             style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.3) 1px, transparent 1px)', backgroundSize: '40px 40px' }} />
+      {/* ── Left panel — green brand ─────────────────────────────────────── */}
+      <div className="auth-left-panel hidden lg:flex flex-col w-[44%] relative overflow-hidden p-10">
+        <div className="auth-left-dots" />
+        <div className="auth-left-glow-tr" />
+        <div className="auth-left-glow-bl" />
 
         {/* Logo */}
-        <div className="relative flex items-center gap-3 z-10">
-          <img src="/ventrix-logo.svg" alt="Ventrix" width={32} height={32} className="w-8 h-8" draggable={false} />
-          <span className="text-white font-semibold text-[18px] tracking-tight">Ventrix</span>
+        <div className="relative z-10 flex items-center gap-3">
+          <div className="auth-logo-mark"><span>V</span></div>
+          <span className="auth-brand-name">Ventrix</span>
         </div>
 
-        {/* Hero copy */}
+        {/* Hero content */}
         <div className="relative z-10 my-auto">
-          <div className="inline-flex items-center gap-2 bg-blue-500/10 border border-blue-500/20 text-blue-400 text-[12px] font-semibold px-3 py-1.5 rounded-full mb-6">
-            <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
+          <div className="auth-panel-badge">
+            <span className="auth-badge-dot" />
             Sistema POS · Versión 2026
           </div>
 
-          <h2 className="text-[38px] font-bold text-white leading-[1.15] tracking-tight mb-4">
-            Administra tu<br />
-            <span style={{ background: 'linear-gradient(90deg, #60a5fa, #818cf8)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-              negocio
-            </span>{' '}
-            completo
+          <h2 className="auth-panel-headline">
+            Bienvenido<br />
+            <span className="auth-panel-headline-accent">de vuelta</span>
           </h2>
 
-          <p className="text-slate-400 text-[15px] leading-relaxed mb-10 max-w-[300px]">
-            Todo lo que necesitas para vender, controlar inventario y crecer.
+          <p className="auth-panel-sub">
+            Tu negocio te espera. Cada venta, cada cliente,<br />cada peso — todo aquí.
           </p>
 
-          {/* Feature cards */}
-          <div className="space-y-3">
-            {FEATURES.map(({ icon: Icon, label, desc }) => (
-              <div
-                key={label}
-                className="flex items-center gap-4 p-4 rounded-xl border border-white/[0.06] bg-white/[0.03] backdrop-blur-sm"
-              >
-                <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 bg-blue-500/15 border border-blue-500/20">
-                  <Icon size={16} className="text-blue-400" />
-                </div>
-                <div>
-                  <p className="text-[13px] font-semibold text-white/90">{label}</p>
-                  <p className="text-[12px] text-slate-500 leading-tight mt-0.5">{desc}</p>
-                </div>
-              </div>
-            ))}
-          </div>
+          <MiniReceipt />
         </div>
 
-        <p className="relative z-10 text-slate-700 text-[11px] mt-auto">
+        <p className="relative z-10 auth-panel-footer">
           © 2026 Ventrix · Todos los derechos reservados
         </p>
       </div>
@@ -334,7 +350,7 @@ export default function LoginPage() {
 
           {/* Mobile logo */}
           <div className="flex items-center gap-2.5 mb-8 lg:hidden">
-            <img src="/ventrix-logo.svg" alt="Ventrix" width={30} height={30} className="w-[30px] h-[30px]" draggable={false} />
+            <div className="auth-mobile-logo-mark"><span>V</span></div>
             <span className="font-semibold text-[17px] text-slate-900 dark:text-white tracking-tight">Ventrix</span>
           </div>
 
@@ -350,7 +366,7 @@ export default function LoginPage() {
 
           <Suspense fallback={
             <div className="flex items-center justify-center py-12">
-              <Loader2 size={22} className="animate-spin text-blue-500" />
+              <Loader2 size={22} className="animate-spin text-[#0DA06A]" />
             </div>
           }>
             <LoginForm />
@@ -358,7 +374,7 @@ export default function LoginPage() {
 
           <p className="text-center text-[13px] text-slate-500 dark:text-slate-400 mt-6">
             ¿No tienes cuenta?{' '}
-            <Link href="/register" className="text-blue-600 dark:text-blue-400 font-semibold hover:underline">
+            <Link href="/register" className="text-[#0DA06A] font-semibold hover:underline">
               Regístrate gratis
             </Link>
           </p>

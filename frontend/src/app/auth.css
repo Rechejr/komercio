@@ -1,0 +1,179 @@
+/* ── Ventrix Auth Panels (login + register) ── */
+
+/* ── Keyframes ── */
+@keyframes auth-printline {
+  from { opacity: 0; transform: translateY(-5px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes auth-stampin {
+  from { opacity: 0; transform: rotate(-5deg) scale(.55); }
+  60%  { opacity: 1; transform: rotate(-5deg) scale(1.1); }
+  to   { opacity: 1; transform: rotate(-5deg) scale(1); }
+}
+@keyframes auth-pulse-dot {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(52,211,153,.6); }
+  50%      { opacity: .75; box-shadow: 0 0 0 6px rgba(52,211,153,0); }
+}
+@keyframes auth-fade-up {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Mini receipt ── */
+.auth-receipt {
+  position: relative;
+  background: rgba(255,255,255,.97);
+  border-radius: 8px;
+  padding: 14px 16px 20px;
+  width: 208px;
+  font-family: "Space Mono", "Courier New", monospace;
+  font-size: .7rem;
+  transform: rotate(-1.5deg);
+  box-shadow: 0 10px 40px -6px rgba(0,0,0,.45), 0 2px 8px rgba(0,0,0,.15);
+  color: #10201A;
+  margin-top: 20px;
+}
+.auth-receipt::before, .auth-receipt::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; height: 8px;
+  background-image: radial-gradient(circle at 4px -1px, transparent 4px, rgba(255,255,255,.97) 4px);
+  background-size: 8px 8px;
+}
+.auth-receipt::before { top: -7px; transform: scaleY(-1); }
+.auth-receipt::after  { bottom: -7px; }
+
+.auth-r-head { text-align: center; border-bottom: 1px dashed #CFE7DA; padding-bottom: 8px; margin-bottom: 8px; }
+.auth-r-brand { font-weight: 700; font-size: .82rem; letter-spacing: .24em; color: #086B4A; }
+.auth-r-sub   { font-size: .6rem; color: #4A5A52; margin-top: 2px; }
+.auth-r-meta  { display: flex; justify-content: space-between; font-size: .6rem; color: #4A5A52; margin-bottom: 7px; }
+.auth-r-line  { display: flex; justify-content: space-between; gap: 8px; padding: 2px 0; opacity: 0; }
+.auth-r-rule  { border-top: 1px dashed #CFE7DA; margin: 7px 0; }
+.auth-r-total { display: flex; justify-content: space-between; font-weight: 700; font-size: .78rem; }
+.auth-r-barcode {
+  height: 22px;
+  margin: 8px auto 0;
+  width: 65%;
+  background: repeating-linear-gradient(
+    90deg, #10201A 0 1.5px, transparent 1.5px 3px,
+    #10201A 3px 4px, transparent 4px 7px
+  );
+  opacity: .7;
+  border-radius: 1px;
+}
+.auth-r-stamp {
+  text-align: center;
+  margin-top: 10px;
+  opacity: 0;
+  color: #C8452F;
+  border: 2px solid #C8452F;
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-weight: 700;
+  letter-spacing: .14em;
+  font-size: .68rem;
+  transform: rotate(-5deg) scale(.55);
+}
+
+.auth-receipt.play .auth-r-line  { animation: auth-printline .28s ease forwards; }
+.auth-receipt.play .auth-r-stamp { animation: auth-stampin .45s cubic-bezier(.2,1.4,.4,1) forwards; }
+
+/* ── Step dots (register) ── */
+.auth-step-dot {
+  width: 32px; height: 32px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 700; flex-shrink: 0;
+  transition: background .35s ease, color .35s ease, box-shadow .35s ease;
+}
+.auth-step-dot.active  {
+  background: rgba(255,255,255,.95);
+  color: #0DA06A;
+  box-shadow: 0 0 0 4px rgba(255,255,255,.2), 0 4px 16px rgba(255,255,255,.15);
+}
+.auth-step-dot.done    { background: #0DA06A; color: #fff; }
+.auth-step-dot.pending { background: rgba(255,255,255,.08); color: rgba(255,255,255,.25); border: 1px solid rgba(255,255,255,.1); }
+
+.auth-step-connector { width: 1px; height: 32px; margin-top: 4px; transition: background .35s ease; }
+.auth-step-connector.done    { background: rgba(13,160,106,.5); }
+.auth-step-connector.pending { background: rgba(255,255,255,.1); }
+
+.auth-step-label-active  { color: #fff; }
+.auth-step-label-done    { color: #6EE7B7; }
+.auth-step-label-pending { color: rgba(255,255,255,.25); }
+
+/* ── Left panel animated content transition ── */
+.auth-panel-content {
+  animation: auth-fade-up .4s cubic-bezier(.16,1,.3,1) both;
+}
+
+/* ── Pulse dot (badge) ── */
+.auth-badge-dot {
+  width: 6px; height: 6px; border-radius: 50%; background: #34D399;
+  animation: auth-pulse-dot 2s ease-in-out infinite;
+}
+
+/* ── Left panel — green brand ── */
+.auth-left-panel {
+  background: linear-gradient(150deg, #041F13 0%, #075C3E 55%, #0B9460 100%);
+}
+.auth-left-dots {
+  position: absolute; inset: 0; pointer-events: none;
+  background-image: radial-gradient(circle, rgba(255,255,255,.07) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+.auth-left-glow-tr {
+  position: absolute; pointer-events: none;
+  top: -80px; right: -80px; width: 360px; height: 360px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(16,192,126,.25) 0%, transparent 70%);
+}
+.auth-left-glow-bl {
+  position: absolute; pointer-events: none;
+  bottom: -60px; left: -60px; width: 280px; height: 280px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(13,160,106,.18) 0%, transparent 70%);
+}
+.auth-logo-mark {
+  width: 32px; height: 32px; border-radius: 8px;
+  background: rgba(255,255,255,.95);
+  display: grid; place-items: center;
+  box-shadow: 0 4px 12px rgba(0,0,0,.2);
+}
+.auth-logo-mark span {
+  color: #0DA06A; font-weight: 900; font-size: 1.05rem; line-height: 1;
+}
+.auth-brand-name {
+  color: #fff; font-weight: 600; font-size: 18px; letter-spacing: -.02em;
+}
+.auth-panel-badge {
+  display: inline-flex; align-items: center; gap: 8px; margin-bottom: 24px;
+  background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.18);
+  color: #6EE7B7; font-size: .72rem; font-weight: 700; letter-spacing: .1em;
+  padding: .4em .85em; border-radius: 999px;
+}
+.auth-panel-headline {
+  color: #fff; font-weight: 700; line-height: 1.15; letter-spacing: -.02em;
+  margin-bottom: 12px; font-size: clamp(1.8rem, 3vw, 2.4rem);
+}
+.auth-panel-headline-accent {
+  background: linear-gradient(90deg, #6EE7B7, #34D399);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+}
+.auth-panel-sub {
+  font-size: 14px; line-height: 1.6; color: rgba(255,255,255,.55); margin-bottom: 4px;
+}
+.auth-panel-footer {
+  font-size: 11px; color: rgba(255,255,255,.25); margin-top: auto;
+}
+/* Logo mark (mobile, small) */
+.auth-mobile-logo-mark {
+  width: 28px; height: 28px; border-radius: 7px;
+  background: #0DA06A; display: grid; place-items: center;
+}
+.auth-mobile-logo-mark span {
+  color: #fff; font-weight: 900; font-size: .9rem;
+}
+.auth-benefit-item {
+  display: flex; align-items: center; gap: 8px;
+  font-size: .75rem; color: rgba(255,255,255,.35);
+}

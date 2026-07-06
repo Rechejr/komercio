@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { Loader2, Eye, EyeOff, Check, X, ArrowRight, ChevronDown, ArrowLeft } from 'lucide-react';
+import '../auth.css';
 
 // ── Business categories ───────────────────────────────────────────────────────
 const CATEGORIES = [
@@ -34,35 +35,22 @@ function StepIndicator({ current }: { current: number }) {
       {STEPS.map((label, i) => {
         const done   = i < current;
         const active = i === current;
+        const state  = done ? 'done' : active ? 'active' : 'pending';
         return (
           <div key={i} className="flex items-start gap-4">
             <div className="flex flex-col items-center">
-              <div className={cn(
-                'w-8 h-8 rounded-full flex items-center justify-center text-[13px] font-bold flex-shrink-0 transition-all',
-                done   && 'bg-blue-500 text-white',
-                active && 'bg-white text-blue-600 shadow-lg shadow-white/20',
-                !done && !active && 'bg-white/10 text-white/30 border border-white/10',
-              )}>
+              <div className={`auth-step-dot ${state}`}>
                 {done ? <Check size={14} strokeWidth={3} /> : i + 1}
               </div>
               {i < STEPS.length - 1 && (
-                <div className={cn(
-                  'w-px h-8 mt-1 transition-colors',
-                  done ? 'bg-blue-500/60' : 'bg-white/10',
-                )} />
+                <div className={`auth-step-connector ${done ? 'done' : 'pending'}`} />
               )}
             </div>
             <div className="pt-1.5">
-              <p className={cn(
-                'text-[13px] font-semibold leading-tight',
-                active ? 'text-white' : done ? 'text-blue-300' : 'text-white/30',
-              )}>
+              <p className={`text-[13px] font-semibold leading-tight auth-step-label-${state}`}>
                 {label}
               </p>
-              <p className={cn(
-                'text-[11px] mt-0.5',
-                active ? 'text-slate-400' : 'text-white/20',
-              )}>
+              <p className={cn('text-[11px] mt-0.5', active ? 'text-slate-400' : 'text-white/20')}>
                 {i === 0 ? 'Nombre, email y contraseña' : 'Nombre y categoría'}
               </p>
             </div>
@@ -107,14 +95,14 @@ function CategoryModal({ value, onSelect, onClose }: {
               className={cn(
                 'w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left text-[13px] transition-colors',
                 temp === label
-                  ? 'bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-400'
+                  ? 'bg-[#0DA06A]/10 text-[#086B4A] dark:text-[#6EE7B7]'
                   : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/[0.04]',
               )}
             >
               <span className="text-lg leading-none w-6 text-center">{emoji}</span>
               <span className="flex-1 font-medium">{label}</span>
               {temp === label && (
-                <div className="w-5 h-5 rounded-full bg-blue-600 flex items-center justify-center flex-shrink-0">
+                <div className="w-5 h-5 rounded-full bg-[#0DA06A] flex items-center justify-center flex-shrink-0">
                   <Check size={10} strokeWidth={3} className="text-white" />
                 </div>
               )}
@@ -127,7 +115,7 @@ function CategoryModal({ value, onSelect, onClose }: {
             type="button"
             disabled={!temp}
             onClick={() => { onSelect(temp); onClose(); }}
-            className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-semibold py-2.5 rounded-xl text-[14px] transition-colors"
+            className="w-full bg-[#0DA06A] hover:bg-[#10C07E] disabled:opacity-50 text-white font-semibold py-2.5 rounded-xl text-[14px] transition-colors"
           >
             Confirmar selección
           </button>
@@ -143,10 +131,17 @@ const inputCls = (hasError?: boolean) => [
   'bg-slate-50 dark:bg-slate-800/60',
   hasError
     ? 'border-red-400 dark:border-red-500/60 focus:ring-red-500/30 focus:border-red-500'
-    : 'border-slate-200 dark:border-slate-700/60 focus:ring-blue-500/30 focus:border-blue-500 dark:focus:border-blue-400',
+    : 'border-slate-200 dark:border-slate-700/60 focus:ring-[#0DA06A]/25 focus:border-[#0DA06A]',
   'text-slate-900 dark:text-slate-100',
   'placeholder:text-slate-400 dark:placeholder:text-slate-500',
   'focus:outline-none focus:ring-2',
+].join(' ');
+
+const btnPrimary = [
+  'w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-[14px] font-semibold mt-1',
+  'bg-[#0DA06A] hover:bg-[#10C07E] active:bg-[#086B4A] text-white',
+  'transition-all duration-150 shadow-sm shadow-[#0DA06A]/30 hover:shadow-md hover:shadow-[#0DA06A]/30',
+  'disabled:opacity-60 disabled:cursor-not-allowed',
 ].join(' ');
 
 // ── Page ──────────────────────────────────────────────────────────────────────
@@ -170,9 +165,9 @@ export default function RegisterPage() {
 
   function validateStep0() {
     const e: Record<string, string> = {};
-    if (!name.trim() || name.trim().length < 2)             e.name     = 'Mínimo 2 caracteres';
+    if (!name.trim() || name.trim().length < 2)              e.name     = 'Mínimo 2 caracteres';
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) e.email   = 'Email inválido';
-    if (!password || password.length < 8)                   e.password = 'Mínimo 8 caracteres';
+    if (!password || password.length < 8)                    e.password = 'Mínimo 8 caracteres';
     setErrors(e);
     return Object.keys(e).length === 0;
   }
@@ -204,77 +199,76 @@ export default function RegisterPage() {
 
   return (
     <>
-      <div className="min-h-screen flex flex-col lg:flex-row bg-slate-50 dark:bg-[#080c14]">
+      <div className="min-h-screen flex flex-col lg:flex-row">
 
-        {/* ── Left panel ─────────────────────────────────────────────────── */}
-        <div
-          className="hidden lg:flex flex-col w-[40%] relative overflow-hidden p-10"
-          style={{ background: 'linear-gradient(135deg, #0d1117 0%, #0f172a 40%, #1a1040 100%)' }}
-        >
-          {/* Glow orbs */}
-          <div className="absolute top-0 left-0 w-[500px] h-[500px] rounded-full opacity-20 pointer-events-none"
-               style={{ background: 'radial-gradient(circle, #3b82f6 0%, transparent 70%)', transform: 'translate(-30%, -30%)' }} />
-          <div className="absolute bottom-0 right-0 w-[350px] h-[350px] rounded-full opacity-10 pointer-events-none"
-               style={{ background: 'radial-gradient(circle, #6366f1 0%, transparent 70%)', transform: 'translate(30%, 30%)' }} />
-          {/* Grid texture */}
-          <div className="absolute inset-0 pointer-events-none opacity-[0.03]"
-               style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.3) 1px, transparent 1px)', backgroundSize: '40px 40px' }} />
+        {/* ── Left panel — green brand ──────────────────────────────────── */}
+        <div className="auth-left-panel hidden lg:flex flex-col w-[40%] relative overflow-hidden p-10">
+          <div className="auth-left-dots" />
+          <div className="auth-left-glow-tr" />
+          <div className="auth-left-glow-bl" />
 
           {/* Logo */}
           <Link href="/" className="relative z-10 flex items-center gap-3">
-            <img src="/ventrix-logo.svg" alt="Ventrix" width={30} height={30} className="w-[30px] h-[30px]" draggable={false} />
-            <span className="text-white font-semibold text-[18px] tracking-tight">Ventrix</span>
+            <div className="auth-logo-mark"><span>V</span></div>
+            <span className="auth-brand-name">Ventrix</span>
           </Link>
 
           {/* Step progress */}
-          <div className="relative z-10 my-auto">
-            <div className="inline-flex items-center gap-2 bg-blue-500/10 border border-blue-500/20 text-blue-400 text-[11px] font-semibold px-3 py-1.5 rounded-full mb-7">
-              <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
+          <div className="relative z-10 my-auto auth-panel-content">
+            <div className="auth-panel-badge">
+              <span className="auth-badge-dot" />
               Paso {step + 1} de {STEPS.length}
             </div>
-            <h2 className="text-[28px] font-bold text-white leading-tight tracking-tight mb-2">
-              {step === 0 ? 'Crea tu cuenta' : 'Tu negocio'}
+
+            <h2 className="auth-panel-headline">
+              {step === 0 ? (
+                <>Crea tu<br /><span className="auth-panel-headline-accent">cuenta</span></>
+              ) : (
+                <>Tu<br /><span className="auth-panel-headline-accent">negocio</span></>
+              )}
             </h2>
-            <p className="text-slate-400 text-[13px] leading-relaxed mb-8">
+
+            <p className="auth-panel-sub">
               {step === 0
                 ? 'Empieza con tu información personal.'
                 : 'Cuéntanos sobre tu negocio para personalizarlo.'}
             </p>
+
             <StepIndicator current={step} />
           </div>
 
           {/* Bottom benefits */}
-          <div className="relative z-10 space-y-2 mt-auto">
+          <div className="relative z-10 space-y-2">
             {['Gratis para siempre en el plan básico', 'Sin tarjeta de crédito requerida', 'Listo en menos de 2 minutos'].map((b) => (
-              <div key={b} className="flex items-center gap-2 text-[12px] text-slate-500">
-                <Check size={12} className="text-blue-500 flex-shrink-0" strokeWidth={2.5} />
+              <div key={b} className="auth-benefit-item">
+                <Check size={12} className="text-[#34D399] flex-shrink-0" strokeWidth={2.5} />
                 {b}
               </div>
             ))}
           </div>
         </div>
 
-        {/* ── Right panel ─────────────────────────────────────────────────── */}
+        {/* ── Right panel ───────────────────────────────────────────────── */}
         <div className="flex-1 flex items-center justify-center p-6 lg:p-10 bg-white dark:bg-[#0d1117] min-h-screen lg:min-h-0">
           <div className="w-full max-w-[380px]">
 
             {/* Mobile header */}
             <div className="flex items-center justify-between mb-8 lg:hidden">
               <div className="flex items-center gap-2.5">
-                <img src="/ventrix-logo.svg" alt="Ventrix" width={28} height={28} className="w-[28px] h-[28px]" draggable={false} />
+                <div className="auth-mobile-logo-mark"><span>V</span></div>
                 <span className="font-semibold text-[16px] text-slate-900 dark:text-white tracking-tight">Ventrix</span>
               </div>
               <div className="flex items-center gap-1.5">
                 {STEPS.map((_, i) => (
                   <div key={i} className={cn(
                     'h-1.5 rounded-full transition-all duration-300',
-                    i === step ? 'bg-blue-600 w-6' : i < step ? 'bg-blue-400 w-4' : 'bg-slate-200 dark:bg-slate-700 w-4',
+                    i === step ? 'bg-[#0DA06A] w-6' : i < step ? 'bg-[#34D399] w-4' : 'bg-slate-200 dark:bg-slate-700 w-4',
                   )} />
                 ))}
               </div>
             </div>
 
-            {/* ── Step 0 — Account ───────────────────────────────────────── */}
+            {/* ── Step 0 — Account ─────────────────────────────────────── */}
             {step === 0 && (
               <div className="animate-fade-up">
                 <div className="mb-7">
@@ -335,15 +329,7 @@ export default function RegisterPage() {
                     {errors.password && <p className="text-red-500 dark:text-red-400 text-[12px]">{errors.password}</p>}
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={handleNext}
-                    className={[
-                      'w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-[14px] font-semibold mt-1',
-                      'bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white',
-                      'transition-all duration-150 shadow-sm shadow-blue-600/25 hover:shadow-md hover:shadow-blue-600/25',
-                    ].join(' ')}
-                  >
+                  <button type="button" onClick={handleNext} className={btnPrimary}>
                     Continuar
                     <ArrowRight size={15} />
                   </button>
@@ -351,14 +337,14 @@ export default function RegisterPage() {
 
                 <p className="text-center text-[13px] text-slate-500 dark:text-slate-400 mt-6">
                   ¿Ya tienes cuenta?{' '}
-                  <Link href="/login" className="text-blue-600 dark:text-blue-400 font-semibold hover:underline">
+                  <Link href="/login" className="text-[#0DA06A] font-semibold hover:underline">
                     Iniciar sesión
                   </Link>
                 </p>
               </div>
             )}
 
-            {/* ── Step 1 — Business ──────────────────────────────────────── */}
+            {/* ── Step 1 — Business ────────────────────────────────────── */}
             {step === 1 && (
               <form onSubmit={handleSubmit} className="animate-fade-up">
                 <button
@@ -407,7 +393,7 @@ export default function RegisterPage() {
                         'focus:outline-none focus:ring-2',
                         errors.businessCategory
                           ? 'border-red-400 dark:border-red-500/60 focus:ring-red-500/30'
-                          : 'border-slate-200 dark:border-slate-700/60 focus:ring-blue-500/30 focus:border-blue-500',
+                          : 'border-slate-200 dark:border-slate-700/60 focus:ring-[#0DA06A]/25 focus:border-[#0DA06A]',
                         cat ? 'text-slate-900 dark:text-slate-100' : 'text-slate-400 dark:text-slate-500',
                       )}
                     >
@@ -422,16 +408,7 @@ export default function RegisterPage() {
                     )}
                   </div>
 
-                  <button
-                    type="submit"
-                    disabled={loading}
-                    className={[
-                      'w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-[14px] font-semibold mt-1',
-                      'bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white',
-                      'transition-all duration-150 shadow-sm shadow-blue-600/25 hover:shadow-md hover:shadow-blue-600/25',
-                      'disabled:opacity-60 disabled:cursor-not-allowed',
-                    ].join(' ')}
-                  >
+                  <button type="submit" disabled={loading} className={btnPrimary}>
                     {loading
                       ? <><Loader2 size={15} className="animate-spin" /> Creando tu cuenta...</>
                       : <>Comenzar a usar Ventrix <ArrowRight size={15} /></>
