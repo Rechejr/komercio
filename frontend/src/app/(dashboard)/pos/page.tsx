@@ -20,47 +20,47 @@ import { Receipt, type ReceiptItem } from '@/components/Receipt';
 
 const PAYMENT_METHODS = ['CASH', 'NEQUI', 'DAVIPLATA', 'TRANSFER', 'CARD', 'MIXED'];
 
-// ── Category color + icon palette ────────────────────────────────────────────
-const CAT_MAP: Record<string, { c1: string; c2: string; icon: LucideIcon }> = {
-  bebidas:     { c1: '#1d4ed8', c2: '#1e3a8a', icon: GlassWater },
-  lacteos:     { c1: '#0f766e', c2: '#134e4a', icon: Milk },
-  lácteos:     { c1: '#0f766e', c2: '#134e4a', icon: Milk },
-  snacks:      { c1: '#b45309', c2: '#78350f', icon: Cookie },
-  aseo:        { c1: '#6d28d9', c2: '#4c1d95', icon: Sparkles },
-  limpieza:    { c1: '#6d28d9', c2: '#4c1d95', icon: Droplets },
-  abarrotes:   { c1: '#15803d', c2: '#14532d', icon: ShoppingBasket },
-  carnes:      { c1: '#b91c1c', c2: '#7f1d1d', icon: Beef },
-  frutas:      { c1: '#65a30d', c2: '#3f6212', icon: Leaf },
-  verduras:    { c1: '#65a30d', c2: '#3f6212', icon: Leaf },
-  panaderia:   { c1: '#c2410c', c2: '#7c2d12', icon: Wheat },
-  panadería:   { c1: '#c2410c', c2: '#7c2d12', icon: Wheat },
-  dulces:      { c1: '#be185d', c2: '#831843', icon: Heart },
-  confiteria:  { c1: '#be185d', c2: '#831843', icon: Heart },
-  tecnologia:  { c1: '#0369a1', c2: '#0c4a6e', icon: Cpu },
-  electronica: { c1: '#0369a1', c2: '#0c4a6e', icon: Cpu },
-  ropa:        { c1: '#7c3aed', c2: '#5b21b6', icon: Shirt },
-  ferreteria:  { c1: '#475569', c2: '#1e293b', icon: Wrench },
-  ferretería:  { c1: '#475569', c2: '#1e293b', icon: Wrench },
-  papeleria:   { c1: '#0891b2', c2: '#164e63', icon: Pen },
-  papelería:   { c1: '#0891b2', c2: '#164e63', icon: Pen },
-  drogueria:   { c1: '#059669', c2: '#065f46', icon: Pill },
-  farmacia:    { c1: '#059669', c2: '#065f46', icon: Pill },
-  bebe:        { c1: '#ec4899', c2: '#9d174d', icon: Baby },
-  bebé:        { c1: '#ec4899', c2: '#9d174d', icon: Baby },
+// ── Category color + icon palette (alineado con guía de estilo Ventrix) ──────
+const CAT_MAP: Record<string, { rgb: string; color: string; icon: LucideIcon }> = {
+  bebidas:     { rgb: '59 123 255',  color: '#3B7BFF', icon: GlassWater   },
+  lacteos:     { rgb: '20 184 166',  color: '#14B8A6', icon: Milk         },
+  lácteos:     { rgb: '20 184 166',  color: '#14B8A6', icon: Milk         },
+  snacks:      { rgb: '245 158 11',  color: '#F59E0B', icon: Cookie       },
+  aseo:        { rgb: '139 92 246',  color: '#8B5CF6', icon: Sparkles     },
+  limpieza:    { rgb: '139 92 246',  color: '#8B5CF6', icon: Droplets     },
+  abarrotes:   { rgb: '34 197 94',   color: '#22C55E', icon: ShoppingBasket },
+  carnes:      { rgb: '239 68 68',   color: '#EF4444', icon: Beef         },
+  frutas:      { rgb: '132 204 22',  color: '#84CC16', icon: Leaf         },
+  verduras:    { rgb: '132 204 22',  color: '#84CC16', icon: Leaf         },
+  panaderia:   { rgb: '249 115 22',  color: '#F97316', icon: Wheat        },
+  panadería:   { rgb: '249 115 22',  color: '#F97316', icon: Wheat        },
+  dulces:      { rgb: '236 72 153',  color: '#EC4899', icon: Heart        },
+  confiteria:  { rgb: '236 72 153',  color: '#EC4899', icon: Heart        },
+  tecnologia:  { rgb: '6 182 212',   color: '#06B6D4', icon: Cpu          },
+  electronica: { rgb: '6 182 212',   color: '#06B6D4', icon: Cpu          },
+  ropa:        { rgb: '139 92 246',  color: '#8B5CF6', icon: Shirt        },
+  ferreteria:  { rgb: '100 116 139', color: '#64748B', icon: Wrench       },
+  ferretería:  { rgb: '100 116 139', color: '#64748B', icon: Wrench       },
+  papeleria:   { rgb: '59 123 255',  color: '#3B7BFF', icon: Pen          },
+  papelería:   { rgb: '59 123 255',  color: '#3B7BFF', icon: Pen          },
+  drogueria:   { rgb: '34 197 94',   color: '#22C55E', icon: Pill         },
+  farmacia:    { rgb: '34 197 94',   color: '#22C55E', icon: Pill         },
+  bebe:        { rgb: '236 72 153',  color: '#EC4899', icon: Baby         },
+  bebé:        { rgb: '236 72 153',  color: '#EC4899', icon: Baby         },
 };
-const HASH_COLORS = [
-  { c1: '#2563eb', c2: '#1e40af' }, { c1: '#7c3aed', c2: '#5b21b6' },
-  { c1: '#059669', c2: '#065f46' }, { c1: '#d97706', c2: '#92400e' },
-  { c1: '#dc2626', c2: '#991b1b' }, { c1: '#0891b2', c2: '#164e63' },
-  { c1: '#65a30d', c2: '#3f6212' }, { c1: '#be185d', c2: '#831843' },
+const HASH_PALETTE = [
+  { rgb: '59 123 255',  color: '#3B7BFF' }, { rgb: '139 92 246',  color: '#8B5CF6' },
+  { rgb: '34 197 94',   color: '#22C55E' }, { rgb: '245 158 11',  color: '#F59E0B' },
+  { rgb: '239 68 68',   color: '#EF4444' }, { rgb: '6 182 212',   color: '#06B6D4' },
+  { rgb: '132 204 22',  color: '#84CC16' }, { rgb: '236 72 153',  color: '#EC4899' },
 ];
-function catStyle(name: string | undefined): { c1: string; c2: string; icon: LucideIcon } {
-  if (!name) return { c1: '#334155', c2: '#1e293b', icon: Package };
+function catStyle(name: string | undefined): { rgb: string; color: string; icon: LucideIcon } {
+  if (!name) return { rgb: '100 116 139', color: '#64748B', icon: Package };
   const key = name.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
   if (CAT_MAP[key]) return CAT_MAP[key];
   let h = 0;
   for (let i = 0; i < key.length; i++) h = key.charCodeAt(i) + ((h << 5) - h);
-  return { ...HASH_COLORS[Math.abs(h) % HASH_COLORS.length], icon: Package };
+  return { ...HASH_PALETTE[Math.abs(h) % HASH_PALETTE.length], icon: Package };
 }
 
 // ── Shared input style ────────────────────────────────────────────────────────
@@ -404,8 +404,8 @@ export default function POSPage() {
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5">
                 {productsData?.map((p: any) => {
-                  const cs          = catStyle(p.category?.name);
-                  const CatIcon     = cs.icon;
+                  const cs      = catStyle(p.category?.name);
+                  const CatIcon = cs.icon;
                   const outOfStock  = p.stock <= 0 && !p.allowNegativeStock;
                   const lowStock    = p.minStock > 0 && p.stock > 0 && p.stock <= p.minStock;
 
@@ -429,14 +429,14 @@ export default function POSPage() {
                           <>
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img src={p.image} alt={p.name} className="w-full h-full object-cover" />
-                            <div className="absolute inset-0 bg-gradient-to-b from-black/35 via-transparent to-transparent" />
+                            <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-transparent to-transparent" />
                           </>
                         ) : (
                           <div
-                            className="cat-gradient w-full h-full flex items-center justify-center"
-                            style={{ '--cat-c1': cs.c1, '--cat-c2': cs.c2 } as React.CSSProperties}
+                            className="cat-tile w-full h-full flex items-center justify-center"
+                            style={{ '--cat-rgb': cs.rgb } as React.CSSProperties}
                           >
-                            <CatIcon size={32} className="text-white/55" />
+                            <CatIcon size={32} style={{ color: cs.color }} className="opacity-75" />
                           </div>
                         )}
                         {/* Category badge */}
@@ -448,12 +448,12 @@ export default function POSPage() {
                       </div>
 
                       {/* ── Info ── */}
-                      <div className="px-2.5 pt-2 pb-2.5 bg-slate-900/90 dark:bg-slate-900 flex flex-col gap-1.5">
-                        <p className="text-[12px] font-semibold text-white leading-tight line-clamp-2 min-h-[2.2em]">
+                      <div className="pos-card-body px-2.5 pt-2 pb-2.5 flex flex-col gap-1.5">
+                        <p className="text-[12px] font-semibold text-[rgb(var(--text-primary))] leading-tight line-clamp-2 min-h-[2.2em]">
                           {p.name}
                         </p>
                         <div className="flex items-center justify-between gap-1">
-                          <span className="text-[15px] font-black text-white tabular-nums leading-none">
+                          <span className="text-[15px] font-black text-[rgb(var(--text-primary))] tabular-nums leading-none">
                             {formatCurrency(p.salePrice)}
                           </span>
                           {!outOfStock && (

@@ -5,67 +5,79 @@
 @layer base {
   /* ── Design tokens ───────────────────────────────────────────────────────── */
   :root {
-    /* Surfaces */
-    --bg:          255 255 255;
-    --bg-subtle:   248 250 252;   /* slate-50 */
+    /* Surfaces — light (#F4F6FA / #FFFFFF / #EEF1F6) */
+    --bg:          244 246 250;
+    --bg-subtle:   244 246 250;
     --surface:     255 255 255;
-    --surface-2:   241 245 249;   /* slate-100 */
+    --surface-2:   238 241 246;
     --overlay:     255 255 255;
 
     /* Borders */
-    --border:      226 232 240;   /* slate-200 */
-    --border-subtle: 241 245 249; /* slate-100 */
-    --border-strong: 203 213 225; /* slate-300 */
+    --border:       15 23 42;     /* used at /0.08 opacity via Tailwind */
+    --border-subtle: 238 241 246;
+    --border-strong: 203 213 225;
 
-    /* Text */
-    --text-primary:   15  23  42;  /* slate-900 */
-    --text-secondary: 100 116 139; /* slate-500 */
-    --text-tertiary:  148 163 184; /* slate-400 */
-    --text-disabled:  203 213 225; /* slate-300 */
+    /* Text — #0F1729 / #566072 / #94A0B3 */
+    --text-primary:    15  23  41;
+    --text-secondary:  86  96 114;
+    --text-tertiary:  148 160 179;
+    --text-disabled:  203 213 225;
 
-    /* Brand / action */
-    --primary:     59  130 246;   /* blue-500 */
-    --primary-fg:  255 255 255;
-    --primary-hover: 37 99 235;   /* blue-600 */
+    /* Brand — #2F6BFF / #1E56E6 */
+    --primary:       47 107 255;
+    --primary-fg:   255 255 255;
+    --primary-hover: 30  86 230;
 
-    /* Status */
-    --success:     34  197 94;    /* green-500 */
-    --warning:     245 158 11;    /* amber-500 */
-    --danger:      239 68  68;    /* red-500 */
-    --info:        99  102 241;   /* indigo-500 */
+    /* Status (unchanged) */
+    --success:  34 197  94;
+    --warning: 245 158  11;
+    --danger:  239  68  68;
+    --info:     99 102 241;
 
-    /* Radius & shadow tokens */
+    /* Category tint colors (RGB channels, used as rgba(var(--cat-X-rgb) / 0.14)) */
+    --cat-bebidas-rgb:    59 123 255;
+    --cat-lacteos-rgb:    20 184 166;
+    --cat-snacks-rgb:    245 158  11;
+    --cat-aseo-rgb:      139  92 246;
+    --cat-abarrotes-rgb:  34 197  94;
+    --cat-otros-rgb:     100 116 139;
+
+    /* Radius tokens */
     --radius-sm:   4px;
     --radius:      8px;
     --radius-md:   10px;
-    --radius-lg:   12px;
+    --radius-lg:   14px;
     --radius-xl:   16px;
     --radius-2xl:  20px;
     --radius-full: 9999px;
 
     /* Focus ring */
-    --ring: 59 130 246;
+    --ring: 47 107 255;
   }
 
   .dark {
-    --bg:          10  15  28;    /* near black */
-    --bg-subtle:   15  23  42;    /* slate-900 */
-    --surface:     22  33  55;    /* slate-800 */
-    --surface-2:   30  41  59;    /* slate-700 */
-    --overlay:     22  33  55;
+    /* Surfaces — #0A0E1A / #111726 / #1A2234 */
+    --bg:          10  14  26;
+    --bg-subtle:   10  14  26;
+    --surface:     17  23  38;
+    --surface-2:   26  34  52;
+    --overlay:     17  23  38;
 
-    --border:       30  41  59;   /* slate-700 */
-    --border-subtle: 22 33  55;   /* slate-800 */
-    --border-strong: 51 65  85;   /* slate-600 */
+    /* Borders (approximated from rgba(255,255,255,.08/.15) on #0A0E1A) */
+    --border:       30  34  48;
+    --border-subtle: 17 23  38;
+    --border-strong: 47  51  65;
 
-    --text-primary:   248 250 252; /* slate-50 */
-    --text-secondary: 148 163 184; /* slate-400 */
-    --text-tertiary:  71  85  105; /* slate-600 */
-    --text-disabled:  51  65  85;  /* slate-700 */
+    /* Text — #EAEEF6 / #9AA4B6 / #616B7E */
+    --text-primary:   234 238 246;
+    --text-secondary: 154 164 182;
+    --text-tertiary:   97 107 126;
+    --text-disabled:   51  65  85;
 
-    --primary:     99  102 241;   /* indigo-500 */
-    --primary-fg:  255 255 255;
-    --primary-hover: 79 70 229;   /* indigo-600 */
+    /* Brand — same blue, lighter hover */
+    --primary:       47 107 255;
+    --primary-fg:   255 255 255;
+    --primary-hover: 76 130 255;
   }
 
   /* ── Base resets ─────────────────────────────────────────────────────────── */
@@ -125,9 +137,9 @@
   .dark input:-webkit-autofill:hover,
   .dark input:-webkit-autofill:focus,
   .dark input:-webkit-autofill:active {
-    -webkit-box-shadow: 0 0 0 1000px #162137 inset !important;
-    -webkit-text-fill-color: #f8fafc !important;
-    caret-color: #f8fafc;
+    -webkit-box-shadow: 0 0 0 1000px #111726 inset !important;
+    -webkit-text-fill-color: #eaeef6 !important;
+    caret-color: #eaeef6;
   }
 }
 
@@ -230,9 +242,14 @@
     background-image: radial-gradient(ellipse at top right, white 0%, transparent 60%);
   }
 
-  /* ── Product card category gradient (colors set via CSS vars) ───────────── */
-  .cat-gradient {
-    background: linear-gradient(145deg, var(--cat-c1), var(--cat-c2));
+  /* ── Product card category tile (RGB tint, adapts to light + dark) ─────── */
+  .cat-tile {
+    background-color: rgb(var(--cat-rgb) / 0.14);
+  }
+
+  /* ── POS card info body (uses surface token) ─────────────────────────────── */
+  .pos-card-body {
+    background-color: rgb(var(--surface));
   }
 
   /* ── Receipt barcode visual ──────────────────────────────────────────────── */
