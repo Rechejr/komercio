@@ -106,9 +106,13 @@
   flex-shrink: 0;
 }
 .lp-nav-actions { display: flex; align-items: center; gap: 14px; }
-.lp-nav-login { font-weight: 500; color: var(--lp-ink-soft); font-size: .95rem; }
+.lp-nav-login { font-weight: 500; color: var(--lp-ink-soft); font-size: .95rem; white-space: nowrap; }
 .lp-nav-login:hover { color: var(--lp-brand-deep); }
-@media (max-width: 560px) { .lp-nav-login { display: none; } }
+@media (max-width: 480px) {
+  .lp-nav-actions { gap: 8px; }
+  .lp-nav-login { font-size: .78rem; }
+  .lp-nav-actions .lp-btn { font-size: .82rem; padding: .65em 1.1em; }
+}
 
 /* ── Hero ── */
 .lp-hero { padding: 56px 0 40px; }
