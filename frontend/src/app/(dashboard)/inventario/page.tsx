@@ -12,7 +12,7 @@ import toast from 'react-hot-toast';
 import {
   Plus, Search, Edit, Trash2, Package, AlertTriangle,
   X, Loader2, Barcode, FileUp, FileDown, CheckCircle2,
-  ArrowRight, Lock, ArrowUpDown,
+  ArrowRight, Lock, ArrowUpDown, Share2,
 } from 'lucide-react';
 import { useAuthStore } from '@/store/auth.store';
 import { useUpgradeStore } from '@/store/upgrade.store';
@@ -47,9 +47,22 @@ export default function InventarioPage() {
   const qc = useQueryClient();
   const searchParams = useSearchParams();
   const router = useRouter();
-  const plan = useAuthStore((s) => s.user?.plan);
-  const isFree = !plan || plan === 'free';
+  const plan       = useAuthStore((s) => s.user?.plan);
+  const businessId = useAuthStore((s) => s.user?.businessId);
+  const isFree     = !plan || plan === 'free';
   const openUpgrade = useUpgradeStore((s) => s.open);
+
+  function shareCatalog() {
+    if (!businessId) return;
+    const url = `${window.location.origin}/catalogo/${businessId}`;
+    navigator.clipboard.writeText(url).then(() => toast.success('¡Link del catálogo copiado!'));
+  }
+  function shareCatalogWhatsApp() {
+    if (!businessId) return;
+    const url = `${window.location.origin}/catalogo/${businessId}`;
+    const text = `¡Mira nuestro catálogo de productos! 🛒\n${url}`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+  }
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [showForm, setShowForm] = useState(false);
@@ -299,6 +312,28 @@ export default function InventarioPage() {
             e.target.value = '';
           }}
         />
+
+        {/* Compartir catálogo */}
+        <div className="flex gap-1.5">
+          <button
+            type="button"
+            onClick={shareCatalog}
+            title="Copiar link del catálogo"
+            className="flex items-center gap-2 px-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+          >
+            <Share2 size={15} /> Compartir catálogo
+          </button>
+          <button
+            type="button"
+            onClick={shareCatalogWhatsApp}
+            title="Compartir catálogo por WhatsApp"
+            className="flex items-center justify-center w-10 py-2.5 bg-[#25D366] text-white rounded-xl hover:bg-[#1ebe5d] transition"
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.116.554 4.103 1.523 5.824L.057 23.885a.5.5 0 0 0 .611.61l6.101-1.466A11.945 11.945 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.894a9.883 9.883 0 0 1-5.036-1.374l-.36-.214-3.733.897.915-3.638-.235-.374A9.861 9.861 0 0 1 2.106 12C2.106 6.527 6.527 2.106 12 2.106S21.894 6.527 21.894 12 17.473 21.894 12 21.894z"/>
+            </svg>
+          </button>
+        </div>
 
         <button
           type="button"
