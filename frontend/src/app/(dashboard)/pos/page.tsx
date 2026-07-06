@@ -18,6 +18,64 @@ import {
 } from 'lucide-react';
 import { Receipt, type ReceiptItem } from '@/components/Receipt';
 
+// ── WhatsApp icon (SVG inline — no está en lucide) ────────────────────────────
+function WhatsAppIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
+      <path d="M12 0C5.373 0 0 5.373 0 12c0 2.116.554 4.103 1.523 5.824L.057 23.885a.5.5 0 0 0 .611.61l6.101-1.466A11.945 11.945 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.894a9.883 9.883 0 0 1-5.036-1.374l-.36-.214-3.733.897.915-3.638-.235-.374A9.861 9.861 0 0 1 2.106 12C2.106 6.527 6.527 2.106 12 2.106S21.894 6.527 21.894 12 17.473 21.894 12 21.894z"/>
+    </svg>
+  );
+}
+
+// ── Armar texto de recibo para WhatsApp ───────────────────────────────────────
+const PM_LABEL: Record<string, string> = {
+  CASH: 'Efectivo', NEQUI: 'Nequi', DAVIPLATA: 'Daviplata',
+  TRANSFER: 'Transferencia', CARD: 'Tarjeta', MIXED: 'Mixto',
+};
+
+function buildWhatsAppText(
+  sale: any,
+  items: ReceiptItem[],
+  business: any,
+  customerName: string | null,
+): string {
+  const date = new Date(sale.createdAt || Date.now());
+  const dateStr = date.toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const timeStr = date.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
+
+  const lines: string[] = [];
+  lines.push(`🧾 *${business?.name || 'Ventrix'}*`);
+  if (business?.city) lines.push(`📍 ${business.city}`);
+  lines.push(`📅 ${dateStr} ${timeStr}  •  Factura #${sale.invoiceNumber}`);
+  if (customerName) lines.push(`👤 ${customerName}`);
+  lines.push('');
+  lines.push('———————————————');
+  for (const item of items) {
+    const qty = item.quantity > 1 ? ` x${item.quantity}` : '';
+    lines.push(`• ${item.name}${qty}  →  ${formatCurrency(item.total)}`);
+  }
+  lines.push('———————————————');
+  if (Number(sale.discountAmount) > 0) {
+    lines.push(`Descuento: -${formatCurrency(Number(sale.discountAmount))}`);
+  }
+  lines.push(`*TOTAL: ${formatCurrency(Number(sale.total))}*`);
+  lines.push(`Pago: ${PM_LABEL[sale.paymentMethod] || sale.paymentMethod}`);
+  if (Number(sale.changeAmount) > 0) {
+    lines.push(`Cambio: ${formatCurrency(Number(sale.changeAmount))}`);
+  }
+  lines.push('');
+  lines.push('¡Gracias por su compra! 🙏');
+  return lines.join('\n');
+}
+
+function openWhatsApp(sale: any, items: ReceiptItem[], business: any, customerPhone?: string | null, customerName?: string | null) {
+  const text = buildWhatsAppText(sale, items, business, customerName || null);
+  const phone = customerPhone?.replace(/\D/g, '');
+  const fullPhone = phone ? `57${phone.replace(/^57/, '')}` : '';
+  window.open(`https://wa.me/${fullPhone}?text=${encodeURIComponent(text)}`, '_blank');
+}
+
 const PAYMENT_METHODS = ['CASH', 'NEQUI', 'DAVIPLATA', 'TRANSFER', 'CARD', 'MIXED'];
 
 // ── Category color + icon palette (alineado con guía de estilo Ventrix) ──────
@@ -289,6 +347,13 @@ export default function POSPage() {
               className="flex items-center gap-1.5 px-3.5 py-2 border border-slate-200 dark:border-slate-700/60 rounded-xl text-[13px] font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
             >
               <Printer size={14} /> Imprimir
+            </button>
+            <button
+              type="button"
+              onClick={() => openWhatsApp(lastSale, receiptItemsRef.current, businessInfo, selectedCustomer?.phone, selectedCustomer?.name)}
+              className="flex items-center gap-1.5 px-3.5 py-2 bg-[#25D366] hover:bg-[#1ebe5d] text-white rounded-xl text-[13px] font-medium transition-colors"
+            >
+              <WhatsAppIcon /> WhatsApp
             </button>
             <button
               type="button"
