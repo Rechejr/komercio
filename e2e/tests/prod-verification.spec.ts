@@ -73,25 +73,34 @@ test('PROD-2: POS — agregar producto y cobrar', async ({ page }) => {
   await page.waitForTimeout(1500);
   await shot(page, 'v3-2b-busqueda');
 
-  // Click en primer producto disponible (botón + o el card)
-  const addBtn = page.locator('button[aria-label*="agregar" i], button:has-text("+")').first();
-  const productCard = page.locator('[class*="cursor-pointer"][class*="rounded"]').first();
+  // Los productos son <button type="button"> dentro de un .grid
+  // Buscar el primer botón de producto en la grilla (no el botón Cobrar ni de la barra superior)
+  const productGrid = page.locator('.grid').first();
+  let productAdded = false;
 
-  if (await addBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
-    await addBtn.click();
-    console.log('  Clicked botón + para agregar producto');
-  } else if (await productCard.isVisible({ timeout: 2000 }).catch(() => false)) {
-    await productCard.click();
-    console.log('  Clicked card de producto');
-  } else {
-    // Buscar con termino diferente
+  if (await productGrid.isVisible({ timeout: 5000 }).catch(() => false)) {
+    const productBtns = productGrid.locator('button[type="button"]');
+    const count = await productBtns.count();
+    console.log(`  Productos visibles en grid: ${count}`);
+    if (count > 0) {
+      await productBtns.first().click();
+      await page.waitForTimeout(800);
+      productAdded = true;
+      console.log('  Clicked primer botón de producto');
+    }
+  }
+
+  if (!productAdded) {
+    // Fallback: buscar con 'a' si 'cafe' no mostró nada
     await search.clear();
     await search.fill('a');
     await page.waitForTimeout(1500);
-    const anyCard = page.locator('.grid > div').first();
-    if (await anyCard.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await anyCard.click();
-      console.log('  Clicked primer card genérico');
+    const fallbackBtns = page.locator('.grid button[type="button"]');
+    const fc = await fallbackBtns.count().catch(() => 0);
+    if (fc > 0) {
+      await fallbackBtns.first().click();
+      await page.waitForTimeout(800);
+      console.log('  Clicked producto (fallback búsqueda "a")');
     }
   }
 

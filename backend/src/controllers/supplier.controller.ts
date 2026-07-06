@@ -49,13 +49,16 @@ export const supplierController = {
       if (!name) throw new AppError('El nombre del proveedor es requerido', 400);
       const { legalName, document, phone, mobile, email, address, city, contactName, notes } = req.body;
       const base = { name, document, phone, email, address, city, contactName, notes, businessId: req.user!.businessId };
+      // select for retry excludes legalName/mobile which may not exist in DB yet
+      const oldSelect = { id: true, businessId: true, name: true, document: true, phone: true, email: true, address: true, city: true, contactName: true, notes: true, isActive: true, createdAt: true, updatedAt: true, deletedAt: true };
       let supplier: any;
       try {
         supplier = await prisma.supplier.create({ data: { ...base, legalName, mobile } });
       } catch (colErr: any) {
         // Retry without extended columns while migration 20260705100000 is pending.
+        // Use explicit select to avoid RETURNING legalName/mobile which don't exist yet.
         if (colErr?.message?.toLowerCase().includes('column') || colErr?.message?.toLowerCase().includes('does not exist')) {
-          supplier = await prisma.supplier.create({ data: base });
+          supplier = await prisma.supplier.create({ data: base, select: oldSelect });
         } else {
           throw colErr;
         }
@@ -73,12 +76,13 @@ export const supplierController = {
       if (!existing) throw new AppError('Proveedor no encontrado', 404);
       const { name, legalName, document, phone, mobile, email, address, city, contactName, notes } = req.body;
       const base = { name, document, phone, email, address, city, contactName, notes };
+      const oldSelect = { id: true, businessId: true, name: true, document: true, phone: true, email: true, address: true, city: true, contactName: true, notes: true, isActive: true, createdAt: true, updatedAt: true, deletedAt: true };
       let supplier: any;
       try {
         supplier = await prisma.supplier.update({ where: { id }, data: { ...base, legalName, mobile } });
       } catch (colErr: any) {
         if (colErr?.message?.toLowerCase().includes('column') || colErr?.message?.toLowerCase().includes('does not exist')) {
-          supplier = await prisma.supplier.update({ where: { id }, data: base });
+          supplier = await prisma.supplier.update({ where: { id }, data: base, select: oldSelect });
         } else {
           throw colErr;
         }
