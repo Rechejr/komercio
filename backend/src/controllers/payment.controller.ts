@@ -13,9 +13,9 @@ const WOMPI_BASE = isTestMode
   : 'production.wompi.co';
 
 const PLAN_PRICES: Record<string, number> = {
-  monthly:   19900,
-  quarterly: Math.round(19900 * 3 * 0.9),
-  annual:    Math.round(19900 * 12 * 0.75),
+  monthly:   29900,
+  quarterly: Math.round(29900 * 3 * 0.9),
+  annual:    Math.round(29900 * 12 * 0.75),
 };
 
 const PLAN_MONTHS: Record<string, number> = {

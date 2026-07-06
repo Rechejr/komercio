@@ -283,7 +283,7 @@ export default function LandingPage() {
             <div className="lp-plan lp-featured lp-reveal">
               <span className="lp-plan-tag">Recomendado</span>
               <h3>Pro</h3>
-              <div className="lp-price">$XX.XXX<small> /mes</small></div>
+              <div className="lp-price">$29.900<small> /mes</small></div>
               <ul>{PRO_FTS.map(f => <li key={f}><CheckIcon />{f}</li>)}</ul>
               <Link href="/register" className="lp-btn lp-btn-primary">Probar Pro</Link>
             </div>

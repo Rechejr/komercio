@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils';
 import { api } from '@/lib/api';
 
 // ─── Config ────────────────────────────────────────────────────────────────────
-const BASE_PRICE = 19900;
+const BASE_PRICE = 29900;
 
 const PERIODS = [
   { key: 'monthly',   label: 'Mensual',    badge: null,   months: 1,  discount: 0    },
