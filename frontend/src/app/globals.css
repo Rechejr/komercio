@@ -184,6 +184,45 @@
   @keyframes scaleIn { from { opacity: 0; transform: scale(0.95) }           to { opacity: 1; transform: scale(1) } }
   @keyframes slideUp { from { opacity: 0; transform: translateY(10px) }      to { opacity: 1; transform: translateY(0) } }
 
+  /* ── Global search ───────────────────────────────────────────────────────── */
+  .search-backdrop {
+    background: radial-gradient(ellipse 640px 360px at 50% 36%, rgba(16,185,129,0.07) 0%, rgba(0,0,0,0.38) 70%);
+  }
+  .search-modal {
+    border: 1px solid rgba(16,185,129,0.18);
+    box-shadow: 0 0 0 1px rgba(16,185,129,0.06), 0 24px 64px rgba(0,0,0,0.28), 0 0 48px rgba(16,185,129,0.07);
+  }
+  .search-accent-bar {
+    height: 3px;
+    background: linear-gradient(90deg, #6ee7b7 0%, #10b981 45%, #059669 100%);
+  }
+  .search-idle-icon {
+    background: linear-gradient(135deg, rgba(16,185,129,0.12) 0%, rgba(5,150,105,0.08) 100%);
+    border: 1px solid rgba(16,185,129,0.2);
+  }
+  .search-item-active {
+    background: rgba(16,185,129,0.06);
+    border-left: 2px solid #10b981;
+    padding-left: 14px;
+  }
+  .search-item-inactive {
+    border-left: 2px solid transparent;
+  }
+  .search-footer {
+    border-top: 1px solid rgba(16,185,129,0.10);
+    background: rgba(16,185,129,0.02);
+  }
+  .search-kbd {
+    background: rgba(16,185,129,0.08);
+    border: 1px solid rgba(16,185,129,0.18);
+    color: #10b981;
+  }
+  .search-esc-kbd {
+    background: rgba(16,185,129,0.06);
+    border: 1px solid rgba(16,185,129,0.2);
+    color: #10b981;
+  }
+
   /* ── Barcode scanner ─────────────────────────────────────────────────────── */
   .animate-scan-line {
     animation: scanLine 1.8s ease-in-out infinite;
