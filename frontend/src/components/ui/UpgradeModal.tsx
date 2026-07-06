@@ -82,7 +82,7 @@ export function UpgradeModal() {
           </button>
         </div>
 
-        <div className="px-6 overflow-y-auto flex-1">
+        <div className="px-6 overflow-y-auto flex-1 min-h-0">
           {/* ── Period tabs ──────────────────────────────────────────────── */}
           <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 rounded-xl p-1 mb-5">
             {PERIODS.map((opt) => (
