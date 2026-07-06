@@ -112,7 +112,7 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
           'transition-transform duration-300 ease-spring',
           'md:relative md:translate-x-0 md:z-30',
           collapsed ? 'md:w-[60px]' : 'md:w-[220px]',
-          'transition-[width,transform] duration-300 ease-spring',
+            'transition-[width,transform] duration-300 ease-spring',
         )}
         style={{
           background: 'linear-gradient(180deg, #0d1117 0%, #0b0f1a 100%)',
