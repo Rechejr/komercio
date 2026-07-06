@@ -157,6 +157,9 @@ export default function LandingPage() {
                 Sin tarjeta · Listo en 2 minutos
               </span>
             </div>
+            <p className="lp-hero-login">
+              ¿Ya tienes cuenta? <Link href="/login">Iniciar sesión</Link>
+            </p>
           </div>
 
           <div className="lp-receipt-stage lp-reveal">

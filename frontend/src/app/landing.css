@@ -108,11 +108,18 @@
 .lp-nav-actions { display: flex; align-items: center; gap: 14px; }
 .lp-nav-login { font-weight: 500; color: var(--lp-ink-soft); font-size: .95rem; white-space: nowrap; }
 .lp-nav-login:hover { color: var(--lp-brand-deep); }
-@media (max-width: 480px) {
-  .lp-nav-actions { gap: 8px; }
-  .lp-nav-login { font-size: .78rem; }
-  .lp-nav-actions .lp-btn { font-size: .82rem; padding: .65em 1.1em; }
+@media (max-width: 640px) { .lp-nav-login { display: none; } }
+
+/* link "Ya tengo cuenta" debajo del CTA en hero (solo mobile) */
+.lp-hero-login {
+  display: none;
+  font-size: .9rem;
+  color: var(--lp-ink-soft);
+  font-weight: 500;
 }
+.lp-hero-login a { color: var(--lp-brand-deep); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+.lp-hero-login a:hover { color: var(--lp-brand); }
+@media (max-width: 640px) { .lp-hero-login { display: block; } }
 
 /* ── Hero ── */
 .lp-hero { padding: 56px 0 40px; }
