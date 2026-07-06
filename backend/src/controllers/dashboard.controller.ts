@@ -15,9 +15,10 @@ export const dashboardController = {
 
       const now = new Date();
       const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      const weekStart = new Date(now);
-      weekStart.setDate(weekStart.getDate() - 7);
+      const yesterdayStart = new Date(todayStart); yesterdayStart.setDate(yesterdayStart.getDate() - 1);
+      const weekStart = new Date(now); weekStart.setDate(weekStart.getDate() - 7);
       const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
 
       const [
         summaryRaw, recentSales, topProducts,
@@ -25,12 +26,14 @@ export const dashboardController = {
       ] = await Promise.all([
         prisma.$queryRaw<any[]>`
           SELECT
-            COALESCE(SUM(CASE WHEN s."createdAt" >= ${todayStart} AND s.status = 'COMPLETED' THEN s.total END), 0)   AS today_total,
-            COALESCE(COUNT(CASE WHEN s."createdAt" >= ${todayStart} AND s.status = 'COMPLETED' THEN 1 END), 0)       AS today_count,
-            COALESCE(SUM(CASE WHEN s."createdAt" >= ${weekStart}  AND s.status = 'COMPLETED' THEN s.total END), 0)   AS week_total,
-            COALESCE(COUNT(CASE WHEN s."createdAt" >= ${weekStart}  AND s.status = 'COMPLETED' THEN 1 END), 0)       AS week_count,
-            COALESCE(SUM(CASE WHEN s."createdAt" >= ${monthStart} AND s.status = 'COMPLETED' THEN s.total END), 0)   AS month_total,
-            COALESCE(COUNT(CASE WHEN s."createdAt" >= ${monthStart} AND s.status = 'COMPLETED' THEN 1 END), 0)       AS month_count
+            COALESCE(SUM(CASE WHEN s."createdAt" >= ${todayStart}     AND s.status = 'COMPLETED' THEN s.total END), 0) AS today_total,
+            COALESCE(COUNT(CASE WHEN s."createdAt" >= ${todayStart}   AND s.status = 'COMPLETED' THEN 1 END), 0)       AS today_count,
+            COALESCE(SUM(CASE WHEN s."createdAt" >= ${yesterdayStart} AND s."createdAt" < ${todayStart} AND s.status = 'COMPLETED' THEN s.total END), 0) AS yesterday_total,
+            COALESCE(SUM(CASE WHEN s."createdAt" >= ${weekStart}      AND s.status = 'COMPLETED' THEN s.total END), 0) AS week_total,
+            COALESCE(COUNT(CASE WHEN s."createdAt" >= ${weekStart}    AND s.status = 'COMPLETED' THEN 1 END), 0)       AS week_count,
+            COALESCE(SUM(CASE WHEN s."createdAt" >= ${monthStart}     AND s.status = 'COMPLETED' THEN s.total END), 0) AS month_total,
+            COALESCE(COUNT(CASE WHEN s."createdAt" >= ${monthStart}   AND s.status = 'COMPLETED' THEN 1 END), 0)       AS month_count,
+            COALESCE(SUM(CASE WHEN s."createdAt" >= ${lastMonthStart} AND s."createdAt" < ${monthStart} AND s.status = 'COMPLETED' THEN s.total END), 0) AS last_month_total
           FROM sales s
           JOIN branches br ON s."branchId" = br.id
           WHERE br."businessId" = ${businessId}
@@ -51,7 +54,9 @@ export const dashboardController = {
         `,
 
         prisma.$queryRaw<any[]>`
-          SELECT p.name, p.code, SUM(sd.quantity) AS total_qty
+          SELECT p.name, p.code,
+                 SUM(sd.quantity)              AS total_qty,
+                 SUM(sd.quantity * sd."unitPrice") AS total_revenue
           FROM sale_details sd
           JOIN products p ON sd."productId" = p.id
           JOIN sales s ON sd."saleId" = s.id
@@ -61,7 +66,7 @@ export const dashboardController = {
             AND s."deletedAt" IS NULL
             AND br."businessId" = ${businessId}
           GROUP BY p.id, p.name, p.code
-          ORDER BY total_qty DESC
+          ORDER BY total_revenue DESC
           LIMIT 5
         `,
 
@@ -89,9 +94,9 @@ export const dashboardController = {
       const sr = summaryRaw[0] || {};
       const data = {
         sales: {
-          today: { total: Number(sr.today_total || 0), count: Number(sr.today_count || 0) },
+          today: { total: Number(sr.today_total || 0), count: Number(sr.today_count || 0), prevTotal: Number(sr.yesterday_total || 0) },
           week:  { total: Number(sr.week_total || 0),  count: Number(sr.week_count || 0) },
-          month: { total: Number(sr.month_total || 0), count: Number(sr.month_count || 0) },
+          month: { total: Number(sr.month_total || 0), count: Number(sr.month_count || 0), prevTotal: Number(sr.last_month_total || 0) },
         },
         inventory: { totalProducts, lowStock },
         customers: { total: totalCustomers, withDebt: customersWithDebt },
@@ -110,7 +115,7 @@ export const dashboardController = {
         })),
         topProducts: topProducts.map((p: any) => ({
           product: { name: p.name, code: p.code },
-          _sum: { quantity: Number(p.total_qty) },
+          _sum: { quantity: Number(p.total_qty), revenue: Number(p.total_revenue || 0) },
         })),
       };
 

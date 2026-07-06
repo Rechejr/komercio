@@ -1,5 +1,6 @@
 ﻿'use client';
 
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { formatCurrency, formatDateTime, formatChartDate, statusColor, statusLabel } from '@/lib/utils';
@@ -9,11 +10,33 @@ import {
 } from 'recharts';
 import {
   ShoppingCart, CreditCard, TrendingUp, AlertTriangle,
-  ArrowUpRight, Info, Package,
+  ArrowUpRight, Info, Package, TrendingDown,
 } from 'lucide-react';
 import Link from 'next/link';
 import { Tooltip as InfoTooltip } from '@/components/ui/Tooltip';
 import { CountUp } from '@/components/ui/CountUp';
+
+// ── Trend badge ───────────────────────────────────────────────────────────────
+function TrendBadge({ current, prev }: { current: number; prev?: number }) {
+  if (prev === undefined || prev === null) return null;
+  if (prev === 0 && current === 0) return null;
+  if (prev === 0) return (
+    <span className="ml-1.5 inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+      Nuevo
+    </span>
+  );
+  const pct = Math.round(((current - prev) / prev) * 100);
+  const up = pct >= 0;
+  return (
+    <span className={`ml-1.5 inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+      up ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+         : 'bg-red-50 dark:bg-red-500/10 text-red-500 dark:text-red-400'
+    }`}>
+      {up ? <TrendingUp size={9} /> : <TrendingDown size={9} />}
+      {up ? '+' : ''}{pct}%
+    </span>
+  );
+}
 
 // ── Stat card ─────────────────────────────────────────────────────────────────
 interface StatCardProps {
@@ -24,9 +47,10 @@ interface StatCardProps {
   accent: string;
   iconBg: string;
   tooltip?: string;
+  trend?: { current: number; prev?: number };
 }
 
-function StatCard({ title, value, sub, icon: Icon, accent, iconBg, tooltip }: StatCardProps) {
+function StatCard({ title, value, sub, icon: Icon, accent, iconBg, tooltip, trend }: StatCardProps) {
   return (
     <div className="card p-5 flex items-start gap-4 card-hover">
       <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${iconBg}`}>
@@ -41,7 +65,10 @@ function StatCard({ title, value, sub, icon: Icon, accent, iconBg, tooltip }: St
             </InfoTooltip>
           )}
         </div>
-        <p className="text-[22px] font-bold text-slate-900 dark:text-white tabular leading-none">{value}</p>
+        <div className="flex items-center flex-wrap gap-0.5">
+          <p className="text-[22px] font-bold text-slate-900 dark:text-white tabular leading-none">{value}</p>
+          {trend && <TrendBadge current={trend.current} prev={trend.prev} />}
+        </div>
         <p className="text-[12px] text-slate-500 dark:text-slate-400 mt-1">{sub}</p>
       </div>
     </div>
@@ -75,8 +102,13 @@ function ChartTooltip({ active, payload, label }: any) {
   );
 }
 
+type Period = '7d' | '30d' | '90d';
+const PERIOD_LABELS: Record<Period, string> = { '7d': '7 días', '30d': '30 días', '90d': '90 días' };
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default function DashboardPage() {
+  const [period, setPeriod] = useState<Period>('30d');
+
   const { data: summaryData, isLoading: loadingSummary } = useQuery({
     queryKey: ['dashboard-summary'],
     queryFn: () => api.get('/dashboard/summary').then((r) => r.data.data),
@@ -84,18 +116,19 @@ export default function DashboardPage() {
   });
 
   const { data: rawChart } = useQuery({
-    queryKey: ['dashboard-chart'],
-    queryFn: () => api.get('/dashboard/sales-chart?period=30d').then((r) => r.data.data),
+    queryKey: ['dashboard-chart', period],
+    queryFn: () => api.get(`/dashboard/sales-chart?period=${period}`).then((r) => r.data.data),
   });
 
-  // Fill gaps so every day in the last 30 days has a data point (0 if no sales)
+  // Fill gaps so every day in the selected period has a data point (0 if no sales)
   const chartData = (() => {
     if (!rawChart) return [];
     const byDay = new Map(rawChart.map((d: any) => [d.date, d]));
     const days: any[] = [];
+    const totalDays = period === '7d' ? 7 : period === '90d' ? 90 : 30;
     const end = new Date();
     const cur = new Date();
-    cur.setDate(cur.getDate() - 29);
+    cur.setDate(cur.getDate() - (totalDays - 1));
     while (cur <= end) {
       const key = cur.toISOString().slice(0, 10);
       days.push(byDay.get(key) ?? { date: key, total: 0, count: 0 });
@@ -125,6 +158,7 @@ export default function DashboardPage() {
               icon={ShoppingCart}
               accent="text-emerald-600 dark:text-emerald-400"
               iconBg="bg-emerald-50 dark:bg-emerald-500/10"
+              trend={{ current: s?.sales?.today?.total || 0, prev: s?.sales?.today?.prevTotal }}
             />
             <StatCard
               title="Ventas del mes"
@@ -133,6 +167,7 @@ export default function DashboardPage() {
               icon={TrendingUp}
               accent="text-emerald-600 dark:text-emerald-400"
               iconBg="bg-emerald-50 dark:bg-emerald-500/10"
+              trend={{ current: s?.sales?.month?.total || 0, prev: s?.sales?.month?.prevTotal }}
             />
             <StatCard
               title="Stock bajo"
@@ -162,8 +197,24 @@ export default function DashboardPage() {
         <div className="card lg:col-span-2 p-5">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h3 className="text-[14px] font-semibold text-slate-800 dark:text-white">Ventas últimos 30 días</h3>
+              <h3 className="text-[14px] font-semibold text-slate-800 dark:text-white">Ventas — últimos {PERIOD_LABELS[period]}</h3>
               <p className="text-[12px] text-slate-500 dark:text-slate-400 mt-0.5">Ingresos diarios acumulados</p>
+            </div>
+            <div className="flex items-center gap-1 bg-slate-100 dark:bg-white/[0.06] rounded-lg p-0.5">
+              {(['7d', '30d', '90d'] as Period[]).map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => setPeriod(p)}
+                  className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-all ${
+                    period === p
+                      ? 'bg-white dark:bg-slate-700 text-emerald-600 dark:text-emerald-400 shadow-sm'
+                      : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
+                  }`}
+                >
+                  {PERIOD_LABELS[p]}
+                </button>
+              ))}
             </div>
           </div>
           <ResponsiveContainer width="100%" height={210}>
@@ -212,26 +263,28 @@ export default function DashboardPage() {
           <div className="flex items-center gap-2 mb-4">
             <Package size={14} className="text-slate-400" />
             <h3 className="text-[14px] font-semibold text-slate-800 dark:text-white">Más vendidos</h3>
+            <span className="ml-auto text-[10px] text-slate-400 dark:text-slate-600">este mes</span>
           </div>
           {s?.topProducts?.length > 0 ? (
             <div className="space-y-3.5">
               {s.topProducts.slice(0, 5).map((p: any, i: number) => {
-                const pct = Math.round(((p._sum?.quantity ?? 0) / maxQty) * 100);
+                const maxRev: number = s.topProducts[0]._sum?.revenue ?? 1;
+                const pct = Math.round(((p._sum?.revenue ?? 0) / maxRev) * 100);
                 return (
-                  <div key={p.productId}>
+                  <div key={p.product?.name ?? i}>
                     <div className="flex items-center gap-2.5 mb-1.5">
                       <span className="text-[10px] font-bold text-slate-400 dark:text-slate-600 w-4 tabular">{i + 1}</span>
                       <p className="text-[13px] font-medium text-slate-800 dark:text-slate-200 flex-1 truncate">
                         {p.product?.name || 'N/A'}
                       </p>
-                      <span className="text-[12px] text-slate-500 dark:text-slate-400 tabular flex-shrink-0">
-                        {p._sum?.quantity} uds
+                      <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold tabular flex-shrink-0">
+                        {formatCurrency(p._sum?.revenue ?? 0)}
                       </span>
                     </div>
                     <div className="ml-6 h-1 rounded-full bg-slate-100 dark:bg-white/[0.06] overflow-hidden">
                       <div
-                        className="h-full rounded-full bg-emerald-500 transition-all duration-500"
-                        style={{ width: `${pct}%` }}
+                        style={{ '--progress': `${pct}%` } as React.CSSProperties}
+                        className="h-full rounded-full bg-emerald-500 transition-all duration-700 [width:var(--progress)]"
                       />
                     </div>
                   </div>
