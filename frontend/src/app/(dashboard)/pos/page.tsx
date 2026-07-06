@@ -12,10 +12,56 @@ import {
   Search, Plus, Minus, Trash2, User,
   DollarSign, Printer, X, Loader2, ShoppingBag, CheckCircle,
   Zap, Package, AlertCircle, CreditCard,
+  GlassWater, Milk, Leaf, Wheat, ShoppingBasket,
+  Beef, Sparkles, Cpu, Shirt, Wrench, Pen, Pill,
+  Heart, Droplets, Cookie, Baby, type LucideIcon,
 } from 'lucide-react';
 import { Receipt, type ReceiptItem } from '@/components/Receipt';
 
 const PAYMENT_METHODS = ['CASH', 'NEQUI', 'DAVIPLATA', 'TRANSFER', 'CARD', 'MIXED'];
+
+// ── Category color + icon palette ────────────────────────────────────────────
+const CAT_MAP: Record<string, { c1: string; c2: string; icon: LucideIcon }> = {
+  bebidas:     { c1: '#1d4ed8', c2: '#1e3a8a', icon: GlassWater },
+  lacteos:     { c1: '#0f766e', c2: '#134e4a', icon: Milk },
+  lácteos:     { c1: '#0f766e', c2: '#134e4a', icon: Milk },
+  snacks:      { c1: '#b45309', c2: '#78350f', icon: Cookie },
+  aseo:        { c1: '#6d28d9', c2: '#4c1d95', icon: Sparkles },
+  limpieza:    { c1: '#6d28d9', c2: '#4c1d95', icon: Droplets },
+  abarrotes:   { c1: '#15803d', c2: '#14532d', icon: ShoppingBasket },
+  carnes:      { c1: '#b91c1c', c2: '#7f1d1d', icon: Beef },
+  frutas:      { c1: '#65a30d', c2: '#3f6212', icon: Leaf },
+  verduras:    { c1: '#65a30d', c2: '#3f6212', icon: Leaf },
+  panaderia:   { c1: '#c2410c', c2: '#7c2d12', icon: Wheat },
+  panadería:   { c1: '#c2410c', c2: '#7c2d12', icon: Wheat },
+  dulces:      { c1: '#be185d', c2: '#831843', icon: Heart },
+  confiteria:  { c1: '#be185d', c2: '#831843', icon: Heart },
+  tecnologia:  { c1: '#0369a1', c2: '#0c4a6e', icon: Cpu },
+  electronica: { c1: '#0369a1', c2: '#0c4a6e', icon: Cpu },
+  ropa:        { c1: '#7c3aed', c2: '#5b21b6', icon: Shirt },
+  ferreteria:  { c1: '#475569', c2: '#1e293b', icon: Wrench },
+  ferretería:  { c1: '#475569', c2: '#1e293b', icon: Wrench },
+  papeleria:   { c1: '#0891b2', c2: '#164e63', icon: Pen },
+  papelería:   { c1: '#0891b2', c2: '#164e63', icon: Pen },
+  drogueria:   { c1: '#059669', c2: '#065f46', icon: Pill },
+  farmacia:    { c1: '#059669', c2: '#065f46', icon: Pill },
+  bebe:        { c1: '#ec4899', c2: '#9d174d', icon: Baby },
+  bebé:        { c1: '#ec4899', c2: '#9d174d', icon: Baby },
+};
+const HASH_COLORS = [
+  { c1: '#2563eb', c2: '#1e40af' }, { c1: '#7c3aed', c2: '#5b21b6' },
+  { c1: '#059669', c2: '#065f46' }, { c1: '#d97706', c2: '#92400e' },
+  { c1: '#dc2626', c2: '#991b1b' }, { c1: '#0891b2', c2: '#164e63' },
+  { c1: '#65a30d', c2: '#3f6212' }, { c1: '#be185d', c2: '#831843' },
+];
+function catStyle(name: string | undefined): { c1: string; c2: string; icon: LucideIcon } {
+  if (!name) return { c1: '#334155', c2: '#1e293b', icon: Package };
+  const key = name.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+  if (CAT_MAP[key]) return CAT_MAP[key];
+  let h = 0;
+  for (let i = 0; i < key.length; i++) h = key.charCodeAt(i) + ((h << 5) - h);
+  return { ...HASH_COLORS[Math.abs(h) % HASH_COLORS.length], icon: Package };
+}
 
 // ── Shared input style ────────────────────────────────────────────────────────
 const inputCls = [
@@ -331,15 +377,17 @@ export default function POSPage() {
           </div>
 
           {/* Product grid */}
-          <div className="mt-3 max-h-[280px] overflow-y-auto scrollbar-thin">
+          <div className="mt-3 max-h-[320px] overflow-y-auto scrollbar-thin">
             {isLoading ? (
-              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2.5">
-                {Array.from({ length: 10 }).map((_, i) => (
-                  <div key={i} className="flex flex-col rounded-xl p-2.5 bg-slate-50 dark:bg-slate-800/40">
-                    <div className="skeleton aspect-square w-full rounded-lg mb-2" />
-                    <div className="skeleton h-3 w-3/4 mb-1.5 rounded" />
-                    <div className="skeleton h-2.5 w-full mb-1.5 rounded" />
-                    <div className="skeleton h-3 w-1/2 rounded-full" />
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5">
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <div key={i} className="flex flex-col rounded-2xl overflow-hidden">
+                    <div className="skeleton aspect-square w-full" />
+                    <div className="p-2.5 bg-slate-800/40 space-y-1.5">
+                      <div className="skeleton h-3 w-3/4 rounded" />
+                      <div className="skeleton h-4 w-1/2 rounded" />
+                      <div className="skeleton h-3 w-2/3 rounded-full" />
+                    </div>
                   </div>
                 ))}
               </div>
@@ -354,38 +402,76 @@ export default function POSPage() {
                 )}
               </div>
             ) : (
-              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2.5">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5">
                 {productsData?.map((p: any) => {
-                  const lowStock = p.stock <= p.minStock;
+                  const cs          = catStyle(p.category?.name);
+                  const CatIcon     = cs.icon;
+                  const outOfStock  = p.stock <= 0 && !p.allowNegativeStock;
+                  const lowStock    = p.minStock > 0 && p.stock > 0 && p.stock <= p.minStock;
+
                   return (
                     <button
                       key={p.id}
                       type="button"
                       onClick={() => handleAddProduct(p)}
+                      disabled={outOfStock}
                       className={cn(
-                        'flex flex-col bg-slate-50 dark:bg-slate-800/40 rounded-xl p-2.5 text-left',
-                        'border border-transparent hover:border-blue-400 hover:bg-blue-50/50 dark:hover:bg-blue-500/5',
-                        'transition-all duration-150 group',
+                        'flex flex-col rounded-2xl overflow-hidden text-left transition-all duration-150',
+                        'border-2',
+                        outOfStock
+                          ? 'opacity-50 cursor-not-allowed border-transparent'
+                          : 'border-transparent hover:border-blue-500 hover:scale-[1.02] hover:shadow-lg hover:shadow-blue-500/20 active:scale-[0.98]',
                       )}
                     >
-                      <div className="aspect-square w-full rounded-lg overflow-hidden bg-white dark:bg-slate-800 mb-2 flex items-center justify-center border border-slate-100 dark:border-white/[0.05]">
+                      {/* ── Header: image or category color ── */}
+                      <div className="relative w-full aspect-square overflow-hidden">
                         {p.image ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={p.image} alt={p.name} className="w-full h-full object-cover" />
+                          <>
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={p.image} alt={p.name} className="w-full h-full object-cover" />
+                            <div className="absolute inset-0 bg-gradient-to-b from-black/35 via-transparent to-transparent" />
+                          </>
                         ) : (
-                          <Package size={22} className="text-slate-300 dark:text-slate-600" />
+                          <div
+                            className="cat-gradient w-full h-full flex items-center justify-center"
+                            style={{ '--cat-c1': cs.c1, '--cat-c2': cs.c2 } as React.CSSProperties}
+                          >
+                            <CatIcon size={32} className="text-white/55" />
+                          </div>
+                        )}
+                        {/* Category badge */}
+                        {p.category?.name && (
+                          <span className="absolute top-2 left-2 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-black/30 backdrop-blur-sm text-white/90 leading-tight">
+                            {p.category.name}
+                          </span>
                         )}
                       </div>
-                      <p className="text-[13px] font-bold text-slate-900 dark:text-white truncate tabular">{formatCurrency(p.salePrice)}</p>
-                      <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate mb-1.5">{p.name}</p>
-                      <span className={cn(
-                        'inline-block w-fit text-[10px] font-semibold px-1.5 py-0.5 rounded-full',
-                        lowStock
-                          ? 'bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400'
-                          : 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400',
-                      )}>
-                        {p.stock} disp.
-                      </span>
+
+                      {/* ── Info ── */}
+                      <div className="px-2.5 pt-2 pb-2.5 bg-slate-900/90 dark:bg-slate-900 flex flex-col gap-1.5">
+                        <p className="text-[12px] font-semibold text-white leading-tight line-clamp-2 min-h-[2.2em]">
+                          {p.name}
+                        </p>
+                        <div className="flex items-center justify-between gap-1">
+                          <span className="text-[15px] font-black text-white tabular-nums leading-none">
+                            {formatCurrency(p.salePrice)}
+                          </span>
+                          {!outOfStock && (
+                            <div className="w-6 h-6 rounded-full bg-blue-500 flex items-center justify-center flex-shrink-0">
+                              <Plus size={13} className="text-white" strokeWidth={2.5} />
+                            </div>
+                          )}
+                        </div>
+                        <span className={cn(
+                          'inline-flex items-center gap-1 w-fit text-[10px] font-semibold px-1.5 py-0.5 rounded-full leading-tight',
+                          outOfStock ? 'bg-red-500/15 text-red-400'
+                            : lowStock ? 'bg-amber-500/15 text-amber-400'
+                            : 'bg-emerald-500/15 text-emerald-400',
+                        )}>
+                          <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-current" />
+                          {outOfStock ? 'Agotado' : lowStock ? `¡Bajo! ${p.stock}` : `${p.stock} disponibles`}
+                        </span>
+                      </div>
                     </button>
                   );
                 })}
