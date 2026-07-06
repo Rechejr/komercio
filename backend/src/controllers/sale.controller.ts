@@ -1,4 +1,5 @@
 import { Response, NextFunction } from 'express';
+import { Prisma } from '@prisma/client';
 import { prisma } from '../config/database';
 import { cache } from '../config/redis';
 import { AppError, success, created, paginated } from '../utils/response';
@@ -41,7 +42,7 @@ async function generateInvoiceNumber(tx: any, branchId: string): Promise<string>
         ${branchId},
         ${prefix},
         COALESCE((
-          SELECT MAX(CAST(SUBSTRING("invoiceNumber" FROM ${prefixLen + 1}) AS INTEGER))
+          SELECT MAX(CAST(SUBSTRING("invoiceNumber" FROM ${Prisma.raw(String(prefixLen + 1))}) AS INTEGER))
           FROM "sales"
           WHERE "invoiceNumber" LIKE ${prefix + '%'} AND "branchId" = ${branchId}
         ), 0) + 1
@@ -50,7 +51,7 @@ async function generateInvoiceNumber(tx: any, branchId: string): Promise<string>
       DO UPDATE SET "lastSeq" = GREATEST(
         "sale_number_counters"."lastSeq" + 1,
         COALESCE((
-          SELECT MAX(CAST(SUBSTRING("invoiceNumber" FROM ${prefixLen + 1}) AS INTEGER))
+          SELECT MAX(CAST(SUBSTRING("invoiceNumber" FROM ${Prisma.raw(String(prefixLen + 1))}) AS INTEGER))
           FROM "sales"
           WHERE "invoiceNumber" LIKE ${prefix + '%'} AND "branchId" = ${branchId}
         ), 0) + 1
