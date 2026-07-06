@@ -47,6 +47,7 @@ import superadminRoutes from './routes/superadmin.routes';
 import uploadRoutes from './routes/upload.routes';
 import paymentRoutes from './routes/payment.routes';
 import publicRoutes from './routes/public.routes';
+import searchRoutes from './routes/search.routes';
 
 const app = express();
 
@@ -158,6 +159,7 @@ app.use(`${apiPrefix}/superadmin`, superadminRoutes);
 app.use(`${apiPrefix}/uploads`, uploadRoutes);
 app.use(`${apiPrefix}/payments`, paymentRoutes);
 app.use(`${apiPrefix}/public`, publicRoutes);
+app.use(`${apiPrefix}/search`, searchRoutes);
 
 // Error handling
 app.use(notFound);

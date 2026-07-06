@@ -1,9 +1,9 @@
 ﻿'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { Bell, Sun, Moon, Menu, Sparkles } from 'lucide-react';
+import { Bell, Sun, Moon, Menu, Sparkles, Search } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth.store';
@@ -11,6 +11,7 @@ import { useUpgradeStore } from '@/store/upgrade.store';
 import { getInitials } from '@/lib/utils';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { NotificationPanel } from './NotificationPanel';
+import { GlobalSearch } from '@/components/ui/GlobalSearch';
 
 const PAGE_LABELS: Record<string, string> = {
   '/dashboard':    'Dashboard',
@@ -40,6 +41,19 @@ export function Header({ onMenuClick }: HeaderProps) {
   const [notifOpen, setNotifOpen] = useState(false);
   const bellRef = useRef<HTMLButtonElement>(null);
   const [notifAnchor, setNotifAnchor] = useState<DOMRect | null>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
+
+  // Ctrl+K / Cmd+K global shortcut
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        setSearchOpen(true);
+      }
+    }
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, []);
 
   const { data: unreadData } = useQuery({
     queryKey: ['notifications-unread-count'],
@@ -97,6 +111,21 @@ export function Header({ onMenuClick }: HeaderProps) {
           {title}
         </h1>
 
+        {/* Search button */}
+        <Tooltip content="Buscar (Ctrl+K)" side="bottom">
+          <button
+            type="button"
+            onClick={() => setSearchOpen(true)}
+            className="hidden sm:flex items-center gap-2 px-3 h-8 rounded-lg bg-slate-100 dark:bg-white/[0.06] text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-200 dark:hover:bg-white/[0.10] transition-colors text-[12px]"
+          >
+            <Search size={14} />
+            <span className="hidden md:inline">Buscar</span>
+            <kbd className="hidden md:inline-flex items-center gap-0.5 px-1 py-0.5 rounded text-[10px] font-mono bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-400">
+              Ctrl K
+            </kbd>
+          </button>
+        </Tooltip>
+
         {/* Right actions */}
         <div className="flex items-center gap-0.5">
           {/* Theme toggle */}
@@ -150,6 +179,7 @@ export function Header({ onMenuClick }: HeaderProps) {
           </Tooltip>
         </div>
       </header>
+      <GlobalSearch open={searchOpen} onClose={() => setSearchOpen(false)} />
     </div>
   );
 }

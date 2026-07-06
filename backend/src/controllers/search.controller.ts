@@ -1,0 +1,80 @@
+import { Response, NextFunction } from 'express';
+import { prisma } from '../config/database';
+import { success, AppError } from '../utils/response';
+import { AuthRequest } from '../middlewares/auth';
+
+const MAX = 5;
+
+export const searchController = {
+  async search(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const q = String(req.query.q || '').trim();
+      if (q.length < 2) return next(new AppError('La búsqueda requiere al menos 2 caracteres', 400));
+
+      const businessId = req.user!.businessId!;
+      const contains   = { contains: q, mode: 'insensitive' as const };
+
+      const [customers, products, sales, suppliers, credits] = await Promise.all([
+        prisma.customer.findMany({
+          where: {
+            businessId, deletedAt: null, isActive: true,
+            OR: [{ name: contains }, { document: contains }, { phone: contains }],
+          },
+          select: { id: true, name: true, document: true, phone: true, currentDebt: true },
+          take: MAX,
+        }),
+
+        prisma.product.findMany({
+          where: {
+            businessId, deletedAt: null, isActive: true,
+            OR: [{ name: contains }, { code: contains }],
+          },
+          select: { id: true, name: true, code: true, stock: true, salePrice: true },
+          take: MAX,
+        }),
+
+        prisma.sale.findMany({
+          where: {
+            branch: { businessId },
+            deletedAt: null,
+            OR: [
+              { invoiceNumber: contains },
+              { customer: { name: contains } },
+            ],
+          },
+          select: {
+            id: true, invoiceNumber: true, total: true, status: true, createdAt: true,
+            customer: { select: { name: true } },
+          },
+          orderBy: { createdAt: 'desc' },
+          take: MAX,
+        }),
+
+        prisma.supplier.findMany({
+          where: {
+            businessId, deletedAt: null, isActive: true,
+            OR: [{ name: contains }, { contactName: contains }, { phone: contains }],
+          },
+          select: { id: true, name: true, contactName: true, phone: true },
+          take: MAX,
+        }),
+
+        prisma.credit.findMany({
+          where: {
+            status: { not: 'PAID' },
+            customer: { businessId, deletedAt: null, name: contains },
+          },
+          select: {
+            id: true, balance: true, status: true,
+            customer: { select: { id: true, name: true } },
+          },
+          take: MAX,
+        }),
+      ]);
+
+      return success(res, { customers, products, sales, suppliers, credits });
+    } catch (err) {
+      next(err);
+    }
+  },
+};
