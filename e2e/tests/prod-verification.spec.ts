@@ -73,34 +73,30 @@ test('PROD-2: POS — agregar producto y cobrar', async ({ page }) => {
   await page.waitForTimeout(1500);
   await shot(page, 'v3-2b-busqueda');
 
-  // Los productos son <button type="button"> dentro de un .grid
-  // Buscar el primer botón de producto en la grilla (no el botón Cobrar ni de la barra superior)
-  const productGrid = page.locator('.grid').first();
+  // Los productos son <button class="...rounded-xl..."> — los skeletons son divs, no buttons
+  // Esperar a que aparezca al menos un botón de producto real
+  const productBtn = page.locator('button.rounded-xl, button[class*="rounded-xl"]').first();
   let productAdded = false;
 
-  if (await productGrid.isVisible({ timeout: 5000 }).catch(() => false)) {
-    const productBtns = productGrid.locator('button[type="button"]');
-    const count = await productBtns.count();
-    console.log(`  Productos visibles en grid: ${count}`);
-    if (count > 0) {
-      await productBtns.first().click();
+  if (await productBtn.waitFor({ timeout: 8000, state: 'visible' }).then(() => true).catch(() => false)) {
+    const allProductBtns = page.locator('button.rounded-xl, button[class*="rounded-xl"]');
+    const count = await allProductBtns.count();
+    console.log(`  Productos cargados (botones rounded-xl): ${count}`);
+    await allProductBtns.first().click();
+    await page.waitForTimeout(800);
+    productAdded = true;
+    console.log('  Clicked primer botón de producto');
+  } else {
+    // Fallback: limpiar búsqueda y buscar todo
+    await search.clear();
+    await search.fill('');
+    await page.waitForTimeout(2000);
+    const anyBtn = page.locator('button[class*="rounded-xl"]').first();
+    if (await anyBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
+      await anyBtn.click();
       await page.waitForTimeout(800);
       productAdded = true;
-      console.log('  Clicked primer botón de producto');
-    }
-  }
-
-  if (!productAdded) {
-    // Fallback: buscar con 'a' si 'cafe' no mostró nada
-    await search.clear();
-    await search.fill('a');
-    await page.waitForTimeout(1500);
-    const fallbackBtns = page.locator('.grid button[type="button"]');
-    const fc = await fallbackBtns.count().catch(() => 0);
-    if (fc > 0) {
-      await fallbackBtns.first().click();
-      await page.waitForTimeout(800);
-      console.log('  Clicked producto (fallback búsqueda "a")');
+      console.log('  Clicked producto (fallback búsqueda vacía)');
     }
   }
 
