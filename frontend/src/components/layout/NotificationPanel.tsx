@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -92,7 +92,7 @@ export function NotificationPanel({ open, onClose, anchorRect }: NotificationPan
           <button
             type="button"
             onClick={() => markAllRead.mutate()}
-            className="flex items-center gap-1 text-xs text-blue-600 hover:underline"
+            className="flex items-center gap-1 text-xs text-emerald-600 hover:underline"
           >
             <CheckCheck size={12} /> Marcar todas
           </button>
@@ -121,13 +121,13 @@ export function NotificationPanel({ open, onClose, anchorRect }: NotificationPan
                 }}
                 className={cn(
                   'w-full text-left flex items-start gap-3 px-4 py-3 border-b border-slate-50 dark:border-white/[0.04] hover:bg-slate-50 dark:hover:bg-white/[0.02] transition-colors',
-                  !n.isRead && 'bg-blue-50/50 dark:bg-blue-900/10',
+                  !n.isRead && 'bg-emerald-50/50 dark:bg-emerald-900/10',
                   isLowStock && 'cursor-pointer',
                 )}
               >
                 <div className={cn(
                   'w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5',
-                  n.type === 'WARNING' ? 'bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400' : 'bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400',
+                  n.type === 'WARNING' ? 'bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400' : 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
                 )}>
                   {n.type === 'WARNING' ? <AlertTriangle size={13} /> : <Info size={13} />}
                 </div>
@@ -145,7 +145,7 @@ export function NotificationPanel({ open, onClose, anchorRect }: NotificationPan
                     )}
                   </div>
                 </div>
-                {!n.isRead && <div className="w-1.5 h-1.5 rounded-full bg-blue-500 flex-shrink-0 mt-1.5" />}
+                {!n.isRead && <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 flex-shrink-0 mt-1.5" />}
                 {n.isRead && <Check size={12} className="text-slate-300 dark:text-slate-600 flex-shrink-0 mt-1.5" />}
               </button>
             );

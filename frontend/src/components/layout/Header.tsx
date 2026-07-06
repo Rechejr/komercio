@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
@@ -57,15 +57,15 @@ export function Header({ onMenuClick }: HeaderProps) {
     <div className="flex flex-col flex-shrink-0">
       {/* ── Upgrade banner ──────────────────────────────────────────────────── */}
       {isFree && (
-        <div className="relative overflow-hidden px-4 md:px-6 py-2.5 flex items-center justify-between gap-4 bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700">
+        <div className="relative overflow-hidden px-4 md:px-6 py-2.5 flex items-center justify-between gap-4 bg-gradient-to-r from-emerald-600 via-emerald-700 to-emerald-700">
           {/* subtle texture */}
           <div className="upgrade-banner-texture absolute inset-0 opacity-10" />
           <div className="relative flex items-center gap-2 text-white/90 text-[12px]">
-            <Sparkles size={13} className="text-blue-200 flex-shrink-0" />
+            <Sparkles size={13} className="text-emerald-200 flex-shrink-0" />
             <span>
               Actualiza al{' '}
               <strong className="text-white font-semibold">Plan Pro</strong>
-              <span className="hidden md:inline text-blue-200">
+              <span className="hidden md:inline text-emerald-200">
                 {' '}— sin límites de productos, ventas ni usuarios
               </span>
             </span>
@@ -138,7 +138,7 @@ export function Header({ onMenuClick }: HeaderProps) {
           {/* User avatar */}
           <Tooltip content={`${user?.name ?? ''}`} side="bottom">
             <div className="flex items-center gap-2.5 cursor-default">
-              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-[11px] font-bold ring-2 ring-white dark:ring-slate-900 shadow-sm">
+              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center text-white text-[11px] font-bold ring-2 ring-white dark:ring-slate-900 shadow-sm">
                 {user?.name ? getInitials(user.name) : '?'}
               </div>
               <div className="hidden md:flex flex-col leading-none">

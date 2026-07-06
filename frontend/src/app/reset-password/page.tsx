@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -30,7 +30,7 @@ function ResetForm() {
         <p className="text-gray-500 text-sm mb-6">
           Este enlace de recuperación no es válido o ya expiró.
         </p>
-        <Link href="/forgot-password" className="text-blue-600 text-sm hover:underline">
+        <Link href="/forgot-password" className="text-emerald-600 text-sm hover:underline">
           Solicitar un nuevo enlace
         </Link>
       </div>
@@ -86,7 +86,7 @@ function ResetForm() {
               onChange={(e) => { setPassword(e.target.value); setErrors((p) => ({ ...p, password: '' })); }}
               placeholder="Mínimo 8 caracteres"
               className={cn(
-                'w-full px-4 py-3 pr-10 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition bg-gray-50/50',
+                'w-full px-4 py-3 pr-10 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition bg-gray-50/50',
                 errors.password ? 'border-red-300' : 'border-gray-200',
               )}
               autoFocus
@@ -114,7 +114,7 @@ function ResetForm() {
               onChange={(e) => { setConfirm(e.target.value); setErrors((p) => ({ ...p, confirm: '' })); }}
               placeholder="Repite tu contraseña"
               className={cn(
-                'w-full px-4 py-3 pr-10 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition bg-gray-50/50',
+                'w-full px-4 py-3 pr-10 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition bg-gray-50/50',
                 errors.confirm ? 'border-red-300' : 'border-gray-200',
               )}
             />
@@ -133,7 +133,7 @@ function ResetForm() {
         <button
           type="submit"
           disabled={loading}
-          className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-semibold py-3.5 rounded-xl text-sm transition-colors flex items-center justify-center gap-2 mt-2"
+          className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white font-semibold py-3.5 rounded-xl text-sm transition-colors flex items-center justify-center gap-2 mt-2"
         >
           {loading && <Loader2 size={16} className="animate-spin" />}
           {loading ? 'Guardando...' : 'Guardar nueva contraseña'}
@@ -142,7 +142,7 @@ function ResetForm() {
 
       <p className="text-center text-xs text-gray-400 mt-6">
         ¿El enlace no funciona?{' '}
-        <Link href="/forgot-password" className="text-blue-600 hover:underline">
+        <Link href="/forgot-password" className="text-emerald-600 hover:underline">
           Solicitar uno nuevo
         </Link>
       </p>
@@ -155,7 +155,7 @@ export default function ResetPasswordPage() {
     <div className="min-h-screen flex flex-col lg:flex-row">
 
       {/* ── Left panel ──────────────────────────────────────────────────── */}
-      <div className="hidden lg:flex flex-col w-[45%] bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800 p-10 relative overflow-hidden">
+      <div className="hidden lg:flex flex-col w-[45%] bg-gradient-to-br from-emerald-600 via-emerald-700 to-emerald-800 p-10 relative overflow-hidden">
         <div className="absolute -top-32 -right-32 w-96 h-96 rounded-full bg-white/5 pointer-events-none" />
         <div className="absolute -bottom-20 -left-20 w-72 h-72 rounded-full bg-white/5 pointer-events-none" />
 
@@ -168,7 +168,7 @@ export default function ResetPasswordPage() {
           <h2 className="text-3xl font-bold text-white mb-3 leading-tight">
             Crea una<br />nueva contraseña
           </h2>
-          <p className="text-blue-100 text-base leading-relaxed max-w-xs">
+          <p className="text-emerald-100 text-base leading-relaxed max-w-xs">
             Elige una contraseña segura de al menos 8 caracteres. Todos tus datos y configuraciones se mantienen intactos.
           </p>
         </div>
@@ -186,7 +186,7 @@ export default function ResetPasswordPage() {
 
           <Suspense fallback={
             <div className="flex items-center justify-center py-8">
-              <Loader2 size={24} className="animate-spin text-blue-600" />
+              <Loader2 size={24} className="animate-spin text-emerald-600" />
             </div>
           }>
             <ResetForm />

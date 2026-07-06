@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -11,7 +11,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { PriceInput } from '@/components/ui/PriceInput';
 import { downloadExcel } from '@/lib/exportExcel';
 
-const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition';
+const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition';
 
 const PAYMENT_BADGE: Record<string, string> = {
   CASH: 'badge-green',
@@ -126,7 +126,7 @@ export default function GastosPage() {
         <button
           type="button"
           onClick={openNew}
-          className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 shadow-sm shadow-blue-600/25 transition"
+          className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-semibold hover:bg-emerald-700 shadow-sm shadow-emerald-600/25 transition"
         >
           <Plus size={15} /> Registrar gasto
         </button>
@@ -140,7 +140,7 @@ export default function GastosPage() {
           aria-label="Fecha inicio exportación"
           value={exportStart}
           onChange={(e) => setExportStart(e.target.value)}
-          className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition"
+          className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition"
         />
         <span className="text-[12px] text-slate-400">hasta</span>
         <input
@@ -148,7 +148,7 @@ export default function GastosPage() {
           aria-label="Fecha fin exportación"
           value={exportEnd}
           onChange={(e) => setExportEnd(e.target.value)}
-          className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition"
+          className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition"
         />
         <button
           type="button"
@@ -223,7 +223,7 @@ export default function GastosPage() {
                         type="button"
                         onClick={() => openEdit(e)}
                         aria-label="Editar gasto"
-                        className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-500/10 transition"
+                        className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 transition"
                       >
                         <Edit size={14} />
                       </button>
@@ -308,7 +308,7 @@ export default function GastosPage() {
                   <div className="flex items-center justify-between mb-1.5">
                     <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400">Categoría</label>
                     <button type="button" onClick={() => setShowCategoryModal(true)}
-                      className="flex items-center gap-1 text-[11px] text-blue-600 dark:text-blue-400 hover:underline">
+                      className="flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400 hover:underline">
                       <Tag size={11} /> Nueva
                     </button>
                   </div>
@@ -393,7 +393,7 @@ export default function GastosPage() {
                 <button
                   type="submit"
                   disabled={saveMutation.isPending || isSubmitting}
-                  className="px-6 py-2.5 bg-blue-600 text-white rounded-xl text-[13px] font-semibold hover:bg-blue-700 disabled:opacity-60 shadow-sm shadow-blue-600/25 flex items-center gap-2 transition"
+                  className="px-6 py-2.5 bg-emerald-600 text-white rounded-xl text-[13px] font-semibold hover:bg-emerald-700 disabled:opacity-60 shadow-sm shadow-emerald-600/25 flex items-center gap-2 transition"
                 >
                   {saveMutation.isPending && <Loader2 size={14} className="animate-spin" />}
                   {editItem ? 'Actualizar' : 'Guardar gasto'}
@@ -428,7 +428,7 @@ export default function GastosPage() {
                 type="button"
                 disabled={!newCategoryName.trim() || categoryMutation.isPending}
                 onClick={() => categoryMutation.mutate(newCategoryName.trim())}
-                className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-semibold py-2.5 rounded-xl text-[13px] flex items-center justify-center gap-2 transition"
+                className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white font-semibold py-2.5 rounded-xl text-[13px] flex items-center justify-center gap-2 transition"
               >
                 {categoryMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Tag size={14} />}
                 Crear categoría

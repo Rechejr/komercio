@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState } from 'react';
 import Link from 'next/link';
@@ -115,7 +115,7 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
             'transition-[width,transform] duration-300 ease-spring',
         )}
         style={{
-          background: 'linear-gradient(180deg, #0d1117 0%, #0b0f1a 100%)',
+          background: 'linear-gradient(180deg, #064e3b 0%, #022c22 100%)',
           borderRight: '1px solid rgba(255,255,255,0.05)',
         }}
       >
@@ -164,7 +164,7 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
                 {bizLogo ? (
                   <img src={bizLogo} alt={bizName} className="w-full h-full object-cover" />
                 ) : (
-                  <div className="w-full h-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-xs font-bold">
+                  <div className="w-full h-full bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center text-white text-xs font-bold">
                     {bizInitial}
                   </div>
                 )}
@@ -230,14 +230,14 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
                             collapsed && 'md:justify-center md:px-0 md:py-2',
                           )}
                           style={active ? {
-                            background: 'linear-gradient(90deg, rgba(59,130,246,0.15) 0%, rgba(59,130,246,0.07) 100%)',
+                            background: 'linear-gradient(90deg, rgba(16,185,129,0.15) 0%, rgba(16,185,129,0.07) 100%)',
                           } : undefined}
                         >
                           {/* Active indicator bar */}
                           {active && (
                             <span
                               className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] rounded-r-full"
-                              style={{ height: '16px', background: 'linear-gradient(180deg, #60a5fa, #6366f1)' }}
+                              style={{ height: '16px', background: 'linear-gradient(180deg, #34d399, #059669)' }}
                             />
                           )}
 
@@ -246,7 +246,7 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
                             strokeWidth={active ? 2.2 : 1.8}
                             className={cn(
                               'flex-shrink-0 transition-colors duration-150',
-                              active   ? 'text-blue-400'  : '',
+                              active   ? 'text-emerald-400'  : '',
                               isLocked ? 'text-slate-700' : !active ? 'text-slate-600 group-hover:text-slate-300' : '',
                             )}
                           />
@@ -264,12 +264,12 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
                                 'flex-shrink-0 hidden md:inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full',
                                 isFree
                                   ? 'text-amber-500/80'
-                                  : 'text-blue-400/80',
+                                  : 'text-emerald-400/80',
                               )}
                               style={{
                                 background: isFree
                                   ? 'rgba(245,158,11,0.08)'
-                                  : 'rgba(59,130,246,0.08)',
+                                  : 'rgba(16,185,129,0.08)',
                               }}
                             >
                               Pro
@@ -293,15 +293,15 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
               <span className={cn(
                 'inline-flex items-center gap-1.5 text-[11px] font-semibold px-2 py-1 rounded-md',
                 user?.plan === 'pro'
-                  ? 'text-blue-400'
+                  ? 'text-emerald-400'
                   : 'text-slate-600',
               )}
               style={{
                 background: user?.plan === 'pro'
-                  ? 'rgba(59,130,246,0.08)'
+                  ? 'rgba(16,185,129,0.08)'
                   : 'rgba(255,255,255,0.03)',
               }}>
-                <Zap size={10} className={user?.plan === 'pro' ? 'fill-blue-400' : 'fill-slate-600'} />
+                <Zap size={10} className={user?.plan === 'pro' ? 'fill-emerald-400' : 'fill-slate-600'} />
                 {user?.plan === 'pro' ? 'Plan Pro' : 'Plan Gratuito'}
               </span>
             </div>
@@ -315,17 +315,17 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
               className={cn(
                 'w-full flex items-center gap-2 px-3 py-2 rounded-md text-[12px] font-semibold',
                 'transition-all duration-200',
-                'text-blue-400 hover:text-blue-300',
+                'text-emerald-400 hover:text-emerald-300',
               )}
               style={{
-                background: 'linear-gradient(90deg, rgba(59,130,246,0.12), rgba(99,102,241,0.12))',
-                border: '1px solid rgba(59,130,246,0.2)',
+                background: 'linear-gradient(90deg, rgba(16,185,129,0.12), rgba(5,150,105,0.12))',
+                border: '1px solid rgba(16,185,129,0.2)',
               }}
               onMouseEnter={(e) => {
-                (e.currentTarget as HTMLElement).style.borderColor = 'rgba(59,130,246,0.4)';
+                (e.currentTarget as HTMLElement).style.borderColor = 'rgba(16,185,129,0.4)';
               }}
               onMouseLeave={(e) => {
-                (e.currentTarget as HTMLElement).style.borderColor = 'rgba(59,130,246,0.2)';
+                (e.currentTarget as HTMLElement).style.borderColor = 'rgba(16,185,129,0.2)';
               }}
             >
               <Sparkles size={12} className="flex-shrink-0" />

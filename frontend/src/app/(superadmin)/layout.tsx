@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -44,7 +44,7 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
   if (isRestoring) {
     return (
       <div className="flex h-screen items-center justify-center bg-gray-950">
-        <Loader2 size={32} className="animate-spin text-blue-500" />
+        <Loader2 size={32} className="animate-spin text-emerald-500" />
       </div>
     );
   }

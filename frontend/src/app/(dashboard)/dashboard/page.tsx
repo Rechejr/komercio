@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
@@ -118,8 +118,8 @@ export default function DashboardPage() {
               value={formatCurrency(s?.sales?.today?.total || 0)}
               sub={`${s?.sales?.today?.count || 0} transacciones`}
               icon={ShoppingCart}
-              accent="text-blue-600 dark:text-blue-400"
-              iconBg="bg-blue-50 dark:bg-blue-500/10"
+              accent="text-emerald-600 dark:text-emerald-400"
+              iconBg="bg-emerald-50 dark:bg-emerald-500/10"
             />
             <StatCard
               title="Ventas del mes"
@@ -165,8 +165,8 @@ export default function DashboardPage() {
             <AreaChart data={chartData || []} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
               <defs>
                 <linearGradient id="salesGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%"  stopColor="#3b82f6" stopOpacity={0.18} />
-                  <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}    />
+                  <stop offset="5%"  stopColor="#10b981" stopOpacity={0.18} />
+                  <stop offset="95%" stopColor="#10b981" stopOpacity={0}    />
                 </linearGradient>
               </defs>
               <CartesianGrid
@@ -188,15 +188,15 @@ export default function DashboardPage() {
                 tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`}
                 width={40}
               />
-              <Tooltip content={<ChartTooltip />} cursor={{ stroke: 'rgba(59,130,246,0.2)', strokeWidth: 1 }} />
+              <Tooltip content={<ChartTooltip />} cursor={{ stroke: 'rgba(16,185,129,0.2)', strokeWidth: 1 }} />
               <Area
                 type="monotone"
                 dataKey="total"
-                stroke="#3b82f6"
+                stroke="#10b981"
                 fill="url(#salesGrad)"
                 strokeWidth={2}
                 dot={false}
-                activeDot={{ r: 4, fill: '#3b82f6', strokeWidth: 0 }}
+                activeDot={{ r: 4, fill: '#10b981', strokeWidth: 0 }}
               />
             </AreaChart>
           </ResponsiveContainer>
@@ -225,7 +225,7 @@ export default function DashboardPage() {
                     </div>
                     <div className="ml-6 h-1 rounded-full bg-slate-100 dark:bg-white/[0.06] overflow-hidden">
                       <div
-                        className="h-full rounded-full bg-blue-500 transition-all duration-500"
+                        className="h-full rounded-full bg-emerald-500 transition-all duration-500"
                         style={{ width: `${pct}%` }}
                       />
                     </div>
@@ -251,7 +251,7 @@ export default function DashboardPage() {
           </div>
           <Link
             href="/ventas?status=CANCELLED"
-            className="flex items-center gap-1 text-[12px] text-blue-600 dark:text-blue-400 hover:underline font-medium"
+            className="flex items-center gap-1 text-[12px] text-emerald-600 dark:text-emerald-400 hover:underline font-medium"
           >
             Ver anuladas <ArrowUpRight size={13} />
           </Link>
@@ -274,7 +274,7 @@ export default function DashboardPage() {
             <tbody className="divide-y divide-slate-50 dark:divide-white/[0.04]">
               {s?.recentSales?.map((sale: any) => (
                 <tr key={sale.id} className="hover:bg-slate-50/60 dark:hover:bg-white/[0.02] transition-colors">
-                  <td className="px-5 py-3 font-mono text-[12px] text-blue-600 dark:text-blue-400">
+                  <td className="px-5 py-3 font-mono text-[12px] text-emerald-600 dark:text-emerald-400">
                     {sale.invoiceNumber}
                   </td>
                   <td className="px-5 py-3 text-[13px] text-slate-700 dark:text-slate-300">

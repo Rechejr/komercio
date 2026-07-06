@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -70,7 +70,7 @@ const inputCls = [
   'border-slate-200 dark:border-slate-700/60',
   'text-slate-900 dark:text-slate-100',
   'placeholder:text-slate-400 dark:placeholder:text-slate-500',
-  'focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 dark:focus:border-blue-400',
+  'focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 dark:focus:border-emerald-400',
 ].join(' ');
 
 export default function POSPage() {
@@ -293,7 +293,7 @@ export default function POSPage() {
             <button
               type="button"
               onClick={() => setLastSale(null)}
-              className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-xl text-[13px] font-semibold hover:bg-blue-700 transition-colors"
+              className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 text-white rounded-xl text-[13px] font-semibold hover:bg-emerald-700 transition-colors"
             >
               Nueva venta
             </button>
@@ -353,7 +353,7 @@ export default function POSPage() {
               className={cn(
                 'flex-shrink-0 px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-all duration-150',
                 !categoryFilter
-                  ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/25'
+                  ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-600/25'
                   : 'border border-slate-200 dark:border-slate-700/60 text-slate-600 dark:text-slate-400 hover:border-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/50',
               )}
             >
@@ -367,7 +367,7 @@ export default function POSPage() {
                 className={cn(
                   'flex-shrink-0 px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-all duration-150',
                   categoryFilter === c.id
-                    ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/25'
+                    ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-600/25'
                     : 'border border-slate-200 dark:border-slate-700/60 text-slate-600 dark:text-slate-400 hover:border-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/50',
                 )}
               >
@@ -396,7 +396,7 @@ export default function POSPage() {
                 <Package size={32} strokeWidth={1.5} />
                 <p className="text-[13px]">{search ? `Sin resultados para "${search}"` : 'No hay productos disponibles'}</p>
                 {search && (
-                  <button type="button" onClick={() => setSearch('')} className="text-[12px] text-blue-500 hover:underline">
+                  <button type="button" onClick={() => setSearch('')} className="text-[12px] text-emerald-500 hover:underline">
                     Limpiar búsqueda
                   </button>
                 )}
@@ -420,7 +420,7 @@ export default function POSPage() {
                         'border-2',
                         outOfStock
                           ? 'opacity-50 cursor-not-allowed border-transparent'
-                          : 'border-transparent hover:border-blue-500 hover:scale-[1.02] hover:shadow-lg hover:shadow-blue-500/20 active:scale-[0.98]',
+                          : 'border-transparent hover:border-emerald-500 hover:scale-[1.02] hover:shadow-lg hover:shadow-emerald-500/20 active:scale-[0.98]',
                       )}
                     >
                       {/* ── Header: image or category color ── */}
@@ -457,7 +457,7 @@ export default function POSPage() {
                             {formatCurrency(p.salePrice)}
                           </span>
                           {!outOfStock && (
-                            <div className="w-6 h-6 rounded-full bg-blue-500 flex items-center justify-center flex-shrink-0">
+                            <div className="w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center flex-shrink-0">
                               <Plus size={13} className="text-white" strokeWidth={2.5} />
                             </div>
                           )}
@@ -484,10 +484,10 @@ export default function POSPage() {
         <div className="lg:flex-1 card overflow-hidden flex flex-col">
           <div className="px-4 py-3 border-b border-slate-100 dark:border-white/[0.06] flex items-center justify-between">
             <h3 className="text-[14px] font-semibold text-slate-800 dark:text-white flex items-center gap-2">
-              <ShoppingBag size={15} className="text-blue-500" />
+              <ShoppingBag size={15} className="text-emerald-500" />
               Carrito
               {items.length > 0 && (
-                <span className="bg-blue-100 dark:bg-blue-500/15 text-blue-700 dark:text-blue-400 text-[11px] font-bold px-1.5 py-0.5 rounded-md">
+                <span className="bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 text-[11px] font-bold px-1.5 py-0.5 rounded-md">
                   {items.length}
                 </span>
               )}
@@ -542,7 +542,7 @@ export default function POSPage() {
                               const v = parseInt(e.target.value);
                               if (!isNaN(v) && v > 0) updateQty(item.productId, v);
                             }}
-                            className="w-10 text-center text-[13px] font-mono border border-slate-200 dark:border-slate-700/60 rounded-md px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:bg-slate-800 dark:text-white"
+                            className="w-10 text-center text-[13px] font-mono border border-slate-200 dark:border-slate-700/60 rounded-md px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-emerald-500 dark:bg-slate-800 dark:text-white"
                           />
                           <button
                             type="button"
@@ -565,7 +565,7 @@ export default function POSPage() {
                               const v = parseFloat(e.target.value);
                               updateDiscount(item.productId, isNaN(v) ? 0 : Math.min(100, Math.max(0, v)));
                             }}
-                            className="w-10 text-right text-[12px] border border-slate-200 dark:border-slate-700/60 rounded-md px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:bg-slate-800 dark:text-white"
+                            className="w-10 text-right text-[12px] border border-slate-200 dark:border-slate-700/60 rounded-md px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-emerald-500 dark:bg-slate-800 dark:text-white"
                           />
                           <span className="text-[11px] text-slate-400">%</span>
                         </div>
@@ -602,15 +602,15 @@ export default function POSPage() {
           </p>
           {customerId ? (
             <div className="space-y-1.5">
-              <div className="flex items-center justify-between bg-blue-50 dark:bg-blue-500/10 border border-blue-100 dark:border-blue-500/20 rounded-xl px-3 py-2">
-                <span className="text-[13px] font-semibold text-blue-700 dark:text-blue-300 truncate">
+              <div className="flex items-center justify-between bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-100 dark:border-emerald-500/20 rounded-xl px-3 py-2">
+                <span className="text-[13px] font-semibold text-emerald-700 dark:text-emerald-300 truncate">
                   {customersData?.find((c: any) => c.id === customerId)?.name ?? customerSearch}
                 </span>
                 <button
                   type="button"
                   aria-label="Quitar cliente"
                   onClick={() => { setCustomer(null); setCustomerSearch(''); setShowCustomerList(false); setShowCreditPayment(false); setSelectedCreditId(null); setCreditPayAmount(''); }}
-                  className="text-blue-400 hover:text-red-500 ml-2 flex-shrink-0 transition-colors"
+                  className="text-emerald-400 hover:text-red-500 ml-2 flex-shrink-0 transition-colors"
                 >
                   <X size={14} />
                 </button>
@@ -654,7 +654,7 @@ export default function POSPage() {
                       key={c.id}
                       type="button"
                       onMouseDown={() => { setCustomer(c.id); setCustomerSearch(c.name); setShowCustomerList(false); }}
-                      className="w-full text-left px-3 py-2.5 text-[13px] hover:bg-blue-50 dark:hover:bg-white/[0.04] transition-colors"
+                      className="w-full text-left px-3 py-2.5 text-[13px] hover:bg-emerald-50 dark:hover:bg-white/[0.04] transition-colors"
                     >
                       <span className="font-medium text-slate-800 dark:text-white">{c.name}</span>
                       {c.currentDebt > 0 && (
@@ -665,7 +665,7 @@ export default function POSPage() {
                   <button
                     type="button"
                     onMouseDown={(e) => { e.preventDefault(); setShowCustomerList(false); setShowCreateCustomer(true); }}
-                    className="w-full flex items-center gap-1.5 px-3 py-2.5 text-[13px] text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-white/[0.04] border-t border-slate-100 dark:border-white/[0.06] transition-colors"
+                    className="w-full flex items-center gap-1.5 px-3 py-2.5 text-[13px] text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-white/[0.04] border-t border-slate-100 dark:border-white/[0.06] transition-colors"
                   >
                     <Plus size={13} /> Crear cliente nuevo
                   </button>
@@ -694,7 +694,7 @@ export default function POSPage() {
             )}
             <div className="flex justify-between font-bold text-[18px] text-slate-900 dark:text-white border-t border-slate-100 dark:border-white/[0.06] pt-2.5 mt-1">
               <span>Total</span>
-              <span className="text-blue-600 dark:text-blue-400 tabular">{formatCurrency(total)}</span>
+              <span className="text-emerald-600 dark:text-emerald-400 tabular">{formatCurrency(total)}</span>
             </div>
           </div>
         </div>
@@ -739,7 +739,7 @@ export default function POSPage() {
                     className={cn(
                       'text-[12px] py-2 px-2 rounded-xl border font-semibold transition-all duration-150',
                       paymentMethod === m
-                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-400'
+                        ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
                         : 'border-slate-200 dark:border-slate-700/60 text-slate-600 dark:text-slate-400 hover:border-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/50',
                     )}
                   >
@@ -756,7 +756,7 @@ export default function POSPage() {
                     aria-label="Método de pago"
                     value={splitMethod}
                     onChange={(e) => setSplitMethod(e.target.value)}
-                    className="flex-1 min-w-0 px-2 py-2 border border-slate-200 dark:border-slate-700/60 rounded-xl text-[12px] focus:outline-none focus:ring-2 focus:ring-blue-500/30 bg-slate-50 dark:bg-slate-800/60 dark:text-white"
+                    className="flex-1 min-w-0 px-2 py-2 border border-slate-200 dark:border-slate-700/60 rounded-xl text-[12px] focus:outline-none focus:ring-2 focus:ring-emerald-500/30 bg-slate-50 dark:bg-slate-800/60 dark:text-white"
                   >
                     {PAYMENT_METHODS.filter((m) => m !== 'MIXED').map((m) => (
                       <option key={m} value={m}>{paymentMethodLabel[m]}</option>
@@ -768,13 +768,13 @@ export default function POSPage() {
                     onChange={(e) => setSplitAmount(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && addSplitPayment()}
                     placeholder={mixedRemaining > 0 ? String(Math.round(mixedRemaining)) : '0'}
-                    className="w-24 px-2 py-2 border border-slate-200 dark:border-slate-700/60 rounded-xl text-[13px] focus:outline-none focus:ring-2 focus:ring-blue-500/30 dark:bg-slate-800 dark:text-white"
+                    className="w-24 px-2 py-2 border border-slate-200 dark:border-slate-700/60 rounded-xl text-[13px] focus:outline-none focus:ring-2 focus:ring-emerald-500/30 dark:bg-slate-800 dark:text-white"
                   />
                   <button
                     type="button"
                     aria-label="Agregar pago"
                     onClick={addSplitPayment}
-                    className="px-3 py-2 bg-blue-600 text-white rounded-xl text-[13px] font-bold hover:bg-blue-700 transition-colors flex-shrink-0"
+                    className="px-3 py-2 bg-emerald-600 text-white rounded-xl text-[13px] font-bold hover:bg-emerald-700 transition-colors flex-shrink-0"
                   >
                     +
                   </button>
@@ -831,7 +831,7 @@ export default function POSPage() {
                           key={d}
                           type="button"
                           onClick={() => setPaidAmount(String(d))}
-                          className="px-2 py-0.5 text-[11px] rounded-full border border-slate-200 dark:border-slate-700/60 text-slate-600 dark:text-slate-400 hover:border-blue-400 hover:text-blue-600 transition-colors"
+                          className="px-2 py-0.5 text-[11px] rounded-full border border-slate-200 dark:border-slate-700/60 text-slate-600 dark:text-slate-400 hover:border-emerald-400 hover:text-emerald-600 transition-colors"
                         >
                           ${(d / 1000).toFixed(0)}k
                         </button>
@@ -839,7 +839,7 @@ export default function POSPage() {
                     <button
                       type="button"
                       onClick={() => setPaidAmount(String(Math.ceil(total)))}
-                      className="px-2 py-0.5 text-[11px] rounded-full border border-blue-200 dark:border-blue-500/30 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-500/10 transition-colors"
+                      className="px-2 py-0.5 text-[11px] rounded-full border border-emerald-200 dark:border-emerald-500/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 transition-colors"
                     >
                       Exacto
                     </button>
@@ -877,7 +877,7 @@ export default function POSPage() {
               </button>
             ) : (
               <label className="flex items-center gap-2 text-[13px] text-slate-600 dark:text-slate-400 cursor-pointer">
-                <input type="checkbox" checked={isCredit} onChange={(e) => setIsCredit(e.target.checked)} className="rounded accent-blue-600" />
+                <input type="checkbox" checked={isCredit} onChange={(e) => setIsCredit(e.target.checked)} className="rounded accent-emerald-600" />
                 Fiado / Crédito
               </label>
             )}
@@ -896,7 +896,7 @@ export default function POSPage() {
           <button
             type="button"
             onClick={() => items.length > 0 ? setShowPayment(true) : toast.error('Agrega productos primero')}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl transition-colors flex items-center justify-center gap-2 text-[15px] shadow-sm shadow-blue-600/25 active:scale-[0.99]"
+            className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-4 rounded-xl transition-colors flex items-center justify-center gap-2 text-[15px] shadow-sm shadow-emerald-600/25 active:scale-[0.99]"
           >
             <DollarSign size={18} />
             Cobrar {total > 0 ? formatCurrency(total) : ''}
@@ -952,7 +952,7 @@ export default function POSPage() {
                     className={cn(
                       'w-full text-left px-4 py-3 rounded-xl border-2 transition-all duration-150',
                       selectedCreditId === credit.id
-                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-500/10'
+                        ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-500/10'
                         : 'border-slate-200 dark:border-slate-700/60 hover:border-slate-300 dark:hover:border-slate-600',
                     )}
                   >
@@ -999,7 +999,7 @@ export default function POSPage() {
                         className={cn(
                           'text-[12px] py-1.5 px-1 rounded-xl border font-semibold transition-all duration-150',
                           creditPayMethod === m
-                            ? 'border-blue-500 bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-400'
+                            ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
                             : 'border-slate-200 dark:border-slate-700/60 text-slate-600 dark:text-slate-400 hover:border-slate-300',
                         )}
                       >
@@ -1069,7 +1069,7 @@ export default function POSPage() {
               type="button"
               onClick={() => newCustName.trim() && createCustomerMutation.mutate({ name: newCustName.trim(), phone: newCustPhone.trim() || undefined, document: newCustDoc.trim() || undefined, address: newCustAddress.trim() || undefined })}
               disabled={!newCustName.trim() || createCustomerMutation.isPending}
-              className="flex-1 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-[13px] font-semibold disabled:opacity-50 transition-colors"
+              className="flex-1 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[13px] font-semibold disabled:opacity-50 transition-colors"
             >
               {createCustomerMutation.isPending ? 'Guardando...' : 'Guardar'}
             </button>

@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -9,7 +9,7 @@ import { formatCurrency, formatDate, formatDateTime, statusColor, statusLabel } 
 import toast from 'react-hot-toast';
 import { CreditCard, X, Loader2, Plus, DollarSign, ChevronRight, Clock, Search } from 'lucide-react';
 
-const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition';
+const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition';
 
 export default function CreditosPage() {
   const qc = useQueryClient();
@@ -96,7 +96,7 @@ export default function CreditosPage() {
           aria-label="Filtrar por estado"
           value={statusFilter}
           onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
-          className="px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition"
+          className="px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition"
         >
           <option value="">Todos los estados</option>
           <option value="PENDING">Pendientes</option>
@@ -112,7 +112,7 @@ export default function CreditosPage() {
             value={customerFilter}
             onChange={(e) => { setCustomerFilter(e.target.value); if (!e.target.value) { setCustomerFilterId(''); setPage(1); } }}
             placeholder="Filtrar por cliente..."
-            className="w-full pl-8 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition"
+            className="w-full pl-8 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition"
           />
           {customerFilter.length > 1 && filterCustomers && filterCustomers.length > 0 && !customerFilterId && (
             <div className="absolute top-full mt-1 left-0 right-0 bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/[0.08] rounded-xl shadow-lg z-20 overflow-hidden">
@@ -143,7 +143,7 @@ export default function CreditosPage() {
         <button
           type="button"
           onClick={() => { setShowNewCredit(true); resetNew(); setCustomerSearch(''); }}
-          className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 shadow-sm shadow-blue-600/25 transition"
+          className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-semibold hover:bg-emerald-700 shadow-sm shadow-emerald-600/25 transition"
         >
           <Plus size={15} /> Nuevo crédito
         </button>
@@ -194,7 +194,7 @@ export default function CreditosPage() {
                   <td className="px-4 py-3">
                     <p className="text-[13px] font-medium text-slate-800 dark:text-white">{c.customer?.name}</p>
                   </td>
-                  <td className="hidden sm:table-cell px-4 py-3 font-mono text-[12px] text-blue-600 dark:text-blue-400">
+                  <td className="hidden sm:table-cell px-4 py-3 font-mono text-[12px] text-emerald-600 dark:text-emerald-400">
                     {c.sale?.invoiceNumber || '—'}
                   </td>
                   <td className="px-4 py-3 text-right text-[13px] text-slate-600 dark:text-slate-300 tabular-nums">
@@ -403,7 +403,7 @@ export default function CreditosPage() {
               <button
                 type="submit"
                 disabled={newCreditMutation.isPending}
-                className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-semibold py-2.5 rounded-xl shadow-sm shadow-blue-600/20 transition flex items-center justify-center gap-2 text-[13px]"
+                className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white font-semibold py-2.5 rounded-xl shadow-sm shadow-emerald-600/20 transition flex items-center justify-center gap-2 text-[13px]"
               >
                 {newCreditMutation.isPending ? <Loader2 size={15} className="animate-spin" /> : <CreditCard size={15} />}
                 Crear crédito

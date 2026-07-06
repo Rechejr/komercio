@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -75,8 +75,8 @@ export default function ReportesPage() {
             onClick={() => setPeriod(p.value)}
             className={`px-4 py-2 rounded-xl text-[13px] font-medium transition ${
               period === p.value
-                ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/25'
-                : 'card text-slate-600 dark:text-slate-300 hover:border-blue-300 dark:hover:border-blue-500/40'
+                ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-600/25'
+                : 'card text-slate-600 dark:text-slate-300 hover:border-emerald-300 dark:hover:border-emerald-500/40'
             }`}
           >
             {p.label}
@@ -97,10 +97,10 @@ export default function ReportesPage() {
       {profitData && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           {[
-            { label: 'Ingresos netos',   value: formatCurrency(profitData.revenue),     icon: DollarSign,  bg: 'bg-blue-50 dark:bg-blue-500/10',   ic: 'text-blue-600 dark:text-blue-400'   },
+            { label: 'Ingresos netos',   value: formatCurrency(profitData.revenue),     icon: DollarSign,  bg: 'bg-emerald-50 dark:bg-emerald-500/10',   ic: 'text-emerald-600 dark:text-emerald-400'   },
             { label: 'Costo mercancía', value: formatCurrency(profitData.cogs),        icon: TrendingDown, bg: 'bg-red-50 dark:bg-red-500/10',     ic: 'text-red-600 dark:text-red-400'     },
             { label: 'Utilidad bruta',  value: formatCurrency(profitData.grossProfit), icon: TrendingUp,   bg: 'bg-emerald-50 dark:bg-emerald-500/10', ic: 'text-emerald-600 dark:text-emerald-400' },
-            { label: 'Utilidad neta',   value: formatCurrency(profitData.netProfit),   icon: DollarSign,  bg: 'bg-indigo-50 dark:bg-indigo-500/10', ic: 'text-indigo-600 dark:text-indigo-400' },
+            { label: 'Utilidad neta',   value: formatCurrency(profitData.netProfit),   icon: DollarSign,  bg: 'bg-emerald-50 dark:bg-emerald-600/10', ic: 'text-emerald-600 dark:text-emerald-400' },
           ].map((k) => (
             <div key={k.label} className="card p-4 flex gap-3 items-center">
               <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${k.bg}`}>
@@ -124,7 +124,7 @@ export default function ReportesPage() {
             onClick={() => setTab(t.id)}
             className={`flex items-center gap-2 px-4 py-2.5 text-[13px] font-medium border-b-2 transition ${
               tab === t.id
-                ? 'border-blue-600 text-blue-600 dark:text-blue-400'
+                ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400'
                 : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'
             }`}
           >
@@ -141,8 +141,8 @@ export default function ReportesPage() {
             <AreaChart data={fillDailySeries(salesData.chart || [], new Date(dates.startDate), new Date(dates.endDate))}>
               <defs>
                 <linearGradient id="revenueGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%"  stopColor="#3b82f6" stopOpacity={0.15} />
-                  <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}    />
+                  <stop offset="5%"  stopColor="#10b981" stopOpacity={0.15} />
+                  <stop offset="95%" stopColor="#10b981" stopOpacity={0}    />
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-slate-100 dark:text-white/[0.06]" />
@@ -152,7 +152,7 @@ export default function ReportesPage() {
                 formatter={(v: number) => formatCurrency(v)}
                 contentStyle={{ borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: 12 }}
               />
-              <Area type="monotone" dataKey="grossRevenue" stroke="#3b82f6" fill="url(#revenueGrad)" strokeWidth={2} name="Ingresos" />
+              <Area type="monotone" dataKey="grossRevenue" stroke="#10b981" fill="url(#revenueGrad)" strokeWidth={2} name="Ingresos" />
             </AreaChart>
           </ResponsiveContainer>
           <div className="grid grid-cols-3 gap-4 mt-4 pt-4 border-t border-slate-100 dark:border-white/[0.06]">
@@ -184,7 +184,7 @@ export default function ReportesPage() {
                 contentStyle={{ borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: 12 }}
               />
               <Legend />
-              <Bar dataKey="ingresos" fill="#3b82f6" radius={[4, 4, 0, 0]} name="Ingresos" />
+              <Bar dataKey="ingresos" fill="#10b981" radius={[4, 4, 0, 0]} name="Ingresos" />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -211,7 +211,7 @@ export default function ReportesPage() {
                   <td className="px-5 py-3 text-slate-400 font-mono text-[12px]">{i + 1}</td>
                   <td className="px-5 py-3 text-[13px] font-medium text-slate-800 dark:text-white">{c.customer?.name || 'Mostrador'}</td>
                   <td className="px-5 py-3 text-center text-[13px] text-slate-500 dark:text-slate-400 tabular-nums">{c.visitCount}</td>
-                  <td className="px-5 py-3 text-right text-[13px] font-bold text-blue-600 dark:text-blue-400 tabular-nums">{formatCurrency(c.totalPurchases)}</td>
+                  <td className="px-5 py-3 text-right text-[13px] font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">{formatCurrency(c.totalPurchases)}</td>
                 </tr>
               ))}
             </tbody>
@@ -226,11 +226,11 @@ export default function ReportesPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-3">
               {[
-                { label: 'Ingresos totales',      value: profitData.revenue,     dot: 'bg-blue-500'    },
+                { label: 'Ingresos totales',      value: profitData.revenue,     dot: 'bg-emerald-500'    },
                 { label: 'Costo de ventas (CMV)', value: profitData.cogs,        dot: 'bg-red-400'     },
                 { label: 'Utilidad bruta',        value: profitData.grossProfit, dot: 'bg-emerald-500' },
                 { label: 'Gastos operacionales',  value: profitData.expenses,    dot: 'bg-amber-500'   },
-                { label: 'Utilidad neta',         value: profitData.netProfit,   dot: 'bg-indigo-500'  },
+                { label: 'Utilidad neta',         value: profitData.netProfit,   dot: 'bg-emerald-600'  },
               ].map((row) => (
                 <div key={row.label} className="flex items-center gap-3">
                   <div className={`w-2.5 h-2.5 rounded-full ${row.dot} flex-shrink-0`} />
@@ -246,9 +246,9 @@ export default function ReportesPage() {
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-500 dark:text-emerald-400 mb-1">Margen bruto</p>
                 <p className="text-[32px] font-bold text-emerald-700 dark:text-emerald-300 tabular-nums">{profitData.grossMargin}%</p>
               </div>
-              <div className="bg-blue-50 dark:bg-blue-500/10 border border-blue-100 dark:border-blue-500/20 rounded-xl p-4">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-blue-500 dark:text-blue-400 mb-1">Margen neto</p>
-                <p className={`text-[32px] font-bold tabular-nums ${parseFloat(profitData.netMargin) >= 0 ? 'text-blue-700 dark:text-blue-300' : 'text-red-700 dark:text-red-300'}`}>
+              <div className="bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-100 dark:border-emerald-500/20 rounded-xl p-4">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-500 dark:text-emerald-400 mb-1">Margen neto</p>
+                <p className={`text-[32px] font-bold tabular-nums ${parseFloat(profitData.netMargin) >= 0 ? 'text-emerald-700 dark:text-emerald-300' : 'text-red-700 dark:text-red-300'}`}>
                   {profitData.netMargin}%
                 </p>
               </div>

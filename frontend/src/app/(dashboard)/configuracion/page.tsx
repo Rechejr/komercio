@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -8,7 +8,7 @@ import toast from 'react-hot-toast';
 import { Loader2, Store, Lock, ImagePlus, X, Users, UserPlus, Edit, Shield, UserX } from 'lucide-react';
 import { useAuthStore } from '@/store/auth.store';
 
-const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition';
+const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition';
 
 const BIZ_FIELDS = [
   {
@@ -166,8 +166,8 @@ export default function ConfiguracionPage() {
       {user?.role === 'ADMIN' && (
         <div className="card overflow-hidden">
           <div className="px-6 py-4 border-b border-slate-100 dark:border-white/[0.06] flex items-center gap-2.5">
-            <div className="w-7 h-7 bg-blue-50 dark:bg-blue-500/10 rounded-lg flex items-center justify-center">
-              <Store size={14} className="text-blue-600 dark:text-blue-400" />
+            <div className="w-7 h-7 bg-emerald-50 dark:bg-emerald-500/10 rounded-lg flex items-center justify-center">
+              <Store size={14} className="text-emerald-600 dark:text-emerald-400" />
             </div>
             <h2 className="text-[14px] font-semibold text-slate-800 dark:text-white">Información del negocio</h2>
           </div>
@@ -178,7 +178,7 @@ export default function ConfiguracionPage() {
             <div className="flex items-center gap-4">
               <div className="w-16 h-16 rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-700 flex items-center justify-center overflow-hidden flex-shrink-0 bg-slate-50 dark:bg-slate-800">
                 {uploadingLogo ? (
-                  <Loader2 size={20} className="animate-spin text-blue-500" />
+                  <Loader2 size={20} className="animate-spin text-emerald-500" />
                 ) : business?.logo ? (
                   /* eslint-disable-next-line @next/next/no-img-element */
                   <img src={business.logo} alt="Logo" className="w-full h-full object-cover" />
@@ -199,7 +199,7 @@ export default function ConfiguracionPage() {
                   type="button"
                   disabled={uploadingLogo}
                   onClick={() => fileInputRef.current?.click()}
-                  className="flex items-center gap-2 px-3.5 py-2 text-[13px] font-medium text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-500/30 bg-blue-50 dark:bg-blue-500/10 rounded-xl hover:bg-blue-100 dark:hover:bg-blue-500/20 transition disabled:opacity-50"
+                  className="flex items-center gap-2 px-3.5 py-2 text-[13px] font-medium text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/10 rounded-xl hover:bg-emerald-100 dark:hover:bg-emerald-500/20 transition disabled:opacity-50"
                 >
                   <ImagePlus size={14} />
                   {business?.logo ? 'Cambiar logo' : 'Subir logo'}
@@ -246,7 +246,7 @@ export default function ConfiguracionPage() {
               <button
                 type="submit"
                 disabled={businessMutation.isPending || savingBusiness}
-                className="px-6 py-2.5 bg-blue-600 text-white rounded-xl text-[13px] font-semibold hover:bg-blue-700 disabled:opacity-60 shadow-sm shadow-blue-600/25 flex items-center gap-2 transition"
+                className="px-6 py-2.5 bg-emerald-600 text-white rounded-xl text-[13px] font-semibold hover:bg-emerald-700 disabled:opacity-60 shadow-sm shadow-emerald-600/25 flex items-center gap-2 transition"
               >
                 {(businessMutation.isPending || savingBusiness) && <Loader2 size={14} className="animate-spin" />}
                 Guardar cambios
@@ -269,7 +269,7 @@ export default function ConfiguracionPage() {
             <button
               type="button"
               onClick={openNewEmp}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-xl text-[12px] font-semibold hover:bg-blue-700 shadow-sm shadow-blue-600/25 transition"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white rounded-xl text-[12px] font-semibold hover:bg-emerald-700 shadow-sm shadow-emerald-600/25 transition"
             >
               <UserPlus size={13} /> Nuevo empleado
             </button>
@@ -326,7 +326,7 @@ export default function ConfiguracionPage() {
                           type="button"
                           aria-label="Editar empleado"
                           onClick={() => openEditEmp(emp)}
-                          className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-500/10 transition"
+                          className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 transition"
                         >
                           <Edit size={13} />
                         </button>
@@ -381,7 +381,7 @@ export default function ConfiguracionPage() {
             <button
               type="submit"
               disabled={pwdMutation.isPending || savingPwd}
-              className="px-6 py-2.5 bg-blue-600 text-white rounded-xl text-[13px] font-semibold hover:bg-blue-700 disabled:opacity-60 shadow-sm shadow-blue-600/25 flex items-center gap-2 transition"
+              className="px-6 py-2.5 bg-emerald-600 text-white rounded-xl text-[13px] font-semibold hover:bg-emerald-700 disabled:opacity-60 shadow-sm shadow-emerald-600/25 flex items-center gap-2 transition"
             >
               {(pwdMutation.isPending || savingPwd) && <Loader2 size={14} className="animate-spin" />}
               Actualizar contraseña
@@ -476,7 +476,7 @@ export default function ConfiguracionPage() {
                 <button
                   type="submit"
                   disabled={saveEmpMutation.isPending}
-                  className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-xl text-[13px] font-semibold hover:bg-blue-700 disabled:opacity-60 shadow-sm shadow-blue-600/25 flex items-center justify-center gap-2 transition"
+                  className="flex-1 px-4 py-2.5 bg-emerald-600 text-white rounded-xl text-[13px] font-semibold hover:bg-emerald-700 disabled:opacity-60 shadow-sm shadow-emerald-600/25 flex items-center justify-center gap-2 transition"
                 >
                   {saveEmpMutation.isPending && <Loader2 size={14} className="animate-spin" />}
                   {editEmp ? 'Actualizar' : 'Crear empleado'}

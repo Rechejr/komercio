@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState } from 'react';
 import Link from 'next/link';
@@ -34,7 +34,7 @@ export default function ForgotPasswordPage() {
     <div className="min-h-screen flex flex-col lg:flex-row">
 
       {/* ── Left panel ──────────────────────────────────────────────────── */}
-      <div className="hidden lg:flex flex-col w-[45%] bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800 p-10 relative overflow-hidden">
+      <div className="hidden lg:flex flex-col w-[45%] bg-gradient-to-br from-emerald-600 via-emerald-700 to-emerald-800 p-10 relative overflow-hidden">
         <div className="absolute -top-32 -right-32 w-96 h-96 rounded-full bg-white/5 pointer-events-none" />
         <div className="absolute -bottom-20 -left-20 w-72 h-72 rounded-full bg-white/5 pointer-events-none" />
 
@@ -50,7 +50,7 @@ export default function ForgotPasswordPage() {
           <h2 className="text-3xl font-bold text-white mb-3 leading-tight">
             ¿Olvidaste tu<br />contraseña?
           </h2>
-          <p className="text-blue-100 text-base leading-relaxed max-w-xs">
+          <p className="text-emerald-100 text-base leading-relaxed max-w-xs">
             No te preocupes. Te enviamos un enlace para que puedas crear una nueva contraseña de forma segura.
           </p>
         </div>
@@ -82,7 +82,7 @@ export default function ForgotPasswordPage() {
                 <button
                   type="button"
                   onClick={() => setSent(false)}
-                  className="text-blue-600 hover:underline"
+                  className="text-emerald-600 hover:underline"
                 >
                   intenta de nuevo
                 </button>
@@ -122,7 +122,7 @@ export default function ForgotPasswordPage() {
                     value={email}
                     onChange={(e) => { setEmail(e.target.value); setError(''); }}
                     placeholder="tu@correo.com"
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition bg-gray-50/50"
+                    className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition bg-gray-50/50"
                     autoFocus
                   />
                   {error && <p className="text-red-500 text-xs mt-1">{error}</p>}
@@ -131,7 +131,7 @@ export default function ForgotPasswordPage() {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-semibold py-3.5 rounded-xl text-sm transition-colors flex items-center justify-center gap-2"
+                  className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white font-semibold py-3.5 rounded-xl text-sm transition-colors flex items-center justify-center gap-2"
                 >
                   {loading && <Loader2 size={16} className="animate-spin" />}
                   {loading ? 'Enviando...' : 'Enviar enlace de recuperación'}

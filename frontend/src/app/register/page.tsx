@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -249,7 +249,7 @@ export default function RegisterPage() {
         </div>
 
         {/* ── Right panel ───────────────────────────────────────────────── */}
-        <div className="flex-1 flex items-center justify-center p-6 lg:p-10 bg-white dark:bg-[#0d1117] min-h-screen lg:min-h-0">
+        <div className="flex-1 flex items-center justify-center p-6 lg:p-10 bg-white dark:bg-[#064e3b] min-h-screen lg:min-h-0">
           <div className="w-full max-w-[380px]">
 
             {/* Mobile header */}

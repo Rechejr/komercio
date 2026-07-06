@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -9,7 +9,7 @@ import { formatCurrency, formatDateTime } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import { Lock, Unlock, TrendingUp, TrendingDown, Loader2, ArrowUpCircle, ArrowDownCircle, Plus, X } from 'lucide-react';
 
-const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition';
+const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition';
 
 export default function CajaPage() {
   const qc = useQueryClient();
@@ -113,9 +113,9 @@ export default function CajaPage() {
         </div>
 
         <div className="grid grid-cols-3 gap-3">
-          <div className="bg-blue-50 dark:bg-blue-500/10 border border-blue-100 dark:border-blue-500/20 rounded-xl p-3.5 text-center">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-blue-500 dark:text-blue-400 mb-1">Apertura</p>
-            <p className="text-[17px] font-bold text-blue-700 dark:text-blue-300 tabular-nums">{formatCurrency(cashRegister.openingAmount)}</p>
+          <div className="bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-100 dark:border-emerald-500/20 rounded-xl p-3.5 text-center">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-500 dark:text-emerald-400 mb-1">Apertura</p>
+            <p className="text-[17px] font-bold text-emerald-700 dark:text-emerald-300 tabular-nums">{formatCurrency(cashRegister.openingAmount)}</p>
           </div>
           <div className="bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-100 dark:border-emerald-500/20 rounded-xl p-3.5 text-center">
             <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-600 dark:text-emerald-400 mb-1 flex items-center justify-center gap-1">

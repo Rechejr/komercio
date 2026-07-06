@@ -1,36 +1,36 @@
 <svg viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
   <defs>
 
-    <!-- LEFT ARM: bright outer-left edge → medium cobalt → dark navy shadow → inner bevel bright -->
+    <!-- LEFT ARM: bright outer-left edge → medium emerald → dark forest shadow → inner bevel bright -->
     <linearGradient id="la" x1="0%" y1="50%" x2="100%" y2="50%">
-      <stop offset="0%"   stop-color="#C8E2FF"/>
-      <stop offset="10%"  stop-color="#62A0F0"/>
-      <stop offset="38%"  stop-color="#2B5ACC"/>
-      <stop offset="72%"  stop-color="#10288A"/>
-      <stop offset="86%"  stop-color="#162E98"/>
-      <stop offset="93%"  stop-color="#4272DC"/>
-      <stop offset="100%" stop-color="#7AAEF0"/>
+      <stop offset="0%"   stop-color="#a7f3d0"/>
+      <stop offset="10%"  stop-color="#34d399"/>
+      <stop offset="38%"  stop-color="#0DA06A"/>
+      <stop offset="72%"  stop-color="#064e3b"/>
+      <stop offset="86%"  stop-color="#047857"/>
+      <stop offset="93%"  stop-color="#0DA06A"/>
+      <stop offset="100%" stop-color="#6ee7b7"/>
     </linearGradient>
 
     <!-- RIGHT ARM: mirror of left arm -->
     <linearGradient id="ra" x1="100%" y1="50%" x2="0%" y2="50%">
-      <stop offset="0%"   stop-color="#C8E2FF"/>
-      <stop offset="10%"  stop-color="#62A0F0"/>
-      <stop offset="38%"  stop-color="#2B5ACC"/>
-      <stop offset="72%"  stop-color="#10288A"/>
-      <stop offset="86%"  stop-color="#162E98"/>
-      <stop offset="93%"  stop-color="#4272DC"/>
-      <stop offset="100%" stop-color="#7AAEF0"/>
+      <stop offset="0%"   stop-color="#a7f3d0"/>
+      <stop offset="10%"  stop-color="#34d399"/>
+      <stop offset="38%"  stop-color="#0DA06A"/>
+      <stop offset="72%"  stop-color="#064e3b"/>
+      <stop offset="86%"  stop-color="#047857"/>
+      <stop offset="93%"  stop-color="#0DA06A"/>
+      <stop offset="100%" stop-color="#6ee7b7"/>
     </linearGradient>
 
     <!-- TOP BEVEL faces (brighter, simulating top crystal face) -->
     <linearGradient id="lt" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%"   stop-color="#E4F0FF"/>
-      <stop offset="100%" stop-color="#8CB8F4"/>
+      <stop offset="0%"   stop-color="#ecfdf5"/>
+      <stop offset="100%" stop-color="#6ee7b7"/>
     </linearGradient>
     <linearGradient id="rt" x1="100%" y1="0%" x2="0%" y2="0%">
-      <stop offset="0%"   stop-color="#E4F0FF"/>
-      <stop offset="100%" stop-color="#8CB8F4"/>
+      <stop offset="0%"   stop-color="#ecfdf5"/>
+      <stop offset="100%" stop-color="#6ee7b7"/>
     </linearGradient>
 
     <!-- GEM — upper-left face (brightest, catching most light) -->
@@ -56,8 +56,8 @@
 
     <!-- Ambient glow behind V -->
     <radialGradient id="glow" cx="50%" cy="38%" r="52%">
-      <stop offset="0%"   stop-color="#1A4EAA" stop-opacity="0.55"/>
-      <stop offset="100%" stop-color="#0C1829"  stop-opacity="0"/>
+      <stop offset="0%"   stop-color="#0DA06A" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="#022c22"  stop-opacity="0"/>
     </radialGradient>
 
   </defs>
@@ -77,7 +77,7 @@
   <path d="M 10,10 L 21,10 L 100,190 Z" fill="white" opacity="0.22"/>
 
   <!-- Inner-edge bevel glow (thin bright strip along right/inner edge of left arm) -->
-  <path d="M 42,10 L 46,10 L 100,116 L 100,122 Z" fill="#88C0FF" opacity="0.55"/>
+  <path d="M 42,10 L 46,10 L 100,116 L 100,122 Z" fill="#a7f3d0" opacity="0.55"/>
 
   <!-- ══════════════ RIGHT ARM ══════════════ -->
 
@@ -91,7 +91,7 @@
   <path d="M 190,10 L 179,10 L 100,190 Z" fill="white" opacity="0.22"/>
 
   <!-- Inner-edge bevel glow (mirror) -->
-  <path d="M 158,10 L 154,10 L 100,116 L 100,122 Z" fill="#88C0FF" opacity="0.55"/>
+  <path d="M 158,10 L 154,10 L 100,116 L 100,122 Z" fill="#a7f3d0" opacity="0.55"/>
 
   <!-- ══════════════ GEM ══════════════ -->
   <!-- Diamond sits from y=116 (inner V junction) to y=190 (outer V tip) -->

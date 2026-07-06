@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -11,7 +11,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import Link from 'next/link';
 import { downloadExcel } from '@/lib/exportExcel';
 
-const inputCls = 'px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition';
+const inputCls = 'px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition';
 
 export default function VentasPage() {
   const qc = useQueryClient();
@@ -96,14 +96,14 @@ export default function VentasPage() {
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(1); }}
             placeholder="Buscar por factura o cliente..."
-            className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition"
+            className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition"
           />
         </div>
         <select
           aria-label="Filtrar por estado"
           value={status}
           onChange={(e) => { setStatus(e.target.value); setPage(1); }}
-          className="px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm dark:bg-slate-800 dark:text-white dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition"
+          className="px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm dark:bg-slate-800 dark:text-white dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 transition"
         >
           <option value="">Todos los estados</option>
           <option value="COMPLETED">Completadas</option>
@@ -112,7 +112,7 @@ export default function VentasPage() {
         </select>
         <Link
           href="/pos"
-          className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 shadow-sm shadow-blue-600/25 transition"
+          className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-semibold hover:bg-emerald-700 shadow-sm shadow-emerald-600/25 transition"
         >
           <ShoppingCart size={15} /> Nueva venta
         </Link>
@@ -188,7 +188,7 @@ export default function VentasPage() {
                   className="hover:bg-slate-50/60 dark:hover:bg-white/[0.02] transition-colors cursor-pointer"
                   onClick={() => setSelected(s)}
                 >
-                  <td className="px-4 py-3 font-mono text-[12px] text-blue-600 dark:text-blue-400 font-medium">{s.invoiceNumber}</td>
+                  <td className="px-4 py-3 font-mono text-[12px] text-emerald-600 dark:text-emerald-400 font-medium">{s.invoiceNumber}</td>
                   <td className="px-4 py-3 text-[13px] text-slate-700 dark:text-slate-300">{s.customer?.name || <span className="text-slate-400">Mostrador</span>}</td>
                   <td className="hidden md:table-cell px-4 py-3 text-[13px] text-slate-500 dark:text-slate-400">{s.user?.name}</td>
                   <td className="hidden sm:table-cell px-4 py-3 text-center text-[13px] text-slate-500 dark:text-slate-400 tabular-nums">{s._count?.details}</td>
@@ -404,7 +404,7 @@ export default function VentasPage() {
                   <h3 className="text-[15px] font-semibold text-slate-800 dark:text-white">Anular venta</h3>
                   <p className="text-[13px] text-slate-500 dark:text-slate-400 mt-1">
                     ¿Anular la factura{' '}
-                    <span className="font-mono font-semibold text-blue-600 dark:text-blue-400">{detail.invoiceNumber}</span>{' '}
+                    <span className="font-mono font-semibold text-emerald-600 dark:text-emerald-400">{detail.invoiceNumber}</span>{' '}
                     por {formatCurrency(detail.total)}? El stock se devolverá automáticamente.
                   </p>
                 </div>

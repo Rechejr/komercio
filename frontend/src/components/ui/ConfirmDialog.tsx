@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import * as Dialog from '@radix-ui/react-dialog';
 import { AlertTriangle, Trash2, HelpCircle, Loader2 } from 'lucide-react';
@@ -21,19 +21,19 @@ interface ConfirmDialogProps {
 const icons: Record<Variant, React.ReactNode> = {
   danger:  <Trash2 size={20} className="text-red-600" />,
   warning: <AlertTriangle size={20} className="text-amber-600" />,
-  default: <HelpCircle size={20} className="text-blue-600" />,
+  default: <HelpCircle size={20} className="text-emerald-600" />,
 };
 
 const iconBg: Record<Variant, string> = {
   danger:  'bg-red-100 dark:bg-red-900/30',
   warning: 'bg-amber-100 dark:bg-amber-900/30',
-  default: 'bg-blue-100 dark:bg-blue-900/30',
+  default: 'bg-emerald-100 dark:bg-emerald-900/30',
 };
 
 const confirmBtn: Record<Variant, string> = {
   danger:  'bg-red-600 hover:bg-red-700 focus-visible:ring-red-500',
   warning: 'bg-amber-600 hover:bg-amber-700 focus-visible:ring-amber-500',
-  default: 'bg-blue-600 hover:bg-blue-700 focus-visible:ring-blue-500',
+  default: 'bg-emerald-600 hover:bg-emerald-700 focus-visible:ring-emerald-500',
 };
 
 export function ConfirmDialog({

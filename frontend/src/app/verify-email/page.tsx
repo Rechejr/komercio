@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { Suspense, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
@@ -62,7 +62,7 @@ function VerifyEmailContent() {
 
       {status === 'verifying' && (
         <>
-          <Loader2 size={40} className="animate-spin text-blue-600 mx-auto mb-4" />
+          <Loader2 size={40} className="animate-spin text-emerald-600 mx-auto mb-4" />
           <h1 className="text-xl font-bold text-gray-900 mb-1">Verificando tu correo...</h1>
           <p className="text-gray-500 text-sm">Esto solo toma un segundo.</p>
         </>
@@ -79,7 +79,7 @@ function VerifyEmailContent() {
           </p>
           <Link
             href="/login"
-            className="inline-block w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl text-sm transition-colors"
+            className="inline-block w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-3 rounded-xl text-sm transition-colors"
           >
             Iniciar sesión
           </Link>
@@ -107,13 +107,13 @@ function VerifyEmailContent() {
                   value={resendEmail}
                   onChange={(e) => setResendEmail(e.target.value)}
                   placeholder="tu@correo.com"
-                  className="w-full pl-9 pr-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full pl-9 pr-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 />
               </div>
               <button
                 type="submit"
                 disabled={resending}
-                className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-semibold py-2.5 rounded-xl text-sm transition-colors flex items-center justify-center gap-2"
+                className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white font-semibold py-2.5 rounded-xl text-sm transition-colors flex items-center justify-center gap-2"
               >
                 {resending && <Loader2 size={15} className="animate-spin" />}
                 {resending ? 'Enviando...' : 'Reenviar enlace'}
@@ -139,7 +139,7 @@ export default function VerifyEmailPage() {
     <div className="min-h-screen flex flex-col lg:flex-row">
 
       {/* Left panel */}
-      <div className="hidden lg:flex flex-col w-[45%] bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800 p-10 relative overflow-hidden">
+      <div className="hidden lg:flex flex-col w-[45%] bg-gradient-to-br from-emerald-600 via-emerald-700 to-emerald-800 p-10 relative overflow-hidden">
         <div className="absolute -top-32 -right-32 w-96 h-96 rounded-full bg-white/5 pointer-events-none" />
         <div className="absolute -bottom-20 -left-20 w-72 h-72 rounded-full bg-white/5 pointer-events-none" />
 
@@ -152,7 +152,7 @@ export default function VerifyEmailPage() {
           <h2 className="text-3xl font-bold text-white mb-3 leading-tight">
             Ya casi estás<br />dentro
           </h2>
-          <p className="text-blue-100 text-base leading-relaxed max-w-xs">
+          <p className="text-emerald-100 text-base leading-relaxed max-w-xs">
             Solo falta confirmar tu correo para activar tu cuenta y empezar a vender.
           </p>
         </div>
@@ -160,7 +160,7 @@ export default function VerifyEmailPage() {
 
       {/* Right panel */}
       <div className="flex-1 flex items-center justify-center bg-white p-8 min-h-screen lg:min-h-0">
-        <Suspense fallback={<Loader2 size={32} className="animate-spin text-blue-600" />}>
+        <Suspense fallback={<Loader2 size={32} className="animate-spin text-emerald-600" />}>
           <VerifyEmailContent />
         </Suspense>
       </div>

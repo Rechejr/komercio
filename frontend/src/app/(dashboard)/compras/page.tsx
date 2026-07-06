@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -11,8 +11,8 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { downloadExcel } from '@/lib/exportExcel';
 import { PriceInput } from '@/components/ui/PriceInput';
 
-const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition';
-const inputSmCls = 'w-full px-2 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition';
+const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition';
+const inputSmCls = 'w-full px-2 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition';
 
 export default function ComprasPage() {
   const qc = useQueryClient();
@@ -159,7 +159,7 @@ export default function ComprasPage() {
             setSupplierSearch('');
             setShowForm(true);
           }}
-          className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 shadow-sm shadow-blue-600/25 transition"
+          className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-semibold hover:bg-emerald-700 shadow-sm shadow-emerald-600/25 transition"
         >
           <Plus size={15} /> Registrar compra
         </button>
@@ -173,7 +173,7 @@ export default function ComprasPage() {
           aria-label="Fecha inicio exportación"
           value={exportStart}
           onChange={(e) => setExportStart(e.target.value)}
-          className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition"
+          className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition"
         />
         <span className="text-[12px] text-slate-400">hasta</span>
         <input
@@ -181,7 +181,7 @@ export default function ComprasPage() {
           aria-label="Fecha fin exportación"
           value={exportEnd}
           onChange={(e) => setExportEnd(e.target.value)}
-          className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition"
+          className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition"
         />
         <button
           type="button"
@@ -232,7 +232,7 @@ export default function ComprasPage() {
                   className="hover:bg-slate-50/60 dark:hover:bg-white/[0.02] transition-colors cursor-pointer"
                   onClick={() => setSelected(p)}
                 >
-                  <td className="hidden sm:table-cell px-4 py-3 font-mono text-[12px] text-blue-600 dark:text-blue-400">{p.invoiceNumber || '—'}</td>
+                  <td className="hidden sm:table-cell px-4 py-3 font-mono text-[12px] text-emerald-600 dark:text-emerald-400">{p.invoiceNumber || '—'}</td>
                   <td className="px-4 py-3 text-[13px] font-medium text-slate-800 dark:text-white">{p.supplier?.name}</td>
                   <td className="hidden md:table-cell px-4 py-3 text-center text-[13px] text-slate-500 dark:text-slate-400 tabular-nums">{p._count?.details}</td>
                   <td className="px-4 py-3 text-right text-[13px] font-semibold text-slate-900 dark:text-white tabular-nums">{formatCurrency(p.total)}</td>
@@ -243,7 +243,7 @@ export default function ComprasPage() {
                         type="button"
                         aria-label="Editar compra"
                         onClick={() => openEdit(p)}
-                        className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-500/10 transition"
+                        className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 transition"
                       >
                         <Edit size={14} />
                       </button>
@@ -307,7 +307,7 @@ export default function ComprasPage() {
                 <button
                   type="button"
                   onClick={() => openEdit(selected)}
-                  className="flex items-center gap-1 px-3 py-1.5 text-[12px] text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-500/30 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-500/10 transition"
+                  className="flex items-center gap-1 px-3 py-1.5 text-[12px] text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/30 rounded-lg hover:bg-emerald-50 dark:hover:bg-emerald-500/10 transition"
                 >
                   <Edit size={12} /> Editar
                 </button>
@@ -423,11 +423,11 @@ export default function ComprasPage() {
                         onChange={(e) => { setSupplierSearch(e.target.value); setShowSupplierDD(true); }}
                         onFocus={() => setShowSupplierDD(true)}
                         onBlur={() => setTimeout(() => setShowSupplierDD(false), 150)}
-                        className="w-full pl-8 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition"
+                        className="w-full pl-8 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition"
                       />
                     </div>
                     {selectedSupplierName && !supplierSearch && (
-                      <p className="mt-1 text-[11px] text-blue-600 dark:text-blue-400 font-medium truncate pl-1">{selectedSupplierName}</p>
+                      <p className="mt-1 text-[11px] text-emerald-600 dark:text-emerald-400 font-medium truncate pl-1">{selectedSupplierName}</p>
                     )}
                     {showSupplierDD && (
                       <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-white/[0.08] rounded-xl shadow-modal z-20 max-h-44 overflow-y-auto">
@@ -438,7 +438,7 @@ export default function ComprasPage() {
                             key={s.id}
                             type="button"
                             onMouseDown={() => { setValue('supplierId', s.id); setSelectedSupplierName(s.name); setSupplierSearch(''); setShowSupplierDD(false); }}
-                            className="w-full text-left px-3 py-2.5 text-[13px] hover:bg-blue-50 dark:hover:bg-slate-700 text-slate-800 dark:text-white transition"
+                            className="w-full text-left px-3 py-2.5 text-[13px] hover:bg-emerald-50 dark:hover:bg-slate-700 text-slate-800 dark:text-white transition"
                           >
                             {s.name}
                           </button>
@@ -449,7 +449,7 @@ export default function ComprasPage() {
                         <button
                           type="button"
                           onMouseDown={(e) => { e.preventDefault(); setShowSupplierDD(false); setShowCreateSupplier(true); }}
-                          className="w-full flex items-center gap-1.5 px-3 py-2.5 text-[13px] text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-slate-700 border-t border-slate-100 dark:border-white/[0.06] transition"
+                          className="w-full flex items-center gap-1.5 px-3 py-2.5 text-[13px] text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-slate-700 border-t border-slate-100 dark:border-white/[0.06] transition"
                         >
                           <Plus size={13} /> Crear proveedor nuevo
                         </button>
@@ -485,7 +485,7 @@ export default function ComprasPage() {
                   <button
                     type="button"
                     onClick={() => append({ productId: '', quantity: 1, unitCost: 0, taxRate: 0 })}
-                    className="flex items-center gap-1 text-[12px] text-blue-600 dark:text-blue-400 hover:underline"
+                    className="flex items-center gap-1 text-[12px] text-emerald-600 dark:text-emerald-400 hover:underline"
                   >
                     <Plus size={12} /> Agregar línea
                   </button>
@@ -571,9 +571,9 @@ export default function ComprasPage() {
 
               {/* Total preview */}
               {total > 0 && (
-                <div className="bg-blue-50 dark:bg-blue-500/10 border border-blue-100 dark:border-blue-500/20 rounded-xl px-4 py-3 flex justify-between items-center">
+                <div className="bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-100 dark:border-emerald-500/20 rounded-xl px-4 py-3 flex justify-between items-center">
                   <span className="text-[13px] text-slate-600 dark:text-slate-400">Total estimado</span>
-                  <span className="text-[15px] font-bold text-blue-700 dark:text-blue-400 tabular-nums">{formatCurrency(total)}</span>
+                  <span className="text-[15px] font-bold text-emerald-700 dark:text-emerald-400 tabular-nums">{formatCurrency(total)}</span>
                 </div>
               )}
 
@@ -594,7 +594,7 @@ export default function ComprasPage() {
                 <button
                   type="submit"
                   disabled={saveMutation.isPending}
-                  className="px-6 py-2.5 bg-blue-600 text-white rounded-xl text-[13px] font-semibold hover:bg-blue-700 disabled:opacity-60 shadow-sm shadow-blue-600/25 flex items-center gap-2 transition"
+                  className="px-6 py-2.5 bg-emerald-600 text-white rounded-xl text-[13px] font-semibold hover:bg-emerald-700 disabled:opacity-60 shadow-sm shadow-emerald-600/25 flex items-center gap-2 transition"
                 >
                   {saveMutation.isPending && <Loader2 size={14} className="animate-spin" />}
                   {editItem ? 'Actualizar compra' : 'Registrar compra'}
@@ -638,7 +638,7 @@ export default function ComprasPage() {
                 placeholder="NIT / Documento"
                 value={newSupDoc}
                 onChange={(e) => setNewSupDoc(e.target.value)}
-                className="px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition"
+                className="px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition"
               />
               <input
                 type="tel"
@@ -646,7 +646,7 @@ export default function ComprasPage() {
                 value={newSupPhone}
                 onChange={(e) => setNewSupPhone(e.target.value)}
                 maxLength={10}
-                className="px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition"
+                className="px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition"
               />
             </div>
 
@@ -667,7 +667,7 @@ export default function ComprasPage() {
                   phone: newSupPhone.trim() || undefined,
                 })}
                 disabled={!newSupName.trim() || createSupplierMutation.isPending}
-                className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-xl text-[13px] font-semibold hover:bg-blue-700 disabled:opacity-50 shadow-sm shadow-blue-600/25 transition"
+                className="flex-1 px-4 py-2.5 bg-emerald-600 text-white rounded-xl text-[13px] font-semibold hover:bg-emerald-700 disabled:opacity-50 shadow-sm shadow-emerald-600/25 transition"
               >
                 {createSupplierMutation.isPending ? 'Guardando...' : 'Guardar'}
               </button>

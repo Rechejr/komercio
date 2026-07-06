@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -58,7 +58,7 @@ export function CategorySelect({ value, onChange, categories }: CategorySelectPr
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-left flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition"
+        className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-left flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition"
       >
         <span className={selected ? '' : 'text-slate-400 dark:text-slate-500'}>{selected ? selected.name : 'Sin categoría'}</span>
         <ChevronDown size={15} className={cn('text-slate-400 transition-transform', open && 'rotate-180')} />
@@ -89,7 +89,7 @@ export function CategorySelect({ value, onChange, categories }: CategorySelectPr
               className="w-full flex items-center justify-between px-3 py-2 text-sm text-left hover:bg-slate-50 dark:hover:bg-white/[0.02] text-slate-500 dark:text-slate-400"
             >
               Sin categoría
-              {!value && <Check size={13} className="text-blue-600" />}
+              {!value && <Check size={13} className="text-emerald-600" />}
             </button>
 
             {filtered.map((c) => (
@@ -100,7 +100,7 @@ export function CategorySelect({ value, onChange, categories }: CategorySelectPr
                 className="w-full flex items-center justify-between px-3 py-2 text-sm text-left hover:bg-slate-50 dark:hover:bg-white/[0.02] dark:text-white"
               >
                 {c.name}
-                {value === c.id && <Check size={13} className="text-blue-600" />}
+                {value === c.id && <Check size={13} className="text-emerald-600" />}
               </button>
             ))}
 
@@ -113,7 +113,7 @@ export function CategorySelect({ value, onChange, categories }: CategorySelectPr
             type="button"
             disabled={createMutation.isPending}
             onClick={() => canCreate ? createMutation.mutate(search.trim()) : inputRef.current?.focus()}
-            className="w-full flex items-center gap-2 px-3 py-2.5 text-sm font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-500/10 border-t border-slate-100 dark:border-white/[0.06] transition-colors disabled:opacity-60"
+            className="w-full flex items-center gap-2 px-3 py-2.5 text-sm font-medium text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 border-t border-slate-100 dark:border-white/[0.06] transition-colors disabled:opacity-60"
           >
             {createMutation.isPending ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />}
             {canCreate ? `Crear "${search.trim()}"` : 'Nueva categoría'}

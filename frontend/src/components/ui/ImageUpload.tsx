@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useRef, useState } from 'react';
 import { Upload, X, Loader2 } from 'lucide-react';
@@ -81,17 +81,17 @@ export function ImageUpload({ value, onChange }: ImageUploadProps) {
           type="button"
           onClick={() => inputRef.current?.click()}
           disabled={uploading}
-          className="w-full border-2 border-dashed border-blue-300 dark:border-blue-700 bg-blue-50/50 dark:bg-blue-900/10 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-xl py-6 flex flex-col items-center justify-center gap-1.5 transition-colors disabled:opacity-60"
+          className="w-full border-2 border-dashed border-emerald-300 dark:border-emerald-700 bg-emerald-50/50 dark:bg-emerald-900/10 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-xl py-6 flex flex-col items-center justify-center gap-1.5 transition-colors disabled:opacity-60"
         >
           {uploading ? (
-            <Loader2 size={20} className="animate-spin text-blue-500" />
+            <Loader2 size={20} className="animate-spin text-emerald-500" />
           ) : (
-            <Upload size={20} className="text-blue-500" />
+            <Upload size={20} className="text-emerald-500" />
           )}
-          <span className="text-xs font-semibold text-blue-600 dark:text-blue-400">
+          <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">
             {uploading ? 'Subiendo...' : `Carga hasta ${MAX_IMAGES} imágenes`}
           </span>
-          <span className="text-[11px] text-blue-400 dark:text-blue-500 text-center px-4">
+          <span className="text-[11px] text-emerald-400 dark:text-emerald-500 text-center px-4">
             Recomendamos: 500 x 500 px, formato PNG, peso máximo {MAX_SIZE_MB}MB
           </span>
         </button>

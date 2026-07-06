@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState } from 'react';
 import { useUpgradeStore } from '@/store/upgrade.store';
@@ -123,11 +123,11 @@ export function UpgradeModal() {
           )}
 
           {/* ── Plan Pro card ─────────────────────────────────────────────── */}
-          <div className="border-2 border-blue-500 rounded-2xl overflow-hidden mb-3">
+          <div className="border-2 border-emerald-500 rounded-2xl overflow-hidden mb-3">
             <div className="flex items-center gap-3 p-4">
               {/* Radio */}
-              <div className="w-5 h-5 rounded-full border-2 border-blue-500 flex items-center justify-center flex-shrink-0">
-                <div className="w-2.5 h-2.5 rounded-full bg-blue-500" />
+              <div className="w-5 h-5 rounded-full border-2 border-emerald-500 flex items-center justify-center flex-shrink-0">
+                <div className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
               </div>
 
               {/* Info */}
@@ -137,7 +137,7 @@ export function UpgradeModal() {
                   <span className="inline-flex items-center gap-1 text-xs bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 font-semibold px-2 py-0.5 rounded-full">
                     ⭐ Recomendado
                   </span>
-                  <span className="text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 font-semibold px-2 py-0.5 rounded-full">
+                  <span className="text-xs bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 font-semibold px-2 py-0.5 rounded-full">
                     Web
                   </span>
                 </div>
@@ -167,11 +167,11 @@ export function UpgradeModal() {
 
             {/* Features expandable */}
             {expanded && (
-              <div className="border-t border-blue-100 dark:border-blue-900/40 px-4 py-3 bg-blue-50/50 dark:bg-blue-900/10">
+              <div className="border-t border-emerald-100 dark:border-emerald-900/40 px-4 py-3 bg-emerald-50/50 dark:bg-emerald-900/10">
                 <ul className="space-y-2">
                   {PRO_FEATURES.map((f) => (
                     <li key={f} className="flex items-start gap-2 text-xs text-slate-600 dark:text-slate-400">
-                      <Check size={13} className="text-blue-500 flex-shrink-0 mt-0.5" strokeWidth={2.5} />
+                      <Check size={13} className="text-emerald-500 flex-shrink-0 mt-0.5" strokeWidth={2.5} />
                       {f}
                     </li>
                   ))}

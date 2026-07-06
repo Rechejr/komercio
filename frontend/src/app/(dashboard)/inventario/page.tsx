@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState, useRef, useEffect } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
@@ -41,7 +41,7 @@ const fieldLabel: Record<string, string> = {
   description: 'Descripción',
 };
 
-const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition';
+const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition';
 
 export default function InventarioPage() {
   const qc = useQueryClient();
@@ -215,10 +215,10 @@ export default function InventarioPage() {
     >
       {/* Drag overlay */}
       {isDragOver && (
-        <div className="pointer-events-none fixed inset-0 z-40 border-2 border-dashed border-blue-400 bg-blue-500/5 backdrop-blur-[2px] flex items-center justify-center">
+        <div className="pointer-events-none fixed inset-0 z-40 border-2 border-dashed border-emerald-400 bg-emerald-500/5 backdrop-blur-[2px] flex items-center justify-center">
           <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-white/[0.08] rounded-2xl px-10 py-8 shadow-modal flex flex-col items-center gap-3">
-            <div className="w-14 h-14 rounded-2xl bg-blue-50 dark:bg-blue-500/10 flex items-center justify-center">
-              <FileUp size={26} className="text-blue-500" />
+            <div className="w-14 h-14 rounded-2xl bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center">
+              <FileUp size={26} className="text-emerald-500" />
             </div>
             <p className="text-[15px] font-semibold text-slate-800 dark:text-white">Suelta para importar</p>
             <p className="text-[13px] text-slate-400">.xlsx · .xls · .csv</p>
@@ -234,7 +234,7 @@ export default function InventarioPage() {
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(1); }}
             placeholder="Buscar por nombre, código o código de barras..."
-            className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition"
+            className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition"
           />
         </div>
 
@@ -303,7 +303,7 @@ export default function InventarioPage() {
         <button
           type="button"
           onClick={() => { setEditItem(null); reset({ images: [], isActive: true }); setShowForm(true); }}
-          className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 shadow-sm shadow-blue-600/25 transition"
+          className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-semibold hover:bg-emerald-700 shadow-sm shadow-emerald-600/25 transition"
         >
           <Plus size={15} /> Nuevo producto
         </button>
@@ -415,7 +415,7 @@ export default function InventarioPage() {
                           type="button"
                           aria-label="Editar producto"
                           onClick={() => openEdit(p)}
-                          className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-500/10 transition"
+                          className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 transition"
                         >
                           <Edit size={14} />
                         </button>
@@ -471,7 +471,7 @@ export default function InventarioPage() {
 
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-white/[0.06]">
               <h2 className="text-[15px] font-semibold text-slate-800 dark:text-white flex items-center gap-2">
-                <FileUp size={16} className="text-blue-500" />
+                <FileUp size={16} className="text-emerald-500" />
                 Vista previa de importación
               </h2>
               <button
@@ -486,7 +486,7 @@ export default function InventarioPage() {
 
             {previewMutation.isPending ? (
               <div className="flex flex-col items-center justify-center py-16 gap-3">
-                <Loader2 size={32} className="animate-spin text-blue-500" />
+                <Loader2 size={32} className="animate-spin text-emerald-500" />
                 <p className="text-[13px] text-slate-500 dark:text-slate-400">Analizando archivo...</p>
               </div>
             ) : previewData ? (
@@ -503,9 +503,9 @@ export default function InventarioPage() {
                     <p className="text-[22px] font-bold text-emerald-700 dark:text-emerald-400 tabular-nums">{previewData.valid}</p>
                     <p className="text-[11px] text-emerald-600 dark:text-emerald-500 mt-0.5 uppercase tracking-wide font-medium">Válidos</p>
                   </div>
-                  <div className="bg-blue-50 dark:bg-blue-500/10 rounded-xl p-3 text-center">
-                    <p className="text-[22px] font-bold text-blue-700 dark:text-blue-400 tabular-nums">{previewData.toCreate}</p>
-                    <p className="text-[11px] text-blue-600 dark:text-blue-500 mt-0.5 uppercase tracking-wide font-medium">Nuevos</p>
+                  <div className="bg-emerald-50 dark:bg-emerald-500/10 rounded-xl p-3 text-center">
+                    <p className="text-[22px] font-bold text-emerald-700 dark:text-emerald-400 tabular-nums">{previewData.toCreate}</p>
+                    <p className="text-[11px] text-emerald-600 dark:text-emerald-500 mt-0.5 uppercase tracking-wide font-medium">Nuevos</p>
                   </div>
                   <div className="bg-violet-50 dark:bg-violet-500/10 rounded-xl p-3 text-center">
                     <p className="text-[22px] font-bold text-violet-700 dark:text-violet-400 tabular-nums">{previewData.toUpdate}</p>
@@ -594,7 +594,7 @@ export default function InventarioPage() {
                   type="button"
                   disabled={previewData.valid === 0 || importMutation.isPending}
                   onClick={() => pendingFile && importMutation.mutate(pendingFile)}
-                  className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-xl text-[13px] font-semibold hover:bg-blue-700 disabled:opacity-50 shadow-sm shadow-blue-600/25 transition flex items-center justify-center gap-2"
+                  className="flex-1 px-4 py-2.5 bg-emerald-600 text-white rounded-xl text-[13px] font-semibold hover:bg-emerald-700 disabled:opacity-50 shadow-sm shadow-emerald-600/25 transition flex items-center justify-center gap-2"
                 >
                   {importMutation.isPending
                     ? <><Loader2 size={14} className="animate-spin" /> Importando...</>
@@ -659,7 +659,7 @@ export default function InventarioPage() {
                     <input
                       {...register('code', { required: 'El código es obligatorio' })}
                       placeholder="Escanea o escribe el código"
-                      className="w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition"
+                      className="w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition"
                     />
                   </div>
                   {errors.code && <p className="text-[11px] text-red-500 mt-1">{errors.code.message as string}</p>}
@@ -690,7 +690,7 @@ export default function InventarioPage() {
                       className={`w-full px-3 py-2.5 border rounded-xl text-sm focus:outline-none dark:text-white transition ${
                         editItem
                           ? 'border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/50 text-slate-400 dark:text-slate-500 cursor-not-allowed'
-                          : 'bg-slate-50 border-slate-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 dark:bg-slate-800 dark:border-slate-700'
+                          : 'bg-slate-50 border-slate-200 focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700'
                       }`}
                     />
                     {editItem && (
@@ -758,7 +758,7 @@ export default function InventarioPage() {
                     {...register('description')}
                     rows={3}
                     placeholder="Añadir una descripción ayudará a identificar mejor el producto"
-                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition resize-none"
+                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition resize-none"
                   />
                 </div>
 
@@ -770,11 +770,11 @@ export default function InventarioPage() {
 
                 <div className="space-y-3 pt-1">
                   <label className="flex items-center gap-3 cursor-pointer">
-                    <input type="checkbox" id="isActive" {...register('isActive')} defaultChecked className="w-4 h-4 accent-blue-600 rounded" />
+                    <input type="checkbox" id="isActive" {...register('isActive')} defaultChecked className="w-4 h-4 accent-emerald-600 rounded" />
                     <span className="text-[13px] text-slate-600 dark:text-slate-300">Producto activo</span>
                   </label>
                   <label className="flex items-center gap-3 cursor-pointer">
-                    <input type="checkbox" id="allowNegativeStock" {...register('allowNegativeStock')} className="w-4 h-4 accent-blue-600 rounded" />
+                    <input type="checkbox" id="allowNegativeStock" {...register('allowNegativeStock')} className="w-4 h-4 accent-emerald-600 rounded" />
                     <span className="text-[13px] text-slate-600 dark:text-slate-300">Permitir stock negativo</span>
                   </label>
                 </div>
@@ -791,7 +791,7 @@ export default function InventarioPage() {
                 <button
                   type="submit"
                   disabled={isSubmitting || saveMutation.isPending}
-                  className="px-6 py-2.5 bg-blue-600 text-white rounded-xl text-[13px] font-semibold hover:bg-blue-700 disabled:opacity-50 shadow-sm shadow-blue-600/25 transition flex items-center gap-2"
+                  className="px-6 py-2.5 bg-emerald-600 text-white rounded-xl text-[13px] font-semibold hover:bg-emerald-700 disabled:opacity-50 shadow-sm shadow-emerald-600/25 transition flex items-center gap-2"
                 >
                   {(isSubmitting || saveMutation.isPending) && <Loader2 size={14} className="animate-spin" />}
                   {editItem ? 'Actualizar' : 'Crear producto'}
@@ -891,7 +891,7 @@ export default function InventarioPage() {
                         onClick={() => setStockForm((f) => ({ ...f, reason: f.reason === r ? '' : r }))}
                         className={`px-3 py-1.5 rounded-full border text-[12px] transition ${
                           stockForm.reason === r
-                            ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-400 dark:bg-blue-500/10 dark:text-blue-400'
+                            ? 'border-emerald-500 bg-emerald-50 text-emerald-700 dark:border-emerald-400 dark:bg-emerald-500/10 dark:text-emerald-400'
                             : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-600'
                         }`}
                       >
@@ -956,9 +956,9 @@ export default function InventarioPage() {
                   <p className="text-[22px] font-bold text-emerald-700 dark:text-emerald-400 tabular-nums">{importResult.imported}</p>
                   <p className="text-[11px] text-emerald-600 dark:text-emerald-500 mt-0.5 uppercase tracking-wide font-medium">Creados</p>
                 </div>
-                <div className="bg-blue-50 dark:bg-blue-500/10 rounded-xl p-4 text-center">
-                  <p className="text-[22px] font-bold text-blue-700 dark:text-blue-400 tabular-nums">{importResult.updated}</p>
-                  <p className="text-[11px] text-blue-600 dark:text-blue-500 mt-0.5 uppercase tracking-wide font-medium">Actualizados</p>
+                <div className="bg-emerald-50 dark:bg-emerald-500/10 rounded-xl p-4 text-center">
+                  <p className="text-[22px] font-bold text-emerald-700 dark:text-emerald-400 tabular-nums">{importResult.updated}</p>
+                  <p className="text-[11px] text-emerald-600 dark:text-emerald-500 mt-0.5 uppercase tracking-wide font-medium">Actualizados</p>
                 </div>
               </div>
 
@@ -987,7 +987,7 @@ export default function InventarioPage() {
               <button
                 type="button"
                 onClick={() => setImportResult(null)}
-                className="w-full py-2.5 bg-blue-600 text-white rounded-xl text-[13px] font-semibold hover:bg-blue-700 shadow-sm shadow-blue-600/25 transition"
+                className="w-full py-2.5 bg-emerald-600 text-white rounded-xl text-[13px] font-semibold hover:bg-emerald-700 shadow-sm shadow-emerald-600/25 transition"
               >
                 Entendido
               </button>

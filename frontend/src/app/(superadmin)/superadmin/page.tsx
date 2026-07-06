@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -73,7 +73,7 @@ export default function SuperAdminPage() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           label="Negocios activos" value={stats?.totalBusinesses ?? '—'} sub="registrados"
-          icon={Building2} color="bg-blue-600"
+          icon={Building2} color="bg-emerald-600"
         />
         <StatCard
           label="Usuarios totales" value={stats?.totalUsers ?? '—'} sub="sin contar super admins"
@@ -98,13 +98,13 @@ export default function SuperAdminPage() {
               value={search}
               onChange={(e) => { setSearch(e.target.value); setPage(1); }}
               placeholder="Buscar negocio..."
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg pl-9 pr-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full bg-gray-800 border border-gray-700 rounded-lg pl-9 pr-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
             />
           </div>
           <select
             value={planFilter}
             onChange={(e) => { setPlanFilter(e.target.value); setPage(1); }}
-            className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
           >
             <option value="">Todos los planes</option>
             <option value="free">Gratuito</option>
@@ -155,7 +155,7 @@ export default function SuperAdminPage() {
                     <td className="px-4 py-3">
                       <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${
                         b.plan === 'pro'
-                          ? 'bg-blue-500/20 text-blue-400'
+                          ? 'bg-emerald-500/20 text-emerald-400'
                           : 'bg-amber-500/20 text-amber-400'
                       }`}>
                         <Zap size={10} />
@@ -179,7 +179,7 @@ export default function SuperAdminPage() {
                             planExpiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
                           })}
                           disabled={changePlan.isPending}
-                          className="px-3 py-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs rounded-lg transition-colors"
+                          className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs rounded-lg transition-colors"
                         >
                           Activar Pro
                         </button>
