@@ -16,9 +16,10 @@ import {
   Zap, Package, AlertCircle, CreditCard,
   GlassWater, Milk, Leaf, Wheat, ShoppingBasket,
   Beef, Sparkles, Cpu, Shirt, Wrench, Pen, Pill,
-  Heart, Droplets, Cookie, Baby, type LucideIcon,
+  Heart, Droplets, Cookie, Baby, ScanLine, type LucideIcon,
 } from 'lucide-react';
 import { Receipt, type ReceiptItem } from '@/components/Receipt';
+import { BarcodeScanner } from '@/components/ui/BarcodeScanner';
 
 // ── WhatsApp icon (SVG inline — no está en lucide) ────────────────────────────
 function WhatsAppIcon() {
@@ -142,6 +143,7 @@ export default function POSPage() {
   const openUpgrade = useUpgradeStore((s) => s.open);
 
   const [search, setSearch]                   = useState('');
+  const [showScanner, setShowScanner]         = useState(false);
   const [categoryFilter, setCategoryFilter]   = useState('');
   const [customerSearch, setCustomerSearch]   = useState('');
   const [showCustomerList, setShowCustomerList] = useState(false);
@@ -419,17 +421,38 @@ export default function POSPage() {
         {/* Search + categories + grid */}
         <div className="card p-4">
           {/* Search */}
-          <div className="relative">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={15} />
-            <input
-              ref={searchRef}
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar producto por nombre, código o código de barras..."
-              className={cn(inputCls, 'pl-9')}
-              autoFocus
-            />
+          <div className="relative flex items-center gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={15} />
+              <input
+                ref={searchRef}
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Buscar producto por nombre, código o código de barras..."
+                className={cn(inputCls, 'pl-9')}
+                autoFocus
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowScanner(true)}
+              title="Escanear código de barras"
+              className="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white transition-colors shadow-sm shadow-emerald-600/20"
+            >
+              <ScanLine size={16} />
+            </button>
           </div>
+
+          {showScanner && (
+            <BarcodeScanner
+              onScan={(code) => {
+                setSearch(code);
+                setShowScanner(false);
+                setTimeout(() => searchRef.current?.focus(), 100);
+              }}
+              onClose={() => setShowScanner(false)}
+            />
+          )}
 
           {/* Category chips */}
           <div className="flex items-center gap-1.5 mt-3 overflow-x-auto pb-1 scrollbar-thin">

@@ -12,8 +12,9 @@ import toast from 'react-hot-toast';
 import {
   Plus, Search, Edit, Trash2, Package, AlertTriangle,
   X, Loader2, Barcode, FileUp, FileDown, CheckCircle2,
-  ArrowRight, Lock, ArrowUpDown, Share2,
+  ArrowRight, Lock, ArrowUpDown, Share2, ScanLine,
 } from 'lucide-react';
+import { BarcodeScanner } from '@/components/ui/BarcodeScanner';
 import { useAuthStore } from '@/store/auth.store';
 import { useUpgradeStore } from '@/store/upgrade.store';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -64,7 +65,8 @@ export default function InventarioPage() {
     const text = `¡Mira nuestro catálogo de productos! 🛒\n${url}`;
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
   }
-  const [search, setSearch] = useState('');
+  const [search, setSearch]         = useState('');
+  const [showScanner, setShowScanner] = useState(false);
   const [page, setPage] = useState(1);
   const [showForm, setShowForm] = useState(false);
   const [editItem, setEditItem] = useState<any>(null);
@@ -242,15 +244,32 @@ export default function InventarioPage() {
 
       {/* ── Toolbar ──────────────────────────────────────────────────────────── */}
       <div className="flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={15} />
-          <input
-            value={search}
-            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-            placeholder="Buscar por nombre, código o código de barras..."
-            className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition"
-          />
+        <div className="relative flex-1 flex items-center gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={15} />
+            <input
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+              placeholder="Buscar por nombre, código o código de barras..."
+              className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowScanner(true)}
+            title="Escanear código de barras"
+            className="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white transition-colors shadow-sm shadow-emerald-600/20"
+          >
+            <ScanLine size={16} />
+          </button>
         </div>
+
+        {showScanner && (
+          <BarcodeScanner
+            onScan={(code) => { setSearch(code); setPage(1); setShowScanner(false); }}
+            onClose={() => setShowScanner(false)}
+          />
+        )}
 
         {isFree ? (
           <button
