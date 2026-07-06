@@ -40,10 +40,10 @@ router.get('/import-template', async (_req, res, next) => {
     ws.addRow({ name: 'Aceite Vegetal 900ml', code: 'P002', salePrice: 9500, costPrice: 7800, stock: 30, minStock: 5, category: 'Alimentos', unit: 'Und', barcode: '', description: '' });
     ws.addRow({ name: 'Jabón Protex 120g', code: 'P003', salePrice: 4200, costPrice: 3000, stock: 40, minStock: 8, category: 'Aseo', unit: 'Und', barcode: '', description: '' });
 
+    const buffer = await wb.xlsx.writeBuffer();
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', 'attachment; filename=plantilla-productos.xlsx');
-    await wb.xlsx.write(res);
-    res.end();
+    res.send(buffer);
   } catch (err) { next(err); }
 });
 

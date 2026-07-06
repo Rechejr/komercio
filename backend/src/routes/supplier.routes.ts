@@ -42,10 +42,10 @@ router.get('/import-template', async (_req, res, next) => {
     ws.addRow({ name: 'Almacén El Sol', legalName: '', document: '12345678', contactName: 'Ana López', phone: '', mobile: '3051234567', email: '', address: 'Av. Las Américas #45-20', city: 'Cali', notes: 'Proveedor de alimentos' });
     ws.addRow({ name: 'Comercializadora Norte', legalName: 'Comercializadora del Norte Ltda', document: '800456789-5', contactName: 'Luis Gómez', phone: '5751234567', mobile: '3155559876', email: 'norte@proveedores.com', address: 'Calle 45 #20-30', city: 'Barranquilla', notes: '' });
 
+    const buffer = await wb.xlsx.writeBuffer();
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', 'attachment; filename=plantilla-proveedores.xlsx');
-    await wb.xlsx.write(res);
-    res.end();
+    res.send(buffer);
   } catch (err) { next(err); }
 });
 

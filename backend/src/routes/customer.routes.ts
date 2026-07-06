@@ -42,10 +42,10 @@ router.get('/import-template', async (_req, res, next) => {
     ws.addRow({ name: 'Juan Pérez', document: '1023456789', phone: '3001234567', email: '', address: 'Calle 50 #20-15', city: 'Medellín', creditLimit: 0, notes: '' });
     ws.addRow({ name: 'Luz Marina Torres', document: '', phone: '3209876543', email: '', address: '', city: 'Cali', creditLimit: 200000, notes: 'Fiada' });
 
+    const buffer = await wb.xlsx.writeBuffer();
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', 'attachment; filename=plantilla-clientes.xlsx');
-    await wb.xlsx.write(res);
-    res.end();
+    res.send(buffer);
   } catch (err) { next(err); }
 });
 
