@@ -13,6 +13,7 @@ import {
   DollarSign, Printer, X, Loader2, ShoppingBag, CheckCircle,
   Zap, Package, AlertCircle, CreditCard,
 } from 'lucide-react';
+import { Receipt, type ReceiptItem } from '@/components/Receipt';
 
 const PAYMENT_METHODS = ['CASH', 'NEQUI', 'DAVIPLATA', 'TRANSFER', 'CARD', 'MIXED'];
 
@@ -30,6 +31,7 @@ export default function POSPage() {
   const qc = useQueryClient();
   const { items, addItem, updateQty, updateDiscount, removeItem, clear, totals, customerId, setCustomer } = useCartStore();
   const plan       = useAuthStore((s) => s.user?.plan);
+  const cashierName = useAuthStore((s) => s.user?.name);
   const isFree     = !plan || plan === 'free';
   const openUpgrade = useUpgradeStore((s) => s.open);
 
@@ -42,6 +44,7 @@ export default function POSPage() {
   const [paidAmount, setPaidAmount]           = useState('');
   const [isCredit, setIsCredit]               = useState(false);
   const [lastSale, setLastSale]               = useState<any>(null);
+  const receiptItemsRef = useRef<ReceiptItem[]>([]);
   const [saleError, setSaleError]             = useState('');
   const [showCreateCustomer, setShowCreateCustomer] = useState(false);
   const [newCustName, setNewCustName]         = useState('');
@@ -82,6 +85,12 @@ export default function POSPage() {
     enabled: !!customerId,
   });
 
+  const { data: businessInfo } = useQuery({
+    queryKey: ['business-me'],
+    queryFn: () => api.get('/business/me').then((r) => r.data.data),
+    staleTime: 5 * 60_000,
+  });
+
   const { data: customerCredits, isLoading: loadingCredits } = useQuery({
     queryKey: ['customer-credits-pos', customerId],
     queryFn: () =>
@@ -117,6 +126,14 @@ export default function POSPage() {
   const saleMutation = useMutation({
     mutationFn: (saleData: any) => api.post('/sales', saleData).then((r) => r.data.data),
     onSuccess: (sale) => {
+      // Snapshot cart items BEFORE clear() so the receipt has product names
+      receiptItemsRef.current = items.map((i) => ({
+        name: i.name,
+        quantity: i.quantity,
+        unitPrice: i.unitPrice,
+        discountPct: i.discountPct,
+        total: i.unitPrice * i.quantity * (1 - i.discountPct / 100),
+      }));
       setSaleError('');
       setLastSale(sale);
       clear();
@@ -210,41 +227,50 @@ export default function POSPage() {
   // ── Success screen ──────────────────────────────────────────────────────────
   if (lastSale) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh] p-4">
-        <div className="max-w-sm w-full text-center animate-scale-in">
-          <div className="w-20 h-20 bg-emerald-50 dark:bg-emerald-500/10 rounded-full flex items-center justify-center mx-auto mb-5 border border-emerald-100 dark:border-emerald-500/20">
-            <CheckCircle className="text-emerald-500" size={40} strokeWidth={1.5} />
+      <div className="flex flex-col items-center py-6 px-4">
+        {/* Action bar — hidden when printing */}
+        <div className="print-hide w-full max-w-sm mb-4 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 bg-emerald-50 dark:bg-emerald-500/10 rounded-full flex items-center justify-center border border-emerald-100 dark:border-emerald-500/20">
+              <CheckCircle className="text-emerald-500" size={14} />
+            </div>
+            <span className="text-[14px] font-semibold text-slate-800 dark:text-white">¡Venta registrada!</span>
           </div>
-          <h2 className="text-[22px] font-bold text-slate-900 dark:text-white mb-1">¡Venta exitosa!</h2>
-          <p className="text-[13px] text-slate-500 dark:text-slate-400 mb-5">
-            Factura <span className="font-mono font-bold text-blue-600 dark:text-blue-400">{lastSale.invoiceNumber}</span>
-          </p>
-          <div className="card p-5 mb-4 text-center">
-            <p className="text-[11px] text-slate-400 uppercase tracking-widest font-semibold mb-1">Total cobrado</p>
-            <p className="text-[36px] font-bold text-slate-900 dark:text-white tabular">{formatCurrency(lastSale.total)}</p>
-            {lastSale.changeAmount > 0 && (
-              <div className="mt-3 pt-3 border-t border-slate-100 dark:border-white/[0.06]">
-                <p className="text-[11px] text-slate-400 uppercase tracking-widest font-semibold mb-0.5">Cambio</p>
-                <p className="text-[22px] font-bold text-emerald-600 dark:text-emerald-400 tabular">{formatCurrency(lastSale.changeAmount)}</p>
-              </div>
-            )}
-          </div>
-          <div className="flex gap-3 justify-center">
+          <div className="flex gap-2">
             <button
               type="button"
               onClick={() => window.print()}
-              className="flex items-center gap-2 px-4 py-2.5 border border-slate-200 dark:border-slate-700/60 rounded-xl text-[13px] font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+              className="flex items-center gap-1.5 px-3.5 py-2 border border-slate-200 dark:border-slate-700/60 rounded-xl text-[13px] font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
             >
-              <Printer size={15} /> Imprimir
+              <Printer size={14} /> Imprimir
             </button>
             <button
               type="button"
               onClick={() => setLastSale(null)}
-              className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-xl text-[13px] font-semibold hover:bg-blue-700 transition-colors"
+              className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-xl text-[13px] font-semibold hover:bg-blue-700 transition-colors"
             >
               Nueva venta
             </button>
           </div>
+        </div>
+
+        {/* Receipt */}
+        <div className="w-full max-w-sm shadow-xl rounded-2xl overflow-hidden border border-slate-100 dark:border-white/[0.06]">
+          <Receipt
+            invoiceNumber={lastSale.invoiceNumber}
+            createdAt={lastSale.createdAt || new Date()}
+            items={receiptItemsRef.current}
+            subtotal={Number(lastSale.subtotal)}
+            discountAmount={Number(lastSale.discountAmount)}
+            taxAmount={Number(lastSale.taxAmount)}
+            total={Number(lastSale.total)}
+            paidAmount={Number(lastSale.paidAmount)}
+            changeAmount={Number(lastSale.changeAmount)}
+            paymentMethod={lastSale.paymentMethod}
+            customerName={selectedCustomer?.name || null}
+            cashierName={cashierName || null}
+            business={businessInfo}
+          />
         </div>
       </div>
     );

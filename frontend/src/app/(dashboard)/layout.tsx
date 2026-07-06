@@ -77,9 +77,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="flex h-screen bg-slate-50 dark:bg-slate-900 overflow-hidden">
-      <Sidebar mobileOpen={mobileMenuOpen} onMobileClose={() => setMobileMenuOpen(false)} />
+      <div className="print-hide">
+        <Sidebar mobileOpen={mobileMenuOpen} onMobileClose={() => setMobileMenuOpen(false)} />
+      </div>
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
-        <Header onMenuClick={() => setMobileMenuOpen(true)} />
+        <div className="print-hide">
+          <Header onMenuClick={() => setMobileMenuOpen(true)} />
+        </div>
         <main className="flex-1 overflow-auto p-4 md:p-6 animate-fade-in">
           <ErrorBoundary>
             {children}

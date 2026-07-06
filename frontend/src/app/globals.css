@@ -229,4 +229,37 @@
   .upgrade-banner-texture {
     background-image: radial-gradient(ellipse at top right, white 0%, transparent 60%);
   }
+
+  /* ── Receipt barcode visual ──────────────────────────────────────────────── */
+  .receipt-barcode {
+    background: repeating-linear-gradient(
+      90deg,
+      #1e293b 0px, #1e293b 2px,
+      transparent 2px, transparent 4px,
+      #1e293b 4px, #1e293b 5px,
+      transparent 5px, transparent 9px,
+      #1e293b 9px, #1e293b 11px,
+      transparent 11px, transparent 13px,
+      #1e293b 13px, #1e293b 14px,
+      transparent 14px, transparent 18px,
+      #1e293b 18px, #1e293b 21px,
+      transparent 21px, transparent 23px,
+      #1e293b 23px, #1e293b 24px,
+      transparent 24px, transparent 28px
+    );
+  }
+}
+
+/* ── Print styles ──────────────────────────────────────────────────────────── */
+@media print {
+  @page { size: 80mm auto; margin: 0; }
+
+  body { background: white !important; }
+
+  /* Hide dashboard chrome */
+  .print-hide { display: none !important; }
+
+  /* Receipt container fills the page */
+  main { padding: 0 !important; overflow: visible !important; }
+  #receipt-content { max-width: 100% !important; padding: 8mm 6mm !important; }
 }
