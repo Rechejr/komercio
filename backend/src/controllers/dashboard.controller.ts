@@ -42,11 +42,13 @@ export const dashboardController = {
 
         prisma.$queryRaw<any[]>`
           SELECT s.id, s."invoiceNumber", s.total, s.status, s."createdAt",
-                 c.name AS customer_name, u.name AS user_name
+                 c.name AS customer_name, u.name AS user_name,
+                 cr.status AS credit_status, cr.balance AS credit_balance
           FROM sales s
           JOIN branches br ON s."branchId" = br.id
           LEFT JOIN customers c ON s."customerId" = c.id
           LEFT JOIN users u ON s."userId" = u.id
+          LEFT JOIN credits cr ON cr."saleId" = s.id
           WHERE s."deletedAt" IS NULL
             AND br."businessId" = ${businessId}
           ORDER BY s."createdAt" DESC
@@ -112,6 +114,10 @@ export const dashboardController = {
           createdAt: s.createdAt ?? s.createdat,
           customer: s.customer_name ? { name: s.customer_name } : null,
           user: { name: s.user_name },
+          credit: s.credit_status ? {
+            status: s.credit_status,
+            balance: Number(s.credit_balance ?? 0),
+          } : null,
         })),
         topProducts: topProducts.map((p: any) => ({
           product: { name: p.name, code: p.code },

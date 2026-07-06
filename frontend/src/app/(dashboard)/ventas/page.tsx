@@ -199,15 +199,22 @@ export default function VentasPage() {
                   <td className="hidden md:table-cell px-4 py-3 text-[12px] text-slate-500 dark:text-slate-400">{paymentMethodLabel[s.paymentMethod] || s.paymentMethod}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className={`badge ${statusColor(s.status)}`}>{statusLabel(s.status)}</span>
-                      {s.credit && (
-                        <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${
-                          s.credit.status === 'PAID'
-                            ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400'
-                            : 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400'
-                        }`}>
-                          {s.credit.status === 'PAID' ? 'Fiado pagado' : 'Fiado'}
-                        </span>
+                      {s.credit && s.credit.status !== 'PAID' ? (
+                        <>
+                          <span className="badge badge-amber">{statusLabel(s.credit.status)}</span>
+                          <span className="text-[11px] px-2 py-0.5 rounded-full font-medium bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400">
+                            Fiado · {formatCurrency(s.credit.balance)}
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <span className={`badge ${statusColor(s.status)}`}>{statusLabel(s.status)}</span>
+                          {s.credit?.status === 'PAID' && (
+                            <span className="text-[11px] px-2 py-0.5 rounded-full font-medium bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400">
+                              Fiado pagado
+                            </span>
+                          )}
+                        </>
                       )}
                     </div>
                   </td>
@@ -296,15 +303,22 @@ export default function VentasPage() {
                 <div>
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-1">Estado</p>
                   <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className={`badge ${statusColor(detail.status)}`}>{statusLabel(detail.status)}</span>
-                    {detail.credit && (
-                      <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${
-                        detail.credit.status === 'PAID'
-                          ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400'
-                          : 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400'
-                      }`}>
-                        {detail.credit.status === 'PAID' ? 'Fiado pagado' : `Fiado: ${formatCurrency(detail.credit.balance)}`}
-                      </span>
+                    {detail.credit && detail.credit.status !== 'PAID' ? (
+                      <>
+                        <span className="badge badge-amber">{statusLabel(detail.credit.status)}</span>
+                        <span className="text-[11px] px-2 py-0.5 rounded-full font-medium bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400">
+                          Fiado · debe {formatCurrency(detail.credit.balance)}
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <span className={`badge ${statusColor(detail.status)}`}>{statusLabel(detail.status)}</span>
+                        {detail.credit?.status === 'PAID' && (
+                          <span className="text-[11px] px-2 py-0.5 rounded-full font-medium bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400">
+                            Fiado pagado ✓
+                          </span>
+                        )}
+                      </>
                     )}
                   </div>
                 </div>

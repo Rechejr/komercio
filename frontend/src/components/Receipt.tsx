@@ -202,22 +202,17 @@ export function Receipt({
           )}
         </div>
       ) : (
-        <div style={{ textAlign: 'center', marginBottom: 12 }}>
-          <span style={{
-            display: 'inline-block',
-            border: '2px solid #f59e0b',
-            color: '#d97706',
-            fontWeight: 900,
-            fontSize: 13,
-            padding: '3px 16px',
-            borderRadius: 20,
-            letterSpacing: '0.12em',
-          }}>
-            FIADO
-          </span>
+        <div style={{ marginBottom: 12 }}>
           {paidAmount > 0 && (
-            <p style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>Abono: {formatCurrency(paidAmount)}</p>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#d97706', marginBottom: 3 }}>
+              <span>Abono inicial</span>
+              <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>{formatCurrency(paidAmount)}</span>
+            </div>
           )}
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, fontWeight: 700, color: '#b45309' }}>
+            <span>Saldo pendiente</span>
+            <span style={{ fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(total - paidAmount)}</span>
+          </div>
         </div>
       )}
 
@@ -226,16 +221,12 @@ export function Receipt({
         {animated ? (
           <motion.span
             initial={{ opacity: 0, scale: 1.4, rotate: -8 }}
-            animate={{ opacity: 1, scale: 1, rotate: -2 }}
-            transition={{
-              delay: stampDelay,
-              duration: DUR.hero,
-              ease: EASE.spring,
-            }}
+            animate={{ opacity: 1, scale: 1, rotate: isFiado ? 2 : -2 }}
+            transition={{ delay: stampDelay, duration: DUR.hero, ease: EASE.spring }}
             style={{
               display: 'inline-block',
-              border: '2.5px solid #dc2626',
-              color: '#dc2626',
+              border: `2.5px solid ${isFiado ? '#f59e0b' : '#16a34a'}`,
+              color: isFiado ? '#b45309' : '#16a34a',
               fontWeight: 900,
               fontSize: 14,
               padding: '5px 20px',
@@ -243,21 +234,21 @@ export function Receipt({
               letterSpacing: '0.12em',
             }}
           >
-            ✓ COBRADO
+            {isFiado ? '⚠ FIADO' : '✓ COBRADO'}
           </motion.span>
         ) : (
           <span style={{
             display: 'inline-block',
-            border: '2.5px solid #dc2626',
-            color: '#dc2626',
+            border: `2.5px solid ${isFiado ? '#f59e0b' : '#16a34a'}`,
+            color: isFiado ? '#b45309' : '#16a34a',
             fontWeight: 900,
             fontSize: 14,
             padding: '5px 20px',
             borderRadius: 8,
             letterSpacing: '0.12em',
-            transform: 'rotate(-2deg)',
+            transform: isFiado ? 'rotate(2deg)' : 'rotate(-2deg)',
           }}>
-            ✓ COBRADO
+            {isFiado ? '⚠ FIADO' : '✓ COBRADO'}
           </span>
         )}
       </div>

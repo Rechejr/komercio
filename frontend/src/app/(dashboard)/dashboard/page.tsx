@@ -345,9 +345,13 @@ export default function DashboardPage() {
                     {formatCurrency(sale.total)}
                   </td>
                   <td className="px-5 py-3">
-                    <span className={`badge ${statusColor(sale.status)}`}>
-                      {statusLabel(sale.status)}
-                    </span>
+                    {sale.credit && sale.credit.status !== 'PAID' ? (
+                      <span className="badge badge-amber">Fiado</span>
+                    ) : (
+                      <span className={`badge ${statusColor(sale.status)}`}>
+                        {statusLabel(sale.status)}
+                      </span>
+                    )}
                   </td>
                   <td className="px-5 py-3 text-[12px] text-slate-400 dark:text-slate-500 tabular">
                     {formatDateTime(sale.createdAt)}
