@@ -19,6 +19,7 @@
     "test:reportes": "playwright test tests/reportes.spec.ts"
   },
   "devDependencies": {
-    "@playwright/test": "^1.45.0"
+    "@playwright/test": "^1.45.0",
+    "@types/node": "^26.1.0"
   }
 }
