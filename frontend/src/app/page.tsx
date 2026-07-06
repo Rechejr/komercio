@@ -1,282 +1,339 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { BarChart3, Package, ShoppingCart, Check, ArrowRight } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { Bricolage_Grotesque, Instrument_Sans, Space_Mono } from 'next/font/google';
+import './landing.css';
 
-// ── Feature slides ────────────────────────────────────────────────────────────
-const SLIDES = [
-  {
-    Icon: ShoppingCart,
-    label: 'Punto de Venta',
-    title: 'Cobra rápido y sin errores',
-    description: 'Registra ventas en segundos con tu catálogo de productos y genera recibos al instante.',
-  },
-  {
-    Icon: Package,
-    label: 'Inventario',
-    title: 'Nunca te quedes sin stock',
-    description: 'Controla cantidades en tiempo real con alertas automáticas cuando un producto esté por agotarse.',
-  },
-  {
-    Icon: BarChart3,
-    label: 'Reportes',
-    title: 'Conoce tu negocio a fondo',
-    description: 'Visualiza ventas diarias, ganancias y productos más vendidos con reportes fáciles de entender.',
-  },
+const bricolage = Bricolage_Grotesque({
+  subsets: ['latin'],
+  variable: '--font-bric',
+  weight: ['500', '600', '700', '800'],
+  display: 'swap',
+  preload: false,
+});
+const instrument = Instrument_Sans({
+  subsets: ['latin'],
+  variable: '--font-inst',
+  weight: ['400', '500', '600'],
+  display: 'swap',
+  preload: false,
+});
+const mono = Space_Mono({
+  subsets: ['latin'],
+  variable: '--font-mono',
+  weight: ['400', '700'],
+  display: 'swap',
+  preload: false,
+});
+
+// ── Data ─────────────────────────────────────────────────────────────────────
+
+const RECEIPT_ITEMS = [
+  { name: 'Coca-Cola 400ml', price: '3.500' },
+  { name: 'Pan tajado',      price: '4.200' },
+  { name: 'Leche 1L',        price: '3.900' },
+  { name: 'Arroz 500g',      price: '2.800' },
+  { name: 'Huevos x6',       price: '4.200' },
 ];
 
-// ── Mini mockup components ────────────────────────────────────────────────────
-function POSMockup() {
-  return (
-    <div className="bg-white rounded-2xl shadow-xl p-4 w-full max-w-[270px] border border-slate-100">
-      <div className="flex justify-between items-center mb-3">
-        <span className="font-bold text-slate-800 text-[13px]">Venta #0042</span>
-        <span className="text-[11px] text-slate-400">hoy 2:32 pm</span>
-      </div>
-      {[
-        { name: 'Coca Cola 350ml', qty: 2, price: '$4.600' },
-        { name: 'Pan Tajado Grande', qty: 1, price: '$7.200' },
-        { name: 'Leche Entera 1L', qty: 2, price: '$6.800' },
-      ].map((item) => (
-        <div key={item.name} className="flex justify-between py-2 border-b border-slate-100 last:border-0">
-          <span className="text-slate-500 text-[12px]">{item.qty}× {item.name}</span>
-          <span className="font-semibold text-slate-800 text-[12px]">{item.price}</span>
-        </div>
-      ))}
-      <div className="flex justify-between mt-3 pt-1">
-        <span className="font-bold text-slate-900 text-[13px]">Total</span>
-        <span className="font-bold text-blue-600 text-[15px]">$18.600</span>
-      </div>
-      <div className="mt-3 bg-blue-600 text-white text-center rounded-xl py-2 text-[13px] font-semibold">
-        Cobrar ✓
-      </div>
-    </div>
-  );
-}
-
-function InventoryMockup() {
-  const items = [
-    { name: 'Arroz Diana 1kg',      stock: 45, status: 'ok'  as const },
-    { name: 'Aceite Girasol 1L',    stock: 7,  status: 'low' as const },
-    { name: 'Azúcar Riopaila 1kg',  stock: 0,  status: 'out' as const },
-    { name: 'Frijol Cargamanto',    stock: 22, status: 'ok'  as const },
-  ];
-  return (
-    <div className="bg-white rounded-2xl shadow-xl p-4 w-full max-w-[270px] border border-slate-100">
-      <div className="font-bold text-slate-800 text-[13px] mb-3">Inventario</div>
-      {items.map((item) => (
-        <div key={item.name} className="flex items-center justify-between py-2 border-b border-slate-100 last:border-0">
-          <span className="text-[12px] text-slate-500">{item.name}</span>
-          <span className={cn(
-            'text-[11px] px-2 py-0.5 rounded-full font-semibold',
-            item.status === 'ok'  && 'bg-green-50 text-green-700',
-            item.status === 'low' && 'bg-amber-50 text-amber-700',
-            item.status === 'out' && 'bg-red-50 text-red-600',
-          )}>
-            {item.status === 'ok'  && `${item.stock} uds`}
-            {item.status === 'low' && `¡Bajo! ${item.stock}`}
-            {item.status === 'out' && 'Agotado'}
-          </span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-const BAR_HEIGHTS = ['h-[40%]','h-[65%]','h-[45%]','h-[80%]','h-[55%]','h-[90%]','h-[72%]'];
-
-function ReportsMockup() {
-  const days = ['L','M','X','J','V','S','D'];
-  return (
-    <div className="bg-white rounded-2xl shadow-xl p-4 w-full max-w-[270px] border border-slate-100">
-      <div className="font-bold text-slate-800 text-[13px] mb-0.5">Ventas esta semana</div>
-      <div className="text-[22px] font-bold text-blue-600 mb-3">$842.500</div>
-      <div className="flex items-end gap-1 h-12 mb-1">
-        {BAR_HEIGHTS.map((hClass, i) => (
-          <div key={i} className="flex-1 flex flex-col items-center">
-            <div className={cn('w-full rounded-sm bg-blue-500/80', hClass)} />
-          </div>
-        ))}
-      </div>
-      <div className="flex gap-1 mb-3">
-        {days.map((d) => (
-          <div key={d} className="flex-1 text-center text-[10px] text-slate-400">{d}</div>
-        ))}
-      </div>
-      <div className="flex gap-2">
-        <div className="flex-1 bg-green-50 rounded-xl p-2 text-center">
-          <div className="text-[10px] text-slate-400">Hoy</div>
-          <div className="font-bold text-green-600 text-[13px]">$142K</div>
-        </div>
-        <div className="flex-1 bg-blue-50 rounded-xl p-2 text-center">
-          <div className="text-[10px] text-slate-400">Productos</div>
-          <div className="font-bold text-blue-600 text-[13px]">38</div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-const MOCKUPS = [POSMockup, InventoryMockup, ReportsMockup];
+const CHIPS    = ['Tiendas de barrio','Minimarkets','Restaurantes','Cafeterías','Papelerías','Licoreras','Fruver'];
+const FREE_FTS = ['Ventas y recibos ilimitados','Control de inventario','Registro de clientes','Sin tarjeta de crédito'];
+const PRO_FTS  = ['Todo lo del plan Gratis','Reportes de ventas y ganancias','Varios usuarios / cajeros','Soporte prioritario'];
 
 const BENEFITS = [
-  'Plan gratuito, sin tarjeta de crédito',
-  'Configura tu negocio en menos de 2 minutos',
-  'Ventas, inventario y clientes en un solo lugar',
+  {
+    icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="24" height="24"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M2 9h20M7 14h4"/></svg>,
+    title: 'Cobra sin equivocarte',
+    body:  'Registra la venta, suma solo y entrega el recibo al instante. Se acabó el error de cálculo mental.',
+  },
+  {
+    icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="24" height="24"><path d="M21 8V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v2M3 8h18v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8zM9 12h6"/></svg>,
+    title: 'Nunca te quedes sin stock',
+    body:  'Tu inventario se actualiza en cada venta. Mira qué se está acabando antes de que se acabe.',
+  },
+  {
+    icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="24" height="24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
+    title: 'Conoce a tus clientes',
+    body:  'Sabe quién te compra, qué se lleva y cada cuánto vuelve, para venderles más y mejor.',
+  },
 ];
 
+const STEPS = [
+  { n: '01', title: 'Crea tu cuenta gratis', body: 'En menos de 2 minutos y sin tarjeta de crédito.' },
+  { n: '02', title: 'Carga tus productos',   body: 'Agrega tus productos y precios una sola vez.' },
+  { n: '03', title: 'Empieza a cobrar',      body: 'Vende, controla tu inventario y lleva las cuentas al día.' },
+];
+
+const FAQ = [
+  { q: '¿Necesito tarjeta de crédito?',     a: 'No. Empiezas gratis y sin ingresar ningún dato de pago. El plan gratis no tiene fecha de vencimiento.' },
+  { q: '¿Es difícil de configurar?',         a: 'Para nada. Creas tu cuenta y cargas tus productos en un par de minutos. No hay que instalar ni descargar nada.' },
+  { q: '¿Funciona en mi celular?',           a: 'Sí. Entras desde el navegador de tu celular, tablet o computador. Donde estés, tu negocio está contigo.' },
+  { q: '¿Y si no sé mucho de tecnología?',   a: 'Ventrix está pensado para que cualquiera lo use. Si sabes usar WhatsApp, sabes usar Ventrix.' },
+  { q: '¿Mis datos están seguros?',          a: 'Sí. Tu información es solo tuya y está protegida. Nadie más ve las ventas ni los datos de tu negocio.' },
+];
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function CheckIcon() {
+  return (
+    <svg
+      width="18" height="18" viewBox="0 0 24 24"
+      fill="none" stroke="#0DA06A" strokeWidth="2.5"
+      strokeLinecap="round" strokeLinejoin="round"
+      style={{ flexShrink: 0, marginTop: 3 }}
+    >
+      <polyline points="20 6 9 17 4 12"/>
+    </svg>
+  );
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
+
 export default function LandingPage() {
-  const [current, setCurrent] = useState(0);
-  const [fading, setFading]   = useState(false);
+  const receiptRef = useRef<HTMLDivElement>(null);
+  const [playing, setPlaying] = useState(false);
 
   useEffect(() => {
-    const timer = setInterval(() => {
-      setFading(true);
-      setTimeout(() => {
-        setCurrent((c) => (c + 1) % SLIDES.length);
-        setFading(false);
-      }, 300);
-    }, 4500);
-    return () => clearInterval(timer);
+    const reveals = document.querySelectorAll<HTMLElement>('.lp-reveal');
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach(e => {
+        if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); }
+      });
+    }, { threshold: 0.12 });
+    reveals.forEach(el => io.observe(el));
+
+    if (receiptRef.current) {
+      const ro = new IntersectionObserver((entries) => {
+        if (entries[0].isIntersecting) {
+          setTimeout(() => setPlaying(true), 250);
+          ro.disconnect();
+        }
+      }, { threshold: 0.35 });
+      ro.observe(receiptRef.current);
+    }
+
+    return () => io.disconnect();
   }, []);
 
-  const slide  = SLIDES[current];
-  const Mockup = MOCKUPS[current];
-
   return (
-    <div className="min-h-screen flex flex-col lg:flex-row bg-slate-50 dark:bg-[#080c14]">
+    <div className={`lp-page ${bricolage.variable} ${instrument.variable} ${mono.variable}`}>
 
-      {/* ── Left panel — brand / carousel ───────────────────────────────── */}
-      <div
-        className="hidden lg:flex flex-col w-[54%] relative overflow-hidden p-10"
-        style={{ background: 'linear-gradient(135deg, #0d1117 0%, #0f172a 40%, #1a1040 100%)' }}
-      >
-        {/* Glow orbs */}
-        <div className="absolute top-0 left-0 w-[500px] h-[500px] rounded-full opacity-20 pointer-events-none"
-             style={{ background: 'radial-gradient(circle, #3b82f6 0%, transparent 70%)', transform: 'translate(-30%, -30%)' }} />
-        <div className="absolute bottom-0 right-0 w-[400px] h-[400px] rounded-full opacity-10 pointer-events-none"
-             style={{ background: 'radial-gradient(circle, #6366f1 0%, transparent 70%)', transform: 'translate(30%, 30%)' }} />
-        {/* Grid texture */}
-        <div className="absolute inset-0 pointer-events-none opacity-[0.03]"
-             style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.3) 1px, transparent 1px)', backgroundSize: '40px 40px' }} />
-
-        {/* Logo */}
-        <div className="relative z-10 flex items-center gap-3">
-          <img src="/ventrix-logo.svg" alt="Ventrix" width={30} height={30} className="w-[30px] h-[30px]" draggable={false} />
-          <span className="text-white font-semibold text-[18px] tracking-tight">Ventrix</span>
+      {/* ── Nav ──────────────────────────────────────────────────────────── */}
+      <header className="lp-nav">
+        <div className="lp-wrap lp-nav-inner">
+          <Link href="/" className="lp-logo">
+            <span className="lp-logo-mark">V</span> Ventrix
+          </Link>
+          <nav className="lp-nav-actions">
+            <Link href="/login" className="lp-nav-login">Ya tengo cuenta</Link>
+            <Link href="/register" className="lp-btn lp-btn-primary">Crear cuenta gratis</Link>
+          </nav>
         </div>
+      </header>
 
-        {/* Carousel content */}
-        <div
-          className={cn(
-            'flex flex-col gap-5 my-auto relative z-10 transition-opacity duration-300',
-            fading ? 'opacity-0' : 'opacity-100',
-          )}
-        >
-          {/* Feature chip */}
-          <div className="inline-flex items-center gap-2 bg-blue-500/10 border border-blue-500/20 text-blue-400 text-[12px] font-semibold px-3 py-1.5 rounded-full w-fit">
-            <slide.Icon size={13} />
-            {slide.label}
-          </div>
+      {/* ── Hero ─────────────────────────────────────────────────────────── */}
+      <section className="lp-hero">
+        <div className="lp-wrap lp-hero-grid">
 
-          <h2 className="text-[34px] font-bold text-white leading-[1.2] tracking-tight max-w-[380px]">
-            {slide.title}
-          </h2>
-          <p className="text-slate-400 text-[14px] leading-relaxed max-w-[320px]">
-            {slide.description}
-          </p>
-
-          {/* Mockup card */}
-          <div className="mt-2">
-            <Mockup />
-          </div>
-        </div>
-
-        {/* Dot navigation */}
-        <div className="flex gap-2 relative z-10 mt-auto">
-          {SLIDES.map((_, i) => (
-            <button
-              key={i}
-              type="button"
-              aria-label={`Ir a diapositiva ${i + 1}`}
-              onClick={() => {
-                setFading(true);
-                setTimeout(() => { setCurrent(i); setFading(false); }, 300);
-              }}
-              className={cn(
-                'h-1.5 rounded-full transition-all duration-300',
-                i === current ? 'bg-white w-8' : 'bg-white/20 w-4 hover:bg-white/40',
-              )}
-            />
-          ))}
-        </div>
-      </div>
-
-      {/* ── Right panel — CTA ────────────────────────────────────────────── */}
-      <div className="flex-1 flex items-center justify-center p-6 lg:p-10 bg-white dark:bg-[#0d1117] min-h-screen lg:min-h-0">
-        <div className="w-full max-w-[360px]">
-
-          {/* Mobile logo */}
-          <div className="flex items-center gap-2.5 mb-8 lg:hidden">
-            <img src="/ventrix-logo.svg" alt="Ventrix" width={30} height={30} className="w-[30px] h-[30px]" draggable={false} />
-            <span className="font-semibold text-[17px] text-slate-900 dark:text-white tracking-tight">Ventrix</span>
-          </div>
-
-          {/* Heading */}
-          <div className="mb-8">
-            <h1 className="text-[26px] font-bold text-slate-900 dark:text-white leading-[1.2] tracking-tight mb-2.5">
-              Gestiona tu negocio<br />de forma inteligente
-            </h1>
-            <p className="text-[14px] text-slate-500 dark:text-slate-400 leading-relaxed">
-              Ventas, inventario y clientes en un solo lugar.<br />
-              Empieza gratis hoy.
+          <div className="lp-reveal">
+            <span className="lp-eyebrow">
+              <span className="lp-dot" />
+              Punto de venta · Hecho para tu negocio
+            </span>
+            <h1>Deja el cuaderno. <span className="lp-accent">Cobra en segundos.</span></h1>
+            <p className="lp-lead">
+              Ventrix es el punto de venta gratis para registrar ventas, controlar tu
+              inventario y conocer a tus clientes — todo desde el celular.
             </p>
+            <div className="lp-hero-cta">
+              <Link href="/register" className="lp-btn lp-btn-primary lp-btn-lg">
+                Crear cuenta gratis
+              </Link>
+              <span className="lp-reassure">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0DA06A" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="20 6 9 17 4 12"/>
+                </svg>
+                Sin tarjeta · Listo en 2 minutos
+              </span>
+            </div>
           </div>
 
-          {/* CTA buttons */}
-          <div className="flex flex-col gap-2.5 mb-8">
-            <Link
-              href="/register"
-              className={[
-                'w-full flex items-center justify-center gap-2',
-                'bg-blue-600 hover:bg-blue-700 active:bg-blue-800',
-                'text-white font-semibold py-3 rounded-xl text-[14px]',
-                'transition-all duration-150 shadow-sm shadow-blue-600/25 hover:shadow-md hover:shadow-blue-600/25',
-              ].join(' ')}
-            >
-              Crear cuenta gratis
-              <ArrowRight size={15} />
-            </Link>
-            <Link
-              href="/login"
-              className={[
-                'w-full flex items-center justify-center',
-                'border border-slate-200 dark:border-slate-700/60',
-                'text-slate-700 dark:text-slate-300 font-semibold py-3 rounded-xl text-[14px]',
-                'hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:border-slate-300 dark:hover:border-slate-600',
-                'transition-all duration-150',
-              ].join(' ')}
-            >
-              Ya tengo cuenta — Iniciar sesión
-            </Link>
-          </div>
+          <div className="lp-receipt-stage lp-reveal">
+            <div ref={receiptRef} className={`lp-receipt${playing ? ' play' : ''}`}>
+              <div className="lp-r-head">
+                <div className="lp-r-brand">VENTRIX</div>
+                <div className="lp-r-sub">Tienda Doña Marta · Mocoa</div>
+              </div>
+              <div className="lp-r-meta"><span>VENTA #0042</span><span>14:32</span></div>
 
-          {/* Benefits */}
-          <div className="space-y-3">
-            {BENEFITS.map((b) => (
-              <div key={b} className="flex items-center gap-2.5 text-[13px] text-slate-600 dark:text-slate-400">
-                <div className="w-[18px] h-[18px] rounded-full bg-blue-50 dark:bg-blue-500/10 flex items-center justify-center flex-shrink-0 border border-blue-100 dark:border-blue-500/20">
-                  <Check size={10} className="text-blue-600 dark:text-blue-400" strokeWidth={2.5} />
+              {RECEIPT_ITEMS.map((item, i) => (
+                <div
+                  key={item.name}
+                  className="lp-r-line"
+                  style={playing ? { animationDelay: `${0.2 + i * 0.18}s` } : undefined}
+                >
+                  <span>{item.name}</span>
+                  <span>{item.price}</span>
                 </div>
-                {b}
+              ))}
+
+              <div className="lp-r-rule" />
+              <div className="lp-r-total"><span>TOTAL</span><span>$ 18.600</span></div>
+              <div className="lp-r-pay"><span>Recibido</span><span>$ 20.000</span></div>
+              <div className="lp-r-pay"><span>Cambio</span><span>$ 1.400</span></div>
+
+              <div
+                className="lp-r-stamp"
+                style={playing ? { animationDelay: '1.5s' } : undefined}
+              >
+                ✓ COBRADO
+              </div>
+              <div className="lp-r-barcode" />
+              <div className="lp-r-foot">¡Gracias por su compra!</div>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      {/* ── Trust strip ──────────────────────────────────────────────────── */}
+      <section className="lp-trust">
+        <div className="lp-wrap lp-trust-inner lp-reveal">
+          <p>Negocios de todo el país ya cobran mejor con Ventrix</p>
+          <div className="lp-chips">
+            {CHIPS.map(c => <span key={c} className="lp-chip">{c}</span>)}
+          </div>
+        </div>
+      </section>
+
+      {/* ── Benefits ─────────────────────────────────────────────────────── */}
+      <section className="lp-block">
+        <div className="lp-wrap">
+          <div className="lp-sec-head lp-reveal">
+            <div className="lp-sec-eyebrow">Por qué Ventrix</div>
+            <h2>Todo tu negocio en un solo lugar</h2>
+            <p>Sin planillas sueltas, sin cuentas en el cuaderno, sin adivinar cuánto ganaste.</p>
+          </div>
+          <div className="lp-benefits">
+            {BENEFITS.map(({ icon, title, body }) => (
+              <div key={title} className="lp-bcard lp-reveal">
+                <div className="lp-bicon">{icon}</div>
+                <h3>{title}</h3>
+                <p>{body}</p>
               </div>
             ))}
           </div>
         </div>
-      </div>
+      </section>
+
+      {/* ── Steps ────────────────────────────────────────────────────────── */}
+      <section className="lp-block" style={{ paddingTop: 0 }}>
+        <div className="lp-steps-block lp-reveal">
+          <div className="lp-wrap">
+            <div className="lp-sec-head">
+              <div className="lp-sec-eyebrow">Cómo funciona</div>
+              <h2>Listo para vender en 3 pasos</h2>
+              <p>Si sabes usar WhatsApp, sabes usar Ventrix.</p>
+            </div>
+            <div className="lp-steps">
+              {STEPS.map(({ n, title, body }) => (
+                <div key={n} className="lp-step">
+                  <span className="lp-step-num">{n}</span>
+                  <div><h3>{title}</h3><p>{body}</p></div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Quote ────────────────────────────────────────────────────────── */}
+      <section className="lp-quote-block">
+        <div className="lp-wrap">
+          <div className="lp-quote lp-reveal">
+            <div className="lp-stars" aria-hidden="true">★★★★★</div>
+            <blockquote>
+              &ldquo;Antes cuadraba la caja con calculadora y a veces no me daba.
+              Con Ventrix cierro el día en un minuto.&rdquo;
+            </blockquote>
+            <cite>— Nombre del cliente · Su negocio, ciudad</cite>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Pricing ──────────────────────────────────────────────────────── */}
+      <section className="lp-block">
+        <div className="lp-wrap">
+          <div className="lp-sec-head lp-reveal" style={{ marginInline: 'auto', textAlign: 'center' }}>
+            <div className="lp-sec-eyebrow">Precios claros</div>
+            <h2>Empieza gratis. Crece cuando quieras.</h2>
+            <p style={{ marginInline: 'auto' }}>Sin letra chiquita. El plan gratis es gratis de verdad.</p>
+          </div>
+          <div className="lp-pricing">
+            <div className="lp-plan lp-reveal">
+              <h3>Gratis</h3>
+              <div className="lp-price">$0<small> /siempre</small></div>
+              <ul>{FREE_FTS.map(f => <li key={f}><CheckIcon />{f}</li>)}</ul>
+              <Link href="/register" className="lp-btn lp-btn-ghost">Empezar gratis</Link>
+            </div>
+            <div className="lp-plan lp-featured lp-reveal">
+              <span className="lp-plan-tag">Recomendado</span>
+              <h3>Pro</h3>
+              <div className="lp-price">$XX.XXX<small> /mes</small></div>
+              <ul>{PRO_FTS.map(f => <li key={f}><CheckIcon />{f}</li>)}</ul>
+              <Link href="/register" className="lp-btn lp-btn-primary">Probar Pro</Link>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── FAQ ──────────────────────────────────────────────────────────── */}
+      <section className="lp-block" style={{ paddingTop: 0 }}>
+        <div className="lp-wrap">
+          <div className="lp-sec-head lp-reveal" style={{ marginInline: 'auto', textAlign: 'center' }}>
+            <div className="lp-sec-eyebrow">Dudas frecuentes</div>
+            <h2>Lo que todos preguntan</h2>
+          </div>
+          <div className="lp-faq lp-reveal">
+            {FAQ.map(({ q, a }) => (
+              <details key={q}>
+                <summary>{q} <span className="lp-plus" /></summary>
+                <p>{a}</p>
+              </details>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── Final CTA ────────────────────────────────────────────────────── */}
+      <section className="lp-final">
+        <div className="lp-wrap">
+          <div className="lp-final-card lp-reveal">
+            <h2>Empieza gratis hoy</h2>
+            <p>Tu próxima venta puede quedar registrada en Ventrix.</p>
+            <Link href="/register" className="lp-btn lp-btn-primary lp-btn-lg">
+              Crear cuenta gratis
+            </Link>
+            <span className="lp-fine">Sin tarjeta · Sin instalación · Cancela cuando quieras</span>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Footer ───────────────────────────────────────────────────────── */}
+      <footer className="lp-footer">
+        <div className="lp-wrap lp-foot-inner">
+          <Link href="/" className="lp-logo" style={{ fontSize: '1.1rem' }}>
+            <span className="lp-logo-mark" style={{ width: 26, height: 26, fontSize: '.9rem' }}>V</span>
+            Ventrix
+          </Link>
+          <nav className="lp-foot-links">
+            <Link href="/register">Crear cuenta</Link>
+            <Link href="/login">Iniciar sesión</Link>
+          </nav>
+          <span>© 2026 Ventrix · Punto de venta</span>
+        </div>
+      </footer>
 
     </div>
   );
