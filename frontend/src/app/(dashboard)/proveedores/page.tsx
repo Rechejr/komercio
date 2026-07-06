@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { api } from '@/lib/api';
@@ -60,7 +60,17 @@ export default function ProveedoresPage() {
   const suppliers = data?.data || [];
   const pagination = data?.pagination;
 
+  const formRef = useRef<HTMLFormElement>(null);
+  useEffect(() => {
+    if (!showForm) return;
+    const id = requestAnimationFrame(() => {
+      if (formRef.current) formRef.current.scrollTop = 0;
+    });
+    return () => cancelAnimationFrame(id);
+  }, [showForm]);
+
   return (
+    <>
     <div className="space-y-4 animate-fade-up">
 
       {/* ── Toolbar ──────────────────────────────────────────────────────────── */}
@@ -193,6 +203,8 @@ export default function ProveedoresPage() {
         )}
       </div>
 
+    </div>
+
       {/* ── Form Modal ───────────────────────────────────────────────────────── */}
       {showForm && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-[2px] z-50 flex items-center justify-center p-4">
@@ -212,7 +224,7 @@ export default function ProveedoresPage() {
               </button>
             </div>
 
-            <form onSubmit={handleSubmit((d: any) => saveMutation.mutate(d))} className="p-6 grid grid-cols-2 gap-4 overflow-y-auto min-h-0">
+            <form ref={formRef} onSubmit={handleSubmit((d: any) => saveMutation.mutate(d))} className="p-6 grid grid-cols-2 gap-4 overflow-y-auto min-h-0">
               {FIELDS.map((f) => (
                 <div key={f.name} className={f.col === 2 ? 'col-span-2' : ''}>
                   <label className="block text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5">{f.label}</label>
@@ -240,6 +252,6 @@ export default function ProveedoresPage() {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }

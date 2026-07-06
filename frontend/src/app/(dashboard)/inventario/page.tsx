@@ -54,7 +54,7 @@ export default function InventarioPage() {
   const [page, setPage] = useState(1);
   const [showForm, setShowForm] = useState(false);
   const [editItem, setEditItem] = useState<any>(null);
-  const formScrollRef = useRef<HTMLDivElement>(null);
+  const formScrollRef = useRef<HTMLFormElement>(null);
   const [deleteTarget, setDeleteTarget] = useState<any>(null);
   const [stockTarget, setStockTarget] = useState<any>(null);
   const [stockForm, setStockForm] = useState({ quantity: '', reason: '' });
@@ -200,6 +200,7 @@ export default function InventarioPage() {
   const pagination = data?.pagination;
 
   return (
+    <>
     <div
       className="space-y-5 animate-fade-up relative"
       onDragOver={(e) => { if (isFree) return; e.preventDefault(); setIsDragOver(true); }}
@@ -461,6 +462,8 @@ export default function InventarioPage() {
         )}
       </div>
 
+    </div>
+
       {/* ── Import Preview Modal ─────────────────────────────────────────────── */}
       {isPreviewOpen && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-[2px] z-50 flex items-center justify-center p-4">
@@ -618,7 +621,7 @@ export default function InventarioPage() {
       {/* ── Product Form Modal ───────────────────────────────────────────────── */}
       {showForm && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-[2px] z-50 flex items-center justify-center p-4">
-          <div ref={formScrollRef} tabIndex={-1} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/[0.08] rounded-2xl shadow-modal w-full max-w-4xl max-h-[90vh] flex flex-col animate-scale-in outline-none">
+          <div tabIndex={-1} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/[0.08] rounded-2xl shadow-modal w-full max-w-4xl max-h-[90vh] flex flex-col animate-scale-in outline-none">
 
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-white/[0.06] flex-shrink-0 bg-white dark:bg-slate-900">
               <h2 className="text-[16px] font-semibold text-slate-800 dark:text-white">
@@ -634,7 +637,7 @@ export default function InventarioPage() {
               </button>
             </div>
 
-            <form onSubmit={handleSubmit((d) => saveMutation.mutate(d))} className="p-6 grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-5 overflow-y-auto min-h-0">
+            <form ref={formScrollRef} tabIndex={-1} onSubmit={handleSubmit((d) => saveMutation.mutate(d))} className="p-6 grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-5 overflow-y-auto min-h-0 outline-none">
 
               {/* ── Columna izquierda ──────────────────── */}
               <div className="space-y-4">
@@ -992,6 +995,6 @@ export default function InventarioPage() {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }
