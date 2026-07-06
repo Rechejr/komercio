@@ -17,6 +17,7 @@ import {
 import { useAuthStore } from '@/store/auth.store';
 import { useUpgradeStore } from '@/store/upgrade.store';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { StaggerList, StaggerItem } from '@/components/ui/StaggerList';
 import { PriceInput } from '@/components/ui/PriceInput';
 
 type PreviewData = {
@@ -362,7 +363,7 @@ export default function InventarioPage() {
                 <th className="w-24 sr-only">Acciones</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-50 dark:divide-white/[0.04]">
+            <StaggerList as="tbody" className="divide-y divide-slate-50 dark:divide-white/[0.04]">
               {isLoading ? (
                 [...Array(5)].map((_, i) => (
                   <tr key={i}>
@@ -382,13 +383,13 @@ export default function InventarioPage() {
                     </div>
                   </td>
                 </tr>
-              ) : products.map((p: any) => {
+              ) : products.map((p: any, idx: number) => {
                 const margin = p.costPrice > 0
                   ? (((p.salePrice - p.costPrice) / p.costPrice) * 100).toFixed(1)
                   : null;
                 const isLowStock = p.stock <= p.minStock;
                 return (
-                  <tr key={p.id} className="hover:bg-slate-50/60 dark:hover:bg-white/[0.02] transition-colors">
+                  <StaggerItem as="tr" key={p.id} index={idx} className="hover:bg-slate-50/60 dark:hover:bg-white/[0.02] transition-colors">
                     <td className="px-4 py-3">
                       {p.image ? (
                         // eslint-disable-next-line @next/next/no-img-element
@@ -464,10 +465,10 @@ export default function InventarioPage() {
                         </button>
                       </div>
                     </td>
-                  </tr>
+                  </StaggerItem>
                 );
               })}
-            </tbody>
+            </StaggerList>
           </table>
         </div>
 

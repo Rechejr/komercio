@@ -1,6 +1,8 @@
 'use client';
 
+import { motion } from 'framer-motion';
 import { formatCurrency } from '@/lib/utils';
+import { fadeUp, EASE, DUR } from '@/lib/motion';
 
 const PM_LABEL: Record<string, string> = {
   CASH: 'Efectivo', NEQUI: 'Nequi', DAVIPLATA: 'Daviplata',
@@ -40,6 +42,8 @@ interface ReceiptProps {
   customerName?: string | null;
   cashierName?: string | null;
   business?: ReceiptBusiness | null;
+  /** Cuando es true anima los items y el sello COBRADO */
+  animated?: boolean;
 }
 
 function Dash() {
@@ -49,13 +53,16 @@ function Dash() {
 export function Receipt({
   invoiceNumber, createdAt, items, subtotal, discountAmount, taxAmount,
   total, paidAmount, changeAmount, paymentMethod,
-  customerName, cashierName, business,
+  customerName, cashierName, business, animated = false,
 }: ReceiptProps) {
   const date     = new Date(createdAt);
   const dateStr  = date.toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric' });
   const timeStr  = date.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
   const footer   = (business?.settings?.receiptMessage as string) || '¡Gracias por su compra!';
   const isFiado  = paidAmount < total;
+
+  // Delay del sello: después de que todos los items hacen stagger
+  const stampDelay = items.length * 0.07 + 0.3;
 
   return (
     <div
@@ -109,22 +116,49 @@ export function Receipt({
 
       {/* ── Items ──────────────────────────────────────── */}
       <div style={{ marginBottom: 8 }}>
-        {items.map((item, i) => (
-          <div key={i} style={{ marginBottom: 8 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
-              <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: '#1e293b', lineHeight: 1.3 }}>
-                {item.name}
-              </span>
-              <span style={{ fontSize: 13, fontWeight: 700, color: '#1e293b', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
-                {formatCurrency(item.total)}
-              </span>
+        {items.map((item, i) => {
+          const itemContent = (
+            <>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: '#1e293b', lineHeight: 1.3 }}>
+                  {item.name}
+                </span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: '#1e293b', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+                  {formatCurrency(item.total)}
+                </span>
+              </div>
+              <p style={{ fontSize: 11, color: '#94a3b8', margin: '1px 0 0' }}>
+                {item.quantity} × {formatCurrency(item.unitPrice)}
+                {item.discountPct > 0 ? ` · ${item.discountPct}% dto.` : ''}
+              </p>
+            </>
+          );
+
+          if (animated) {
+            return (
+              <motion.div
+                key={i}
+                initial="hidden"
+                animate="show"
+                variants={fadeUp}
+                transition={{
+                  delay: i * 0.07,
+                  duration: DUR.md,
+                  ease: EASE.spring,
+                }}
+                style={{ marginBottom: 8 }}
+              >
+                {itemContent}
+              </motion.div>
+            );
+          }
+
+          return (
+            <div key={i} style={{ marginBottom: 8 }}>
+              {itemContent}
             </div>
-            <p style={{ fontSize: 11, color: '#94a3b8', margin: '1px 0 0' }}>
-              {item.quantity} × {formatCurrency(item.unitPrice)}
-              {item.discountPct > 0 ? ` · ${item.discountPct}% dto.` : ''}
-            </p>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       <Dash />
@@ -189,19 +223,43 @@ export function Receipt({
 
       {/* ── Stamp ──────────────────────────────────────── */}
       <div style={{ textAlign: 'center', marginBottom: 12 }}>
-        <span style={{
-          display: 'inline-block',
-          border: '2.5px solid #dc2626',
-          color: '#dc2626',
-          fontWeight: 900,
-          fontSize: 14,
-          padding: '5px 20px',
-          borderRadius: 8,
-          letterSpacing: '0.12em',
-          transform: 'rotate(-2deg)',
-        }}>
-          ✓ COBRADO
-        </span>
+        {animated ? (
+          <motion.span
+            initial={{ opacity: 0, scale: 1.4, rotate: -8 }}
+            animate={{ opacity: 1, scale: 1, rotate: -2 }}
+            transition={{
+              delay: stampDelay,
+              duration: DUR.hero,
+              ease: EASE.spring,
+            }}
+            style={{
+              display: 'inline-block',
+              border: '2.5px solid #dc2626',
+              color: '#dc2626',
+              fontWeight: 900,
+              fontSize: 14,
+              padding: '5px 20px',
+              borderRadius: 8,
+              letterSpacing: '0.12em',
+            }}
+          >
+            ✓ COBRADO
+          </motion.span>
+        ) : (
+          <span style={{
+            display: 'inline-block',
+            border: '2.5px solid #dc2626',
+            color: '#dc2626',
+            fontWeight: 900,
+            fontSize: 14,
+            padding: '5px 20px',
+            borderRadius: 8,
+            letterSpacing: '0.12em',
+            transform: 'rotate(-2deg)',
+          }}>
+            ✓ COBRADO
+          </span>
+        )}
       </div>
 
       {/* ── Payment method ─────────────────────────────── */}

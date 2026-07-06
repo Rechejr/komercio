@@ -13,11 +13,16 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { Tooltip as InfoTooltip } from '@/components/ui/Tooltip';
+import { CountUp } from '@/components/ui/CountUp';
 
 // ── Stat card ─────────────────────────────────────────────────────────────────
 interface StatCardProps {
-  title: string; value: string; sub: string;
-  icon: React.ElementType; accent: string; iconBg: string;
+  title: string;
+  value: React.ReactNode;
+  sub: string;
+  icon: React.ElementType;
+  accent: string;
+  iconBg: string;
   tooltip?: string;
 }
 
@@ -115,7 +120,7 @@ export default function DashboardPage() {
           <>
             <StatCard
               title="Ventas hoy"
-              value={formatCurrency(s?.sales?.today?.total || 0)}
+              value={<CountUp value={s?.sales?.today?.total || 0} />}
               sub={`${s?.sales?.today?.count || 0} transacciones`}
               icon={ShoppingCart}
               accent="text-emerald-600 dark:text-emerald-400"
@@ -123,7 +128,7 @@ export default function DashboardPage() {
             />
             <StatCard
               title="Ventas del mes"
-              value={formatCurrency(s?.sales?.month?.total || 0)}
+              value={<CountUp value={s?.sales?.month?.total || 0} />}
               sub={`${s?.sales?.month?.count || 0} ventas`}
               icon={TrendingUp}
               accent="text-emerald-600 dark:text-emerald-400"
@@ -131,7 +136,7 @@ export default function DashboardPage() {
             />
             <StatCard
               title="Stock bajo"
-              value={String(s?.inventory?.lowStock || 0)}
+              value={<CountUp value={s?.inventory?.lowStock || 0} bare />}
               sub={`de ${s?.inventory?.totalProducts || 0} productos`}
               icon={AlertTriangle}
               accent="text-amber-600 dark:text-amber-400"
@@ -140,7 +145,7 @@ export default function DashboardPage() {
             />
             <StatCard
               title="Créditos pendientes"
-              value={formatCurrency(s?.credits?.totalBalance || 0)}
+              value={<CountUp value={s?.credits?.totalBalance || 0} />}
               sub={`${s?.credits?.count || 0} clientes`}
               icon={CreditCard}
               accent="text-red-600 dark:text-red-400"

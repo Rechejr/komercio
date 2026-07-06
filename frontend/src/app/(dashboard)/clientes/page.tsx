@@ -11,6 +11,7 @@ import {
   FileUp, FileDown, CheckCircle2, ArrowRight, Lock,
 } from 'lucide-react';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { StaggerList, StaggerItem } from '@/components/ui/StaggerList';
 import { PriceInput } from '@/components/ui/PriceInput';
 import { useAuthStore } from '@/store/auth.store';
 import { useUpgradeStore } from '@/store/upgrade.store';
@@ -253,7 +254,7 @@ export default function ClientesPage() {
                 <th className="w-20 sr-only">Acciones</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-50 dark:divide-white/[0.04]">
+            <StaggerList as="tbody" className="divide-y divide-slate-50 dark:divide-white/[0.04]">
               {isLoading ? (
                 [...Array(6)].map((_, i) => (
                   <tr key={i}>{[...Array(7)].map((_, j) => (
@@ -274,8 +275,11 @@ export default function ClientesPage() {
                     </div>
                   </td>
                 </tr>
-              ) : customers.map((c: any) => (
-                <tr key={c.id}
+              ) : customers.map((c: any, idx: number) => (
+                <StaggerItem
+                  as="tr"
+                  key={c.id}
+                  index={idx}
                   className="hover:bg-slate-50/60 dark:hover:bg-white/[0.02] transition-colors cursor-pointer"
                   onClick={() => setSelected(c)}
                 >
@@ -316,9 +320,9 @@ export default function ClientesPage() {
                       <ChevronRight size={14} className="text-slate-300 dark:text-slate-600" />
                     </div>
                   </td>
-                </tr>
+                </StaggerItem>
               ))}
-            </tbody>
+            </StaggerList>
           </table>
         </div>
 

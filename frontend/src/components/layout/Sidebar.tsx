@@ -233,11 +233,13 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
                             background: 'linear-gradient(90deg, rgba(16,185,129,0.15) 0%, rgba(16,185,129,0.07) 100%)',
                           } : undefined}
                         >
-                          {/* Active indicator bar */}
+                          {/* Active indicator bar — desliza entre ítems con layoutId */}
                           {active && (
-                            <span
+                            <motion.span
+                              layoutId="sidebar-active-bar"
                               className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] rounded-r-full"
                               style={{ height: '16px', background: 'linear-gradient(180deg, #34d399, #059669)' }}
+                              transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
                             />
                           )}
 

@@ -1,12 +1,14 @@
 ﻿'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { motion, AnimatePresence } from 'framer-motion';
 import { api } from '@/lib/api';
 import { useCartStore } from '@/store/cart.store';
 import { useAuthStore } from '@/store/auth.store';
 import { useUpgradeStore } from '@/store/upgrade.store';
 import { formatCurrency, formatDate, paymentMethodLabel, statusColor, statusLabel, cn } from '@/lib/utils';
+import { EASE, DUR } from '@/lib/motion';
 import toast from 'react-hot-toast';
 import {
   Search, Plus, Minus, Trash2, User,
@@ -331,59 +333,78 @@ export default function POSPage() {
   // ── Success screen ──────────────────────────────────────────────────────────
   if (lastSale) {
     return (
-      <div className="flex flex-col items-center py-6 px-4">
-        {/* Action bar — hidden when printing */}
-        <div className="print-hide w-full max-w-sm mb-4 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 bg-emerald-50 dark:bg-emerald-500/10 rounded-full flex items-center justify-center border border-emerald-100 dark:border-emerald-500/20">
-              <CheckCircle className="text-emerald-500" size={14} />
-            </div>
-            <span className="text-[14px] font-semibold text-slate-800 dark:text-white">¡Venta registrada!</span>
-          </div>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => window.print()}
-              className="flex items-center gap-1.5 px-3.5 py-2 border border-slate-200 dark:border-slate-700/60 rounded-xl text-[13px] font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
-            >
-              <Printer size={14} /> Imprimir
-            </button>
-            <button
-              type="button"
-              onClick={() => openWhatsApp(lastSale, receiptItemsRef.current, businessInfo, selectedCustomer?.phone, selectedCustomer?.name)}
-              className="flex items-center gap-1.5 px-3.5 py-2 bg-[#25D366] hover:bg-[#1ebe5d] text-white rounded-xl text-[13px] font-medium transition-colors"
-            >
-              <WhatsAppIcon /> WhatsApp
-            </button>
-            <button
-              type="button"
-              onClick={() => setLastSale(null)}
-              className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 text-white rounded-xl text-[13px] font-semibold hover:bg-emerald-700 transition-colors"
-            >
-              Nueva venta
-            </button>
-          </div>
-        </div>
+      <AnimatePresence>
+        <motion.div
+          key="success-screen"
+          className="flex flex-col items-center py-6 px-4"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: DUR.sm, ease: EASE.spring }}
+        >
+          {/* Receipt */}
+          <motion.div
+            className="w-full max-w-sm shadow-xl rounded-2xl overflow-hidden border border-slate-100 dark:border-white/[0.06] mb-4"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.35, ease: EASE.spring }}
+          >
+            <Receipt
+              invoiceNumber={lastSale.invoiceNumber}
+              createdAt={lastSale.createdAt || new Date()}
+              items={receiptItemsRef.current}
+              subtotal={Number(lastSale.subtotal)}
+              discountAmount={Number(lastSale.discountAmount)}
+              taxAmount={Number(lastSale.taxAmount)}
+              total={Number(lastSale.total)}
+              paidAmount={Number(lastSale.paidAmount)}
+              changeAmount={Number(lastSale.changeAmount)}
+              paymentMethod={lastSale.paymentMethod}
+              customerName={selectedCustomer?.name || null}
+              cashierName={cashierName || null}
+              business={businessInfo}
+              animated={true}
+            />
+          </motion.div>
 
-        {/* Receipt */}
-        <div className="w-full max-w-sm shadow-xl rounded-2xl overflow-hidden border border-slate-100 dark:border-white/[0.06]">
-          <Receipt
-            invoiceNumber={lastSale.invoiceNumber}
-            createdAt={lastSale.createdAt || new Date()}
-            items={receiptItemsRef.current}
-            subtotal={Number(lastSale.subtotal)}
-            discountAmount={Number(lastSale.discountAmount)}
-            taxAmount={Number(lastSale.taxAmount)}
-            total={Number(lastSale.total)}
-            paidAmount={Number(lastSale.paidAmount)}
-            changeAmount={Number(lastSale.changeAmount)}
-            paymentMethod={lastSale.paymentMethod}
-            customerName={selectedCustomer?.name || null}
-            cashierName={cashierName || null}
-            business={businessInfo}
-          />
-        </div>
-      </div>
+          {/* Action bar — hidden when printing */}
+          <motion.div
+            className="print-hide w-full max-w-sm flex items-center justify-between"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.8, duration: DUR.md, ease: EASE.spring }}
+          >
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 bg-emerald-50 dark:bg-emerald-500/10 rounded-full flex items-center justify-center border border-emerald-100 dark:border-emerald-500/20">
+                <CheckCircle className="text-emerald-500" size={14} />
+              </div>
+              <span className="text-[14px] font-semibold text-slate-800 dark:text-white">¡Venta registrada!</span>
+            </div>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="flex items-center gap-1.5 px-3.5 py-2 border border-slate-200 dark:border-slate-700/60 rounded-xl text-[13px] font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+              >
+                <Printer size={14} /> Imprimir
+              </button>
+              <button
+                type="button"
+                onClick={() => openWhatsApp(lastSale, receiptItemsRef.current, businessInfo, selectedCustomer?.phone, selectedCustomer?.name)}
+                className="flex items-center gap-1.5 px-3.5 py-2 bg-[#25D366] hover:bg-[#1ebe5d] text-white rounded-xl text-[13px] font-medium transition-colors"
+              >
+                <WhatsAppIcon /> WhatsApp
+              </button>
+              <button
+                type="button"
+                onClick={() => setLastSale(null)}
+                className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 text-white rounded-xl text-[13px] font-semibold hover:bg-emerald-700 transition-colors"
+              >
+                Nueva venta
+              </button>
+            </div>
+          </motion.div>
+        </motion.div>
+      </AnimatePresence>
     );
   }
 
@@ -475,17 +496,19 @@ export default function POSPage() {
                   const lowStock    = p.minStock > 0 && p.stock > 0 && p.stock <= p.minStock;
 
                   return (
-                    <button
+                    <motion.button
                       key={p.id}
                       type="button"
                       onClick={() => handleAddProduct(p)}
                       disabled={outOfStock}
+                      whileTap={outOfStock ? undefined : { scale: 0.93 }}
+                      transition={{ duration: DUR.xs, ease: EASE.spring }}
                       className={cn(
                         'flex flex-col rounded-2xl overflow-hidden text-left transition-all duration-150',
                         'border-2',
                         outOfStock
                           ? 'opacity-50 cursor-not-allowed border-transparent'
-                          : 'border-transparent hover:border-emerald-500 hover:scale-[1.02] hover:shadow-lg hover:shadow-emerald-500/20 active:scale-[0.98]',
+                          : 'border-transparent hover:border-emerald-500 hover:scale-[1.02] hover:shadow-lg hover:shadow-emerald-500/20',
                       )}
                     >
                       {/* ── Header: image or category color ── */}
@@ -537,7 +560,7 @@ export default function POSPage() {
                           {outOfStock ? 'Agotado' : lowStock ? `¡Bajo! ${p.stock}` : `${p.stock} disponibles`}
                         </span>
                       </div>
-                    </button>
+                    </motion.button>
                   );
                 })}
               </div>
@@ -759,7 +782,14 @@ export default function POSPage() {
             )}
             <div className="flex justify-between font-bold text-[18px] text-slate-900 dark:text-white border-t border-slate-100 dark:border-white/[0.06] pt-2.5 mt-1">
               <span>Total</span>
-              <span className="text-emerald-600 dark:text-emerald-400 tabular">{formatCurrency(total)}</span>
+              <motion.span
+                key={total}
+                animate={{ scale: total > 0 ? [1, 1.05, 1] : 1 }}
+                transition={{ duration: 0.3, ease: EASE.spring }}
+                className="text-emerald-600 dark:text-emerald-400 tabular"
+              >
+                {formatCurrency(total)}
+              </motion.span>
             </div>
           </div>
         </div>

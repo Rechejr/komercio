@@ -8,6 +8,7 @@ import { formatCurrency, formatDateTime, statusColor, statusLabel, paymentMethod
 import toast from 'react-hot-toast';
 import { Search, X, ShoppingCart, Ban, ChevronRight, FileDown, Loader2, AlertTriangle, Trash2 } from 'lucide-react';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { StaggerList, StaggerItem } from '@/components/ui/StaggerList';
 import Link from 'next/link';
 import { downloadExcel } from '@/lib/exportExcel';
 
@@ -162,7 +163,7 @@ export default function VentasPage() {
                 <th className="w-8 sr-only">Ver</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-50 dark:divide-white/[0.04]">
+            <StaggerList as="tbody" className="divide-y divide-slate-50 dark:divide-white/[0.04]">
               {isLoading ? (
                 [...Array(8)].map((_, i) => (
                   <tr key={i}>
@@ -182,9 +183,11 @@ export default function VentasPage() {
                     </div>
                   </td>
                 </tr>
-              ) : sales.map((s: any) => (
-                <tr
+              ) : sales.map((s: any, idx: number) => (
+                <StaggerItem
+                  as="tr"
                   key={s.id}
+                  index={idx}
                   className="hover:bg-slate-50/60 dark:hover:bg-white/[0.02] transition-colors cursor-pointer"
                   onClick={() => setSelected(s)}
                 >
@@ -210,9 +213,9 @@ export default function VentasPage() {
                   </td>
                   <td className="hidden sm:table-cell px-4 py-3 text-[12px] text-slate-400 dark:text-slate-500 tabular-nums">{formatDateTime(s.createdAt)}</td>
                   <td className="px-4 py-3 text-slate-300 dark:text-slate-600"><ChevronRight size={14} /></td>
-                </tr>
+                </StaggerItem>
               ))}
-            </tbody>
+            </StaggerList>
           </table>
         </div>
 
