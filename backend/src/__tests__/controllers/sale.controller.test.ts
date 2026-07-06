@@ -31,6 +31,10 @@ jest.mock('../../config/database', () => ({
     saleDetail: { deleteMany: jest.fn() },
     $transaction: jest.fn(),
     $queryRawUnsafe: jest.fn(),
+    // generateInvoiceNumber now runs BEFORE the transaction (auto-commit counter).
+    // counterTableReady() uses $executeRaw; the counter upsert uses $queryRaw.
+    $executeRaw: jest.fn().mockResolvedValue(0),
+    $queryRaw: jest.fn().mockResolvedValue([{ lastSeq: 1 }]),
   },
 }));
 
