@@ -8,7 +8,8 @@ import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
-import { TrendingUp, TrendingDown, DollarSign, ShoppingCart, Package, Users } from 'lucide-react';
+import { TrendingUp, TrendingDown, DollarSign, ShoppingCart, Package, Users, FileSpreadsheet } from 'lucide-react';
+import { downloadExcel } from '@/lib/exportExcel';
 
 function fillDailySeries(chart: any[], startDate: Date, endDate: Date) {
   const byDay = new Map(chart.map((c: any) => [c.period, c]));
@@ -64,8 +65,9 @@ export default function ReportesPage() {
   return (
     <div className="space-y-5 animate-fade-up">
 
-      {/* ── Selector de período ───────────────────────────────────────────── */}
-      <div className="flex flex-wrap items-center gap-2">
+      {/* ── Selector de período + Export ─────────────────────────────────── */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-2">
         {PERIODS.map((p) => (
           <button
             key={p.value}
@@ -80,6 +82,15 @@ export default function ReportesPage() {
             {p.label}
           </button>
         ))}
+        </div>
+        <button
+          type="button"
+          onClick={() => downloadExcel('financial', dates.startDate.slice(0, 10), dates.endDate.slice(0, 10))}
+          className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-[13px] font-medium bg-emerald-600 hover:bg-emerald-700 text-white transition shadow-sm shadow-emerald-600/25"
+        >
+          <FileSpreadsheet size={15} />
+          Estado de Resultados
+        </button>
       </div>
 
       {/* ── KPI Cards ─────────────────────────────────────────────────────── */}

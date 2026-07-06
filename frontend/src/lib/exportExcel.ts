@@ -1,8 +1,15 @@
 import { api } from './api';
 import toast from 'react-hot-toast';
 
+const ENDPOINT_FILENAMES: Record<string, string> = {
+  sales: 'ventas',
+  purchases: 'compras',
+  expenses: 'gastos',
+  financial: 'estado-resultados',
+};
+
 export async function downloadExcel(
-  endpoint: 'sales' | 'purchases' | 'expenses',
+  endpoint: 'sales' | 'purchases' | 'expenses' | 'financial',
   startDate: string,
   endDate: string,
 ) {
@@ -21,7 +28,8 @@ export async function downloadExcel(
     const url = URL.createObjectURL(new Blob([res.data]));
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${endpoint}-${startDate || 'inicio'}-${endDate || 'hoy'}.xlsx`;
+    const name = ENDPOINT_FILENAMES[endpoint] ?? endpoint;
+    a.download = `${name}-${startDate || 'inicio'}-${endDate || 'hoy'}.xlsx`;
     document.body.appendChild(a);
     try { a.click(); } finally { a.remove(); }
     URL.revokeObjectURL(url);
