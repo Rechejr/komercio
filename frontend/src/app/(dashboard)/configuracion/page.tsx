@@ -5,8 +5,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { api } from '@/lib/api';
 import toast from 'react-hot-toast';
-import { Loader2, Store, Lock, ImagePlus, X, Users, UserPlus, Edit, Shield, UserX } from 'lucide-react';
+import { Loader2, Store, Lock, ImagePlus, X, Users, UserPlus, Edit, Shield, UserX, Volume2, VolumeX } from 'lucide-react';
 import { useAuthStore } from '@/store/auth.store';
+import { useSoundStore } from '@/store/sound.store';
+import { sounds } from '@/lib/sounds';
 
 const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition';
 
@@ -47,6 +49,7 @@ export default function ConfiguracionPage() {
   const qc = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
+  const { enabled: soundEnabled, toggle: toggleSound } = useSoundStore();
 
   // Employee form state
   const [showEmpForm, setShowEmpForm] = useState(false);
@@ -390,6 +393,45 @@ export default function ConfiguracionPage() {
         </form>
       </div>
     </div>
+
+      {/* ── Preferencias de sonido ───────────────────────────────────────────── */}
+      <div className="card overflow-hidden">
+        <div className="px-6 py-4 border-b border-slate-100 dark:border-white/[0.06] flex items-center gap-2.5">
+          <div className="w-7 h-7 bg-emerald-50 dark:bg-emerald-500/10 rounded-lg flex items-center justify-center">
+            <Volume2 size={14} className="text-emerald-600 dark:text-emerald-400" />
+          </div>
+          <h2 className="text-[14px] font-semibold text-slate-800 dark:text-white">Sonidos</h2>
+        </div>
+        <div className="px-6 py-5 flex items-center justify-between gap-4">
+          <div>
+            <p className="text-[13px] font-medium text-slate-700 dark:text-slate-300">Efectos de sonido</p>
+            <p className="text-[12px] text-slate-500 dark:text-slate-400 mt-0.5">
+              Ka-ching al completar ventas, beep al escanear, pop al agregar productos
+            </p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={soundEnabled ? 'true' : 'false'}
+            onClick={() => {
+              toggleSound();
+              if (!soundEnabled) { try { sounds.add(); } catch { /* blocked */ } }
+            }}
+            className={`relative flex-shrink-0 w-11 h-6 rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 ${
+              soundEnabled ? 'bg-emerald-500' : 'bg-slate-200 dark:bg-slate-700'
+            }`}
+          >
+            <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 flex items-center justify-center ${
+              soundEnabled ? 'translate-x-5' : 'translate-x-0'
+            }`}>
+              {soundEnabled
+                ? <Volume2 size={10} className="text-emerald-500" />
+                : <VolumeX size={10} className="text-slate-400" />
+              }
+            </span>
+          </button>
+        </div>
+      </div>
 
       {/* ── Employee Form Modal ──────────────────────────────────────────────── */}
       {showEmpForm && (

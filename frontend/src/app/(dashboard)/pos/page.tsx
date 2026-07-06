@@ -9,6 +9,7 @@ import { useAuthStore } from '@/store/auth.store';
 import { useUpgradeStore } from '@/store/upgrade.store';
 import { formatCurrency, formatDate, paymentMethodLabel, statusColor, statusLabel, cn } from '@/lib/utils';
 import { EASE, DUR } from '@/lib/motion';
+import { useSound } from '@/lib/useSound';
 import toast from 'react-hot-toast';
 import {
   Search, Plus, Minus, Trash2, User,
@@ -141,6 +142,7 @@ export default function POSPage() {
   const cashierName = useAuthStore((s) => s.user?.name);
   const isFree     = !plan || plan === 'free';
   const openUpgrade = useUpgradeStore((s) => s.open);
+  const { play }   = useSound();
 
   const [search, setSearch]                   = useState('');
   const [showScanner, setShowScanner]         = useState(false);
@@ -234,6 +236,7 @@ export default function POSPage() {
   const saleMutation = useMutation({
     mutationFn: (saleData: any) => api.post('/sales', saleData).then((r) => r.data.data),
     onSuccess: (sale) => {
+      play('sale');
       // Snapshot cart items BEFORE clear() so the receipt has product names
       receiptItemsRef.current = items.map((i) => ({
         name: i.name,
@@ -303,9 +306,11 @@ export default function POSPage() {
   function handleAddProduct(product: any) {
     const cartQty = items.find((i) => i.productId === product.id)?.quantity ?? 0;
     if (product.stock <= cartQty && !product.allowNegativeStock) {
+      play('error');
       toast.error(`"${product.name}" sin stock suficiente (${product.stock} disponibles)`);
       return;
     }
+    play('add');
     addItem({
       productId: product.id, name: product.name, code: product.code,
       unitPrice: product.salePrice, quantity: 1, discountPct: 0, taxRate: product.taxRate || 0,
@@ -446,6 +451,7 @@ export default function POSPage() {
           {showScanner && (
             <BarcodeScanner
               onScan={(code) => {
+                play('scan');
                 setSearch(code);
                 setShowScanner(false);
                 setTimeout(() => searchRef.current?.focus(), 100);
