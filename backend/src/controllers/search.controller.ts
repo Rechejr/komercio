@@ -12,7 +12,29 @@ export const searchController = {
       if (q.length < 2) return next(new AppError('La búsqueda requiere al menos 2 caracteres', 400));
 
       const businessId = req.user!.businessId!;
-      const contains   = { contains: q, mode: 'insensitive' as const };
+
+      // ── Atajo especial: "fiado" devuelve todos los créditos pendientes ──────
+      if (q.toLowerCase() === 'fiado') {
+        const credits = await prisma.credit.findMany({
+          where: {
+            status: { in: ['PENDING', 'PARTIAL', 'OVERDUE'] },
+            customer: { businessId, deletedAt: null },
+          },
+          select: {
+            id: true, balance: true, status: true, dueDate: true,
+            customer: { select: { id: true, name: true, phone: true } },
+          },
+          orderBy: { balance: 'desc' },
+          take: 100,
+        });
+        return success(res, {
+          customers: [], products: [], sales: [], suppliers: [],
+          credits, isFiadoQuery: true,
+        });
+      }
+
+      // ── Búsqueda normal ──────────────────────────────────────────────────────
+      const contains = { contains: q, mode: 'insensitive' as const };
 
       const [customers, products, sales, suppliers, credits] = await Promise.all([
         prisma.customer.findMany({
@@ -72,7 +94,7 @@ export const searchController = {
         }),
       ]);
 
-      return success(res, { customers, products, sales, suppliers, credits });
+      return success(res, { customers, products, sales, suppliers, credits, isFiadoQuery: false });
     } catch (err) {
       next(err);
     }

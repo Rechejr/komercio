@@ -5,14 +5,26 @@ import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
-import { Search, Users, Package, ShoppingCart, Truck, CreditCard, X, Loader2, ArrowRight } from 'lucide-react';
+import {
+  Search, Users, Package, ShoppingCart, Truck, CreditCard,
+  X, Loader2, ArrowRight, AlertTriangle, Clock, ChevronRight,
+} from 'lucide-react';
+
+interface CreditResult {
+  id: string;
+  balance: number;
+  status: string;
+  dueDate?: string | null;
+  customer: { id: string; name: string; phone?: string };
+}
 
 interface SearchResult {
   customers: { id: string; name: string; document?: string; phone?: string; currentDebt: number }[];
   products:  { id: string; name: string; code?: string; stock: number; salePrice: number }[];
   sales:     { id: string; invoiceNumber: string; total: number; status: string; createdAt: string; customer?: { name: string } }[];
   suppliers: { id: string; name: string; contactName?: string; phone?: string }[];
-  credits:   { id: string; balance: number; status: string; customer: { id: string; name: string } }[];
+  credits:   CreditResult[];
+  isFiadoQuery?: boolean;
 }
 
 interface FlatResult { label: string; sub: string; href: string; category: string }
@@ -36,6 +48,18 @@ function flatten(data: SearchResult): FlatResult[] {
   }
   return out;
 }
+
+const CREDIT_STATUS_LABEL: Record<string, string> = {
+  PENDING:  'Pendiente',
+  PARTIAL:  'Abono parcial',
+  OVERDUE:  'Vencido',
+};
+
+const CREDIT_STATUS_CLS: Record<string, string> = {
+  PENDING: 'bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-200/80 dark:border-amber-500/20',
+  PARTIAL: 'bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-200/80 dark:border-blue-500/20',
+  OVERDUE: 'bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-400 border-red-200/80 dark:border-red-500/20',
+};
 
 const CATEGORY_META: Record<string, { Icon: React.ElementType; iconCls: string }> = {
   Clientes:    { Icon: Users,        iconCls: 'text-violet-500 bg-violet-50 dark:bg-violet-500/15' },
@@ -72,7 +96,8 @@ export function GlobalSearch({ open, onClose }: GlobalSearchProps) {
     staleTime: 10_000,
   });
 
-  const results: FlatResult[] = data ? flatten(data) : [];
+  const isFiadoMode = data?.isFiadoQuery === true;
+  const results: FlatResult[] = (data && !isFiadoMode) ? flatten(data) : [];
 
   useEffect(() => {
     if (open) {
@@ -86,7 +111,7 @@ export function GlobalSearch({ open, onClose }: GlobalSearchProps) {
     if (!open) return;
     function onKey(e: KeyboardEvent) {
       if (e.key === 'Escape') { onClose(); return; }
-      if (results.length === 0) return;
+      if (isFiadoMode || results.length === 0) return;
       if (e.key === 'ArrowDown') { e.preventDefault(); setIdx((i) => Math.min(i + 1, results.length - 1)); }
       if (e.key === 'ArrowUp')   { e.preventDefault(); setIdx((i) => Math.max(i - 1, 0)); }
       if (e.key === 'Enter')     { e.preventDefault(); navigate(results[idx].href); }
@@ -94,7 +119,7 @@ export function GlobalSearch({ open, onClose }: GlobalSearchProps) {
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, results, idx]);
+  }, [open, results, idx, isFiadoMode]);
 
   useEffect(() => {
     const el = listRef.current?.querySelector(`[data-idx="${idx}"]`);
@@ -117,12 +142,16 @@ export function GlobalSearch({ open, onClose }: GlobalSearchProps) {
   }, {});
 
   const hasResults = results.length > 0;
-  const showEmpty  = q.trim().length >= 2 && !isFetching && !hasResults;
+  const showEmpty  = q.trim().length >= 2 && !isFetching && !hasResults && !isFiadoMode;
   const isIdle     = q.trim().length < 2;
+
+  // Fiado mode data
+  const fiadoCredits = isFiadoMode ? (data?.credits ?? []) : [];
+  const fiadoTotal   = fiadoCredits.reduce((s, c) => s + Number(c.balance), 0);
 
   return (
     <>
-      {/* Backdrop — radial glow esmeralda */}
+      {/* Backdrop */}
       <div
         className="fixed inset-0 z-50 backdrop-blur-[2px] search-backdrop"
         onClick={onClose}
@@ -138,13 +167,18 @@ export function GlobalSearch({ open, onClose }: GlobalSearchProps) {
       >
         <div className="bg-white dark:bg-slate-900 rounded-2xl overflow-hidden animate-scale-in search-modal">
 
-          {/* Barra degradada esmeralda */}
-          <div aria-hidden="true" className="search-accent-bar" />
+          {/* Barra degradada — ámbar cuando es modo fiado, esmeralda normal */}
+          <div
+            aria-hidden="true"
+            className={isFiadoMode ? 'search-accent-bar-fiado' : 'search-accent-bar'}
+          />
 
           {/* Input */}
           <div className="flex items-center gap-3 px-4 py-3.5 border-b border-slate-100 dark:border-white/[0.06]">
             {isFetching ? (
               <Loader2 size={16} className="text-emerald-500 animate-spin flex-shrink-0" />
+            ) : isFiadoMode ? (
+              <AlertTriangle size={16} className="text-amber-500 flex-shrink-0" />
             ) : (
               <Search
                 size={16}
@@ -157,7 +191,7 @@ export function GlobalSearch({ open, onClose }: GlobalSearchProps) {
               type="text"
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder="Buscar clientes, productos, ventas..."
+              placeholder="Buscar clientes, productos, ventas... o escribe «fiado»"
               className="flex-1 bg-transparent text-[14px] text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none"
               autoComplete="off"
               spellCheck={false}
@@ -165,6 +199,7 @@ export function GlobalSearch({ open, onClose }: GlobalSearchProps) {
             {q && (
               <button
                 type="button"
+                aria-label="Limpiar búsqueda"
                 onClick={() => setQ('')}
                 className="w-5 h-5 flex items-center justify-center rounded-md text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
               >
@@ -176,10 +211,10 @@ export function GlobalSearch({ open, onClose }: GlobalSearchProps) {
             </kbd>
           </div>
 
-          {/* Cuerpo de resultados */}
-          <div ref={listRef} className="max-h-[400px] overflow-y-auto overscroll-contain">
+          {/* Cuerpo */}
+          <div ref={listRef} className="max-h-[420px] overflow-y-auto overscroll-contain">
 
-            {/* Estado idle: icono + pills de módulos */}
+            {/* Estado idle */}
             {isIdle && (
               <div className="px-5 py-6">
                 <div className="flex justify-center mb-4">
@@ -187,31 +222,36 @@ export function GlobalSearch({ open, onClose }: GlobalSearchProps) {
                     <div className="w-12 h-12 rounded-xl flex items-center justify-center search-idle-icon">
                       <Search size={20} className="text-emerald-500" strokeWidth={2} />
                     </div>
-                    <div
-                      aria-hidden="true"
-                      className="absolute -inset-1.5 rounded-xl pointer-events-none border border-dashed border-emerald-400/25"
-                    />
+                    <div aria-hidden="true" className="absolute -inset-1.5 rounded-xl pointer-events-none border border-dashed border-emerald-400/25" />
                   </div>
                 </div>
-
                 <p className="text-center text-[13px] font-medium text-slate-600 dark:text-slate-300 mb-1">
                   Busca en todos los módulos
                 </p>
                 <p className="text-center text-[11px] text-slate-400 dark:text-slate-500 mb-4">
                   Escribe al menos 2 caracteres
                 </p>
-
-                <div className="flex flex-wrap justify-center gap-2">
+                <div className="flex flex-wrap justify-center gap-2 mb-3">
                   {IDLE_PILLS.map(({ label, Icon, cls }) => (
-                    <span
-                      key={label}
-                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium border ${cls}`}
-                    >
+                    <span key={label} className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium border ${cls}`}>
                       <Icon size={11} strokeWidth={2.5} />
                       {label}
                     </span>
                   ))}
                 </div>
+
+                {/* Hint fiado */}
+                <button
+                  type="button"
+                  onClick={() => setQ('fiado')}
+                  className="mx-auto flex items-center gap-2 px-3.5 py-2 rounded-xl border border-dashed border-amber-300 dark:border-amber-500/30 bg-amber-50/60 dark:bg-amber-500/5 text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-500/10 transition-colors"
+                >
+                  <AlertTriangle size={13} className="flex-shrink-0" />
+                  <span className="text-[12px] font-medium">
+                    Escribe <strong className="font-bold">"fiado"</strong> para ver todos los créditos pendientes
+                  </span>
+                  <ChevronRight size={12} className="flex-shrink-0 opacity-60" />
+                </button>
               </div>
             )}
 
@@ -231,14 +271,95 @@ export function GlobalSearch({ open, onClose }: GlobalSearchProps) {
               </div>
             )}
 
-            {/* Resultados agrupados */}
+            {/* ── Vista especial FIADO ──────────────────────────────────────── */}
+            {isFiadoMode && (
+              <div>
+                {/* Resumen totales */}
+                <div className="px-4 py-3 border-b border-amber-100 dark:border-amber-500/10 bg-amber-50/50 dark:bg-amber-500/5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-md bg-amber-100 dark:bg-amber-500/20 flex items-center justify-center">
+                        <AlertTriangle size={12} className="text-amber-600 dark:text-amber-400" strokeWidth={2.5} />
+                      </div>
+                      <span className="text-[13px] font-semibold text-amber-800 dark:text-amber-300">
+                        {fiadoCredits.length} {fiadoCredits.length === 1 ? 'cliente' : 'clientes'} con fiado
+                      </span>
+                    </div>
+                    <span className="text-[13px] font-bold text-amber-700 dark:text-amber-400 tabular-nums">
+                      {formatCurrency(fiadoTotal)}
+                    </span>
+                  </div>
+                </div>
+
+                {fiadoCredits.length === 0 ? (
+                  <div className="px-4 py-8 text-center">
+                    <p className="text-[13px] text-slate-400 dark:text-slate-500">No hay créditos pendientes</p>
+                  </div>
+                ) : (
+                  <div className="py-1">
+                    {fiadoCredits.map((cr) => {
+                      const isOverdue = cr.status === 'OVERDUE';
+                      return (
+                        <button
+                          key={cr.id}
+                          type="button"
+                          onClick={() => navigate(`/creditos?search=${encodeURIComponent(cr.customer.name)}`)}
+                          className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-amber-50/60 dark:hover:bg-amber-500/5 transition-colors border-l-2 border-transparent hover:border-amber-400"
+                        >
+                          {/* Avatar inicial */}
+                          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-amber-100 to-amber-200 dark:from-amber-500/20 dark:to-amber-600/10 flex items-center justify-center flex-shrink-0">
+                            <span className="text-[11px] font-bold text-amber-700 dark:text-amber-400">
+                              {cr.customer.name.charAt(0).toUpperCase()}
+                            </span>
+                          </div>
+
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className="text-[13px] font-medium text-slate-800 dark:text-slate-200 truncate">
+                                {cr.customer.name}
+                              </p>
+                              <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold border flex-shrink-0 ${CREDIT_STATUS_CLS[cr.status] ?? CREDIT_STATUS_CLS.PENDING}`}>
+                                {isOverdue && <Clock size={9} />}
+                                {CREDIT_STATUS_LABEL[cr.status] ?? cr.status}
+                              </span>
+                            </div>
+                            {cr.customer.phone && (
+                              <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">
+                                {cr.customer.phone}
+                              </p>
+                            )}
+                          </div>
+
+                          <span className="text-[13px] font-bold text-amber-700 dark:text-amber-400 tabular-nums flex-shrink-0">
+                            {formatCurrency(cr.balance)}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Footer — ir al módulo completo */}
+                <div className="px-4 py-2.5 border-t border-amber-100 dark:border-amber-500/10 bg-amber-50/30 dark:bg-amber-500/5">
+                  <button
+                    type="button"
+                    onClick={() => navigate('/creditos')}
+                    className="w-full flex items-center justify-center gap-1.5 text-[12px] font-medium text-amber-700 dark:text-amber-400 hover:text-amber-900 dark:hover:text-amber-300 transition-colors"
+                  >
+                    Ver todos en módulo de créditos
+                    <ArrowRight size={13} />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Resultados normales agrupados */}
             {hasResults && (
               <div className="py-1.5">
                 {Object.entries(grouped).map(([cat, items]) => {
                   const meta = CATEGORY_META[cat] ?? { Icon: Search, iconCls: 'text-slate-500 bg-slate-100' };
                   return (
                     <div key={cat}>
-                      {/* Cabecera de categoría */}
                       <div className="px-4 pt-3 pb-1.5 flex items-center gap-2">
                         <div className={`w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0 ${meta.iconCls}`}>
                           <meta.Icon size={12} strokeWidth={2.5} />
@@ -251,8 +372,6 @@ export function GlobalSearch({ open, onClose }: GlobalSearchProps) {
                           {items.length}
                         </span>
                       </div>
-
-                      {/* Items */}
                       {items.map(({ label, sub, href, flatIdx }) => {
                         const active = idx === flatIdx;
                         return (
@@ -272,11 +391,7 @@ export function GlobalSearch({ open, onClose }: GlobalSearchProps) {
                               }`}>
                                 {label}
                               </p>
-                              {sub && (
-                                <p className="text-[11px] text-slate-400 dark:text-slate-500 truncate mt-0.5">
-                                  {sub}
-                                </p>
-                              )}
+                              {sub && <p className="text-[11px] text-slate-400 dark:text-slate-500 truncate mt-0.5">{sub}</p>}
                             </div>
                             <ArrowRight
                               size={13}
@@ -294,7 +409,7 @@ export function GlobalSearch({ open, onClose }: GlobalSearchProps) {
             )}
           </div>
 
-          {/* Footer con atajos de teclado */}
+          {/* Footer con atajos — solo en modo normal */}
           {hasResults && (
             <div className="px-4 py-2 flex items-center gap-3 search-footer">
               {([['↑↓', 'navegar'], ['↵', 'abrir'], ['ESC', 'cerrar']] as const).map(([key, label]) => (
