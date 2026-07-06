@@ -60,8 +60,10 @@ async function generateInvoiceNumber(tx: any, branchId: string): Promise<string>
     return `${prefix}${String(rows[0].lastSeq).padStart(6, '0')}`;
   }
 
-  // Fallback while migration 20260705200000 is pending: advisory lock + scan.
-  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${branchId}))`;
+  // Fallback while migration 20260705200000 is pending: scan committed sales.
+  // Called with prisma (auto-commit) since generateInvoiceNumber runs outside any tx.
+  // pg_advisory_xact_lock is omitted: it would release immediately in auto-commit mode
+  // and offer no mutual exclusion. The retry loop in saleController.create handles P2002.
   const last = await tx.sale.findFirst({
     where: { invoiceNumber: { startsWith: prefix }, branchId },
     orderBy: { invoiceNumber: 'desc' },
