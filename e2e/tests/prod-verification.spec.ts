@@ -66,38 +66,30 @@ test('PROD-2: POS — agregar producto y cobrar', async ({ page }) => {
   await page.waitForLoadState('networkidle');
   await shot(page, 'v3-2a-pos');
 
-  // Buscar producto
+  // Limpiar búsqueda para ver todos los productos
   const search = page.locator('input[placeholder*="buscar" i], input[placeholder*="Buscar" i]').first();
   await search.waitFor({ timeout: 10000 });
-  await search.fill('cafe');
+  await search.fill('');
   await page.waitForTimeout(1500);
   await shot(page, 'v3-2b-busqueda');
 
-  // Los productos son <button class="...rounded-xl..."> — los skeletons son divs, no buttons
-  // Esperar a que aparezca al menos un botón de producto real
-  const productBtn = page.locator('button.rounded-xl, button[class*="rounded-xl"]').first();
+  // Los productos son <button> que contienen un span con "disp." (stock disponible)
+  // Esperar a que al menos uno cargue (no skeletons)
+  const productBtn = page.locator('button:has(span:has-text("disp."))').first();
   let productAdded = false;
 
-  if (await productBtn.waitFor({ timeout: 8000, state: 'visible' }).then(() => true).catch(() => false)) {
-    const allProductBtns = page.locator('button.rounded-xl, button[class*="rounded-xl"]');
+  if (await productBtn.waitFor({ timeout: 10000, state: 'visible' }).then(() => true).catch(() => false)) {
+    const allProductBtns = page.locator('button:has(span:has-text("disp."))');
     const count = await allProductBtns.count();
-    console.log(`  Productos cargados (botones rounded-xl): ${count}`);
+    console.log(`  Productos con stock visible: ${count}`);
     await allProductBtns.first().click();
     await page.waitForTimeout(800);
     productAdded = true;
-    console.log('  Clicked primer botón de producto');
-  } else {
-    // Fallback: limpiar búsqueda y buscar todo
-    await search.clear();
-    await search.fill('');
-    await page.waitForTimeout(2000);
-    const anyBtn = page.locator('button[class*="rounded-xl"]').first();
-    if (await anyBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
-      await anyBtn.click();
-      await page.waitForTimeout(800);
-      productAdded = true;
-      console.log('  Clicked producto (fallback búsqueda vacía)');
-    }
+    console.log('  Clicked primer producto real');
+  }
+
+  if (!productAdded) {
+    console.log('  ⚠️ No se encontraron productos con "disp." — verificar inventario');
   }
 
   await page.waitForTimeout(800);
