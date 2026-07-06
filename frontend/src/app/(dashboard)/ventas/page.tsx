@@ -85,6 +85,7 @@ export default function VentasPage() {
   const pagination = data?.pagination;
 
   return (
+    <>
     <div className="space-y-4 animate-fade-up">
 
       {/* ── Toolbar ──────────────────────────────────────────────────────────── */}
@@ -240,6 +241,7 @@ export default function VentasPage() {
           </div>
         )}
       </div>
+    </div>
 
       {/* ── Detail Modal ─────────────────────────────────────────────────────── */}
       {selected && detail && !showCancelModal && !showDeleteModal && (
@@ -454,6 +456,6 @@ export default function VentasPage() {
         loading={deleteMutation.isPending}
         variant="danger"
       />
-    </div>
+    </>
   );
 }

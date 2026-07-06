@@ -145,6 +145,7 @@ export default function ComprasPage() {
   const pagination = data?.pagination;
 
   return (
+    <>
     <div className="space-y-4 animate-fade-up">
 
       {/* ── Toolbar ──────────────────────────────────────────────────────────── */}
@@ -288,6 +289,7 @@ export default function ComprasPage() {
           </div>
         )}
       </div>
+    </div>
 
       {/* ── Detail Modal ─────────────────────────────────────────────────────── */}
       {selected && detail && (
@@ -673,6 +675,6 @@ export default function ComprasPage() {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }

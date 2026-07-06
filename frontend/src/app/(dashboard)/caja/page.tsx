@@ -99,6 +99,7 @@ export default function CajaPage() {
   const expected = cashRegister.expectedAmount ?? (cashRegister.openingAmount + totalIn - totalOut);
 
   return (
+    <>
     <div className="space-y-4 max-w-2xl animate-fade-up">
 
       {/* ── Estado caja abierta ───────────────────────────────────────────── */}
@@ -206,6 +207,7 @@ export default function CajaPage() {
           </div>
         </div>
       )}
+    </div>
 
       {/* ── Modal movimiento ──────────────────────────────────────────────── */}
       {showMovement && (
@@ -273,6 +275,6 @@ export default function CajaPage() {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }

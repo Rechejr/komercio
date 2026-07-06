@@ -118,6 +118,7 @@ export default function GastosPage() {
   const pagination = data?.pagination;
 
   return (
+    <>
     <div className="space-y-4 animate-fade-up">
 
       {/* ── Toolbar ──────────────────────────────────────────────────────────── */}
@@ -268,6 +269,7 @@ export default function GastosPage() {
           </div>
         )}
       </div>
+    </div>
 
       {/* ── Form Modal ───────────────────────────────────────────────────────── */}
       {showForm && (
@@ -447,6 +449,6 @@ export default function GastosPage() {
         loading={deleteMutation.isPending}
         variant="danger"
       />
-    </div>
+    </>
   );
 }

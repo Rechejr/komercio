@@ -87,6 +87,7 @@ export default function CreditosPage() {
   function openPayment(c: any) { setSelected(c); setShowPayment(true); setShowDetail(false); reset(); }
 
   return (
+    <>
     <div className="space-y-4 animate-fade-up">
 
       {/* ── Toolbar ──────────────────────────────────────────────────────────── */}
@@ -248,6 +249,8 @@ export default function CreditosPage() {
           </div>
         )}
       </div>
+
+    </div>
 
       {/* ── Detail Modal ─────────────────────────────────────────────────────── */}
       {showDetail && selected && (
@@ -474,6 +477,6 @@ export default function CreditosPage() {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }

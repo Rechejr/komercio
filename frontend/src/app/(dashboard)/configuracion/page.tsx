@@ -159,6 +159,7 @@ export default function ConfiguracionPage() {
   }
 
   return (
+    <>
     <div className="max-w-2xl space-y-4 animate-fade-up">
 
       {/* ── Información del negocio (solo ADMIN) ─────────────────────────── */}
@@ -388,6 +389,7 @@ export default function ConfiguracionPage() {
           </div>
         </form>
       </div>
+    </div>
 
       {/* ── Employee Form Modal ──────────────────────────────────────────────── */}
       {showEmpForm && (
@@ -484,6 +486,6 @@ export default function ConfiguracionPage() {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }
