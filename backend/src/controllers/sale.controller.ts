@@ -182,6 +182,11 @@ export const saleController = {
       let attempt = 0;
       while (true) {
         try {
+          // Reserve invoice number BEFORE the main transaction using prisma (auto-commit).
+          // If the tx fails (P2002 or any other error) and rolls back, the counter stays
+          // incremented — the next retry calls this again and gets a strictly higher seq.
+          const invoiceNumber = await generateInvoiceNumber(prisma, effectiveBranchId);
+
           result = await prisma.$transaction(async (tx) => {
         // SELECT FOR UPDATE locks these rows for the duration of the transaction.
         // Concurrent sales on the same products will block here until this tx commits,
@@ -271,7 +276,7 @@ export const saleController = {
 
         const newSale = await tx.sale.create({
           data: {
-            invoiceNumber: await generateInvoiceNumber(tx, effectiveBranchId),
+            invoiceNumber,
             customerId: customerId || null,
             userId: req.user!.userId,
             branchId: effectiveBranchId,
