@@ -129,10 +129,13 @@ test('PROD-2: POS — agregar producto y cobrar', async ({ page }) => {
       await shot(page, 'v3-2e-resultado-venta');
     }
 
-    const hasError = await page.locator('text=/error al procesar/i').first().isVisible().catch(() => false);
-    const hasSuccess = await page.locator('text=/venta.*registrada|registrada.*éxito|factura/i').first().isVisible().catch(() => false);
+    const hasError = await page.locator('[class*="toast"] text=/error|no se pudo/i, [class*="alert"] text=/error/i').first().isVisible().catch(() => false);
+    const hasSuccess = await page.locator('text=/venta registrada|registrada con éxito|factura generada/i').first().isVisible().catch(() => false);
+    // También verificar si el carrito se limpió (indica venta exitosa)
+    const cartCleared = await page.locator('text=/Busca y agrega productos/i').first().isVisible().catch(() => false);
     console.log('  ❌ Error en venta:', hasError);
-    console.log('  ✅ Venta exitosa:', hasSuccess);
+    console.log('  ✅ Venta exitosa (toast):', hasSuccess);
+    console.log('  ✅ Carrito vaciado (indica éxito):', cartCleared);
   }
 });
 

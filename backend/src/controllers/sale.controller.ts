@@ -31,9 +31,20 @@ async function generateInvoiceNumber(tx: any, branchId: string): Promise<string>
   if (await counterTableReady()) {
     // Atomic counter: INSERT ... ON CONFLICT ... DO UPDATE RETURNING is serialized
     // by PostgreSQL row-level locking; eliminates collisions even with Neon pooling.
+    // The initial value uses MAX(existing seq)+1 so that sales created via the
+    // advisory-lock fallback (before the migration ran) don't collide.
+    const prefixLen = prefix.length;
     const rows = await tx.$queryRaw<Array<{ lastSeq: number }>>`
       INSERT INTO "sale_number_counters" ("branchId", "dayPrefix", "lastSeq")
-      VALUES (${branchId}, ${prefix}, 1)
+      VALUES (
+        ${branchId},
+        ${prefix},
+        COALESCE((
+          SELECT MAX(CAST(SUBSTRING("invoiceNumber" FROM ${prefixLen + 1}) AS INTEGER))
+          FROM "sales"
+          WHERE "invoiceNumber" LIKE ${prefix + '%'} AND "branchId" = ${branchId}
+        ), 0) + 1
+      )
       ON CONFLICT ("branchId", "dayPrefix")
       DO UPDATE SET "lastSeq" = "sale_number_counters"."lastSeq" + 1
       RETURNING "lastSeq"
