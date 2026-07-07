@@ -133,13 +133,19 @@ router.delete('/businesses/:id', async (req: AuthRequest, res, next) => {
     const businessId = req.params.id;
     const branchIds = business.branches.map((b) => b.id);
 
-    // Eliminación en orden correcto para respetar las foreign keys
+    // Recoger IDs de usuarios del negocio para limpiar audit_logs antes de borrarlos
+    // (AuditLog.userId no tiene onDelete: Cascade → PostgreSQL bloquea el delete)
+    const staffUsers = branchIds.length > 0
+      ? await prisma.user.findMany({ where: { branchId: { in: branchIds } }, select: { id: true } })
+      : [];
+    const allUserIds = [...staffUsers.map((u) => u.id), business.ownerId];
+
     await prisma.$transaction(async (tx) => {
       // 1. Pagos de créditos
       await tx.creditPayment.deleteMany({ where: { credit: { customer: { businessId } } } });
       // 2. Créditos
       await tx.credit.deleteMany({ where: { customer: { businessId } } });
-      // 3-5. Caja (solo si hay sucursales)
+      // 3-5. Caja
       if (branchIds.length > 0) {
         await tx.cashMovement.deleteMany({ where: { cashRegister: { branchId: { in: branchIds } } } });
         await tx.cashRegister.deleteMany({ where: { branchId: { in: branchIds } } });
@@ -147,7 +153,7 @@ router.delete('/businesses/:id', async (req: AuthRequest, res, next) => {
       }
       // 6. Movimientos de inventario
       await tx.inventoryMovement.deleteMany({ where: { product: { businessId } } });
-      // 7. Ventas (solo si hay sucursales)
+      // 7. Ventas
       if (branchIds.length > 0) {
         await tx.saleDetail.deleteMany({ where: { sale: { branchId: { in: branchIds } } } });
         await tx.sale.deleteMany({ where: { branchId: { in: branchIds } } });
@@ -165,15 +171,17 @@ router.delete('/businesses/:id', async (req: AuthRequest, res, next) => {
       await tx.supplier.deleteMany({ where: { businessId } });
       await tx.category.deleteMany({ where: { businessId } });
       await tx.brand.deleteMany({ where: { businessId } });
-      // 12. Usuarios staff (tienen branchId; RefreshToken y Notification en cascade en el schema)
+      // 12. AuditLog: userId nullable sin cascade → poner null para no bloquear delete de usuarios
+      await tx.auditLog.updateMany({ where: { userId: { in: allUserIds } }, data: { userId: null } });
+      // 13. Usuarios staff (Notification y RefreshToken tienen onDelete: Cascade)
       if (branchIds.length > 0) {
         await tx.user.deleteMany({ where: { branchId: { in: branchIds } } });
       }
-      // 13. Sucursales
+      // 14. Sucursales
       await tx.branch.deleteMany({ where: { businessId } });
-      // 14. Negocio (libera el FK Business.ownerId → User)
+      // 15. Negocio (libera FK Business.ownerId → User)
       await tx.business.delete({ where: { id: businessId } });
-      // 15. Owner (ahora sin FK que lo bloquee)
+      // 16. Owner
       await tx.user.delete({ where: { id: business.ownerId } });
     });
 
