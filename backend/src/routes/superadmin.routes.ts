@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import bcrypt from 'bcryptjs';
 import { prisma } from '../config/database';
 import { authenticate } from '../middlewares/auth';
 import { AppError, success, paginated } from '../utils/response';
@@ -105,6 +106,75 @@ router.patch('/businesses/:id/status', async (req, res, next) => {
     });
 
     return success(res, business, active ? `"${business.name}" activado` : `"${business.name}" desactivado`);
+  } catch (err) { next(err); }
+});
+
+// Eliminar negocio permanentemente — requiere contraseña del superadmin
+router.delete('/businesses/:id', async (req: AuthRequest, res, next) => {
+  try {
+    const { password } = req.body;
+    if (!password) throw new AppError('Se requiere la contraseña para confirmar', 400);
+
+    // Verificar contraseña del superadmin
+    const superAdmin = await prisma.user.findUnique({
+      where: { id: req.user!.id },
+      select: { password: true },
+    });
+    if (!superAdmin || !(await bcrypt.compare(password, superAdmin.password))) {
+      throw new AppError('Contraseña incorrecta', 401);
+    }
+
+    const business = await prisma.business.findUnique({
+      where: { id: req.params.id },
+      include: { branches: { select: { id: true } } },
+    });
+    if (!business) throw new AppError('Negocio no encontrado', 404);
+
+    const branchIds = business.branches.map((b) => b.id);
+
+    // Eliminación en orden correcto para respetar las foreign keys
+    await prisma.$transaction(async (tx) => {
+      // 1. Pagos de créditos
+      await tx.creditPayment.deleteMany({ where: { credit: { customer: { businessId: req.params.id } } } });
+      // 2. Créditos
+      await tx.credit.deleteMany({ where: { customer: { businessId: req.params.id } } });
+      // 3. Movimientos de caja
+      if (branchIds.length > 0) {
+        await tx.cashMovement.deleteMany({ where: { cashRegister: { branchId: { in: branchIds } } } });
+        // 4. Cajas registradoras
+        await tx.cashRegister.deleteMany({ where: { branchId: { in: branchIds } } });
+        // 5. Contadores de facturas
+        await tx.saleNumberCounter.deleteMany({ where: { branchId: { in: branchIds } } });
+      }
+      // 6. Movimientos de inventario (antes de productos)
+      await tx.inventoryMovement.deleteMany({ where: { product: { businessId: req.params.id } } });
+      // 7. Detalles de ventas + ventas (las ventas están en sucursales)
+      if (branchIds.length > 0) {
+        await tx.saleDetail.deleteMany({ where: { sale: { branchId: { in: branchIds } } } });
+        await tx.sale.deleteMany({ where: { branchId: { in: branchIds } } });
+      }
+      // 8. Productos
+      await tx.product.deleteMany({ where: { businessId: req.params.id } });
+      // 9. Detalles de compras + compras
+      await tx.purchaseDetail.deleteMany({ where: { purchase: { businessId: req.params.id } } });
+      await tx.purchase.deleteMany({ where: { businessId: req.params.id } });
+      // 10. Gastos y categorías de gastos
+      await tx.expense.deleteMany({ where: { businessId: req.params.id } });
+      await tx.expenseCategory.deleteMany({ where: { businessId: req.params.id } });
+      // 11. Clientes, proveedores, categorías, marcas
+      await tx.customer.deleteMany({ where: { businessId: req.params.id } });
+      await tx.supplier.deleteMany({ where: { businessId: req.params.id } });
+      await tx.category.deleteMany({ where: { businessId: req.params.id } });
+      await tx.brand.deleteMany({ where: { businessId: req.params.id } });
+      // 12. Sucursales (User.branchId → SetNull automático)
+      await tx.branch.deleteMany({ where: { businessId: req.params.id } });
+      // 13. Usuarios del negocio (notificaciones y refreshTokens en cascade)
+      await tx.user.deleteMany({ where: { businessId: req.params.id } });
+      // 14. Negocio
+      await tx.business.delete({ where: { id: req.params.id } });
+    });
+
+    return success(res, null, `Negocio "${business.name}" eliminado permanentemente`);
   } catch (err) { next(err); }
 });
 

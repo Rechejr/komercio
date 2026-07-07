@@ -6,7 +6,7 @@ import { api } from '@/lib/api';
 import toast from 'react-hot-toast';
 import {
   Building2, Users, ShoppingCart, Zap, Search,
-  ChevronLeft, ChevronRight, X, CheckCircle, Ban, Loader2,
+  ChevronLeft, ChevronRight, X, CheckCircle, Ban, Loader2, Trash2, AlertTriangle,
 } from 'lucide-react';
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
@@ -158,6 +158,95 @@ function PlanModal({ business, onClose }: { business: Business; onClose: () => v
   );
 }
 
+// ── Modal eliminar cuenta ─────────────────────────────────────────────────────
+function DeleteModal({ business, onClose }: { business: Business; onClose: () => void }) {
+  const qc = useQueryClient();
+  const [password, setPassword] = useState('');
+
+  const mutation = useMutation({
+    mutationFn: () =>
+      api.delete(`/superadmin/businesses/${business.id}`, { data: { password } }).then((r) => r.data),
+    onSuccess: () => {
+      toast.success(`"${business.name}" eliminado permanentemente`);
+      qc.invalidateQueries({ queryKey: ['sa-businesses'] });
+      qc.invalidateQueries({ queryKey: ['sa-stats'] });
+      onClose();
+    },
+    onError: (err: any) => toast.error(err.response?.data?.error || 'Error al eliminar'),
+  });
+
+  return (
+    <div
+      className="fixed inset-0 bg-black/80 backdrop-blur-[2px] z-50 flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-gray-900 border border-red-900/60 rounded-2xl w-full max-w-sm p-5 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <div className="w-9 h-9 bg-red-500/15 rounded-xl flex items-center justify-center flex-shrink-0">
+              <AlertTriangle size={17} className="text-red-400" />
+            </div>
+            <h2 className="text-[15px] font-bold text-white">Eliminar cuenta</h2>
+          </div>
+          <button
+            type="button"
+            aria-label="Cerrar"
+            onClick={onClose}
+            className="w-7 h-7 flex items-center justify-center rounded-md text-gray-500 hover:bg-gray-800 transition-colors"
+          >
+            <X size={14} />
+          </button>
+        </div>
+
+        <div className="mb-4 p-3 bg-red-500/5 border border-red-900/40 rounded-xl text-sm">
+          <p className="font-semibold text-white">{business.name}</p>
+          <p className="text-gray-400 text-xs mt-0.5">{business.owner.email}</p>
+          <p className="text-red-400 text-xs mt-2 leading-relaxed">
+            Esta acción es <strong>irreversible</strong>. Se eliminarán todos los datos: ventas,
+            productos, clientes, usuarios y sucursales.
+          </p>
+        </div>
+
+        <div className="mb-4">
+          <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+            Contraseña del superadmin
+          </label>
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Ingresa tu contraseña"
+            className="w-full px-3 py-2.5 text-sm rounded-xl border border-gray-700 bg-gray-800 text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-red-500"
+            onKeyDown={(e) => { if (e.key === 'Enter' && password) mutation.mutate(); }}
+          />
+        </div>
+
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex-1 px-4 py-2.5 bg-gray-800 hover:bg-gray-700 rounded-xl text-sm font-medium text-gray-300 transition-colors"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={() => mutation.mutate()}
+            disabled={!password || mutation.isPending}
+            className="flex-1 px-4 py-2.5 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded-xl text-sm font-semibold transition-colors flex items-center justify-center gap-2"
+          >
+            {mutation.isPending && <Loader2 size={13} className="animate-spin" />}
+            Eliminar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Página ────────────────────────────────────────────────────────────────────
 export default function SuperAdminPage() {
   const qc = useQueryClient();
@@ -165,6 +254,7 @@ export default function SuperAdminPage() {
   const [planFilter, setPlanFilter] = useState('');
   const [page, setPage] = useState(1);
   const [planModal, setPlanModal] = useState<Business | null>(null);
+  const [deleteModal, setDeleteModal] = useState<Business | null>(null);
   const LIMIT = 15;
 
   const { data: stats } = useQuery({
@@ -349,6 +439,14 @@ export default function SuperAdminPage() {
                           >
                             {isActive ? 'Desactivar' : 'Activar'}
                           </button>
+                          <button
+                            type="button"
+                            onClick={() => setDeleteModal(b)}
+                            className="p-1.5 bg-red-500/10 hover:bg-red-500/25 text-red-400 rounded-lg transition-colors"
+                            title="Eliminar cuenta permanentemente"
+                          >
+                            <Trash2 size={13} />
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -386,6 +484,7 @@ export default function SuperAdminPage() {
       </div>
 
       {planModal && <PlanModal business={planModal} onClose={() => setPlanModal(null)} />}
+      {deleteModal && <DeleteModal business={deleteModal} onClose={() => setDeleteModal(null)} />}
     </div>
   );
 }
