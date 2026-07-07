@@ -327,6 +327,7 @@ export default function SuperAdminPage() {
   const [planModal, setPlanModal] = useState<Business | null>(null);
   const [deleteModal, setDeleteModal] = useState<Business | null>(null);
   const [changePwdModal, setChangePwdModal] = useState(false);
+  const [searchSnapshot, setSearchSnapshot] = useState('');
   const LIMIT = 15;
 
   const { data: stats } = useQuery({
@@ -370,7 +371,7 @@ export default function SuperAdminPage() {
         </div>
         <button
           type="button"
-          onClick={() => setChangePwdModal(true)}
+          onClick={() => { setSearchSnapshot(search); setChangePwdModal(true); }}
           className="flex items-center gap-2 px-3 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-xl text-sm text-gray-300 transition-colors flex-shrink-0"
         >
           <KeyRound size={14} className="text-emerald-400" />
@@ -505,7 +506,7 @@ export default function SuperAdminPage() {
                         <div className="flex items-center gap-1.5">
                           <button
                             type="button"
-                            onClick={() => setPlanModal(b)}
+                            onClick={() => { setSearchSnapshot(search); setPlanModal(b); }}
                             className="px-2.5 py-1 bg-gray-700 hover:bg-gray-600 text-gray-300 text-xs rounded-lg transition-colors font-medium"
                           >
                             Plan
@@ -524,7 +525,7 @@ export default function SuperAdminPage() {
                           </button>
                           <button
                             type="button"
-                            onClick={() => setDeleteModal(b)}
+                            onClick={() => { setSearchSnapshot(search); setDeleteModal(b); }}
                             className="p-1.5 bg-red-500/10 hover:bg-red-500/25 text-red-400 rounded-lg transition-colors"
                             title="Eliminar cuenta permanentemente"
                           >
@@ -546,6 +547,7 @@ export default function SuperAdminPage() {
             <div className="flex items-center gap-2">
               <button
                 type="button"
+                aria-label="Página anterior"
                 onClick={() => setPage((p) => p - 1)}
                 disabled={page === 1}
                 className="p-1 rounded hover:bg-gray-800 disabled:opacity-30 transition-colors"
@@ -555,6 +557,7 @@ export default function SuperAdminPage() {
               <span className="text-white font-medium">{page} / {totalPages}</span>
               <button
                 type="button"
+                aria-label="Página siguiente"
                 onClick={() => setPage((p) => p + 1)}
                 disabled={page === totalPages}
                 className="p-1 rounded hover:bg-gray-800 disabled:opacity-30 transition-colors"
@@ -566,9 +569,9 @@ export default function SuperAdminPage() {
         )}
       </div>
 
-      {planModal && <PlanModal business={planModal} onClose={() => setPlanModal(null)} />}
-      {deleteModal && <DeleteModal business={deleteModal} onClose={() => setDeleteModal(null)} />}
-      {changePwdModal && <ChangePasswordModal onClose={() => setChangePwdModal(false)} />}
+      {planModal && <PlanModal business={planModal} onClose={() => { setPlanModal(null); setSearch(searchSnapshot); setPage(1); }} />}
+      {deleteModal && <DeleteModal business={deleteModal} onClose={() => { setDeleteModal(null); setSearch(searchSnapshot); setPage(1); }} />}
+      {changePwdModal && <ChangePasswordModal onClose={() => { setChangePwdModal(false); setSearch(searchSnapshot); }} />}
     </div>
   );
 }
