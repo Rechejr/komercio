@@ -126,8 +126,9 @@ function catStyle(name: string | undefined): { rgb: string; color: string; icon:
 }
 
 // ── Shared input style ────────────────────────────────────────────────────────
+// text-[16px] en móvil evita el zoom automático de iOS Safari (< 16 px dispara zoom)
 const inputCls = [
-  'w-full px-3.5 py-2.5 text-[13px] rounded-xl border transition-all duration-150',
+  'w-full px-3.5 py-2.5 text-[16px] sm:text-[13px] rounded-xl border transition-all duration-150',
   'bg-slate-50 dark:bg-slate-800/60',
   'border-slate-200 dark:border-slate-700/60',
   'text-slate-900 dark:text-slate-100',
@@ -170,6 +171,13 @@ export default function POSPage() {
   const [creditPayAmount, setCreditPayAmount] = useState('');
   const [creditPayMethod, setCreditPayMethod] = useState('CASH');
   const searchRef = useRef<HTMLInputElement>(null);
+
+  // Focalizar el buscador solo en escritorio al montar (en móvil evita teclado automático)
+  useEffect(() => {
+    if (window.matchMedia('(pointer: fine)').matches) {
+      searchRef.current?.focus();
+    }
+  }, []);
 
   const { data: categories } = useQuery({
     queryKey: ['categories'],
@@ -316,7 +324,10 @@ export default function POSPage() {
       unitPrice: product.salePrice, quantity: 1, discountPct: 0, taxRate: product.taxRate || 0,
     });
     setSearch('');
-    searchRef.current?.focus();
+    // Solo refocalizar en escritorio — en móvil abre el teclado de forma inesperada
+    if (window.matchMedia('(pointer: fine)').matches) {
+      searchRef.current?.focus();
+    }
   }
 
   function handleSale() {
@@ -435,7 +446,6 @@ export default function POSPage() {
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Buscar producto por nombre, código o código de barras..."
                 className={cn(inputCls, 'pl-9')}
-                autoFocus
               />
             </div>
             <button
@@ -659,7 +669,7 @@ export default function POSPage() {
                               const v = parseInt(e.target.value);
                               if (!isNaN(v) && v > 0) updateQty(item.productId, v);
                             }}
-                            className="w-10 text-center text-[13px] font-mono border border-slate-200 dark:border-slate-700/60 rounded-md px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-emerald-500 dark:bg-slate-800 dark:text-white"
+                            className="w-10 text-center text-[16px] sm:text-[13px] font-mono border border-slate-200 dark:border-slate-700/60 rounded-md px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-emerald-500 dark:bg-slate-800 dark:text-white"
                           />
                           <button
                             type="button"
@@ -682,7 +692,7 @@ export default function POSPage() {
                               const v = parseFloat(e.target.value);
                               updateDiscount(item.productId, isNaN(v) ? 0 : Math.min(100, Math.max(0, v)));
                             }}
-                            className="w-10 text-right text-[12px] border border-slate-200 dark:border-slate-700/60 rounded-md px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-emerald-500 dark:bg-slate-800 dark:text-white"
+                            className="w-10 text-right text-[16px] sm:text-[12px] border border-slate-200 dark:border-slate-700/60 rounded-md px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-emerald-500 dark:bg-slate-800 dark:text-white"
                           />
                           <span className="text-[11px] text-slate-400">%</span>
                         </div>
@@ -880,7 +890,7 @@ export default function POSPage() {
                     aria-label="Método de pago"
                     value={splitMethod}
                     onChange={(e) => setSplitMethod(e.target.value)}
-                    className="flex-1 min-w-0 px-2 py-2 border border-slate-200 dark:border-slate-700/60 rounded-xl text-[12px] focus:outline-none focus:ring-2 focus:ring-emerald-500/30 bg-slate-50 dark:bg-slate-800/60 dark:text-white"
+                    className="flex-1 min-w-0 px-2 py-2 border border-slate-200 dark:border-slate-700/60 rounded-xl text-[16px] sm:text-[12px] focus:outline-none focus:ring-2 focus:ring-emerald-500/30 bg-slate-50 dark:bg-slate-800/60 dark:text-white"
                   >
                     {PAYMENT_METHODS.filter((m) => m !== 'MIXED').map((m) => (
                       <option key={m} value={m}>{paymentMethodLabel[m]}</option>
@@ -892,7 +902,7 @@ export default function POSPage() {
                     onChange={(e) => setSplitAmount(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && addSplitPayment()}
                     placeholder={mixedRemaining > 0 ? String(Math.round(mixedRemaining)) : '0'}
-                    className="w-24 px-2 py-2 border border-slate-200 dark:border-slate-700/60 rounded-xl text-[13px] focus:outline-none focus:ring-2 focus:ring-emerald-500/30 dark:bg-slate-800 dark:text-white"
+                    className="w-24 px-2 py-2 border border-slate-200 dark:border-slate-700/60 rounded-xl text-[16px] sm:text-[13px] focus:outline-none focus:ring-2 focus:ring-emerald-500/30 dark:bg-slate-800 dark:text-white"
                   />
                   <button
                     type="button"
