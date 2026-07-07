@@ -14,7 +14,7 @@ import {
   LayoutDashboard, Package, ShoppingCart, Users, Truck,
   Receipt, CreditCard, TrendingUp, Settings,
   ChevronLeft, ChevronRight, ShoppingBag, DollarSign,
-  LogOut, Calculator, X, Sparkles, Zap,
+  LogOut, Calculator, X, Sparkles, Zap, Shield,
 } from 'lucide-react';
 
 // ── Navigation ────────────────────────────────────────────────────────────────
@@ -106,18 +106,14 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
       {/* Sidebar */}
       <aside
         className={cn(
-          'flex flex-col z-50 select-none',
+          'sidebar-bg flex flex-col z-50 select-none',
           'fixed inset-y-0 left-0 w-72',
           mobileOpen ? 'translate-x-0' : '-translate-x-full',
           'transition-transform duration-300 ease-spring',
           'md:relative md:translate-x-0 md:z-30',
           collapsed ? 'md:w-[60px]' : 'md:w-[220px]',
-            'transition-[width,transform] duration-300 ease-spring',
+          'transition-[width,transform] duration-300 ease-spring',
         )}
-        style={{
-          background: 'linear-gradient(180deg, #064e3b 0%, #022c22 100%)',
-          borderRight: '1px solid rgba(255,255,255,0.05)',
-        }}
       >
         {/* ── Logo ─────────────────────────────────────────────────────────── */}
         <div className={cn(
@@ -182,127 +178,149 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
 
         {/* ── Navigation ───────────────────────────────────────────────────── */}
         <nav className="flex-1 overflow-y-auto scrollbar-thin py-1.5 px-2 space-y-0">
-          {NAV_GROUPS.map((group, gi) => {
-            const visible = group.items.filter(
-              (i) => user?.role && i.roles.includes(user.role as never),
-            );
-            if (visible.length === 0) return null;
+          {user?.role === 'SUPER_ADMIN' ? (
+            /* Nav exclusivo para super admin */
+            <div>
+              {(() => {
+                const active = pathname === '/superadmin' || pathname.startsWith('/superadmin/');
+                return (
+                  <Tooltip content="Panel Admin" side="right" disabled={!collapsed}>
+                    <Link
+                      href="/superadmin"
+                      className={cn(
+                        'group relative flex items-center gap-2.5 rounded-md text-[13px] font-medium',
+                        'transition-all duration-150 px-2.5 py-[7px]',
+                        active ? 'text-white nav-item-active-admin' : 'text-slate-400 hover:text-slate-100 hover:bg-white/[0.05]',
+                        collapsed && 'md:justify-center md:px-0 md:py-2',
+                      )}
+                    >
+                      {active && (
+                        <motion.span
+                          layoutId="sidebar-active-bar"
+                          className="sidebar-active-bar-admin absolute left-0 top-1/2 -translate-y-1/2 w-[3px] rounded-r-full"
+                          transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+                        />
+                      )}
+                      <Shield
+                        size={15}
+                        strokeWidth={active ? 2.2 : 1.8}
+                        className={cn('flex-shrink-0', active ? 'text-violet-400' : 'text-slate-600 group-hover:text-slate-300')}
+                      />
+                      <span className={cn('truncate flex-1', collapsed && 'md:hidden')}>Panel Admin</span>
+                    </Link>
+                  </Tooltip>
+                );
+              })()}
+            </div>
+          ) : (
+            /* Nav normal para el resto de roles */
+            NAV_GROUPS.map((group, gi) => {
+              const visible = group.items.filter(
+                (i) => user?.role && i.roles.includes(user.role as never),
+              );
+              if (visible.length === 0) return null;
 
-            return (
-              <div key={gi} className={gi > 0 ? 'mt-3' : ''}>
-                {/* Group label */}
-                {group.label && !collapsed && (
-                  <p className="px-2 pt-0.5 pb-1 text-[10px] font-semibold uppercase tracking-widest"
-                     style={{ color: 'rgba(148,163,184,0.45)' }}>
-                    {group.label}
-                  </p>
-                )}
-                {gi > 0 && collapsed && <div className="mx-1.5 mb-2 h-px bg-white/[0.06]" />}
+              return (
+                <div key={gi} className={gi > 0 ? 'mt-3' : ''}>
+                  {/* Group label */}
+                  {group.label && !collapsed && (
+                    <p className="sidebar-group-label px-2 pt-0.5 pb-1 text-[10px] font-semibold uppercase tracking-widest">
+                      {group.label}
+                    </p>
+                  )}
+                  {gi > 0 && collapsed && <div className="mx-1.5 mb-2 h-px bg-white/[0.06]" />}
 
-                <div className="space-y-[2px]">
-                  {visible.map((item) => {
-                    const isLocked = item.pro && isFree;
-                    const active   = !isLocked && (
-                      pathname === item.href ||
-                      (item.href !== '/dashboard' && pathname.startsWith(item.href))
-                    );
+                  <div className="space-y-[2px]">
+                    {visible.map((item) => {
+                      const isLocked = item.pro && isFree;
+                      const active   = !isLocked && (
+                        pathname === item.href ||
+                        (item.href !== '/dashboard' && pathname.startsWith(item.href))
+                      );
 
-                    return (
-                      <Tooltip
-                        key={item.href}
-                        content={isLocked ? `${item.label} — Solo Plan Pro` : item.label}
-                        side="right"
-                        disabled={!collapsed}
-                      >
-                        <Link
-                          href={item.href}
-                          onClick={(e) => handleNavClick(item, e)}
-                          className={cn(
-                            'group relative flex items-center gap-2.5 rounded-md text-[13px] font-medium',
-                            'transition-all duration-150',
-                            'px-2.5 py-[7px]',
-                            active
-                              ? 'text-white'
-                              : isLocked
-                                ? 'text-slate-700 cursor-pointer'
-                                : 'text-slate-400 hover:text-slate-100',
-                            !active && !isLocked && 'hover:bg-white/[0.05]',
-                            collapsed && 'md:justify-center md:px-0 md:py-2',
-                          )}
-                          style={active ? {
-                            background: 'linear-gradient(90deg, rgba(16,185,129,0.15) 0%, rgba(16,185,129,0.07) 100%)',
-                          } : undefined}
+                      return (
+                        <Tooltip
+                          key={item.href}
+                          content={isLocked ? `${item.label} — Solo Plan Pro` : item.label}
+                          side="right"
+                          disabled={!collapsed}
                         >
-                          {/* Active indicator bar — desliza entre ítems con layoutId */}
-                          {active && (
-                            <motion.span
-                              layoutId="sidebar-active-bar"
-                              className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] rounded-r-full"
-                              style={{ height: '16px', background: 'linear-gradient(180deg, #34d399, #059669)' }}
-                              transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-                            />
-                          )}
-
-                          <item.icon
-                            size={15}
-                            strokeWidth={active ? 2.2 : 1.8}
+                          <Link
+                            href={item.href}
+                            onClick={(e) => handleNavClick(item, e)}
                             className={cn(
-                              'flex-shrink-0 transition-colors duration-150',
-                              active   ? 'text-emerald-400'  : '',
-                              isLocked ? 'text-slate-700' : !active ? 'text-slate-600 group-hover:text-slate-300' : '',
+                              'group relative flex items-center gap-2.5 rounded-md text-[13px] font-medium',
+                              'transition-all duration-150',
+                              'px-2.5 py-[7px]',
+                              active
+                                ? 'text-white nav-item-active'
+                                : isLocked
+                                  ? 'text-slate-700 cursor-pointer'
+                                  : 'text-slate-400 hover:text-slate-100',
+                              !active && !isLocked && 'hover:bg-white/[0.05]',
+                              collapsed && 'md:justify-center md:px-0 md:py-2',
                             )}
-                          />
+                          >
+                            {/* Active indicator bar — desliza entre ítems con layoutId */}
+                            {active && (
+                              <motion.span
+                                layoutId="sidebar-active-bar"
+                                className="sidebar-active-bar absolute left-0 top-1/2 -translate-y-1/2 w-[3px] rounded-r-full"
+                                transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+                              />
+                            )}
 
-                          <span className={cn(
-                            'truncate flex-1',
-                            collapsed && 'md:hidden',
-                          )}>
-                            {item.label}
-                          </span>
-
-                          {item.pro && !collapsed && (
-                            <span
+                            <item.icon
+                              size={15}
+                              strokeWidth={active ? 2.2 : 1.8}
                               className={cn(
-                                'flex-shrink-0 hidden md:inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full',
-                                isFree
-                                  ? 'text-amber-500/80'
-                                  : 'text-emerald-400/80',
+                                'flex-shrink-0 transition-colors duration-150',
+                                active   ? 'text-emerald-400'  : '',
+                                isLocked ? 'text-slate-700' : !active ? 'text-slate-600 group-hover:text-slate-300' : '',
                               )}
-                              style={{
-                                background: isFree
-                                  ? 'rgba(245,158,11,0.08)'
-                                  : 'rgba(16,185,129,0.08)',
-                              }}
-                            >
-                              Pro
+                            />
+
+                            <span className={cn(
+                              'truncate flex-1',
+                              collapsed && 'md:hidden',
+                            )}>
+                              {item.label}
                             </span>
-                          )}
-                        </Link>
-                      </Tooltip>
-                    );
-                  })}
+
+                            {item.pro && !collapsed && (
+                              <span
+                                className={cn(
+                                  'flex-shrink-0 hidden md:inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full',
+                                  isFree
+                                    ? 'text-amber-500/80 sidebar-pro-badge-free'
+                                    : 'text-emerald-400/80 sidebar-pro-badge-pro',
+                                )}
+                              >
+                                Pro
+                              </span>
+                            )}
+                          </Link>
+                        </Tooltip>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })
+          )}
         </nav>
 
         {/* ── Bottom actions ────────────────────────────────────────────────── */}
-        <div className="flex-shrink-0 px-2 pb-2 pt-1 space-y-[2px]" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+        <div className="sidebar-bottom-border flex-shrink-0 px-2 pb-2 pt-1 space-y-[2px]">
           {/* Plan indicator */}
           {!collapsed && (
             <div className="px-2 py-1.5">
               <span className={cn(
                 'inline-flex items-center gap-1.5 text-[11px] font-semibold px-2 py-1 rounded-md',
                 user?.plan === 'pro'
-                  ? 'text-emerald-400'
-                  : 'text-slate-600',
-              )}
-              style={{
-                background: user?.plan === 'pro'
-                  ? 'rgba(16,185,129,0.08)'
-                  : 'rgba(255,255,255,0.03)',
-              }}>
+                  ? 'text-emerald-400 sidebar-plan-indicator-pro'
+                  : 'text-slate-600 sidebar-plan-indicator-free',
+              )}>
                 <Zap size={10} className={user?.plan === 'pro' ? 'fill-emerald-400' : 'fill-slate-600'} />
                 {user?.plan === 'pro' ? 'Plan Pro' : 'Plan Gratuito'}
               </span>
@@ -315,20 +333,10 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
               type="button"
               onClick={openUpgrade}
               className={cn(
-                'w-full flex items-center gap-2 px-3 py-2 rounded-md text-[12px] font-semibold',
+                'sidebar-upgrade-btn w-full flex items-center gap-2 px-3 py-2 rounded-md text-[12px] font-semibold',
                 'transition-all duration-200',
                 'text-emerald-400 hover:text-emerald-300',
               )}
-              style={{
-                background: 'linear-gradient(90deg, rgba(16,185,129,0.12), rgba(5,150,105,0.12))',
-                border: '1px solid rgba(16,185,129,0.2)',
-              }}
-              onMouseEnter={(e) => {
-                (e.currentTarget as HTMLElement).style.borderColor = 'rgba(16,185,129,0.4)';
-              }}
-              onMouseLeave={(e) => {
-                (e.currentTarget as HTMLElement).style.borderColor = 'rgba(16,185,129,0.2)';
-              }}
             >
               <Sparkles size={12} className="flex-shrink-0" />
               Actualizar a Pro

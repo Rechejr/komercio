@@ -184,6 +184,24 @@
   @keyframes scaleIn { from { opacity: 0; transform: scale(0.95) }           to { opacity: 1; transform: scale(1) } }
   @keyframes slideUp { from { opacity: 0; transform: translateY(10px) }      to { opacity: 1; transform: translateY(0) } }
 
+  /* ── Sidebar ─────────────────────────────────────────────────────────────── */
+  .sidebar-bg            { background: linear-gradient(180deg, #064e3b 0%, #022c22 100%); border-right: 1px solid rgba(255,255,255,0.05); }
+  .sidebar-bottom-border { border-top: 1px solid rgba(255,255,255,0.06); }
+  .sidebar-group-label   { color: rgba(148,163,184,0.45); }
+  .nav-item-active       { background: linear-gradient(90deg, rgba(16,185,129,0.15) 0%, rgba(16,185,129,0.07) 100%); }
+  .nav-item-active-admin { background: linear-gradient(90deg, rgba(139,92,246,0.18) 0%, rgba(139,92,246,0.08) 100%); }
+  .sidebar-active-bar    { height: 16px; background: linear-gradient(180deg, #34d399, #059669); }
+  .sidebar-active-bar-admin { height: 16px; background: linear-gradient(180deg, #a78bfa, #7c3aed); }
+  .sidebar-pro-badge-free { background: rgba(245,158,11,0.08); }
+  .sidebar-pro-badge-pro  { background: rgba(16,185,129,0.08); }
+  .sidebar-plan-indicator-free { background: rgba(255,255,255,0.03); }
+  .sidebar-plan-indicator-pro  { background: rgba(16,185,129,0.08); }
+  .sidebar-upgrade-btn {
+    background: linear-gradient(90deg, rgba(16,185,129,0.12), rgba(5,150,105,0.12));
+    border: 1px solid rgba(16,185,129,0.2);
+  }
+  .sidebar-upgrade-btn:hover { border-color: rgba(16,185,129,0.4); }
+
   /* ── Global search ───────────────────────────────────────────────────────── */
   .search-backdrop {
     background: radial-gradient(ellipse 640px 360px at 50% 36%, rgba(16,185,129,0.07) 0%, rgba(0,0,0,0.38) 70%);
