@@ -6,7 +6,7 @@ import { api } from '@/lib/api';
 import toast from 'react-hot-toast';
 import {
   Building2, Users, ShoppingCart, Zap, Search,
-  ChevronLeft, ChevronRight, X, CheckCircle, Ban, Loader2, Trash2, AlertTriangle,
+  ChevronLeft, ChevronRight, X, CheckCircle, Ban, Loader2, Trash2, AlertTriangle, KeyRound,
 } from 'lucide-react';
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
@@ -247,6 +247,75 @@ function DeleteModal({ business, onClose }: { business: Business; onClose: () =>
   );
 }
 
+// ── Modal cambiar contraseña superadmin ───────────────────────────────────────
+function ChangePasswordModal({ onClose }: { onClose: () => void }) {
+  const [current, setCurrent] = useState('');
+  const [next, setNext] = useState('');
+  const [confirm, setConfirm] = useState('');
+
+  const mutation = useMutation({
+    mutationFn: () =>
+      api.patch('/auth/change-password', { currentPassword: current, newPassword: next }).then((r) => r.data),
+    onSuccess: () => {
+      toast.success('Contraseña actualizada correctamente');
+      onClose();
+    },
+    onError: (err: any) => toast.error(err.response?.data?.error || 'Error al cambiar contraseña'),
+  });
+
+  const valid = current && next.length >= 8 && next === confirm;
+
+  return (
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-[2px] z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-sm p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-[15px] font-bold text-white flex items-center gap-2">
+            <KeyRound size={15} className="text-emerald-400" /> Cambiar contraseña
+          </h2>
+          <button type="button" aria-label="Cerrar" onClick={onClose} className="w-7 h-7 flex items-center justify-center rounded-md text-gray-500 hover:bg-gray-800 transition-colors">
+            <X size={14} />
+          </button>
+        </div>
+
+        <div className="space-y-3 mb-4">
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Contraseña actual</label>
+            <input type="password" value={current} onChange={(e) => setCurrent(e.target.value)}
+              placeholder="Tu contraseña actual"
+              className="w-full px-3 py-2.5 text-[16px] sm:text-sm rounded-xl border border-gray-700 bg-gray-800 text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Nueva contraseña</label>
+            <input type="password" value={next} onChange={(e) => setNext(e.target.value)}
+              placeholder="Mínimo 8 caracteres"
+              className="w-full px-3 py-2.5 text-[16px] sm:text-sm rounded-xl border border-gray-700 bg-gray-800 text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Confirmar nueva contraseña</label>
+            <input type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)}
+              placeholder="Repite la nueva contraseña"
+              className={`w-full px-3 py-2.5 text-[16px] sm:text-sm rounded-xl border bg-gray-800 text-white placeholder-gray-600 focus:outline-none focus:ring-2 transition-colors ${
+                confirm && next !== confirm ? 'border-red-500 focus:ring-red-500' : 'border-gray-700 focus:ring-emerald-500'
+              }`} />
+            {confirm && next !== confirm && <p className="text-red-400 text-xs mt-1">Las contraseñas no coinciden</p>}
+          </div>
+        </div>
+
+        <div className="flex gap-2">
+          <button type="button" onClick={onClose} className="flex-1 px-4 py-2.5 bg-gray-800 hover:bg-gray-700 rounded-xl text-sm font-medium text-gray-300 transition-colors">
+            Cancelar
+          </button>
+          <button type="button" onClick={() => mutation.mutate()} disabled={!valid || mutation.isPending}
+            className="flex-1 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-xl text-sm font-semibold transition-colors flex items-center justify-center gap-2">
+            {mutation.isPending && <Loader2 size={13} className="animate-spin" />}
+            Guardar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Página ────────────────────────────────────────────────────────────────────
 export default function SuperAdminPage() {
   const qc = useQueryClient();
@@ -255,6 +324,7 @@ export default function SuperAdminPage() {
   const [page, setPage] = useState(1);
   const [planModal, setPlanModal] = useState<Business | null>(null);
   const [deleteModal, setDeleteModal] = useState<Business | null>(null);
+  const [changePwdModal, setChangePwdModal] = useState(false);
   const LIMIT = 15;
 
   const { data: stats } = useQuery({
@@ -291,9 +361,19 @@ export default function SuperAdminPage() {
 
   return (
     <div className="max-w-7xl mx-auto space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold text-white">Panel de Administración</h1>
-        <p className="text-gray-500 text-sm mt-1">Gestión global de negocios y planes</p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-white">Panel de Administración</h1>
+          <p className="text-gray-500 text-sm mt-1">Gestión global de negocios y planes</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setChangePwdModal(true)}
+          className="flex items-center gap-2 px-3 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-xl text-sm text-gray-300 transition-colors flex-shrink-0"
+        >
+          <KeyRound size={14} className="text-emerald-400" />
+          Cambiar contraseña
+        </button>
       </div>
 
       {/* Stats */}
@@ -485,6 +565,7 @@ export default function SuperAdminPage() {
 
       {planModal && <PlanModal business={planModal} onClose={() => setPlanModal(null)} />}
       {deleteModal && <DeleteModal business={deleteModal} onClose={() => setDeleteModal(null)} />}
+      {changePwdModal && <ChangePasswordModal onClose={() => setChangePwdModal(false)} />}
     </div>
   );
 }
