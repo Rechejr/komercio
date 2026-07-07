@@ -116,7 +116,7 @@ export function Header({ onMenuClick }: HeaderProps) {
           <button
             type="button"
             onClick={() => setSearchOpen(true)}
-            className="hidden sm:flex items-center gap-2 px-3 h-8 rounded-lg bg-slate-100 dark:bg-white/[0.06] text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-200 dark:hover:bg-white/[0.10] transition-colors text-[12px]"
+            className="flex items-center gap-2 px-2 sm:px-3 h-8 rounded-lg bg-slate-100 dark:bg-white/[0.06] text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-200 dark:hover:bg-white/[0.10] transition-colors text-[12px]"
           >
             <Search size={14} />
             <span className="hidden md:inline">Buscar</span>
