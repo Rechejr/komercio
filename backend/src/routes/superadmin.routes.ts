@@ -173,9 +173,9 @@ router.delete('/businesses/:id', async (req: AuthRequest, res, next) => {
       await tx.brand.deleteMany({ where: { businessId } });
       // 12. AuditLog: userId nullable sin cascade → poner null para no bloquear delete de usuarios
       await tx.auditLog.updateMany({ where: { userId: { in: allUserIds } }, data: { userId: null } });
-      // 13. Usuarios staff (Notification y RefreshToken tienen onDelete: Cascade)
+      // 13. Usuarios staff — excluir el owner (tiene negocio con FK; se borra en paso 16)
       if (branchIds.length > 0) {
-        await tx.user.deleteMany({ where: { branchId: { in: branchIds } } });
+        await tx.user.deleteMany({ where: { branchId: { in: branchIds }, id: { not: business.ownerId } } });
       }
       // 14. Sucursales
       await tx.branch.deleteMany({ where: { businessId } });
