@@ -122,7 +122,7 @@ export default function ForgotPasswordPage() {
                     value={email}
                     onChange={(e) => { setEmail(e.target.value); setError(''); }}
                     placeholder="tu@correo.com"
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition bg-gray-50/50"
+                    className="w-full px-4 py-3 border border-gray-200 rounded-xl text-[16px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition bg-gray-50/50"
                     autoFocus
                   />
                   {error && <p className="text-red-500 text-xs mt-1">{error}</p>}

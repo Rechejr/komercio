@@ -662,6 +662,7 @@ export default function POSPage() {
                           </button>
                           <input
                             type="number"
+                            inputMode="numeric"
                             aria-label="Cantidad"
                             min={1}
                             value={item.quantity}
@@ -685,6 +686,7 @@ export default function POSPage() {
                         <div className="flex items-center justify-end gap-0.5">
                           <input
                             type="number"
+                            inputMode="numeric"
                             aria-label="Descuento %"
                             min={0} max={100}
                             value={item.discountPct}
@@ -898,6 +900,7 @@ export default function POSPage() {
                   </select>
                   <input
                     type="number"
+                    inputMode="decimal"
                     value={splitAmount}
                     onChange={(e) => setSplitAmount(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && addSplitPayment()}
@@ -951,6 +954,7 @@ export default function POSPage() {
                   <label className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5 block">Monto recibido</label>
                   <input
                     type="number"
+                    inputMode="decimal"
                     value={paidAmount}
                     onChange={(e) => setPaidAmount(e.target.value)}
                     placeholder={formatCurrency(total)}
@@ -1115,6 +1119,7 @@ export default function POSPage() {
                   <input
                     id="creditPayAmount"
                     type="number"
+                    inputMode="decimal"
                     min={0.01}
                     step={0.01}
                     value={creditPayAmount}

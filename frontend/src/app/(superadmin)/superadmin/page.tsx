@@ -126,7 +126,7 @@ function PlanModal({ business, onClose }: { business: Business; onClose: () => v
               type="date"
               value={expires}
               onChange={(e) => setExpires(e.target.value)}
-              className="w-full px-3 py-2.5 text-sm rounded-xl border border-gray-700 bg-gray-800 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              className="w-full px-3 py-2.5 text-[16px] sm:text-sm rounded-xl border border-gray-700 bg-gray-800 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
             />
             <p className="text-xs text-gray-600 mt-1">Dejar vacío = sin expiración</p>
           </div>
@@ -219,7 +219,7 @@ function DeleteModal({ business, onClose }: { business: Business; onClose: () =>
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="Ingresa tu contraseña"
-            className="w-full px-3 py-2.5 text-sm rounded-xl border border-gray-700 bg-gray-800 text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-red-500"
+            className="w-full px-3 py-2.5 text-[16px] sm:text-sm rounded-xl border border-gray-700 bg-gray-800 text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-red-500"
             onKeyDown={(e) => { if (e.key === 'Enter' && password) mutation.mutate(); }}
           />
         </div>

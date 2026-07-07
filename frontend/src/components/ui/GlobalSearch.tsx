@@ -192,7 +192,7 @@ export function GlobalSearch({ open, onClose }: GlobalSearchProps) {
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder="Buscar clientes, productos, ventas... o escribe «fiado»"
-              className="flex-1 bg-transparent text-[14px] text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none"
+              className="flex-1 bg-transparent text-[16px] sm:text-[14px] text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none"
               autoComplete="off"
               spellCheck={false}
             />

@@ -43,7 +43,7 @@ const fieldLabel: Record<string, string> = {
   description: 'Descripción',
 };
 
-const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition';
+const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[16px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition';
 
 export default function InventarioPage() {
   const qc = useQueryClient();
@@ -740,9 +740,10 @@ export default function InventarioPage() {
                     <input
                       {...register('stock', { valueAsNumber: true })}
                       type="number"
+                      inputMode="numeric"
                       placeholder="0"
                       readOnly={!!editItem}
-                      className={`w-full px-3 py-2.5 border rounded-xl text-sm focus:outline-none dark:text-white transition ${
+                      className={`w-full px-3 py-2.5 border rounded-xl text-[16px] sm:text-sm focus:outline-none dark:text-white transition ${
                         editItem
                           ? 'border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/50 text-slate-400 dark:text-slate-500 cursor-not-allowed'
                           : 'bg-slate-50 border-slate-200 focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700'
@@ -756,7 +757,7 @@ export default function InventarioPage() {
                   </div>
                   <div>
                     <label className="block text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5">Cantidad mínima</label>
-                    <input {...register('minStock', { valueAsNumber: true })} type="number" placeholder="5" className={inputCls} />
+                    <input {...register('minStock', { valueAsNumber: true })} type="number" inputMode="numeric" placeholder="5" className={inputCls} />
                   </div>
                 </div>
 
@@ -820,7 +821,7 @@ export default function InventarioPage() {
                 <div>
                   <h4 className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide mb-3">Impuestos</h4>
                   <label className="block text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5">IVA (%)</label>
-                  <input {...register('taxRate', { valueAsNumber: true })} type="number" placeholder="0" className={inputCls} />
+                  <input {...register('taxRate', { valueAsNumber: true })} type="number" inputMode="numeric" placeholder="0" className={inputCls} />
                 </div>
 
                 <div className="space-y-3 pt-1">
@@ -926,6 +927,7 @@ export default function InventarioPage() {
                   </label>
                   <input
                     type="number"
+                    inputMode="decimal"
                     min="0"
                     step="any"
                     value={stockForm.quantity}

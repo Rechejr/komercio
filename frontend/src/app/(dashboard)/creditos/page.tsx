@@ -9,7 +9,7 @@ import { formatCurrency, formatDate, formatDateTime, statusColor, statusLabel } 
 import toast from 'react-hot-toast';
 import { CreditCard, X, Loader2, Plus, DollarSign, ChevronRight, Clock, Search } from 'lucide-react';
 
-const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition';
+const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[16px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition';
 
 export default function CreditosPage() {
   const qc = useQueryClient();

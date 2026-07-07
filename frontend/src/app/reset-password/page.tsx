@@ -86,7 +86,7 @@ function ResetForm() {
               onChange={(e) => { setPassword(e.target.value); setErrors((p) => ({ ...p, password: '' })); }}
               placeholder="Mínimo 8 caracteres"
               className={cn(
-                'w-full px-4 py-3 pr-10 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition bg-gray-50/50',
+                'w-full px-4 py-3 pr-10 border rounded-xl text-[16px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition bg-gray-50/50',
                 errors.password ? 'border-red-300' : 'border-gray-200',
               )}
               autoFocus
@@ -114,7 +114,7 @@ function ResetForm() {
               onChange={(e) => { setConfirm(e.target.value); setErrors((p) => ({ ...p, confirm: '' })); }}
               placeholder="Repite tu contraseña"
               className={cn(
-                'w-full px-4 py-3 pr-10 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition bg-gray-50/50',
+                'w-full px-4 py-3 pr-10 border rounded-xl text-[16px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition bg-gray-50/50',
                 errors.confirm ? 'border-red-300' : 'border-gray-200',
               )}
             />

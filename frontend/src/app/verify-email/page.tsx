@@ -107,7 +107,7 @@ function VerifyEmailContent() {
                   value={resendEmail}
                   onChange={(e) => setResendEmail(e.target.value)}
                   placeholder="tu@correo.com"
-                  className="w-full pl-9 pr-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  className="w-full pl-9 pr-3 py-2.5 border border-gray-200 rounded-xl text-[16px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 />
               </div>
               <button

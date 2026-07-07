@@ -143,7 +143,7 @@ export default function CatalogoPage() {
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="Buscar producto…"
-              className="w-full pl-8 pr-4 py-2 text-[13px] bg-slate-100 border-none rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0DA06A]/25 text-slate-800 placeholder:text-slate-400"
+              className="w-full pl-8 pr-4 py-2 text-[16px] sm:text-[13px] bg-slate-100 border-none rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0DA06A]/25 text-slate-800 placeholder:text-slate-400"
             />
           </div>
         </div>

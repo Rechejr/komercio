@@ -11,7 +11,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { PriceInput } from '@/components/ui/PriceInput';
 import { downloadExcel } from '@/lib/exportExcel';
 
-const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition';
+const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[16px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition';
 
 const PAYMENT_BADGE: Record<string, string> = {
   CASH: 'badge-green',
@@ -140,7 +140,7 @@ export default function GastosPage() {
           aria-label="Fecha inicio exportación"
           value={exportStart}
           onChange={(e) => setExportStart(e.target.value)}
-          className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition"
+          className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[16px] sm:text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition"
         />
         <span className="text-[12px] text-slate-400">hasta</span>
         <input
@@ -148,7 +148,7 @@ export default function GastosPage() {
           aria-label="Fecha fin exportación"
           value={exportEnd}
           onChange={(e) => setExportEnd(e.target.value)}
-          className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition"
+          className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[16px] sm:text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition"
         />
         <button
           type="button"

@@ -73,7 +73,7 @@ export function CategorySelect({ value, onChange, categories }: CategorySelectPr
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Buscar categoría..."
-              className="flex-1 text-sm outline-none bg-transparent dark:text-white"
+              className="flex-1 text-[16px] sm:text-sm outline-none bg-transparent dark:text-white"
             />
             {search && (
               <button type="button" aria-label="Limpiar búsqueda" onClick={() => setSearch('')} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">

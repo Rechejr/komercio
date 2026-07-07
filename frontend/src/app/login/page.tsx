@@ -190,7 +190,7 @@ function LoginForm() {
   };
 
   const inputCls = [
-    'w-full px-3.5 py-2.5 text-[14px] rounded-xl border transition-all duration-150',
+    'w-full px-3.5 py-2.5 text-[16px] sm:text-[14px] rounded-xl border transition-all duration-150',
     'bg-slate-50 dark:bg-slate-800/60',
     'border-slate-200 dark:border-slate-700/60',
     'text-slate-900 dark:text-slate-100',
