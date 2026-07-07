@@ -151,18 +151,18 @@ router.delete('/businesses/:id', async (req: AuthRequest, res, next) => {
         await tx.cashRegister.deleteMany({ where: { branchId: { in: branchIds } } });
         await tx.saleNumberCounter.deleteMany({ where: { branchId: { in: branchIds } } });
       }
-      // 6. Movimientos de inventario
+      // 6. Movimientos de inventario (FK productId requerido sin cascade)
       await tx.inventoryMovement.deleteMany({ where: { product: { businessId } } });
-      // 7. Ventas
+      // 7. Ventas (SaleDetail.productId FK requerido sin cascade → antes de productos)
       if (branchIds.length > 0) {
         await tx.saleDetail.deleteMany({ where: { sale: { branchId: { in: branchIds } } } });
         await tx.sale.deleteMany({ where: { branchId: { in: branchIds } } });
       }
-      // 8. Productos
-      await tx.product.deleteMany({ where: { businessId } });
-      // 9. Compras
+      // 8. Compras (PurchaseDetail.productId FK requerido sin cascade → antes de productos)
       await tx.purchaseDetail.deleteMany({ where: { purchase: { businessId } } });
       await tx.purchase.deleteMany({ where: { businessId } });
+      // 9. Productos (ahora sin referencias pendientes)
+      await tx.product.deleteMany({ where: { businessId } });
       // 10. Gastos
       await tx.expense.deleteMany({ where: { businessId } });
       await tx.expenseCategory.deleteMany({ where: { businessId } });
