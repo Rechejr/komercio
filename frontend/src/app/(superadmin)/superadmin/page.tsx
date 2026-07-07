@@ -1,11 +1,28 @@
-﻿'use client';
+'use client';
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import toast from 'react-hot-toast';
-import { Building2, Users, ShoppingCart, Zap, Search, ChevronLeft, ChevronRight } from 'lucide-react';
+import {
+  Building2, Users, ShoppingCart, Zap, Search,
+  ChevronLeft, ChevronRight, X, CheckCircle, Ban, Loader2,
+} from 'lucide-react';
 
+// ── Tipos ─────────────────────────────────────────────────────────────────────
+interface Business {
+  id: string;
+  name: string;
+  city?: string;
+  plan: 'free' | 'pro';
+  planExpiresAt?: string | null;
+  createdAt: string;
+  deletedAt?: string | null;
+  owner: { name: string; email: string };
+  _count: { branches: number };
+}
+
+// ── Stat tile ─────────────────────────────────────────────────────────────────
 function StatCard({ label, value, sub, icon: Icon, color }: {
   label: string; value: string | number; sub: string;
   icon: React.ElementType; color: string;
@@ -24,11 +41,131 @@ function StatCard({ label, value, sub, icon: Icon, color }: {
   );
 }
 
+// ── Modal cambiar plan ────────────────────────────────────────────────────────
+function PlanModal({ business, onClose }: { business: Business; onClose: () => void }) {
+  const qc = useQueryClient();
+  const [plan, setPlan] = useState<'free' | 'pro'>(business.plan);
+  const [expires, setExpires] = useState(
+    business.planExpiresAt ? business.planExpiresAt.split('T')[0] : '',
+  );
+
+  const mutation = useMutation({
+    mutationFn: (data: { plan: string; planExpiresAt?: string | null }) =>
+      api.patch(`/superadmin/businesses/${business.id}/plan`, data).then((r) => r.data),
+    onSuccess: () => {
+      toast.success(`Plan de "${business.name}" actualizado a ${plan.toUpperCase()}`);
+      qc.invalidateQueries({ queryKey: ['sa-businesses'] });
+      qc.invalidateQueries({ queryKey: ['sa-stats'] });
+      onClose();
+    },
+    onError: (err: any) => toast.error(err.response?.data?.error || 'Error al actualizar'),
+  });
+
+  return (
+    <div
+      className="fixed inset-0 bg-black/70 backdrop-blur-[2px] z-50 flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-sm p-5 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-[15px] font-bold text-white flex items-center gap-2">
+            <Zap size={15} className="text-amber-400" /> Cambiar plan
+          </h2>
+          <button
+            type="button"
+            aria-label="Cerrar"
+            onClick={onClose}
+            className="w-7 h-7 flex items-center justify-center rounded-md text-gray-500 hover:bg-gray-800 transition-colors"
+          >
+            <X size={14} />
+          </button>
+        </div>
+
+        <div className="mb-4 p-3 bg-gray-800 rounded-xl text-sm">
+          <p className="font-semibold text-white">{business.name}</p>
+          <p className="text-gray-400 text-xs mt-0.5">{business.owner.email}</p>
+          <p className="text-gray-500 text-xs mt-1">
+            Plan actual:{' '}
+            <span className={business.plan === 'pro' ? 'text-emerald-400 font-semibold' : 'text-gray-400'}>
+              {business.plan.toUpperCase()}
+            </span>
+          </p>
+        </div>
+
+        <div className="mb-4">
+          <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Nuevo plan</label>
+          <div className="grid grid-cols-2 gap-2">
+            {(['free', 'pro'] as const).map((p) => (
+              <button
+                key={p}
+                type="button"
+                onClick={() => setPlan(p)}
+                className={`py-2.5 rounded-xl border-2 text-sm font-semibold transition-all ${
+                  plan === p
+                    ? p === 'pro'
+                      ? 'border-emerald-500 bg-emerald-500/10 text-emerald-400'
+                      : 'border-gray-500 bg-gray-700 text-gray-200'
+                    : 'border-gray-700 text-gray-500 hover:border-gray-600'
+                }`}
+              >
+                {p === 'pro' ? '⚡ Pro' : 'Free'}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {plan === 'pro' && (
+          <div className="mb-4">
+            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+              Fecha de expiración (opcional)
+            </label>
+            <input
+              type="date"
+              value={expires}
+              onChange={(e) => setExpires(e.target.value)}
+              className="w-full px-3 py-2.5 text-sm rounded-xl border border-gray-700 bg-gray-800 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            />
+            <p className="text-xs text-gray-600 mt-1">Dejar vacío = sin expiración</p>
+          </div>
+        )}
+
+        <div className="flex gap-2 pt-1">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex-1 px-4 py-2.5 bg-gray-800 hover:bg-gray-700 rounded-xl text-sm font-medium text-gray-300 transition-colors"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={() => mutation.mutate({
+              plan,
+              planExpiresAt: plan === 'pro' && expires ? new Date(expires).toISOString() : null,
+            })}
+            disabled={mutation.isPending}
+            className="flex-1 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white rounded-xl text-sm font-semibold transition-colors flex items-center justify-center gap-2"
+          >
+            {mutation.isPending && <Loader2 size={13} className="animate-spin" />}
+            Guardar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Página ────────────────────────────────────────────────────────────────────
 export default function SuperAdminPage() {
   const qc = useQueryClient();
   const [search, setSearch] = useState('');
   const [planFilter, setPlanFilter] = useState('');
   const [page, setPage] = useState(1);
+  const [planModal, setPlanModal] = useState<Business | null>(null);
+  const LIMIT = 15;
 
   const { data: stats } = useQuery({
     queryKey: ['sa-stats'],
@@ -39,25 +176,25 @@ export default function SuperAdminPage() {
     queryKey: ['sa-businesses', page, search, planFilter],
     queryFn: () =>
       api.get('/superadmin/businesses', {
-        params: { page, limit: 10, search: search || undefined, plan: planFilter || undefined },
+        params: { page, limit: LIMIT, search: search || undefined, plan: planFilter || undefined },
       }).then((r) => r.data),
     placeholderData: (prev) => prev,
   });
 
-  const changePlan = useMutation({
-    mutationFn: ({ id, plan, planExpiresAt }: { id: string; plan: string; planExpiresAt?: string }) =>
-      api.patch(`/superadmin/businesses/${id}/plan`, { plan, planExpiresAt }),
-    onSuccess: (_, vars) => {
-      toast.success(`Plan actualizado a ${vars.plan}`);
+  const statusMutation = useMutation({
+    mutationFn: ({ id, active }: { id: string; active: boolean }) =>
+      api.patch(`/superadmin/businesses/${id}/status`, { active }).then((r) => r.data),
+    onSuccess: (_, { active }) => {
+      toast.success(active ? 'Negocio activado' : 'Negocio desactivado');
       qc.invalidateQueries({ queryKey: ['sa-businesses'] });
       qc.invalidateQueries({ queryKey: ['sa-stats'] });
     },
-    onError: (err: any) => toast.error(err.response?.data?.error || 'Error al actualizar'),
+    onError: (err: any) => toast.error(err.response?.data?.error || 'Error al cambiar estado'),
   });
 
-  const businesses = bizData?.data || [];
-  const total = bizData?.meta?.total || 0;
-  const totalPages = Math.ceil(total / 10);
+  const businesses: Business[] = bizData?.data ?? [];
+  const totalCount = bizData?.pagination?.total ?? bizData?.meta?.total ?? 0;
+  const totalPages = Math.ceil(totalCount / LIMIT);
 
   const fmt = (n: number) =>
     new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(n);
@@ -80,11 +217,13 @@ export default function SuperAdminPage() {
           icon={Users} color="bg-violet-600"
         />
         <StatCard
-          label="Ventas totales" value={stats ? fmt(stats.sales.total) : '—'} sub={`${stats?.sales.count ?? 0} transacciones`}
+          label="Ventas totales" value={stats ? fmt(stats.sales.total) : '—'}
+          sub={`${stats?.sales.count ?? 0} transacciones`}
           icon={ShoppingCart} color="bg-emerald-600"
         />
         <StatCard
-          label="Plan Pro activos" value={stats?.plans.pro ?? '—'} sub={`${stats?.plans.free ?? 0} en plan gratuito`}
+          label="Plan Pro activos" value={stats?.plans.pro ?? '—'}
+          sub={`${stats?.plans.free ?? 0} en plan gratuito`}
           icon={Zap} color="bg-amber-600"
         />
       </div>
@@ -104,6 +243,7 @@ export default function SuperAdminPage() {
           <select
             value={planFilter}
             onChange={(e) => { setPlanFilter(e.target.value); setPage(1); }}
+            aria-label="Filtrar por plan"
             className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
           >
             <option value="">Todos los planes</option>
@@ -120,15 +260,17 @@ export default function SuperAdminPage() {
                 <th className="text-left px-4 py-3 font-medium">Propietario</th>
                 <th className="text-left px-4 py-3 font-medium">Plan</th>
                 <th className="text-left px-4 py-3 font-medium">Vence</th>
+                <th className="text-left px-4 py-3 font-medium">Sucursales</th>
                 <th className="text-left px-4 py-3 font-medium">Registrado</th>
-                <th className="text-left px-4 py-3 font-medium">Acción</th>
+                <th className="text-left px-4 py-3 font-medium">Estado</th>
+                <th className="text-left px-4 py-3 font-medium">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-800">
               {isLoading ? (
                 [...Array(5)].map((_, i) => (
                   <tr key={i}>
-                    {[...Array(6)].map((__, j) => (
+                    {[...Array(8)].map((__, j) => (
                       <td key={j} className="px-4 py-3">
                         <div className="h-4 bg-gray-800 rounded animate-pulse" />
                       </td>
@@ -137,64 +279,81 @@ export default function SuperAdminPage() {
                 ))
               ) : businesses.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-gray-500">
-                    No hay negocios registrados
+                  <td colSpan={8} className="px-4 py-8 text-center text-gray-500">
+                    {search || planFilter ? 'Sin resultados para los filtros aplicados' : 'No hay negocios registrados'}
                   </td>
                 </tr>
               ) : (
-                businesses.map((b: any) => (
-                  <tr key={b.id} className="hover:bg-gray-800/50 transition-colors">
-                    <td className="px-4 py-3">
-                      <p className="font-medium text-white">{b.name}</p>
-                      {b.city && <p className="text-xs text-gray-500">{b.city}</p>}
-                    </td>
-                    <td className="px-4 py-3">
-                      <p className="text-white">{b.owner?.name}</p>
-                      <p className="text-xs text-gray-500">{b.owner?.email}</p>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${
-                        b.plan === 'pro'
-                          ? 'bg-emerald-500/20 text-emerald-400'
-                          : 'bg-amber-500/20 text-amber-400'
-                      }`}>
-                        <Zap size={10} />
-                        {b.plan === 'pro' ? 'Pro' : 'Gratuito'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-gray-400 text-xs">
-                      {b.planExpiresAt
-                        ? new Date(b.planExpiresAt).toLocaleDateString('es-CO')
-                        : <span className="text-gray-600">—</span>}
-                    </td>
-                    <td className="px-4 py-3 text-gray-400 text-xs">
-                      {new Date(b.createdAt).toLocaleDateString('es-CO')}
-                    </td>
-                    <td className="px-4 py-3">
-                      {b.plan === 'free' ? (
-                        <button
-                          onClick={() => changePlan.mutate({
-                            id: b.id,
-                            plan: 'pro',
-                            planExpiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
-                          })}
-                          disabled={changePlan.isPending}
-                          className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs rounded-lg transition-colors"
-                        >
-                          Activar Pro
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => changePlan.mutate({ id: b.id, plan: 'free' })}
-                          disabled={changePlan.isPending}
-                          className="px-3 py-1 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 text-gray-300 text-xs rounded-lg transition-colors"
-                        >
-                          Bajar a Free
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))
+                businesses.map((b) => {
+                  const isActive = !b.deletedAt;
+                  return (
+                    <tr key={b.id} className={`hover:bg-gray-800/50 transition-colors ${!isActive ? 'opacity-50' : ''}`}>
+                      <td className="px-4 py-3">
+                        <p className="font-medium text-white">{b.name}</p>
+                        {b.city && <p className="text-xs text-gray-500">{b.city}</p>}
+                      </td>
+                      <td className="px-4 py-3">
+                        <p className="text-white">{b.owner?.name}</p>
+                        <p className="text-xs text-gray-500">{b.owner?.email}</p>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${
+                          b.plan === 'pro'
+                            ? 'bg-emerald-500/20 text-emerald-400'
+                            : 'bg-gray-700 text-gray-400'
+                        }`}>
+                          <Zap size={10} />
+                          {b.plan === 'pro' ? 'Pro' : 'Gratuito'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-gray-400 text-xs">
+                        {b.planExpiresAt
+                          ? new Date(b.planExpiresAt).toLocaleDateString('es-CO')
+                          : <span className="text-gray-700">—</span>}
+                      </td>
+                      <td className="px-4 py-3 text-gray-400 text-center">
+                        {b._count?.branches ?? 1}
+                      </td>
+                      <td className="px-4 py-3 text-gray-400 text-xs">
+                        {new Date(b.createdAt).toLocaleDateString('es-CO')}
+                      </td>
+                      <td className="px-4 py-3">
+                        {isActive ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400">
+                            <CheckCircle size={10} /> Activo
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-red-500/10 text-red-400">
+                            <Ban size={10} /> Inactivo
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => setPlanModal(b)}
+                            className="px-2.5 py-1 bg-gray-700 hover:bg-gray-600 text-gray-300 text-xs rounded-lg transition-colors font-medium"
+                          >
+                            Plan
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => statusMutation.mutate({ id: b.id, active: !isActive })}
+                            disabled={statusMutation.isPending}
+                            className={`px-2.5 py-1 text-xs rounded-lg transition-colors font-medium disabled:opacity-50 ${
+                              isActive
+                                ? 'bg-red-500/10 hover:bg-red-500/20 text-red-400'
+                                : 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400'
+                            }`}
+                          >
+                            {isActive ? 'Desactivar' : 'Activar'}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -202,17 +361,19 @@ export default function SuperAdminPage() {
 
         {totalPages > 1 && (
           <div className="px-4 py-3 border-t border-gray-800 flex items-center justify-between text-sm text-gray-500">
-            <span>{total} negocios en total</span>
+            <span>{totalCount} negocios en total · Página {page} de {totalPages}</span>
             <div className="flex items-center gap-2">
               <button
+                type="button"
                 onClick={() => setPage((p) => p - 1)}
                 disabled={page === 1}
                 className="p-1 rounded hover:bg-gray-800 disabled:opacity-30 transition-colors"
               >
                 <ChevronLeft size={16} />
               </button>
-              <span className="text-white">{page} / {totalPages}</span>
+              <span className="text-white font-medium">{page} / {totalPages}</span>
               <button
+                type="button"
                 onClick={() => setPage((p) => p + 1)}
                 disabled={page === totalPages}
                 className="p-1 rounded hover:bg-gray-800 disabled:opacity-30 transition-colors"
@@ -223,6 +384,8 @@ export default function SuperAdminPage() {
           </div>
         )}
       </div>
+
+      {planModal && <PlanModal business={planModal} onClose={() => setPlanModal(null)} />}
     </div>
   );
 }
