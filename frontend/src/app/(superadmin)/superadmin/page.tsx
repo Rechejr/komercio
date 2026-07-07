@@ -219,6 +219,8 @@ function DeleteModal({ business, onClose }: { business: Business; onClose: () =>
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="Ingresa tu contraseña"
+            autoFocus
+            autoComplete="new-password"
             className="w-full px-3 py-2.5 text-[16px] sm:text-sm rounded-xl border border-gray-700 bg-gray-800 text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-red-500"
             onKeyDown={(e) => { if (e.key === 'Enter' && password) mutation.mutate(); }}
           />
@@ -407,6 +409,7 @@ export default function SuperAdminPage() {
               value={search}
               onChange={(e) => { setSearch(e.target.value); setPage(1); }}
               placeholder="Buscar negocio..."
+              autoComplete="off"
               className="w-full bg-gray-800 border border-gray-700 rounded-lg pl-9 pr-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
             />
           </div>
