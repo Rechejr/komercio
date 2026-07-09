@@ -316,6 +316,7 @@ model Supplier {
   isActive    Boolean    @default(true)
   products    Product[]
   purchases   Purchase[]
+  expenses    Expense[]
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
   deletedAt   DateTime?
@@ -455,12 +456,15 @@ model Expense {
   recipientName     String?
   recipientDocument String?
   recipientPhone    String?
+  supplierId        String?
+  supplier          Supplier?        @relation(fields: [supplierId], references: [id])
   createdAt     DateTime         @default(now())
   updatedAt     DateTime         @updatedAt
   deletedAt     DateTime?
 
   @@index([businessId])
   @@index([categoryId])
+  @@index([supplierId])
   @@index([date])
   @@index([businessId, date])
   @@map("expenses")

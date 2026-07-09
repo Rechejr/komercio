@@ -6,7 +6,7 @@ import { useForm, Controller } from 'react-hook-form';
 import { api } from '@/lib/api';
 import { formatCurrency, formatDate, paymentMethodLabel } from '@/lib/utils';
 import toast from 'react-hot-toast';
-import { Plus, X, Loader2, Receipt, Edit, Trash2, FileDown, Tag } from 'lucide-react';
+import { Plus, X, Loader2, Receipt, Edit, Trash2, FileDown, Tag, Search } from 'lucide-react';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { PriceInput } from '@/components/ui/PriceInput';
 import { downloadExcel } from '@/lib/exportExcel';
@@ -29,6 +29,12 @@ export default function GastosPage() {
   const [page, setPage] = useState(1);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
+  const [showSupplierDD, setShowSupplierDD] = useState(false);
+  const [showCreateSupplier, setShowCreateSupplier] = useState(false);
+  const [newSupName, setNewSupName] = useState('');
+  const [newSupPhone, setNewSupPhone] = useState('');
+  const [newSupLegal, setNewSupLegal] = useState('');
+  const [newSupDoc, setNewSupDoc] = useState('');
 
   const today = new Date().toISOString().split('T')[0];
   const firstOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
@@ -45,7 +51,27 @@ export default function GastosPage() {
     queryFn: () => api.get('/expenses/categories').then((r) => r.data.data),
   });
 
-  const { register, handleSubmit, reset, control, formState: { isSubmitting, errors } } = useForm();
+  const { data: suppliers } = useQuery({
+    queryKey: ['suppliers-list'],
+    queryFn: () => api.get('/suppliers?limit=100').then((r) => r.data.data),
+  });
+
+  const { register, handleSubmit, reset, control, watch, setValue, formState: { isSubmitting, errors } } = useForm();
+
+  const recipientNameValue = watch('recipientName') || '';
+  const filteredSuppliers = (suppliers || []).filter((s: any) =>
+    !recipientNameValue || s.name.toLowerCase().includes(recipientNameValue.toLowerCase())
+  );
+
+  function selectSupplier(s: any) {
+    setValue('supplierId', s.id);
+    setValue('recipientName', s.name);
+    setValue('recipientDocument', s.document || '');
+    setValue('recipientPhone', s.mobile || s.phone || '');
+    setShowSupplierDD(false);
+  }
+
+  const { onChange: recipientNameOnChange, ...recipientNameField } = register('recipientName');
 
   const saveMutation = useMutation({
     mutationFn: (data: any) => editItem
@@ -82,6 +108,19 @@ export default function GastosPage() {
     onError: (err: any) => toast.error(err.response?.data?.error || 'Error al crear categoría'),
   });
 
+  const createSupplierMutation = useMutation({
+    mutationFn: (d: { name: string; legalName?: string; document?: string; phone?: string }) =>
+      api.post('/suppliers', d).then((r) => r.data.data),
+    onSuccess: (supplier) => {
+      selectSupplier(supplier);
+      setShowCreateSupplier(false);
+      setNewSupName(''); setNewSupPhone(''); setNewSupLegal(''); setNewSupDoc('');
+      qc.invalidateQueries({ queryKey: ['suppliers-list'] });
+      toast.success('Proveedor creado');
+    },
+    onError: (err: any) => toast.error(err.response?.data?.error || 'Error al crear proveedor'),
+  });
+
   function openEdit(expense: any) {
     setEditItem(expense);
     reset({
@@ -94,6 +133,7 @@ export default function GastosPage() {
       recipientName: expense.recipientName || '',
       recipientDocument: expense.recipientDocument || '',
       recipientPhone: expense.recipientPhone || '',
+      supplierId: expense.supplierId || '',
     });
     setShowForm(true);
   }
@@ -110,6 +150,7 @@ export default function GastosPage() {
       recipientName: '',
       recipientDocument: '',
       recipientPhone: '',
+      supplierId: '',
     });
     setShowForm(true);
   }
@@ -360,11 +401,44 @@ export default function GastosPage() {
                   A quién se le paga (opcional)
                 </p>
                 <div className="space-y-3">
-                  <input
-                    {...register('recipientName')}
-                    placeholder="Nombre completo"
-                    className={inputCls}
-                  />
+                  <input type="hidden" {...register('supplierId')} />
+                  <div className="relative">
+                    <div className="relative">
+                      <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                      <input
+                        {...recipientNameField}
+                        onChange={(e) => { recipientNameOnChange(e); setValue('supplierId', ''); setShowSupplierDD(true); }}
+                        onFocus={() => setShowSupplierDD(true)}
+                        onBlur={() => setTimeout(() => setShowSupplierDD(false), 150)}
+                        placeholder="Nombre completo o buscar proveedor..."
+                        className={`${inputCls} pl-8`}
+                      />
+                    </div>
+                    {showSupplierDD && (
+                      <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-white/[0.08] rounded-xl shadow-modal z-20 max-h-44 overflow-y-auto">
+                        {filteredSuppliers.map((s: any) => (
+                          <button
+                            key={s.id}
+                            type="button"
+                            onMouseDown={() => selectSupplier(s)}
+                            className="w-full text-left px-3 py-2.5 text-[13px] hover:bg-emerald-50 dark:hover:bg-slate-700 text-slate-800 dark:text-white transition"
+                          >
+                            {s.name}
+                          </button>
+                        ))}
+                        {filteredSuppliers.length === 0 && (
+                          <p className="px-3 py-2.5 text-[12px] text-slate-400">Sin proveedores</p>
+                        )}
+                        <button
+                          type="button"
+                          onMouseDown={(e) => { e.preventDefault(); setShowSupplierDD(false); setNewSupName(recipientNameValue); setShowCreateSupplier(true); }}
+                          className="w-full flex items-center gap-1.5 px-3 py-2.5 text-[13px] text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-slate-700 border-t border-slate-100 dark:border-white/[0.06] transition"
+                        >
+                          <Plus size={13} /> Crear proveedor nuevo
+                        </button>
+                      </div>
+                    )}
+                  </div>
                   <div className="grid grid-cols-2 gap-3">
                     <input
                       {...register('recipientDocument')}
@@ -432,6 +506,77 @@ export default function GastosPage() {
               >
                 {categoryMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Tag size={14} />}
                 Crear categoría
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Crear proveedor Modal ────────────────────────────────────────────── */}
+      {showCreateSupplier && (
+        <div
+          className="fixed inset-0 bg-black/50 backdrop-blur-[2px] z-[60] flex items-center justify-center p-4"
+          onClick={() => { setShowCreateSupplier(false); setNewSupName(''); setNewSupPhone(''); setNewSupLegal(''); setNewSupDoc(''); }}
+        >
+          <div
+            className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/[0.08] rounded-2xl shadow-modal w-full max-w-sm p-6 space-y-4 animate-scale-in"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-[15px] font-semibold text-slate-800 dark:text-white">Crear proveedor</h3>
+
+            <input
+              type="text"
+              placeholder="Nombre comercial *"
+              value={newSupName}
+              onChange={(e) => setNewSupName(e.target.value)}
+              autoFocus
+              className={inputCls}
+            />
+            <input
+              type="text"
+              placeholder="Razón social (opcional)"
+              value={newSupLegal}
+              onChange={(e) => setNewSupLegal(e.target.value)}
+              className={inputCls}
+            />
+            <div className="grid grid-cols-2 gap-3">
+              <input
+                type="text"
+                placeholder="NIT / Documento"
+                value={newSupDoc}
+                onChange={(e) => setNewSupDoc(e.target.value)}
+                className="px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition"
+              />
+              <input
+                type="tel"
+                placeholder="Celular / Teléfono"
+                value={newSupPhone}
+                onChange={(e) => setNewSupPhone(e.target.value)}
+                maxLength={10}
+                className="px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition"
+              />
+            </div>
+
+            <div className="flex gap-3 pt-1">
+              <button
+                type="button"
+                onClick={() => { setShowCreateSupplier(false); setNewSupName(''); setNewSupPhone(''); setNewSupLegal(''); setNewSupDoc(''); }}
+                className="flex-1 px-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-xl text-[13px] font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => newSupName.trim() && createSupplierMutation.mutate({
+                  name: newSupName.trim(),
+                  legalName: newSupLegal.trim() || undefined,
+                  document: newSupDoc.trim() || undefined,
+                  phone: newSupPhone.trim() || undefined,
+                })}
+                disabled={!newSupName.trim() || createSupplierMutation.isPending}
+                className="flex-1 px-4 py-2.5 bg-emerald-600 text-white rounded-xl text-[13px] font-semibold hover:bg-emerald-700 disabled:opacity-50 shadow-sm shadow-emerald-600/25 transition"
+              >
+                {createSupplierMutation.isPending ? 'Guardando...' : 'Guardar'}
               </button>
             </div>
           </div>

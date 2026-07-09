@@ -23,7 +23,10 @@ export const expenseController = {
       const [expenses, total] = await Promise.all([
         prisma.expense.findMany({
           where, skip, take: limit, orderBy: { date: 'desc' },
-          include: { category: { select: { id: true, name: true } } },
+          include: {
+            category: { select: { id: true, name: true } },
+            supplier: { select: { id: true, name: true } },
+          },
         }),
         prisma.expense.count({ where }),
       ]);
@@ -34,7 +37,7 @@ export const expenseController = {
   async create(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const { description, amount, date, categoryId, notes, paymentMethod,
-              recipientName, recipientDocument, recipientPhone } = req.body;
+              recipientName, recipientDocument, recipientPhone, supplierId } = req.body;
       if (parseFloat(amount) <= 0) throw new AppError('El monto debe ser mayor a 0', 400);
       const base = {
         description,
@@ -48,7 +51,13 @@ export const expenseController = {
       let expense: any;
       try {
         expense = await prisma.expense.create({
-          data: { ...base, recipientName: recipientName || null, recipientDocument: recipientDocument || null, recipientPhone: recipientPhone || null },
+          data: {
+            ...base,
+            recipientName: recipientName || null,
+            recipientDocument: recipientDocument || null,
+            recipientPhone: recipientPhone || null,
+            supplierId: supplierId || null,
+          },
         });
       } catch (colErr: any) {
         // Retry without recipient columns while migration 20260703100000 is pending.
@@ -91,7 +100,7 @@ export const expenseController = {
       });
       if (!existing) throw new AppError('Gasto no encontrado', 404);
       const { description, amount, date, categoryId, notes, paymentMethod,
-              recipientName, recipientDocument, recipientPhone } = req.body;
+              recipientName, recipientDocument, recipientPhone, supplierId } = req.body;
       if (amount !== undefined && parseFloat(amount) <= 0) throw new AppError('El monto debe ser mayor a 0', 400);
       const base = {
         description,
@@ -110,6 +119,7 @@ export const expenseController = {
             recipientName: recipientName !== undefined ? (recipientName || null) : undefined,
             recipientDocument: recipientDocument !== undefined ? (recipientDocument || null) : undefined,
             recipientPhone: recipientPhone !== undefined ? (recipientPhone || null) : undefined,
+            supplierId: supplierId !== undefined ? (supplierId || null) : undefined,
           },
         });
       } catch (colErr: any) {
