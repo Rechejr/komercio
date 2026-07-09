@@ -6,7 +6,7 @@ import { useForm, Controller } from 'react-hook-form';
 import { api } from '@/lib/api';
 import { formatCurrency, formatDate, paymentMethodLabel } from '@/lib/utils';
 import toast from 'react-hot-toast';
-import { Plus, X, Loader2, Receipt, Edit, Trash2, FileDown, Tag, Search } from 'lucide-react';
+import { Plus, X, Loader2, Receipt, Edit, Trash2, FileDown, Tag, Search, Building2 } from 'lucide-react';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { PriceInput } from '@/components/ui/PriceInput';
 import { downloadExcel } from '@/lib/exportExcel';
@@ -107,6 +107,10 @@ export default function GastosPage() {
     !descriptionValue || e.description.toLowerCase().includes(descriptionValue.toLowerCase())
   );
 
+  const supplierMatchesForDescription = descriptionValue
+    ? (suppliers || []).filter((s: any) => s.name.toLowerCase().includes(descriptionValue.toLowerCase()))
+    : [];
+
   function selectExpenseTemplate(e: any) {
     setValue('description', e.description);
     setValue('categoryId', e.categoryId || '');
@@ -115,6 +119,20 @@ export default function GastosPage() {
     setValue('recipientDocument', e.recipientDocument || '');
     setValue('recipientPhone', e.recipientPhone || '');
     setValue('supplierId', e.supplierId || '');
+    setShowDescriptionDD(false);
+  }
+
+  function selectSupplierFromDescription(s: any) {
+    setValue('supplierId', s.id);
+    setValue('recipientName', s.name);
+    setValue('recipientDocument', s.document || '');
+    setValue('recipientPhone', s.mobile || s.phone || '');
+    // Si este proveedor ya tiene gastos anteriores, hereda categoría y método de pago del más reciente
+    const lastExpense = (expenseHistory || []).find((e: any) => e.supplierId === s.id);
+    if (lastExpense) {
+      setValue('categoryId', lastExpense.categoryId || '');
+      setValue('paymentMethod', lastExpense.paymentMethod || 'CASH');
+    }
     setShowDescriptionDD(false);
   }
 
@@ -395,19 +413,42 @@ export default function GastosPage() {
                     autoComplete="off"
                     autoFocus
                   />
-                  {showDescriptionDD && filteredDescriptions.length > 0 && (
-                    <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-white/[0.08] rounded-xl shadow-modal z-20 max-h-44 overflow-y-auto">
-                      {filteredDescriptions.map((e: any) => (
-                        <button
-                          key={e.id}
-                          type="button"
-                          onMouseDown={() => selectExpenseTemplate(e)}
-                          className="w-full text-left px-3 py-2.5 text-[13px] hover:bg-emerald-50 dark:hover:bg-slate-700 text-slate-800 dark:text-white transition"
-                        >
-                          <span className="font-medium">{e.description}</span>
-                          {e.recipientName && <span className="text-slate-400"> · {e.recipientName}</span>}
-                        </button>
-                      ))}
+                  {showDescriptionDD && (supplierMatchesForDescription.length > 0 || filteredDescriptions.length > 0) && (
+                    <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-white/[0.08] rounded-xl shadow-modal z-20 max-h-52 overflow-y-auto">
+                      {supplierMatchesForDescription.length > 0 && (
+                        <>
+                          <p className="px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Proveedores</p>
+                          {supplierMatchesForDescription.map((s: any) => (
+                            <button
+                              key={`sup-${s.id}`}
+                              type="button"
+                              onMouseDown={() => selectSupplierFromDescription(s)}
+                              className="w-full flex items-center gap-1.5 text-left px-3 py-2.5 text-[13px] hover:bg-emerald-50 dark:hover:bg-slate-700 text-slate-800 dark:text-white transition"
+                            >
+                              <Building2 size={12} className="text-slate-400 flex-shrink-0" />
+                              {s.name}
+                            </button>
+                          ))}
+                        </>
+                      )}
+                      {filteredDescriptions.length > 0 && (
+                        <>
+                          {supplierMatchesForDescription.length > 0 && (
+                            <p className="px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400 border-t border-slate-100 dark:border-white/[0.06]">Gastos anteriores</p>
+                          )}
+                          {filteredDescriptions.map((e: any) => (
+                            <button
+                              key={e.id}
+                              type="button"
+                              onMouseDown={() => selectExpenseTemplate(e)}
+                              className="w-full text-left px-3 py-2.5 text-[13px] hover:bg-emerald-50 dark:hover:bg-slate-700 text-slate-800 dark:text-white transition"
+                            >
+                              <span className="font-medium">{e.description}</span>
+                              {e.recipientName && <span className="text-slate-400"> · {e.recipientName}</span>}
+                            </button>
+                          ))}
+                        </>
+                      )}
                     </div>
                   )}
                 </div>
