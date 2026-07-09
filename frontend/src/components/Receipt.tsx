@@ -44,6 +44,10 @@ interface ReceiptProps {
   business?: ReceiptBusiness | null;
   /** Cuando es true anima los items y el sello COBRADO */
   animated?: boolean;
+  /** Si es 'CANCELLED' se muestra el sello ANULADA en vez de COBRADO/FIADO */
+  status?: string;
+  /** Desglose de pago mixto, se lista bajo el pill de método de pago */
+  paymentDetails?: { splits?: { method: string; amount: number }[] } | null;
 }
 
 function Dash() {
@@ -54,12 +58,14 @@ export function Receipt({
   invoiceNumber, createdAt, items, subtotal, discountAmount, taxAmount,
   total, paidAmount, changeAmount, paymentMethod,
   customerName, cashierName, business, animated = false,
+  status, paymentDetails,
 }: ReceiptProps) {
   const date     = new Date(createdAt);
   const dateStr  = date.toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric' });
   const timeStr  = date.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
   const footer   = (business?.settings?.receiptMessage as string) || '¡Gracias por su compra!';
-  const isFiado  = paidAmount < total;
+  const isCancelled = status === 'CANCELLED';
+  const isFiado  = !isCancelled && paidAmount < total;
 
   // Delay del sello: después de que todos los items hacen stagger
   const stampDelay = items.length * 0.07 + 0.3;
@@ -221,12 +227,12 @@ export function Receipt({
         {animated ? (
           <motion.span
             initial={{ opacity: 0, scale: 1.4, rotate: -8 }}
-            animate={{ opacity: 1, scale: 1, rotate: isFiado ? 2 : -2 }}
+            animate={{ opacity: 1, scale: 1, rotate: isCancelled ? -2 : isFiado ? 2 : -2 }}
             transition={{ delay: stampDelay, duration: DUR.hero, ease: EASE.spring }}
             style={{
               display: 'inline-block',
-              border: `2.5px solid ${isFiado ? '#f59e0b' : '#16a34a'}`,
-              color: isFiado ? '#b45309' : '#16a34a',
+              border: `2.5px solid ${isCancelled ? '#dc2626' : isFiado ? '#f59e0b' : '#16a34a'}`,
+              color: isCancelled ? '#dc2626' : isFiado ? '#b45309' : '#16a34a',
               fontWeight: 900,
               fontSize: 14,
               padding: '5px 20px',
@@ -234,21 +240,21 @@ export function Receipt({
               letterSpacing: '0.12em',
             }}
           >
-            {isFiado ? '⚠ FIADO' : '✓ COBRADO'}
+            {isCancelled ? '✕ ANULADA' : isFiado ? '⚠ FIADO' : '✓ COBRADO'}
           </motion.span>
         ) : (
           <span style={{
             display: 'inline-block',
-            border: `2.5px solid ${isFiado ? '#f59e0b' : '#16a34a'}`,
-            color: isFiado ? '#b45309' : '#16a34a',
+            border: `2.5px solid ${isCancelled ? '#dc2626' : isFiado ? '#f59e0b' : '#16a34a'}`,
+            color: isCancelled ? '#dc2626' : isFiado ? '#b45309' : '#16a34a',
             fontWeight: 900,
             fontSize: 14,
             padding: '5px 20px',
             borderRadius: 8,
             letterSpacing: '0.12em',
-            transform: isFiado ? 'rotate(2deg)' : 'rotate(-2deg)',
+            transform: isCancelled ? 'rotate(-2deg)' : isFiado ? 'rotate(2deg)' : 'rotate(-2deg)',
           }}>
-            {isFiado ? '⚠ FIADO' : '✓ COBRADO'}
+            {isCancelled ? '✕ ANULADA' : isFiado ? '⚠ FIADO' : '✓ COBRADO'}
           </span>
         )}
       </div>
@@ -265,6 +271,16 @@ export function Receipt({
         }}>
           {PM_LABEL[paymentMethod] || paymentMethod}
         </span>
+        {paymentMethod === 'MIXED' && paymentDetails?.splits && paymentDetails.splits.length > 0 && (
+          <div style={{ marginTop: 6 }}>
+            {paymentDetails.splits.map((s, i) => (
+              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#64748b', maxWidth: 200, margin: '0 auto' }}>
+                <span>{PM_LABEL[s.method] || s.method}</span>
+                <span style={{ fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(s.amount)}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <Dash />

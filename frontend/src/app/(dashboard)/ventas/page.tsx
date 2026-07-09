@@ -6,11 +6,14 @@ import { useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
 import { formatCurrency, formatDateTime, statusColor, statusLabel, paymentMethodLabel } from '@/lib/utils';
 import toast from 'react-hot-toast';
-import { Search, X, ShoppingCart, Ban, ChevronRight, FileDown, Loader2, AlertTriangle, Trash2 } from 'lucide-react';
+import { Search, X, ShoppingCart, Ban, ChevronRight, FileDown, Loader2, AlertTriangle, Trash2, Printer } from 'lucide-react';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { StaggerList, StaggerItem } from '@/components/ui/StaggerList';
+import { WhatsAppIcon } from '@/components/ui/WhatsAppIcon';
 import Link from 'next/link';
 import { downloadExcel } from '@/lib/exportExcel';
+import { Receipt, type ReceiptItem } from '@/components/Receipt';
+import { shareSaleViaWhatsApp } from '@/lib/receiptShare';
 
 const inputCls = 'px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[16px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition';
 
@@ -25,6 +28,7 @@ export default function VentasPage() {
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
+  const [sharingWhatsApp, setSharingWhatsApp] = useState(false);
 
   useEffect(() => {
     const s = searchParams.get('status');
@@ -47,6 +51,20 @@ export default function VentasPage() {
     queryFn: () => api.get(`/sales/${selected.id}`).then((r) => r.data.data),
     enabled: !!selected?.id,
   });
+
+  const { data: businessInfo } = useQuery({
+    queryKey: ['business-me'],
+    queryFn: () => api.get('/business/me').then((r) => r.data.data),
+    staleTime: 5 * 60_000,
+  });
+
+  const receiptItems: ReceiptItem[] = (detail?.details || []).map((d: any) => ({
+    name: d.product?.name || '',
+    quantity: d.quantity,
+    unitPrice: Number(d.unitPrice),
+    discountPct: Number(d.discountPct),
+    total: Number(d.total),
+  }));
 
   const cancelMutation = useMutation({
     mutationFn: ({ id, reason }: { id: string; reason: string }) =>
@@ -293,9 +311,9 @@ export default function VentasPage() {
               </div>
             </div>
 
-            <div className="p-6 space-y-5 overflow-y-auto min-h-0">
-              {/* Meta info */}
-              <div className="grid grid-cols-2 gap-4">
+            <div className="p-6 space-y-4 overflow-y-auto min-h-0">
+              {/* Meta info compacto */}
+              <div className="grid grid-cols-2 gap-4 print-hide">
                 <div>
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-1">Cliente</p>
                   <p className="text-[13px] font-medium text-slate-800 dark:text-white">{detail.customer?.name || 'Mostrador'}</p>
@@ -322,84 +340,57 @@ export default function VentasPage() {
                     )}
                   </div>
                 </div>
-                <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-1">Vendedor</p>
-                  <p className="text-[13px] font-medium text-slate-800 dark:text-white">{detail.user?.name}</p>
-                </div>
-                <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-1">Método de pago</p>
-                  {detail.paymentMethod === 'MIXED' && detail.paymentDetails?.splits?.length > 0 ? (
-                    <div className="space-y-0.5">
-                      <p className="text-[13px] font-medium text-slate-800 dark:text-white">Mixto</p>
-                      {detail.paymentDetails.splits.map((s: any, i: number) => (
-                        <div key={i} className="flex justify-between items-center text-[12px] pl-2">
-                          <span className="text-slate-500">{paymentMethodLabel[s.method] || s.method}</span>
-                          <span className="font-medium text-slate-700 dark:text-slate-300 tabular-nums">{formatCurrency(s.amount)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-[13px] font-medium text-slate-800 dark:text-white">{paymentMethodLabel[detail.paymentMethod]}</p>
-                  )}
-                </div>
               </div>
 
-              {/* Items table */}
-              <div className="border-t border-slate-100 dark:border-white/[0.06] pt-4">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-slate-100 dark:border-white/[0.06]">
-                      <th className="text-left pb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Producto</th>
-                      <th className="text-center pb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Cant.</th>
-                      <th className="text-right pb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Precio</th>
-                      <th className="text-right pb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Total</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-50 dark:divide-white/[0.04]">
-                    {detail.details?.map((d: any) => (
-                      <tr key={d.id}>
-                        <td className="py-2.5 text-[13px] text-slate-700 dark:text-slate-300">{d.product?.name}</td>
-                        <td className="py-2.5 text-center text-[13px] text-slate-500 tabular-nums">{d.quantity}</td>
-                        <td className="py-2.5 text-right text-[13px] text-slate-500 tabular-nums">{formatCurrency(d.unitPrice)}</td>
-                        <td className="py-2.5 text-right text-[13px] font-semibold text-slate-800 dark:text-white tabular-nums">{formatCurrency(d.total)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              {/* Ticket — mismo diseño que en el POS */}
+              <div className="shadow-sm rounded-2xl overflow-hidden border border-slate-100 dark:border-white/[0.06]">
+                <Receipt
+                  invoiceNumber={detail.invoiceNumber}
+                  createdAt={detail.createdAt}
+                  items={receiptItems}
+                  subtotal={Number(detail.subtotal)}
+                  discountAmount={Number(detail.discountAmount)}
+                  taxAmount={Number(detail.taxAmount)}
+                  total={Number(detail.total)}
+                  paidAmount={Number(detail.paidAmount)}
+                  changeAmount={Number(detail.changeAmount)}
+                  paymentMethod={detail.paymentMethod}
+                  customerName={detail.customer?.name || null}
+                  cashierName={detail.user?.name || null}
+                  business={businessInfo}
+                  status={detail.status}
+                  paymentDetails={detail.paymentDetails}
+                />
               </div>
 
-              {/* Totals */}
-              <div className="border-t border-slate-100 dark:border-white/[0.06] pt-4 space-y-1.5">
-                <div className="flex justify-between text-[13px] text-slate-500 dark:text-slate-400">
-                  <span>Subtotal</span>
-                  <span className="tabular-nums">{formatCurrency(detail.subtotal)}</span>
-                </div>
-                {detail.taxAmount > 0 && (
-                  <div className="flex justify-between text-[13px] text-slate-500 dark:text-slate-400">
-                    <span>IVA</span>
-                    <span className="tabular-nums">{formatCurrency(detail.taxAmount)}</span>
-                  </div>
-                )}
-                {detail.discountAmount > 0 && (
-                  <div className="flex justify-between text-[13px] text-emerald-600 dark:text-emerald-400">
-                    <span>Descuento</span>
-                    <span className="tabular-nums">-{formatCurrency(detail.discountAmount)}</span>
-                  </div>
-                )}
-                <div className="flex justify-between text-[16px] font-bold text-slate-900 dark:text-white pt-1 border-t border-slate-100 dark:border-white/[0.06]">
-                  <span>Total</span>
-                  <span className="tabular-nums">{formatCurrency(detail.total)}</span>
-                </div>
-                {detail.changeAmount > 0 && (
-                  <div className="flex justify-between text-[13px] text-emerald-600 dark:text-emerald-400">
-                    <span>Cambio</span>
-                    <span className="tabular-nums">{formatCurrency(detail.changeAmount)}</span>
-                  </div>
-                )}
+              {/* Acciones — se ocultan al imprimir */}
+              <div className="print-hide flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="flex items-center gap-1.5 px-3.5 py-2 border border-slate-200 dark:border-slate-700/60 rounded-xl text-[13px] font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                >
+                  <Printer size={14} /> Imprimir
+                </button>
+                <button
+                  type="button"
+                  disabled={sharingWhatsApp}
+                  onClick={async () => {
+                    setSharingWhatsApp(true);
+                    try {
+                      await shareSaleViaWhatsApp(detail, receiptItems, businessInfo, detail.customer?.phone, detail.customer?.name);
+                    } finally {
+                      setSharingWhatsApp(false);
+                    }
+                  }}
+                  className="flex items-center gap-1.5 px-3.5 py-2 bg-[#25D366] hover:bg-[#1ebe5d] text-white rounded-xl text-[13px] font-medium transition-colors disabled:opacity-60"
+                >
+                  {sharingWhatsApp ? <Loader2 size={14} className="animate-spin" /> : <WhatsAppIcon />} WhatsApp
+                </button>
               </div>
 
               {detail.notes && (
-                <p className="text-[12px] text-slate-400 border-t border-slate-100 dark:border-white/[0.06] pt-3 italic">
+                <p className="print-hide text-[12px] text-slate-400 border-t border-slate-100 dark:border-white/[0.06] pt-3 italic">
                   Nota: {detail.notes}
                 </p>
               )}
