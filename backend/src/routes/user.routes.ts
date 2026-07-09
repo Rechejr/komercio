@@ -5,6 +5,8 @@ import { success, created, paginated } from '../utils/response';
 import { AppError } from '../utils/response';
 import { getPagination } from '../utils/pagination';
 import { planLimit } from '../middlewares/planLimit';
+import { getPlan } from '../config/plans';
+import { acquirePlanLimitLock } from '../utils/planLimitLock';
 import bcrypt from 'bcryptjs';
 
 const router = Router();
@@ -55,9 +57,26 @@ router.post('/', authorize('ADMIN'), planLimit.users(), async (req: any, res, ne
     }
 
     const hashed = await bcrypt.hash(password, 12);
-    const user = await prisma.user.create({
-      data: { name, email, password: hashed, role, branchId, isEmailVerified: true },
-      select: { id: true, name: true, email: true, role: true },
+    const user = await prisma.$transaction(async (tx) => {
+      // Mismo recuento atómico que en productos/clientes — ver planLimitLock.ts.
+      await acquirePlanLimitLock(tx, businessId, 'users');
+      const biz = await tx.business.findUnique({ where: { id: businessId }, select: { plan: true, planExpiresAt: true } });
+      if (biz) {
+        const effectivePlan = biz.plan === 'pro' && biz.planExpiresAt && biz.planExpiresAt < new Date() ? 'free' : biz.plan;
+        const limits = getPlan(effectivePlan);
+        if (limits.users !== Infinity) {
+          const branchIds = (await tx.branch.findMany({ where: { businessId, deletedAt: null }, select: { id: true } })).map((b) => b.id);
+          const count = await tx.user.count({ where: { branchId: { in: branchIds }, deletedAt: null } });
+          if (count >= limits.users) {
+            throw new AppError(`Límite de ${limits.users} usuario(s) alcanzado en el plan gratuito. Actualiza a Pro para continuar.`, 403);
+          }
+        }
+      }
+
+      return tx.user.create({
+        data: { name, email, password: hashed, role, branchId, isEmailVerified: true },
+        select: { id: true, name: true, email: true, role: true },
+      });
     });
     return created(res, user, 'Usuario creado');
   } catch (err) { next(err); }

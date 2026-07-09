@@ -131,11 +131,32 @@ model Business {
   plan              String            @default("free")
   planExpiresAt     DateTime?
   settings          Json?
+  paymentLinks      PaymentLink[]
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
   deletedAt         DateTime?
 
   @@map("businesses")
+}
+
+// ─── PAYMENT LINKS (Wompi) ─────────────────────────────────────────────────────
+// Mapeo linkId → negocio que sobrevive más allá del TTL de Redis y no se pisa
+// entre sí cuando se generan varios links seguidos (reintentos de checkout):
+// antes esto vivía en un solo campo `business.settings.pendingPayment` que la
+// siguiente llamada a createLink sobreescribía, así que si el webhook de un
+// link viejo llegaba tarde (después de expirar el caché), ya no encontraba a
+// qué negocio pertenecía y el pago quedaba cobrado sin activar el plan.
+model PaymentLink {
+  id         String    @id // Wompi payment_link_id
+  businessId String
+  business   Business  @relation(fields: [businessId], references: [id])
+  period     String
+  months     Int
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([businessId])
+  @@map("payment_links")
 }
 
 model Branch {

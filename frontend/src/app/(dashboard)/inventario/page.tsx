@@ -65,7 +65,7 @@ export default function InventarioPage() {
     const text = `¡Mira nuestro catálogo de productos! 🛒\n${url}`;
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
   }
-  const [search, setSearch]         = useState('');
+  const [search, setSearch]         = useState(() => searchParams.get('search') || '');
   const [showScanner, setShowScanner] = useState(false);
   const [page, setPage] = useState(1);
   const [showForm, setShowForm] = useState(false);
@@ -211,6 +211,11 @@ export default function InventarioPage() {
       .finally(() => router.replace('/inventario'));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    const q = searchParams.get('search');
+    if (q) setSearch(q);
+  }, [searchParams]);
 
   const products = data?.data || [];
   const pagination = data?.pagination;

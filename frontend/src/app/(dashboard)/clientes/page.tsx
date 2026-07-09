@@ -1,6 +1,7 @@
 ﻿'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm, Controller } from 'react-hook-form';
 import { api } from '@/lib/api';
@@ -40,12 +41,18 @@ type PreviewData = {
 
 export default function ClientesPage() {
   const qc = useQueryClient();
+  const searchParams = useSearchParams();
   const plan = useAuthStore((s) => s.user?.plan);
   const isFree = !plan || plan === 'free';
   const openUpgrade = useUpgradeStore((s) => s.open);
 
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(() => searchParams.get('search') || '');
   const [page, setPage] = useState(1);
+
+  useEffect(() => {
+    const q = searchParams.get('search');
+    if (q) setSearch(q);
+  }, [searchParams]);
   const [showForm, setShowForm] = useState(false);
   const [editItem, setEditItem] = useState<any>(null);
   const [selected, setSelected] = useState<any>(null);

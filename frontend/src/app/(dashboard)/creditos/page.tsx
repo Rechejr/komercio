@@ -1,6 +1,7 @@
 ﻿'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm, Controller } from 'react-hook-form';
 import { PriceInput } from '@/components/ui/PriceInput';
@@ -13,10 +14,25 @@ const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded
 
 export default function CreditosPage() {
   const qc = useQueryClient();
+  const searchParams = useSearchParams();
   const [statusFilter, setStatusFilter] = useState('');
   const [customerFilter, setCustomerFilter] = useState('');
   const [customerFilterId, setCustomerFilterId] = useState('');
   const [page, setPage] = useState(1);
+
+  // Créditos no tiene un `search` de texto libre propio — filtra por cliente
+  // resuelto a un id (ver el combobox de abajo) — así que llegar desde la
+  // búsqueda global con "?search=Nombre" reutiliza ese mismo mecanismo en vez
+  // de mandarlo directo al backend (que no soporta ese parámetro aquí).
+  useEffect(() => {
+    const q = searchParams.get('search');
+    if (!q) return;
+    api.get(`/customers?search=${encodeURIComponent(q)}&limit=1`).then((r) => {
+      const c = r.data.data?.[0];
+      if (c) { setCustomerFilter(c.name); setCustomerFilterId(c.id); }
+    }).catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
   const [selected, setSelected] = useState<any>(null);
   const [showPayment, setShowPayment] = useState(false);
   const [showDetail, setShowDetail] = useState(false);

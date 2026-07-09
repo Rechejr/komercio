@@ -4,6 +4,25 @@ import { cache } from '../config/redis';
 import { success } from '../utils/response';
 import { AuthRequest } from '../middlewares/auth';
 
+// Colombia no observa horario de verano — UTC-5 todo el año — así que a
+// diferencia del huso horario general, aquí sí se puede calcular con un offset
+// fijo en vez de Intl/toLocaleString. El servidor corre en UTC (sin TZ seteada),
+// así que "hoy" calculado con Date local del proceso quedaba corrido ~5 horas
+// respecto al día calendario real en Bogotá.
+const BOGOTA_OFFSET_MS = 5 * 60 * 60 * 1000;
+
+function bogotaDayStart(date: Date, dayOffset = 0): Date {
+  const shifted = new Date(date.getTime() - BOGOTA_OFFSET_MS);
+  const midnightShifted = new Date(Date.UTC(shifted.getUTCFullYear(), shifted.getUTCMonth(), shifted.getUTCDate() + dayOffset));
+  return new Date(midnightShifted.getTime() + BOGOTA_OFFSET_MS);
+}
+
+function bogotaMonthStart(date: Date, monthOffset = 0): Date {
+  const shifted = new Date(date.getTime() - BOGOTA_OFFSET_MS);
+  const firstOfMonthShifted = new Date(Date.UTC(shifted.getUTCFullYear(), shifted.getUTCMonth() + monthOffset, 1));
+  return new Date(firstOfMonthShifted.getTime() + BOGOTA_OFFSET_MS);
+}
+
 export const dashboardController = {
   async getSummary(req: AuthRequest, res: Response, next: NextFunction) {
     try {
@@ -14,11 +33,11 @@ export const dashboardController = {
       if (cached) return success(res, cached);
 
       const now = new Date();
-      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      const yesterdayStart = new Date(todayStart); yesterdayStart.setDate(yesterdayStart.getDate() - 1);
+      const todayStart = bogotaDayStart(now);
+      const yesterdayStart = bogotaDayStart(now, -1);
       const weekStart = new Date(now); weekStart.setDate(weekStart.getDate() - 7);
-      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-      const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const monthStart = bogotaMonthStart(now);
+      const lastMonthStart = bogotaMonthStart(now, -1);
 
       const [
         summaryRaw, recentSales, topProducts,
@@ -81,11 +100,11 @@ export const dashboardController = {
             AND "businessId" = ${businessId}
         `,
         prisma.customer.count({ where: { deletedAt: null, isActive: true, businessId } }),
-        prisma.customer.count({ where: { currentDebt: { gt: 0 }, businessId } }),
+        prisma.customer.count({ where: { currentDebt: { gt: 0 }, businessId, deletedAt: null } }),
         prisma.credit.aggregate({
           where: {
             status: { in: ['PENDING', 'PARTIAL', 'OVERDUE'] },
-            customer: { businessId },
+            customer: { businessId, deletedAt: null },
           },
           _sum: { balance: true },
           _count: { id: true },
@@ -137,8 +156,10 @@ export const dashboardController = {
       const { period = '30d' } = req.query;
       const businessId = req.user!.businessId!;
       const days = period === '7d' ? 7 : period === '90d' ? 90 : 30;
-      const startDate = new Date();
-      startDate.setDate(startDate.getDate() - days);
+      // Empezar en la medianoche (Bogotá) de hace `days` días — si no, la barra
+      // más vieja de la gráfica es un día parcial (desde la hora actual en vez de
+      // desde las 00:00) y se ve más baja que el resto sin que sea real.
+      const startDate = bogotaDayStart(new Date(), -days);
 
       const cacheKey = `chart:${businessId}:${period}`;
       const cached = await cache.get(cacheKey).catch(() => null);

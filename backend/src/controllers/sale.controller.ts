@@ -7,6 +7,8 @@ import { getPagination, getSearch } from '../utils/pagination';
 import { AuthRequest } from '../middlewares/auth';
 import { emitToBusinesss, socketEvents } from '../config/socket';
 import { notifyLowStockBatch } from '../services/notification.service';
+import { getPlan } from '../config/plans';
+import { acquirePlanLimitLock } from '../utils/planLimitLock';
 
 // Checked once per process on first sale; avoids breaking when migration is pending.
 let _counterTableReady: boolean | undefined;
@@ -216,6 +218,27 @@ export const saleController = {
           const invoiceNumber = await generateInvoiceNumber(prisma, effectiveBranchId);
 
           result = await prisma.$transaction(async (tx) => {
+        // Recuento atómico de ventas del mes — el middleware planLimit.salesPerMonth()
+        // ya rechazó el caso normal, pero su count()-then-allow no es atómico (ver
+        // planLimitLock.ts). El advisory lock serializa esta sección contra otra
+        // venta concurrente del mismo negocio antes de confiar en el conteo.
+        await acquirePlanLimitLock(tx, req.user!.businessId!, 'salesPerMonth');
+        const biz = await tx.business.findUnique({ where: { id: req.user!.businessId! }, select: { plan: true, planExpiresAt: true } });
+        if (biz) {
+          const effectivePlan = biz.plan === 'pro' && biz.planExpiresAt && biz.planExpiresAt < new Date() ? 'free' : biz.plan;
+          const limits = getPlan(effectivePlan);
+          if (limits.salesPerMonth !== Infinity) {
+            const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0);
+            const branchIds = (await tx.branch.findMany({ where: { businessId: req.user!.businessId! }, select: { id: true } })).map((b) => b.id);
+            const salesCount = await tx.sale.count({
+              where: { branchId: { in: branchIds }, createdAt: { gte: monthStart }, deletedAt: null },
+            });
+            if (salesCount >= limits.salesPerMonth) {
+              throw new AppError(`Límite de ${limits.salesPerMonth} ventas por mes alcanzado en el plan gratuito. Actualiza a Pro para continuar.`, 403);
+            }
+          }
+        }
+
         // SELECT FOR UPDATE locks these rows for the duration of the transaction.
         // Concurrent sales on the same products will block here until this tx commits,
         // eliminating the check-then-decrement race that allows overselling.

@@ -2,7 +2,6 @@ import { Response, NextFunction } from 'express';
 import { Request } from 'express';
 import { paymentController } from '../../controllers/payment.controller';
 import { prisma } from '../../config/database';
-import { cache } from '../../config/redis';
 import { AuthRequest } from '../../middlewares/auth';
 
 // Wompi makes real HTTPS calls — mock the entire https module so tests are offline
@@ -14,17 +13,14 @@ jest.mock('../../config/database', () => ({
   prisma: {
     business: {
       findUnique: jest.fn(),
-      findFirst: jest.fn(),
       update: jest.fn(),
     },
-  },
-}));
-
-jest.mock('../../config/redis', () => ({
-  cache: {
-    get: jest.fn(),
-    set: jest.fn(),
-    del: jest.fn(),
+    paymentLink: {
+      create: jest.fn(),
+      findUnique: jest.fn(),
+      update: jest.fn(),
+    },
+    $transaction: jest.fn(),
   },
 }));
 
@@ -33,7 +29,6 @@ jest.mock('../../config/logger', () => ({
 }));
 
 const mockPrisma = prisma as jest.Mocked<typeof prisma>;
-const mockCache = cache as jest.Mocked<typeof cache>;
 import * as https from 'https';
 const mockHttpsRequest = https.request as jest.Mock;
 
@@ -85,21 +80,17 @@ describe('paymentController.createLink', () => {
     expect((next as jest.Mock).mock.calls[0][0].statusCode).toBe(400);
   });
 
-  it('crea el link de pago y lo guarda en Redis y en BD', async () => {
+  it('crea el link de pago y su fila en payment_links', async () => {
     const linkId = 'link-abc123';
     mockWompiHttps({ data: { id: linkId } }, 200);
-    mockCache.set.mockResolvedValue('OK' as any);
-    (mockPrisma.business.findUnique as jest.Mock).mockResolvedValue({ settings: {} });
-    (mockPrisma.business.update as jest.Mock).mockResolvedValue({});
+    (mockPrisma.paymentLink.create as jest.Mock).mockResolvedValue({});
 
     const { res, json } = makeRes();
     await paymentController.createLink(makeAuthReq({ body: { period: 'monthly' } }), res, next);
 
-    expect(mockCache.set).toHaveBeenCalledWith(
-      `wompi_link:${linkId}`,
-      { businessId: 'biz-1', period: 'monthly', months: 1 },
-      7200,
-    );
+    expect(mockPrisma.paymentLink.create).toHaveBeenCalledWith({
+      data: { id: linkId, businessId: 'biz-1', period: 'monthly', months: 1 },
+    });
     expect(json).toHaveBeenCalledWith(
       expect.objectContaining({ data: { url: `https://checkout.wompi.co/l/${linkId}` } })
     );
@@ -121,6 +112,7 @@ describe('paymentController.webhook', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     process.env.WOMPI_EVENTS_SECRET = EVENTS_SECRET;
+    (mockPrisma.$transaction as jest.Mock).mockImplementation((ops: any[]) => Promise.all(ops));
   });
 
   afterAll(() => {
@@ -136,8 +128,15 @@ describe('paymentController.webhook', () => {
     } as unknown as Request;
   }
 
+  function signedBody(txBody: any) {
+    const crypto = require('crypto');
+    const rawBody = JSON.stringify(txBody);
+    const sig = `sha256=${crypto.createHmac('sha256', EVENTS_SECRET).update(rawBody).digest('hex')}`;
+    return { rawBody, sig };
+  }
+
   it('retorna 401 cuando falta la firma x-event-signature', async () => {
-    const { res, status, json } = makeRes();
+    const { res, status } = makeRes();
     await paymentController.webhook(makeWebhookReq(), res, next);
     expect(status).toHaveBeenCalledWith(401);
   });
@@ -153,13 +152,12 @@ describe('paymentController.webhook', () => {
   });
 
   it('responde con received:true sin procesar si el evento no es transaction.updated', async () => {
-    const import_crypto = require('crypto');
-    const rawBody = JSON.stringify({ event: 'other.event' });
-    const sig = `sha256=${import_crypto.createHmac('sha256', EVENTS_SECRET).update(rawBody).digest('hex')}`;
+    const txBody = { event: 'other.event' };
+    const { rawBody, sig } = signedBody(txBody);
 
     const { res, json } = makeRes();
     await paymentController.webhook(
-      makeWebhookReq({ headers: { 'x-event-signature': sig }, body: { event: 'other.event' }, rawBody } as any),
+      makeWebhookReq({ headers: { 'x-event-signature': sig }, body: txBody, rawBody } as any),
       res,
       next,
     );
@@ -167,18 +165,12 @@ describe('paymentController.webhook', () => {
     expect(mockPrisma.business.update).not.toHaveBeenCalled();
   });
 
-  it('activa el plan Pro cuando llega una transacción APPROVED con link válido en Redis', async () => {
-    const crypto = require('crypto');
-    const linkId = 'link-xyz';
-    const meta = { businessId: 'biz-1', period: 'monthly', months: 1 };
+  it('responde received:true sin activar nada si el link no existe', async () => {
+    const linkId = 'link-unknown';
     const txBody = { event: 'transaction.updated', data: { transaction: { status: 'APPROVED', payment_link_id: linkId } } };
-    const rawBody = JSON.stringify(txBody);
-    const sig = `sha256=${crypto.createHmac('sha256', EVENTS_SECRET).update(rawBody).digest('hex')}`;
+    const { rawBody, sig } = signedBody(txBody);
 
-    mockCache.get.mockResolvedValue(meta as any);
-    mockCache.del.mockResolvedValue(1 as any);
-    (mockPrisma.business.findUnique as jest.Mock).mockResolvedValue({ settings: { some: 'data' } });
-    (mockPrisma.business.update as jest.Mock).mockResolvedValue({});
+    (mockPrisma.paymentLink.findUnique as jest.Mock).mockResolvedValue(null);
 
     const { res, json } = makeRes();
     await paymentController.webhook(
@@ -187,30 +179,19 @@ describe('paymentController.webhook', () => {
       next,
     );
 
-    expect(mockPrisma.business.update).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ plan: 'pro' }) })
-    );
-    expect(mockCache.del).toHaveBeenCalledWith(`wompi_link:${linkId}`);
+    expect(mockPrisma.business.update).not.toHaveBeenCalled();
     expect(json).toHaveBeenCalledWith({ received: true });
   });
 
-  it('activa el plan Pro usando el fallback de BD cuando Redis no tiene el link', async () => {
-    const crypto = require('crypto');
-    const linkId = 'link-fallback';
+  it('activa el plan Pro y marca el link como consumido cuando llega una transacción APPROVED', async () => {
+    const linkId = 'link-xyz';
     const txBody = { event: 'transaction.updated', data: { transaction: { status: 'APPROVED', payment_link_id: linkId } } };
-    const rawBody = JSON.stringify(txBody);
-    const sig = `sha256=${crypto.createHmac('sha256', EVENTS_SECRET).update(rawBody).digest('hex')}`;
+    const { rawBody, sig } = signedBody(txBody);
 
-    mockCache.get.mockResolvedValue(null);
-    mockCache.del.mockResolvedValue(1 as any);
-    (mockPrisma.business.findFirst as jest.Mock).mockResolvedValue({
-      id: 'biz-1',
-      settings: { pendingPayment: { linkId, period: 'quarterly', months: 3 } },
+    (mockPrisma.paymentLink.findUnique as jest.Mock).mockResolvedValue({
+      id: linkId, businessId: 'biz-1', period: 'monthly', months: 1, consumedAt: null,
     });
-    (mockPrisma.business.findUnique as jest.Mock).mockResolvedValue({
-      settings: { pendingPayment: { linkId, period: 'quarterly', months: 3 } },
-    });
-    (mockPrisma.business.update as jest.Mock).mockResolvedValue({});
+    (mockPrisma.business.findUnique as jest.Mock).mockResolvedValue({ planExpiresAt: null });
 
     const { res, json } = makeRes();
     await paymentController.webhook(
@@ -220,8 +201,59 @@ describe('paymentController.webhook', () => {
     );
 
     expect(mockPrisma.business.update).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ plan: 'pro' }) })
+      expect.objectContaining({ where: { id: 'biz-1' }, data: expect.objectContaining({ plan: 'pro' }) })
+    );
+    expect(mockPrisma.paymentLink.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: linkId }, data: expect.objectContaining({ consumedAt: expect.any(Date) }) })
     );
     expect(json).toHaveBeenCalledWith({ received: true });
+  });
+
+  it('ignora un webhook duplicado si el link ya fue consumido antes', async () => {
+    const linkId = 'link-already-done';
+    const txBody = { event: 'transaction.updated', data: { transaction: { status: 'APPROVED', payment_link_id: linkId } } };
+    const { rawBody, sig } = signedBody(txBody);
+
+    (mockPrisma.paymentLink.findUnique as jest.Mock).mockResolvedValue({
+      id: linkId, businessId: 'biz-1', period: 'monthly', months: 1, consumedAt: new Date(),
+    });
+
+    const { res, json } = makeRes();
+    await paymentController.webhook(
+      makeWebhookReq({ headers: { 'x-event-signature': sig }, body: txBody, rawBody } as any),
+      res,
+      next,
+    );
+
+    expect(mockPrisma.business.update).not.toHaveBeenCalled();
+    expect(json).toHaveBeenCalledWith({ received: true });
+  });
+
+  it('al renovar con tiempo vigente, extiende desde el vencimiento actual en vez de resetear desde hoy', async () => {
+    const linkId = 'link-renewal';
+    const txBody = { event: 'transaction.updated', data: { transaction: { status: 'APPROVED', payment_link_id: linkId } } };
+    const { rawBody, sig } = signedBody(txBody);
+
+    const futureExpiry = new Date();
+    futureExpiry.setDate(futureExpiry.getDate() + 20); // 20 días vigentes todavía
+
+    (mockPrisma.paymentLink.findUnique as jest.Mock).mockResolvedValue({
+      id: linkId, businessId: 'biz-1', period: 'monthly', months: 1, consumedAt: null,
+    });
+    (mockPrisma.business.findUnique as jest.Mock).mockResolvedValue({ planExpiresAt: futureExpiry });
+
+    const { res } = makeRes();
+    await paymentController.webhook(
+      makeWebhookReq({ headers: { 'x-event-signature': sig }, body: txBody, rawBody } as any),
+      res,
+      next,
+    );
+
+    const updateCall = (mockPrisma.business.update as jest.Mock).mock.calls[0][0];
+    const newExpiry: Date = updateCall.data.planExpiresAt;
+    // Debe quedar ~1 mes después del vencimiento futuro (no ~1 mes después de hoy)
+    const expectedFloor = new Date(futureExpiry);
+    expectedFloor.setDate(expectedFloor.getDate() + 25); // al menos 25 días de margen (1 mes - unos días)
+    expect(newExpiry.getTime()).toBeGreaterThan(expectedFloor.getTime());
   });
 });

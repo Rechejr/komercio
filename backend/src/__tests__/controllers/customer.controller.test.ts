@@ -3,8 +3,8 @@ import { customerController } from '../../controllers/customer.controller';
 import { prisma } from '../../config/database';
 import { AuthRequest } from '../../middlewares/auth';
 
-jest.mock('../../config/database', () => ({
-  prisma: {
+jest.mock('../../config/database', () => {
+  const prismaMock: any = {
     customer: {
       findMany: jest.fn(),
       count: jest.fn(),
@@ -13,8 +13,14 @@ jest.mock('../../config/database', () => ({
       update: jest.fn(),
     },
     sale: { findMany: jest.fn(), count: jest.fn() },
-  },
-}));
+    business: { findUnique: jest.fn().mockResolvedValue({ plan: 'pro', planExpiresAt: null }) },
+    $executeRawUnsafe: jest.fn().mockResolvedValue(0),
+    // create() corre dentro de $transaction para el chequeo atómico del límite
+    // de plan — el mock invoca el callback pasándole el mismo objeto mockeado.
+    $transaction: jest.fn((cb: any) => cb(prismaMock)),
+  };
+  return { prisma: prismaMock };
+});
 
 jest.mock('../../utils/pagination', () => ({
   getPagination: jest.fn().mockReturnValue({ page: 1, limit: 20, skip: 0 }),

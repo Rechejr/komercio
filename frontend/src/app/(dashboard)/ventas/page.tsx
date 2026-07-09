@@ -21,7 +21,7 @@ export default function VentasPage() {
   const qc = useQueryClient();
   const searchParams = useSearchParams();
 
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(() => searchParams.get('search') || '');
   const [page, setPage] = useState(1);
   const [status, setStatus] = useState(() => searchParams.get('status') || '');
   const [selected, setSelected] = useState<any>(null);
@@ -33,6 +33,8 @@ export default function VentasPage() {
   useEffect(() => {
     const s = searchParams.get('status');
     if (s) setStatus(s);
+    const q = searchParams.get('search');
+    if (q) setSearch(q);
   }, [searchParams]);
 
   const [exportStart, setExportStart] = useState(() => {

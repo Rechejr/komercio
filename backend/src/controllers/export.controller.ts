@@ -267,7 +267,7 @@ export const exportController = {
           select: {
             id: true, createdAt: true, total: true, subtotal: true,
             discountAmount: true, taxAmount: true,
-            details: { select: { quantity: true, unitPrice: true, costPrice: true, total: true } },
+            details: { select: { productId: true, quantity: true, unitPrice: true, costPrice: true, total: true } },
           },
         }),
         // Cancelled sales (for context)
@@ -332,21 +332,28 @@ export const exportController = {
         });
       }
 
-      // Top products
-      const prodMap = new Map<string, { name: string; qty: number; revenue: number; cogs: number }>();
+      // Top products — agregado en JS a partir de completedSales.details (que ya
+      // tenemos en memoria), sumando costPrice*quantity POR LÍNEA. La versión anterior
+      // usaba `prisma.saleDetail.groupBy` con `_sum.costPrice * _sum.quantity`, que
+      // multiplica la SUMA de costos por la SUMA de cantidades — matemáticamente
+      // distinto de sumar (costo × cantidad) de cada línea salvo que el costo nunca
+      // hubiera cambiado, e inflaba el costo (y por lo tanto distorsionaba la utilidad)
+      // en cualquier producto vendido más de una vez con costos distintos.
+      const topProductsMap = new Map<string, { qty: number; revenue: number; cogs: number }>();
       for (const s of completedSales) {
         for (const d of s.details) {
-          const key = d.unitPrice.toString(); // Use as pseudo-id — we only have joined data
-          // We don't have productId here - skip for now, handled via separate query
+          const prev = topProductsMap.get(d.productId) || { qty: 0, revenue: 0, cogs: 0 };
+          topProductsMap.set(d.productId, {
+            qty: prev.qty + Number(d.quantity),
+            revenue: prev.revenue + Number(d.total),
+            cogs: prev.cogs + Number(d.costPrice) * Number(d.quantity),
+          });
         }
       }
-      const topProducts = await prisma.saleDetail.groupBy({
-        by: ['productId'],
-        where: { sale: { createdAt: { gte: start, lte: end }, status: 'COMPLETED', branch: { businessId } } },
-        _sum: { total: true, costPrice: true, quantity: true },
-        orderBy: { _sum: { total: 'desc' } },
-        take: 20,
-      });
+      const topProducts = [...topProductsMap.entries()]
+        .map(([productId, v]) => ({ productId, ...v }))
+        .sort((a, b) => b.revenue - a.revenue)
+        .slice(0, 20);
       const topProductIds = topProducts.map((t) => t.productId);
       const topProductNames = topProductIds.length > 0
         ? await prisma.product.findMany({
@@ -530,14 +537,14 @@ export const exportController = {
       });
       for (const tp of topProducts) {
         const prod = nameById.get(tp.productId);
-        const rev  = Number(tp._sum.total || 0);
-        const cogs = Number(tp._sum.costPrice || 0) * Number(tp._sum.quantity || 0);
+        const rev  = tp.revenue;
+        const cogs = tp.cogs;
         const profit = rev - cogs;
         const margin = rev > 0 ? pct((profit / rev) * 100) : 0;
         ws3.addRow({
           name: prod?.name || tp.productId,
           code: prod?.code || '',
-          qty: Number(tp._sum.quantity || 0),
+          qty: tp.qty,
           revenue: money(rev),
           cogs: money(cogs),
           profit: money(profit),

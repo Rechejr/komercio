@@ -1,5 +1,6 @@
 import { Response, NextFunction } from 'express';
 import { prisma } from '../config/database';
+import { cache } from '../config/redis';
 import { AppError, success, created, paginated } from '../utils/response';
 import { getPagination, getSearch } from '../utils/pagination';
 import { AuthRequest } from '../middlewares/auth';
@@ -106,6 +107,7 @@ export const expenseController = {
           }
         } catch { /* no debe fallar el gasto */ }
       }
+      await cache.del(`dashboard:${businessId}`).catch(() => {});
       return created(res, expense, 'Gasto registrado');
     } catch (err) { next(err); }
   },
@@ -200,6 +202,7 @@ export const expenseController = {
         }
       } catch { /* no debe fallar la actualización del gasto */ }
 
+      await cache.del(`dashboard:${businessId}`).catch(() => {});
       return success(res, expense, 'Gasto actualizado');
     } catch (err) { next(err); }
   },
@@ -225,6 +228,7 @@ export const expenseController = {
         }
       } catch { /* no debe fallar la eliminación del gasto */ }
 
+      await cache.del(`dashboard:${req.user!.businessId}`).catch(() => {});
       return success(res, null, 'Gasto eliminado');
     } catch (err) { next(err); }
   },

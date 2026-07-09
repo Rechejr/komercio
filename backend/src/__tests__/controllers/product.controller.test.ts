@@ -164,6 +164,8 @@ describe('productController.create', () => {
       return fn({
         product: { create: jest.fn().mockResolvedValue(product) },
         inventoryMovement: { create: jest.fn().mockResolvedValue({}) },
+        business: { findUnique: jest.fn().mockResolvedValue({ plan: 'pro', planExpiresAt: null }) },
+        $executeRawUnsafe: jest.fn().mockResolvedValue(0),
       });
     });
 
@@ -185,6 +187,8 @@ describe('productController.create', () => {
       return fn({
         product: { create: jest.fn().mockResolvedValue(product) },
         inventoryMovement: { create: mockTxInventory },
+        business: { findUnique: jest.fn().mockResolvedValue({ plan: 'pro', planExpiresAt: null }) },
+        $executeRawUnsafe: jest.fn().mockResolvedValue(0),
       });
     });
 

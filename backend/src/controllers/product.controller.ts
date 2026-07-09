@@ -6,6 +6,8 @@ import { getPagination, getSearch } from '../utils/pagination';
 import { AuthRequest } from '../middlewares/auth';
 import { emitToBusinesss, socketEvents } from '../config/socket';
 import { notifyLowStock } from '../services/notification.service';
+import { getPlan } from '../config/plans';
+import { acquirePlanLimitLock } from '../utils/planLimitLock';
 
 const CACHE_TTL = 300;
 
@@ -101,6 +103,24 @@ export const productController = {
       }
 
       const product = await prisma.$transaction(async (tx) => {
+        // Recuento atómico: el middleware planLimit.products() ya rechazó el caso
+        // normal, pero su count()-then-allow no es atómico — dos altas casi
+        // simultáneas podían leer el mismo conteo y ambas pasar. El advisory lock
+        // serializa esta sección contra cualquier otra alta concurrente del mismo
+        // negocio, así que el recuento de aquí en adelante sí es confiable.
+        await acquirePlanLimitLock(tx, businessId!, 'products');
+        const biz = await tx.business.findUnique({ where: { id: businessId! }, select: { plan: true, planExpiresAt: true } });
+        if (biz) {
+          const effectivePlan = biz.plan === 'pro' && biz.planExpiresAt && biz.planExpiresAt < new Date() ? 'free' : biz.plan;
+          const limits = getPlan(effectivePlan);
+          if (limits.products !== Infinity) {
+            const count = await tx.product.count({ where: { businessId: businessId!, deletedAt: null } });
+            if (count >= limits.products) {
+              throw new AppError(`Límite de ${limits.products} productos alcanzado en el plan gratuito. Actualiza a Pro para continuar.`, 403);
+            }
+          }
+        }
+
         const newProduct = await tx.product.create({
           data: {
             code: data.code,
@@ -119,6 +139,7 @@ export const productController = {
             minStock: parseFloat(data.minStock) || 0,
             unit: data.unit || 'unit',
             taxRate: parseFloat(data.taxRate) || 0,
+            allowNegativeStock: !!data.allowNegativeStock,
             image: data.images?.[0] || data.image || null,
             images: Array.isArray(data.images) ? data.images : [],
           },

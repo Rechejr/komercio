@@ -2,7 +2,6 @@ import { Request, Response, NextFunction } from 'express';
 import crypto from 'crypto';
 import https from 'https';
 import { prisma } from '../config/database';
-import { cache } from '../config/redis';
 import { AppError, success } from '../utils/response';
 import { logger } from '../config/logger';
 import { AuthRequest } from '../middlewares/auth';
@@ -98,15 +97,11 @@ export const paymentController = {
       // Wompi no devuelve campo "url" — la URL de checkout se construye con el id
       const paymentUrl = `https://checkout.wompi.co/l/${linkData.id}`;
 
-      // Primary: Redis (TTL 2h)
-      await cache.set(`wompi_link:${linkData.id}`, { businessId, period, months }, 7200);
-
-      // Fallback: Business.settings
-      const biz = await prisma.business.findUnique({ where: { id: businessId }, select: { settings: true } });
-      const currentSettings = (biz?.settings as Record<string, any>) || {};
-      await prisma.business.update({
-        where: { id: businessId },
-        data: { settings: { ...currentSettings, pendingPayment: { linkId: linkData.id, period, months } } },
+      // Cada link queda en su propia fila (no se pisa con el siguiente): si el
+      // usuario reintenta el checkout y genera un segundo link, el webhook del
+      // primero (si llega tarde) todavía puede encontrar a qué negocio pertenece.
+      await prisma.paymentLink.create({
+        data: { id: linkData.id, businessId, period, months },
       });
 
       return success(res, { url: paymentUrl });
@@ -129,8 +124,13 @@ export const paymentController = {
         return res.status(401).json({ error: 'Firma requerida' });
       }
       const rawBody = (req as any).rawBody as string || '';
-      const expected = `sha256=${crypto.createHmac('sha256', eventsSecret).update(rawBody).digest('hex')}`;
-      if (signature !== expected) {
+      const expectedHex = crypto.createHmac('sha256', eventsSecret).update(rawBody).digest('hex');
+      const expected = `sha256=${expectedHex}`;
+      // Comparación en tiempo constante — este endpoint otorga acceso pago, así que
+      // no debe filtrar por temporización cuánto de la firma coincidió.
+      const signatureValid = signature.length === expected.length &&
+        crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
+      if (!signatureValid) {
         logger.warn('Wompi webhook: firma inválida');
         return res.status(401).json({ error: 'Firma inválida' });
       }
@@ -144,36 +144,39 @@ export const paymentController = {
       const linkId = tx.payment_link_id as string | undefined;
       if (!linkId) return res.json({ received: true });
 
-      let meta = await cache.get<{ businessId: string; period: string; months: number }>(`wompi_link:${linkId}`);
-
-      if (!meta) {
-        const biz = await prisma.business.findFirst({
-          where: { settings: { path: ['pendingPayment', 'linkId'], equals: linkId } },
-          select: { id: true, settings: true },
-        });
-        if (biz) {
-          const pmt = (biz.settings as any)?.pendingPayment;
-          meta = { businessId: biz.id, period: pmt.period, months: pmt.months };
-        }
-      }
-
-      if (!meta) {
+      const link = await prisma.paymentLink.findUnique({ where: { id: linkId } });
+      if (!link) {
         logger.warn('Wompi webhook: link no encontrado', { linkId });
         return res.json({ received: true });
       }
+      // Wompi puede reenviar el mismo evento más de una vez — sin este chequeo,
+      // un webhook duplicado extendería el plan dos veces por el mismo pago.
+      if (link.consumedAt) {
+        logger.info('Wompi webhook: link ya procesado, ignorando duplicado', { linkId });
+        return res.json({ received: true });
+      }
 
-      const expiresAt = new Date();
-      expiresAt.setMonth(expiresAt.getMonth() + meta.months);
+      const business = await prisma.business.findUnique({ where: { id: link.businessId }, select: { planExpiresAt: true } });
+      // Si al negocio le quedaba tiempo vigente, se le suma desde ahí — no desde
+      // "ahora" — para no regalarle un mes gratis por renovar antes de vencerse
+      // (o, visto al revés, quitarle los días que ya tenía pagados).
+      const currentExpiry = business?.planExpiresAt;
+      const base = currentExpiry && currentExpiry > new Date() ? currentExpiry : new Date();
+      const expiresAt = new Date(base);
+      expiresAt.setMonth(expiresAt.getMonth() + link.months);
 
-      const bizNow = await prisma.business.findUnique({ where: { id: meta.businessId }, select: { settings: true } });
-      const { pendingPayment: _removed, ...cleanSettings } = ((bizNow?.settings as Record<string, any>) || {});
-      await prisma.business.update({
-        where: { id: meta.businessId },
-        data: { plan: 'pro', planExpiresAt: expiresAt, settings: cleanSettings },
-      });
+      await prisma.$transaction([
+        prisma.business.update({
+          where: { id: link.businessId },
+          data: { plan: 'pro', planExpiresAt: expiresAt },
+        }),
+        prisma.paymentLink.update({
+          where: { id: linkId },
+          data: { consumedAt: new Date() },
+        }),
+      ]);
 
-      await cache.del(`wompi_link:${linkId}`);
-      logger.info('Plan Pro activado', { businessId: meta.businessId, period: meta.period, expiresAt });
+      logger.info('Plan Pro activado', { businessId: link.businessId, period: link.period, expiresAt });
 
       return res.json({ received: true });
     } catch (err) {

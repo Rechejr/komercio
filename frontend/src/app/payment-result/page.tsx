@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { CheckCircle, XCircle, Loader2 } from 'lucide-react';
 import { Suspense } from 'react';
+import { api } from '@/lib/api';
+import { useAuthStore } from '@/store/auth.store';
 
 function PaymentResultContent() {
   const searchParams = useSearchParams();
@@ -12,6 +14,46 @@ function PaymentResultContent() {
 
   const status = searchParams.get('status') ?? '';
   const approved = status === 'APPROVED';
+
+  // Wompi llega aquí con una navegación de página completa desde afuera del
+  // dominio, así que el accessToken en memoria se perdió — hay que restaurarlo
+  // antes de poder llamar /auth/me. El webhook que activa el plan en el backend
+  // es asíncrono (puede tardar unos segundos), así que se reintenta unas cuantas
+  // veces en vez de una sola consulta: sin esto, el usuario vuelve al dashboard
+  // viéndose todavía como "Plan Gratuito" hasta la próxima vez que inicie sesión,
+  // aunque el pago ya haya sido aprobado.
+  useEffect(() => {
+    if (!approved) return;
+    let cancelled = false;
+
+    async function refreshPlan() {
+      try {
+        if (!useAuthStore.getState().accessToken) {
+          const refreshed = await api.post('/auth/refresh-token');
+          if (cancelled) return;
+          useAuthStore.getState().setAccessToken(refreshed.data.data.accessToken);
+        }
+        const me = await api.get('/auth/me');
+        if (cancelled) return;
+        const userData = me.data.data;
+        const current = useAuthStore.getState().user;
+        useAuthStore.getState().setUser({
+          ...(current as any),
+          ...userData,
+          businessId: userData.branch?.business?.id ?? current?.businessId,
+          businessName: userData.branch?.business?.name ?? current?.businessName,
+          plan: userData.branch?.business?.plan || current?.plan || 'free',
+        });
+      } catch {
+        // se reintenta en el siguiente tick; si nunca se logra, el próximo login lo corrige
+      }
+    }
+
+    refreshPlan();
+    const poll = setInterval(refreshPlan, 1500);
+    const stopPoll = setTimeout(() => clearInterval(poll), 8000);
+    return () => { cancelled = true; clearInterval(poll); clearTimeout(stopPoll); };
+  }, [approved]);
 
   useEffect(() => {
     const timer = setInterval(() => {

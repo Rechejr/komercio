@@ -1,5 +1,6 @@
 ﻿import { Response, NextFunction } from 'express';
 import { prisma } from '../config/database';
+import { cache } from '../config/redis';
 import { AppError, success, created, paginated } from '../utils/response';
 import { getPagination } from '../utils/pagination';
 import { AuthRequest } from '../middlewares/auth';
@@ -85,6 +86,7 @@ export const creditController = {
         return newCredit;
       });
 
+      await cache.del(`dashboard:${req.user!.businessId}`).catch(() => {});
       return created(res, credit, 'CrÃ©dito registrado');
     } catch (err) {
       next(err);
@@ -150,6 +152,7 @@ export const creditController = {
 
       if (businessId) {
         emitToBusinesss(businessId, socketEvents.PAYMENT_RECEIVED, { creditId: id, amount: paymentAmount });
+        await cache.del(`dashboard:${businessId}`).catch(() => {});
       }
 
       return success(res, { newBalance, status: newStatus }, 'Pago registrado');

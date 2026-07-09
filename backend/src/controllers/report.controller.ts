@@ -21,6 +21,9 @@ export const reportController = {
 
       const start = new Date(startStr);
       const end = new Date(endStr);
+      // Sin esto, "hasta" corta a las 00:00 del día final y excluye casi todo lo
+      // de ese mismo día — el export de Excel ya lo hacía bien, los reportes no.
+      end.setUTCHours(23, 59, 59, 999);
 
       let groupFormat = 'YYYY-MM-DD';
       if (groupBy === 'week') groupFormat = 'YYYY-WW';
@@ -99,6 +102,9 @@ export const reportController = {
 
       const start = new Date(startStr);
       const end = new Date(endStr);
+      // Sin esto, "hasta" corta a las 00:00 del día final y excluye casi todo lo
+      // de ese mismo día — el export de Excel ya lo hacía bien, los reportes no.
+      end.setUTCHours(23, 59, 59, 999);
 
       const top = await prisma.saleDetail.groupBy({
         by: ['productId'],
@@ -151,6 +157,9 @@ export const reportController = {
 
       const start = new Date(startStr);
       const end = new Date(endStr);
+      // Sin esto, "hasta" corta a las 00:00 del día final y excluye casi todo lo
+      // de ese mismo día — el export de Excel ya lo hacía bien, los reportes no.
+      end.setUTCHours(23, 59, 59, 999);
 
       const top = await prisma.sale.groupBy({
         by: ['customerId'],
@@ -201,6 +210,9 @@ export const reportController = {
 
       const start = new Date(startStr);
       const end = new Date(endStr);
+      // Sin esto, "hasta" corta a las 00:00 del día final y excluye casi todo lo
+      // de ese mismo día — el export de Excel ya lo hacía bien, los reportes no.
+      end.setUTCHours(23, 59, 59, 999);
 
       const [revenueData, expenseData, cogsResult] = await Promise.all([
         prisma.sale.aggregate({
