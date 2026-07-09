@@ -14,6 +14,7 @@ router.post('/categories',
   validate,
   expenseController.createCategory,
 );
+router.delete('/categories/:id', authorize('ADMIN'), expenseController.deleteCategory);
 router.get('/summary/monthly', expenseController.getMonthlySummary);
 router.get('/', expenseController.list);
 router.post('/',

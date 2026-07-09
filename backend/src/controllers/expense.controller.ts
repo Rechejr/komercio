@@ -207,4 +207,17 @@ export const expenseController = {
       return created(res, cat, 'Categoría creada');
     } catch (err) { next(err); }
   },
+
+  async deleteCategory(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const businessId = req.user!.businessId;
+      const existing = await prisma.expenseCategory.findFirst({
+        where: { id: req.params.id, businessId },
+      });
+      if (!existing) throw new AppError('Categoría no encontrada', 404);
+      // Los gastos que la usaban quedan sin categoría (FK ON DELETE SET NULL), no se pierden.
+      await prisma.expenseCategory.delete({ where: { id: req.params.id } });
+      return success(res, null, 'Categoría eliminada');
+    } catch (err) { next(err); }
+  },
 };

@@ -29,6 +29,7 @@ export default function GastosPage() {
   const [page, setPage] = useState(1);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
+  const [categoryDeleteTarget, setCategoryDeleteTarget] = useState<any>(null);
   const [showDescriptionDD, setShowDescriptionDD] = useState(false);
   const [showSupplierDD, setShowSupplierDD] = useState(false);
   const [showCreateSupplier, setShowCreateSupplier] = useState(false);
@@ -173,6 +174,16 @@ export default function GastosPage() {
       setNewCategoryName('');
     },
     onError: (err: any) => toast.error(err.response?.data?.error || 'Error al crear categoría'),
+  });
+
+  const deleteCategoryMutation = useMutation({
+    mutationFn: (id: string) => api.delete(`/expenses/categories/${id}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['expense-categories'] });
+      toast.success('Categoría eliminada');
+      setCategoryDeleteTarget(null);
+    },
+    onError: (err: any) => toast.error(err.response?.data?.error || 'Error al eliminar categoría'),
   });
 
   const createSupplierMutation = useMutation({
@@ -599,12 +610,12 @@ export default function GastosPage() {
         </div>
       )}
 
-      {/* ── Nueva categoría Modal ────────────────────────────────────────────── */}
+      {/* ── Categorías de gasto Modal ────────────────────────────────────────── */}
       {showCategoryModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-[2px] z-50 flex items-center justify-center p-4">
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/[0.08] rounded-2xl shadow-modal w-full max-w-xs animate-scale-in">
             <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-white/[0.06]">
-              <h2 className="text-[14px] font-semibold text-slate-800 dark:text-white">Nueva categoría</h2>
+              <h2 className="text-[14px] font-semibold text-slate-800 dark:text-white">Categorías de gasto</h2>
               <button type="button" aria-label="Cerrar" onClick={() => { setShowCategoryModal(false); setNewCategoryName(''); }}
                 className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-white/[0.06] transition">
                 <X size={16} />
@@ -628,10 +639,41 @@ export default function GastosPage() {
                 {categoryMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Tag size={14} />}
                 Crear categoría
               </button>
+
+              {categories && categories.length > 0 && (
+                <div className="border-t border-slate-100 dark:border-white/[0.06] pt-3 space-y-0.5 max-h-48 overflow-y-auto">
+                  {categories.map((c: any) => (
+                    <div key={c.id} className="flex items-center justify-between px-1 py-1.5 text-[13px] text-slate-700 dark:text-slate-300">
+                      <span>{c.name}</span>
+                      {c.businessId && (
+                        <button
+                          type="button"
+                          aria-label={`Eliminar categoría ${c.name}`}
+                          onClick={() => setCategoryDeleteTarget(c)}
+                          className="w-6 h-6 flex items-center justify-center rounded-lg text-slate-300 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 transition"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={!!categoryDeleteTarget}
+        onOpenChange={(open) => { if (!open) setCategoryDeleteTarget(null); }}
+        title="Eliminar categoría"
+        description={categoryDeleteTarget ? `¿Eliminar la categoría "${categoryDeleteTarget.name}"? Los gastos que la usan quedarán sin categoría.` : undefined}
+        confirmLabel="Eliminar"
+        onConfirm={() => categoryDeleteTarget && deleteCategoryMutation.mutate(categoryDeleteTarget.id)}
+        loading={deleteCategoryMutation.isPending}
+        variant="danger"
+      />
 
       {/* ── Crear proveedor Modal ────────────────────────────────────────────── */}
       {showCreateSupplier && (
