@@ -411,6 +411,7 @@ export default function GastosPage() {
                         onFocus={() => setShowSupplierDD(true)}
                         onBlur={() => setTimeout(() => setShowSupplierDD(false), 150)}
                         placeholder="Nombre completo o buscar proveedor..."
+                        autoComplete="off"
                         className={`${inputCls} pl-8`}
                       />
                     </div>
