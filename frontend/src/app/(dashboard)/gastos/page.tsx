@@ -29,6 +29,7 @@ export default function GastosPage() {
   const [page, setPage] = useState(1);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
+  const [showDescriptionDD, setShowDescriptionDD] = useState(false);
   const [showSupplierDD, setShowSupplierDD] = useState(false);
   const [showCreateSupplier, setShowCreateSupplier] = useState(false);
   const [newSupName, setNewSupName] = useState('');
@@ -56,6 +57,11 @@ export default function GastosPage() {
     queryFn: () => api.get('/suppliers?limit=100').then((r) => r.data.data),
   });
 
+  const { data: expenseHistory } = useQuery({
+    queryKey: ['expenses-history'],
+    queryFn: () => api.get('/expenses?limit=100').then((r) => r.data.data),
+  });
+
   const { register, handleSubmit, reset, control, watch, setValue, formState: { isSubmitting, errors } } = useForm();
 
   const recipientNameValue = watch('recipientName') || '';
@@ -73,12 +79,42 @@ export default function GastosPage() {
 
   const { onChange: recipientNameOnChange, ...recipientNameField } = register('recipientName');
 
+  const descriptionValue = watch('description') || '';
+  const descriptionSuggestions = (() => {
+    const seen = new Set<string>();
+    const unique: any[] = [];
+    for (const e of expenseHistory || []) {
+      const key = e.description.trim().toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      unique.push(e);
+    }
+    return unique;
+  })();
+  const filteredDescriptions = descriptionSuggestions.filter((e: any) =>
+    !descriptionValue || e.description.toLowerCase().includes(descriptionValue.toLowerCase())
+  );
+
+  function selectExpenseTemplate(e: any) {
+    setValue('description', e.description);
+    setValue('categoryId', e.categoryId || '');
+    setValue('paymentMethod', e.paymentMethod || 'CASH');
+    setValue('recipientName', e.recipientName || '');
+    setValue('recipientDocument', e.recipientDocument || '');
+    setValue('recipientPhone', e.recipientPhone || '');
+    setValue('supplierId', e.supplierId || '');
+    setShowDescriptionDD(false);
+  }
+
+  const { onChange: descriptionOnChange, ...descriptionField } = register('description', { required: 'La descripción es obligatoria' });
+
   const saveMutation = useMutation({
     mutationFn: (data: any) => editItem
       ? api.put(`/expenses/${editItem.id}`, data)
       : api.post('/expenses', data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['expenses'] });
+      qc.invalidateQueries({ queryKey: ['expenses-history'] });
       toast.success(editItem ? 'Gasto actualizado' : 'Gasto registrado');
       setShowForm(false);
       setEditItem(null);
@@ -91,6 +127,7 @@ export default function GastosPage() {
     mutationFn: (id: string) => api.delete(`/expenses/${id}`),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['expenses'] });
+      qc.invalidateQueries({ queryKey: ['expenses-history'] });
       setDeleteTarget(null);
       toast.success('Gasto eliminado');
     },
@@ -335,12 +372,33 @@ export default function GastosPage() {
 
               <div>
                 <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5 block">Descripción *</label>
-                <input
-                  {...register('description', { required: 'La descripción es obligatoria' })}
-                  className={inputCls}
-                  placeholder="Ej: Pago arriendo local"
-                  autoFocus
-                />
+                <div className="relative">
+                  <input
+                    {...descriptionField}
+                    onChange={(e) => { descriptionOnChange(e); setShowDescriptionDD(true); }}
+                    onFocus={() => setShowDescriptionDD(true)}
+                    onBlur={() => setTimeout(() => setShowDescriptionDD(false), 150)}
+                    className={inputCls}
+                    placeholder="Ej: Pago arriendo local"
+                    autoComplete="off"
+                    autoFocus
+                  />
+                  {showDescriptionDD && filteredDescriptions.length > 0 && (
+                    <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-white/[0.08] rounded-xl shadow-modal z-20 max-h-44 overflow-y-auto">
+                      {filteredDescriptions.map((e: any) => (
+                        <button
+                          key={e.id}
+                          type="button"
+                          onMouseDown={() => selectExpenseTemplate(e)}
+                          className="w-full text-left px-3 py-2.5 text-[13px] hover:bg-emerald-50 dark:hover:bg-slate-700 text-slate-800 dark:text-white transition"
+                        >
+                          <span className="font-medium">{e.description}</span>
+                          {e.recipientName && <span className="text-slate-400"> · {e.recipientName}</span>}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
                 {errors.description && <p className="text-[11px] text-red-500 mt-1">{errors.description.message as string}</p>}
               </div>
 
