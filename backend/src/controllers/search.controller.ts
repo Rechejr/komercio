@@ -83,7 +83,7 @@ export const searchController = {
 
         prisma.credit.findMany({
           where: {
-            status: { not: 'PAID' },
+            status: { notIn: ['PAID', 'CANCELLED'] },
             customer: { businessId, deletedAt: null, name: contains },
           },
           select: {

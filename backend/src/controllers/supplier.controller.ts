@@ -48,7 +48,11 @@ export const supplierController = {
       const name = req.body.name?.toString().trim();
       if (!name) throw new AppError('El nombre del proveedor es requerido', 400);
       const { legalName, document, phone, mobile, email, address, city, contactName, notes } = req.body;
-      const base = { name, document, phone, email, address, city, contactName, notes, businessId: req.user!.businessId };
+      // Normalizar "" a null: con el unique constraint (businessId, document), dos
+      // proveedores sin documento guardados como "" chocarían entre sí (múltiples
+      // NULL sí están permitidos bajo un índice único).
+      const normalizedDoc = document?.toString().trim() || null;
+      const base = { name, document: normalizedDoc, phone, email, address, city, contactName, notes, businessId: req.user!.businessId };
       // select for retry excludes legalName/mobile which may not exist in DB yet
       const oldSelect = { id: true, businessId: true, name: true, document: true, phone: true, email: true, address: true, city: true, contactName: true, notes: true, isActive: true, createdAt: true, updatedAt: true, deletedAt: true };
       let supplier: any;
@@ -75,7 +79,8 @@ export const supplierController = {
       });
       if (!existing) throw new AppError('Proveedor no encontrado', 404);
       const { name, legalName, document, phone, mobile, email, address, city, contactName, notes } = req.body;
-      const base = { name, document, phone, email, address, city, contactName, notes };
+      const normalizedDoc = document !== undefined ? (document?.toString().trim() || null) : undefined;
+      const base = { name, document: normalizedDoc, phone, email, address, city, contactName, notes };
       const oldSelect = { id: true, businessId: true, name: true, document: true, phone: true, email: true, address: true, city: true, contactName: true, notes: true, isActive: true, createdAt: true, updatedAt: true, deletedAt: true };
       let supplier: any;
       try {

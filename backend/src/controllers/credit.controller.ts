@@ -120,7 +120,14 @@ export const creditController = {
 
         const newPaid = Number(locked.paidAmount) + paymentAmount;
         const balance = Number(locked.totalAmount) - newPaid;
-        const status = balance <= 0 ? 'PAID' : newPaid > 0 ? 'PARTIAL' : 'PENDING';
+        // Un abono parcial a un crédito ya vencido no lo "pone al día" — sigue
+        // vencido hasta que se salde por completo; antes bajaba a PARTIAL y
+        // desaparecía del filtro de vencidos hasta el próximo tick del cron horario.
+        const status = balance <= 0
+          ? 'PAID'
+          : locked.status === 'OVERDUE'
+            ? 'OVERDUE'
+            : newPaid > 0 ? 'PARTIAL' : 'PENDING';
 
         await tx.creditPayment.create({
           data: { creditId: id, amount: paymentAmount, paymentMethod, notes },

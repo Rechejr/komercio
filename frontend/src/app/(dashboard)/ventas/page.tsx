@@ -127,7 +127,6 @@ export default function VentasPage() {
           <option value="">Todos los estados</option>
           <option value="COMPLETED">Completadas</option>
           <option value="CANCELLED">Anuladas</option>
-          <option value="REFUNDED">Devueltas</option>
         </select>
         <Link
           href="/pos"

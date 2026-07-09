@@ -95,6 +95,11 @@ export const productController = {
         if (!branch) throw new AppError('Sucursal no válida para este negocio', 403);
       }
 
+      if (data.supplierId) {
+        const sup = await prisma.supplier.findFirst({ where: { id: data.supplierId, businessId, deletedAt: null } });
+        if (!sup) throw new AppError('Proveedor inválido', 400);
+      }
+
       const product = await prisma.$transaction(async (tx) => {
         const newProduct = await tx.product.create({
           data: {
@@ -154,10 +159,16 @@ export const productController = {
       const { id } = req.params;
       const data = req.body;
 
+      const businessId = req.user!.businessId;
       const existing = await prisma.product.findFirst({
-        where: { id, deletedAt: null, businessId: req.user!.businessId },
+        where: { id, deletedAt: null, businessId },
       });
       if (!existing) throw new AppError('Producto no encontrado', 404);
+
+      if (data.supplierId) {
+        const sup = await prisma.supplier.findFirst({ where: { id: data.supplierId, businessId, deletedAt: null } });
+        if (!sup) throw new AppError('Proveedor inválido', 400);
+      }
 
       const product = await prisma.product.update({
         where: { id },
@@ -182,9 +193,8 @@ export const productController = {
         },
       });
 
-      await cache.del(`product:${req.user!.businessId}:${id}`);
+      await cache.del(`product:${businessId}:${id}`);
 
-      const businessId = req.user?.businessId;
       if (businessId) {
         emitToBusinesss(businessId, socketEvents.INVENTORY_UPDATED, { type: 'updated', product });
       }

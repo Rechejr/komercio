@@ -757,7 +757,11 @@ export default function InventarioPage() {
                   </div>
                   <div>
                     <label className="block text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5">Cantidad mínima</label>
-                    <input {...register('minStock', { valueAsNumber: true })} type="number" inputMode="numeric" placeholder="5" className={inputCls} />
+                    <input
+                      {...register('minStock', { valueAsNumber: true, min: { value: 0, message: 'No puede ser negativo' } })}
+                      type="number" inputMode="numeric" min="0" placeholder="5" className={inputCls}
+                    />
+                    {errors.minStock && <p className="text-[11px] text-red-500 mt-1">{errors.minStock.message as string}</p>}
                   </div>
                 </div>
 
@@ -821,7 +825,15 @@ export default function InventarioPage() {
                 <div>
                   <h4 className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide mb-3">Impuestos</h4>
                   <label className="block text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5">IVA (%)</label>
-                  <input {...register('taxRate', { valueAsNumber: true })} type="number" inputMode="numeric" placeholder="0" className={inputCls} />
+                  <input
+                    {...register('taxRate', {
+                      valueAsNumber: true,
+                      min: { value: 0, message: 'No puede ser negativo' },
+                      max: { value: 100, message: 'No puede ser mayor a 100' },
+                    })}
+                    type="number" inputMode="numeric" min="0" max="100" placeholder="0" className={inputCls}
+                  />
+                  {errors.taxRate && <p className="text-[11px] text-red-500 mt-1">{errors.taxRate.message as string}</p>}
                 </div>
 
                 <div className="space-y-3 pt-1">

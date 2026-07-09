@@ -202,6 +202,13 @@ router.post('/import',
         const costPrice = parseNum(cellVal(row, col.costPrice));
         const minStock = parseNum(cellVal(row, col.minStock)) || 5;
 
+        // Hard error: negative cost (a formula/typo error like "-2500" would
+        // otherwise import straight into costPrice and corrupt margin math silently)
+        if (costPrice < 0) {
+          issues.push({ row: rowNum, name, message: 'Costo negativo', type: 'error' });
+          continue;
+        }
+
         // Warning: price below cost
         if (costPrice > 0 && salePrice < costPrice) {
           issues.push({
@@ -269,10 +276,14 @@ router.post('/import',
       const existingProducts = allCodes.length > 0
         ? await prisma.product.findMany({
             where: { code: { in: allCodes }, businessId },
-            select: { id: true, code: true },
+            select: { id: true, code: true, stock: true },
           })
         : [];
       const existingByCode = new Map(existingProducts.map(p => [p.code!, p]));
+      // Si el archivo no trae columna de Stock, no se debe tocar el stock existente
+      // al actualizar — de lo contrario re-subir una plantilla sin esa columna
+      // (por ejemplo, solo para corregir categorías) resetearía todo a 0 en silencio.
+      const hasStockColumn = col.stock !== -1;
 
       for (const r of validRows) {
         try {
@@ -292,35 +303,62 @@ router.post('/import',
             }
           }
 
-          const productData = {
+          const sharedData = {
             name: r.name, salePrice: r.salePrice, costPrice: r.costPrice,
-            stock: r.stock, minStock: r.minStock, unit: r.unit,
+            minStock: r.minStock, unit: r.unit,
             categoryId, branchId, businessId,
             ...(r.barcodeVal && { barcode: r.barcodeVal }),
             ...(r.descriptionVal && { description: r.descriptionVal }),
           };
+          // Al crear siempre se fija el stock inicial del archivo; al actualizar,
+          // solo si la columna existe (ver hasStockColumn arriba).
+          const createData = { ...sharedData, stock: r.stock };
 
           if (r.rawCode) {
             const existing = existingByCode.get(r.rawCode);
             if (existing) {
-              await prisma.product.update({ where: { id: existing.id }, data: productData });
+              const prevStock = Number(existing.stock);
+              await prisma.product.update({
+                where: { id: existing.id },
+                data: hasStockColumn ? { ...sharedData, stock: r.stock } : sharedData,
+              });
+              // Deja rastro del cambio de stock — antes se sobreescribía en silencio,
+              // sin quedar registrado en el historial de inventario del producto.
+              if (hasStockColumn && r.stock !== prevStock) {
+                await prisma.inventoryMovement.create({
+                  data: {
+                    productId: existing.id,
+                    type: r.stock > prevStock ? 'IN' : 'OUT',
+                    quantity: Math.abs(r.stock - prevStock),
+                    previousStock: prevStock,
+                    newStock: r.stock,
+                    reason: 'Importación Excel',
+                    unitCost: r.costPrice,
+                    totalCost: Math.abs(r.stock - prevStock) * r.costPrice,
+                  },
+                });
+              }
               results.updated++;
             } else {
               try {
-                await prisma.product.create({ data: { code: r.rawCode, ...productData } });
+                const created = await prisma.product.create({ data: { code: r.rawCode, ...createData } });
+                // Para que una segunda fila del mismo archivo con este código
+                // actualice en vez de volver a intentar crear (ver P2002 abajo).
+                existingByCode.set(r.rawCode, { id: created.id, code: r.rawCode, stock: r.stock as any });
                 results.imported++;
               } catch (e: any) {
                 if (e.code === 'P2002') {
                   // Code collides with another business — add suffix
                   const fallbackCode = `${r.rawCode}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
-                  await prisma.product.create({ data: { code: fallbackCode, ...productData } });
+                  const created = await prisma.product.create({ data: { code: fallbackCode, ...createData } });
+                  existingByCode.set(r.rawCode, { id: created.id, code: r.rawCode, stock: r.stock as any });
                   results.imported++;
                 } else { throw e; }
               }
             }
           } else {
             const autoCode = `IMP${String(r.rowNum).padStart(5, '0')}-${Date.now().toString(36).toUpperCase()}`;
-            await prisma.product.create({ data: { code: autoCode, ...productData } });
+            await prisma.product.create({ data: { code: autoCode, ...createData } });
             results.imported++;
           }
         } catch (err: any) {
@@ -351,7 +389,18 @@ router.post('/',
   productController.create,
 );
 
-router.put('/:id', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE'), productController.update);
+router.put('/:id',
+  authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE'),
+  [
+    body('salePrice').optional().isFloat({ min: 0 }).withMessage('Precio de venta inválido'),
+    body('costPrice').optional().isFloat({ min: 0 }).withMessage('Costo inválido'),
+    body('wholesalePrice').optional({ checkFalsy: true }).isFloat({ min: 0 }).withMessage('Precio mayorista inválido'),
+    body('minStock').optional().isFloat({ min: 0 }).withMessage('Cantidad mínima inválida'),
+    body('taxRate').optional().isFloat({ min: 0, max: 100 }).withMessage('IVA inválido'),
+  ],
+  validate,
+  productController.update,
+);
 router.delete('/:id', authorize('ADMIN', 'SUPERVISOR'), productController.delete);
 router.post('/:id/duplicate', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE'), productController.duplicate);
 router.patch('/:id/adjust-stock',

@@ -68,6 +68,11 @@ router.post('/', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE'), purchaseItemVali
       throw new AppError('Uno o más productos no pertenecen a este negocio', 403);
     }
 
+    if (supplierId) {
+      const sup = await prisma.supplier.findFirst({ where: { id: supplierId, businessId, deletedAt: null } });
+      if (!sup) throw new AppError('Proveedor inválido', 400);
+    }
+
     const purchase = await prisma.$transaction(async (tx) => {
       let subtotal = 0;
       let taxAmount = 0;
@@ -138,9 +143,10 @@ router.put('/:id', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE'), purchaseItemVa
   try {
     const { supplierId, invoiceNumber, items, notes, purchaseDate } = req.body;
     if (!items?.length) throw new AppError('Se requieren productos', 400);
+    const businessId = req.user!.businessId;
 
     const existing = await prisma.purchase.findFirst({
-      where: { id: req.params.id, deletedAt: null, businessId: req.user!.businessId },
+      where: { id: req.params.id, deletedAt: null, businessId },
       include: { details: true },
     });
     if (!existing) throw new AppError('Compra no encontrada', 404);
@@ -148,41 +154,69 @@ router.put('/:id', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE'), purchaseItemVa
     // Validate new items' products belong to this business
     const newProductIds: string[] = items.map((item: any) => item.productId);
     const validCount = await prisma.product.count({
-      where: { id: { in: newProductIds }, businessId: req.user!.businessId, deletedAt: null },
+      where: { id: { in: newProductIds }, businessId, deletedAt: null },
     });
     if (validCount !== newProductIds.length) {
       throw new AppError('Uno o más productos no pertenecen a este negocio', 403);
     }
 
+    if (supplierId) {
+      const sup = await prisma.supplier.findFirst({ where: { id: supplierId, businessId, deletedAt: null } });
+      if (!sup) throw new AppError('Proveedor inválido', 400);
+    }
+
     const updated = await prisma.$transaction(async (tx) => {
-      // Revert stock from old details: lock each row and only decrement as much
-      // stock as currently exists — prevents driving stock below 0 when units
-      // were already sold since the original purchase was registered.
-      interface RevertRow { id: string; stock: number; }
-      for (const old of existing.details) {
-        const [locked] = await tx.$queryRawUnsafe<RevertRow[]>(
-          'SELECT id, stock FROM products WHERE id::text = $1 FOR UPDATE',
-          old.productId,
+      // Cantidad neta por producto: la línea vieja resta, la línea nueva suma, y se
+      // aplica un solo ajuste de stock por producto — en vez de "revertir todo lo
+      // viejo (con un tope que perdía unidades ya vendidas) y luego reaplicar todo
+      // lo nuevo", que en ese caso inflaba el stock (10→20 con 8 ya vendidas
+      // terminaba en 20 en vez de los 12 correctos).
+      const oldDetailByProduct = new Map(existing.details.map((d) => [d.productId, d]));
+      const newItemByProduct = new Map<string, any>(items.map((i: any) => [i.productId, i]));
+      const productIds = new Set<string>([...oldDetailByProduct.keys(), ...newItemByProduct.keys()]);
+
+      interface ProductRow { id: string; stock: number; allowNegativeStock: boolean; name: string; }
+      for (const productId of productIds) {
+        const oldDetail = oldDetailByProduct.get(productId);
+        const newItem: any = newItemByProduct.get(productId);
+        const oldQty = oldDetail ? Number(oldDetail.quantity) : 0;
+        const newQty = newItem ? parseFloat(newItem.quantity) : 0;
+        const delta = newQty - oldQty;
+
+        const [locked] = await tx.$queryRawUnsafe<ProductRow[]>(
+          'SELECT id, stock, "allowNegativeStock", name FROM products WHERE id::text = $1 FOR UPDATE',
+          productId,
         );
         if (!locked) continue;
-        const revertQty = Math.min(Number(old.quantity), locked.stock);
-        if (revertQty > 0) {
-          const newStock = locked.stock - revertQty;
+
+        if (delta !== 0) {
+          const newStock = locked.stock + delta;
+          if (newStock < 0 && !locked.allowNegativeStock) {
+            throw new AppError(
+              `No se puede editar la compra: ya se vendieron más unidades de "${locked.name}" de las que quedarían tras el ajuste`,
+              400,
+            );
+          }
+          const unitCost = newItem ? parseFloat(newItem.unitCost) : Number(oldDetail!.unitCost);
           await tx.product.update({
-            where: { id: old.productId },
-            data: { stock: { decrement: revertQty } },
+            where: { id: productId },
+            data: { stock: { increment: delta }, ...(newItem ? { costPrice: unitCost } : {}) },
           });
           await tx.inventoryMovement.create({
             data: {
-              productId: old.productId, type: 'OUT',
-              quantity: revertQty,
+              productId, type: delta > 0 ? 'IN' : 'OUT',
+              quantity: Math.abs(delta),
               previousStock: locked.stock, newStock,
-              reason: 'Reversión de compra (edición)',
+              reason: 'Edición de compra',
               referenceId: req.params.id, referenceType: 'PURCHASE',
-              unitCost: Number(old.unitCost),
-              totalCost: Number(old.unitCost) * revertQty,
+              unitCost,
+              totalCost: Math.abs(delta) * unitCost,
             },
           });
+        } else if (newItem) {
+          // Misma cantidad, pero el costo unitario pudo haber cambiado — se conserva
+          // el "último costo" aunque el delta de stock haya quedado en cero.
+          await tx.product.update({ where: { id: productId }, data: { costPrice: parseFloat(newItem.unitCost) } });
         }
       }
 
@@ -215,33 +249,6 @@ router.put('/:id', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE'), purchaseItemVa
         },
       });
 
-      interface PurchaseProductRow { id: string; stock: number; }
-      for (const item of items) {
-        // Lock row — provides accurate previousStock for the movement log
-        const [locked] = await tx.$queryRawUnsafe<PurchaseProductRow[]>(
-          'SELECT id, stock FROM products WHERE id::text = $1 FOR UPDATE',
-          item.productId,
-        );
-        if (!locked) continue;
-        const qty = parseFloat(item.quantity);
-        const newStock = locked.stock + qty;
-        await tx.product.update({
-          where: { id: item.productId },
-          data: { stock: { increment: qty }, costPrice: parseFloat(item.unitCost) },
-        });
-        await tx.inventoryMovement.create({
-          data: {
-            productId: item.productId, type: 'IN',
-            quantity: qty,
-            previousStock: locked.stock, newStock,
-            reason: 'Edición de compra',
-            referenceId: req.params.id, referenceType: 'PURCHASE',
-            unitCost: parseFloat(item.unitCost),
-            totalCost: parseFloat(item.unitCost) * qty,
-          },
-        });
-      }
-
       return updatedPurchase;
     });
 
@@ -258,18 +265,27 @@ router.delete('/:id', authorize('ADMIN', 'SUPERVISOR'), async (req: AuthRequest,
     if (!existing) throw new AppError('Compra no encontrada', 404);
 
     await prisma.$transaction(async (tx) => {
-      interface DeleteProductRow { id: string; stock: number; }
+      interface DeleteProductRow { id: string; stock: number; allowNegativeStock: boolean; name: string; }
       for (const detail of existing.details) {
         // Lock row — provides accurate previousStock/newStock; use atomic decrement
         // instead of the previous `stock: Math.max(0, staleValue - qty)` which:
         //   1. used a stale read susceptible to concurrent updates
         //   2. silently capped at 0, hiding real inventory discrepancies
         const [locked] = await tx.$queryRawUnsafe<DeleteProductRow[]>(
-          'SELECT id, stock FROM products WHERE id::text = $1 FOR UPDATE',
+          'SELECT id, stock, "allowNegativeStock", name FROM products WHERE id::text = $1 FOR UPDATE',
           detail.productId,
         );
         if (!locked) continue;
         const newStock = locked.stock - detail.quantity;
+        // A diferencia de la versión anterior, que descontaba sin tope: si ya se
+        // vendieron unidades de esta compra y el producto no permite stock
+        // negativo, no se debe poder eliminarla sin dejar el inventario en negativo.
+        if (newStock < 0 && !locked.allowNegativeStock) {
+          throw new AppError(
+            `No se puede eliminar la compra: ya se vendieron unidades de "${locked.name}" que quedarían en stock negativo`,
+            400,
+          );
+        }
         await tx.product.update({
           where: { id: detail.productId },
           data: { stock: { decrement: detail.quantity } },

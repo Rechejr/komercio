@@ -49,14 +49,23 @@ router.post('/open', authorize('ADMIN', 'SUPERVISOR', 'CASHIER'), async (req: an
       throw new AppError('El monto de apertura debe ser un número mayor o igual a 0', 400);
     }
 
-    const register = await prisma.cashRegister.create({
-      data: {
-        branchId: req.user.branchId,
-        openedBy: req.user.userId,
-        openingAmount,
-        status: 'OPEN',
-      },
-    });
+    let register;
+    try {
+      register = await prisma.cashRegister.create({
+        data: {
+          branchId: req.user.branchId,
+          openedBy: req.user.userId,
+          openingAmount,
+          status: 'OPEN',
+        },
+      });
+    } catch (err: any) {
+      // Red de seguridad ante la carrera findFirst→create: el índice único parcial
+      // "cash_registers_branch_open_unique" (una sola caja OPEN por sucursal) rechaza
+      // el segundo intento aunque ambos hayan pasado el chequeo `existing` de arriba.
+      if (err?.code === 'P2002') throw new AppError('Ya hay una caja abierta para esta sucursal', 400);
+      throw err;
+    }
     return created(res, register, 'Caja abierta');
   } catch (err) { next(err); }
 });

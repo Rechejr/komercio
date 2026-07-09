@@ -6,7 +6,6 @@ import { AppError, success, created, paginated } from '../utils/response';
 import { getPagination, getSearch } from '../utils/pagination';
 import { AuthRequest } from '../middlewares/auth';
 import { emitToBusinesss, socketEvents } from '../config/socket';
-import { logger } from '../config/logger';
 import { notifyLowStockBatch } from '../services/notification.service';
 
 // Checked once per process on first sale; avoids breaking when migration is pending.
@@ -21,6 +20,32 @@ async function counterTableReady(): Promise<boolean> {
   }
   return _counterTableReady;
 }
+
+// Suma únicamente los splits en efectivo (puede haber más de uno) para pagos MIXED;
+// para CASH/sin método usa el neto recibido. Se comparte entre create() y cancel()
+// para que el registro y la reversión de caja siempre queden en sincronía.
+function computeCashAmount(
+  paymentMethod: string | null | undefined,
+  paidAmount: number,
+  changeAmount: number,
+  paymentDetails: any,
+): number {
+  if (paymentMethod === 'MIXED') {
+    const splits: Array<{ method: string; amount: number }> = paymentDetails?.splits || [];
+    return splits
+      .filter((s) => s.method === 'CASH')
+      .reduce((sum, s) => sum + Number(s.amount), 0);
+  }
+  if (paymentMethod === 'CASH' || !paymentMethod) {
+    return paidAmount - changeAmount;
+  }
+  return 0;
+}
+
+// COP no maneja centavos en la práctica (formatCurrency ya muestra 0 decimales);
+// redondear cada línea antes de sumar evita que el binario de punto flotante
+// acumule diferencias de centavos entre varias líneas con IVA/descuento.
+const roundCOP = (n: number) => Math.round(n);
 
 async function generateInvoiceNumber(tx: any, branchId: string): Promise<string> {
   const coDate = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Bogota' }));
@@ -237,21 +262,31 @@ export const saleController = {
 
         const productMap = new Map(lockedProducts.map((p) => [p.id, p]));
 
+        // Cantidad total por producto — un mismo producto puede venir repetido en
+        // varias líneas (ej. llamada directa a la API); el chequeo de stock y el
+        // descuento de inventario deben mirar el total combinado, no línea por línea,
+        // o dos líneas de 3 unidades con solo 5 en stock pasarían cada una "por separado".
+        const qtyByProduct = new Map<string, number>();
+        for (const item of items) {
+          qtyByProduct.set(item.productId, (qtyByProduct.get(item.productId) || 0) + item.quantity);
+        }
+        for (const [pid, qty] of qtyByProduct) {
+          const product = productMap.get(pid)!;
+          if (product.stock < qty && !product.allowNegativeStock) {
+            throw new AppError(`Stock insuficiente para: ${product.name}`, 400);
+          }
+        }
+
         let subtotal = 0;
         let taxAmount = 0;
 
         const saleDetails = items.map((item: any) => {
           const product = productMap.get(item.productId)!;
 
-          // Stock check uses locked (current) values — no race condition
-          if (product.stock < item.quantity && !product.allowNegativeStock) {
-            throw new AppError(`Stock insuficiente para: ${product.name}`, 400);
-          }
-
           const lineSubtotal = product.salePrice * item.quantity;
           const lineDiscount = lineSubtotal * ((item.discountPct || 0) / 100);
-          const lineNet = lineSubtotal - lineDiscount;
-          const lineTax = lineNet * (product.taxRate / 100);
+          const lineNet = roundCOP(lineSubtotal - lineDiscount);
+          const lineTax = roundCOP(lineNet * (product.taxRate / 100));
 
           subtotal += lineNet;
           taxAmount += lineTax;
@@ -268,7 +303,7 @@ export const saleController = {
           };
         });
 
-        const discAmt = parseFloat(discountAmount) || 0;
+        const discAmt = roundCOP(parseFloat(discountAmount) || 0);
         if (discAmt < 0) throw new AppError('El descuento no puede ser negativo', 400);
 
         const total = subtotal + taxAmount - discAmt;
@@ -276,6 +311,13 @@ export const saleController = {
 
         const paid = (paidAmount != null && !isNaN(parseFloat(paidAmount))) ? parseFloat(paidAmount) : total;
         if (paid < 0) throw new AppError('El monto pagado no puede ser negativo', 400);
+        // Una venta que no se marca como fiado/crédito debe quedar cubierta por completo —
+        // de lo contrario la diferencia no queda como deuda del cliente ni como error,
+        // simplemente desaparece.
+        if (!isCredit && paid < total) {
+          throw new AppError('El monto pagado es menor al total. Marca la venta como fiado o completa el pago.', 400);
+        }
+        const changeAmt = Math.max(0, paid - total);
 
         const newSale = await tx.sale.create({
           data: {
@@ -289,7 +331,7 @@ export const saleController = {
             discountAmount: discAmt,
             total,
             paidAmount: paid,
-            changeAmount: Math.max(0, paid - total),
+            changeAmount: changeAmt,
             paymentMethod: paymentMethod || 'CASH',
             paymentDetails: paymentDetails || null,
             notes: notes || null,
@@ -298,24 +340,25 @@ export const saleController = {
           include: { details: true },
         });
 
-        // Update stock and record movements
+        // Update stock and record movements — una sola vez por producto, con la
+        // cantidad total combinada (ver qtyByProduct arriba).
         const lowStockProducts: Array<{ id: string; name: string; stock: number; minStock: number }> = [];
-        for (const item of items) {
-          const product = productMap.get(item.productId)!;
-          const newStock = product.stock - item.quantity;
-          await tx.product.update({ where: { id: product.id }, data: { stock: { decrement: item.quantity } } });
+        for (const [pid, qty] of qtyByProduct) {
+          const product = productMap.get(pid)!;
+          const newStock = product.stock - qty;
+          await tx.product.update({ where: { id: pid }, data: { stock: { decrement: qty } } });
           await tx.inventoryMovement.create({
             data: {
-              productId: product.id,
+              productId: pid,
               type: 'OUT',
-              quantity: item.quantity,
+              quantity: qty,
               previousStock: product.stock,
               newStock,
               reason: 'Venta',
               referenceId: newSale.id,
               referenceType: 'SALE',
               unitCost: product.costPrice,
-              totalCost: product.costPrice * item.quantity,
+              totalCost: product.costPrice * qty,
             },
           });
           if (product.minStock > 0 && newStock <= product.minStock) {
@@ -342,6 +385,27 @@ export const saleController = {
           });
         }
 
+        // Registrar ingreso en caja abierta — dentro de la misma transacción que la
+        // venta (antes corría después, "best effort": si el proceso caía justo en ese
+        // instante, la venta quedaba completa pero el ingreso en caja se perdía sin dejar rastro).
+        const cashAmount = computeCashAmount(paymentMethod, paid, changeAmt, paymentDetails);
+        if (cashAmount > 0 && effectiveBranchId) {
+          const openRegister = await tx.cashRegister.findFirst({
+            where: { branchId: effectiveBranchId, status: 'OPEN' },
+          });
+          if (openRegister) {
+            await tx.cashMovement.create({
+              data: {
+                cashRegisterId: openRegister.id,
+                type: 'IN',
+                amount: cashAmount,
+                description: `Venta ${invoiceNumber}`,
+                referenceId: newSale.id,
+              },
+            });
+          }
+        }
+
           return { newSale, lowStockProducts };
           }, { timeout: 30000 });
           break; // success — exit retry loop
@@ -358,39 +422,6 @@ export const saleController = {
       }
 
       const { newSale: sale, lowStockProducts } = result;
-
-      // Registrar ingreso en caja abierta para ventas en efectivo (best effort)
-      try {
-        if (sale.branchId) {
-          let cashAmount = 0;
-          if (paymentMethod === 'CASH' || !paymentMethod) {
-            cashAmount = Number(sale.paidAmount) - Number(sale.changeAmount);
-          } else if (paymentMethod === 'MIXED') {
-            const splits: Array<{ method: string; amount: number }> = (sale.paymentDetails as any)?.splits || [];
-            const cashSplit = splits.find((s) => s.method === 'CASH');
-            cashAmount = cashSplit ? Number(cashSplit.amount) : 0;
-          }
-          if (cashAmount > 0) {
-            const openRegister = await prisma.cashRegister.findFirst({
-              where: { branchId: sale.branchId, status: 'OPEN' },
-            });
-            if (openRegister) {
-              await prisma.cashMovement.create({
-                data: {
-                  cashRegisterId: openRegister.id,
-                  type: 'IN',
-                  amount: cashAmount,
-                  description: `Venta ${sale.invoiceNumber}`,
-                  referenceId: sale.id,
-                },
-              });
-            }
-          }
-        }
-      } catch (cashErr) {
-        // El movimiento de caja no debe fallar la venta — best effort
-        logger.warn('Cash register movement failed after sale', { saleId: sale.id, err: cashErr });
-      }
 
       const businessId = req.user?.businessId;
       if (businessId) {
@@ -455,37 +486,47 @@ export const saleController = {
           });
         }
 
-        // 2. Revert credit if it was a credit sale — cancels phantom debt on customer
-        const credit = await tx.credit.findUnique({ where: { saleId: id } });
+        // 2. Revert credit if it was a credit sale — cancels the phantom debt on the
+        // customer. Locked FOR UPDATE so this can't race with a concurrent payment
+        // (credit.controller.ts addPayment locks the same row).
+        const [credit] = await tx.$queryRawUnsafe<any[]>(
+          'SELECT * FROM credits WHERE "saleId"::text = $1 FOR UPDATE',
+          id,
+        );
         if (credit) {
           await tx.customer.update({
             where: { id: credit.customerId },
-            data: { currentDebt: { decrement: credit.balance } },
+            data: { currentDebt: { decrement: Number(credit.balance) } },
           });
+          // Estado propio de "anulado" — no 'PAID': la venta se canceló, el cliente
+          // no pagó nada. paidAmount se deja tal cual (los abonos reales ya hechos,
+          // si los hubo, no se inventan como si cubrieran el total).
           await tx.credit.update({
             where: { id: credit.id },
-            data: { status: 'PAID', balance: 0, paidAmount: credit.totalAmount },
+            data: { status: 'CANCELLED', balance: 0 },
           });
         }
 
-        // 3. Revert cash movement only for CASH sales — other methods never created a movement
-        if (sale.branchId && (sale.paymentMethod === 'CASH' || !sale.paymentMethod)) {
-          const netCash = Number(sale.paidAmount) - Number(sale.changeAmount);
-          if (netCash > 0) {
-            const openRegister = await tx.cashRegister.findFirst({
-              where: { branchId: sale.branchId, status: 'OPEN' },
+        // 3. Revert the cash portion of the sale — cubre tanto ventas 100% en
+        // efectivo como la porción en efectivo de un pago MIXTO (antes solo
+        // revertía CASH puro, dejando la caja descuadrada tras anular una mixta).
+        const netCash = computeCashAmount(
+          sale.paymentMethod, Number(sale.paidAmount), Number(sale.changeAmount), sale.paymentDetails,
+        );
+        if (sale.branchId && netCash > 0) {
+          const openRegister = await tx.cashRegister.findFirst({
+            where: { branchId: sale.branchId, status: 'OPEN' },
+          });
+          if (openRegister) {
+            await tx.cashMovement.create({
+              data: {
+                cashRegisterId: openRegister.id,
+                type: 'OUT',
+                amount: netCash,
+                description: `Anulación venta ${sale.invoiceNumber}`,
+                referenceId: id,
+              },
             });
-            if (openRegister) {
-              await tx.cashMovement.create({
-                data: {
-                  cashRegisterId: openRegister.id,
-                  type: 'OUT',
-                  amount: netCash,
-                  description: `Anulación venta ${sale.invoiceNumber}`,
-                  referenceId: id,
-                },
-              });
-            }
           }
         }
       }, { timeout: 30000 });

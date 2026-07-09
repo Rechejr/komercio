@@ -256,7 +256,11 @@ router.post('/import',
               await prisma.supplier.update({ where: { id: existing.id }, data });
               results.updated++;
             } else {
-              await prisma.supplier.create({ data: { ...data, document: r.document, businessId } });
+              const created = await prisma.supplier.create({ data: { ...data, document: r.document, businessId } });
+              // Para que otra fila del mismo archivo con este mismo documento
+              // (ver advertencia de arriba) actualice en vez de intentar crear un
+              // duplicado — el unique constraint (businessId, document) lo rechazaría.
+              existingByDoc.set(r.document, { id: created.id, document: r.document });
               results.imported++;
             }
           } else {

@@ -75,6 +75,15 @@ export const customerController = {
       const { email, phone, document, documentType, address, city, notes, creditLimit } = req.body;
       const name = req.body.name?.toString().trim();
       if (!name) throw new AppError('El nombre del cliente es requerido', 400);
+      if (phone) {
+        // El documento ya tiene un unique constraint en el schema; el celular no,
+        // así que sin este chequeo el mismo cliente podía quedar duplicado (typo
+        // en el documento) con la deuda repartida entre dos fichas distintas.
+        const dupPhone = await prisma.customer.findFirst({
+          where: { businessId: req.user!.businessId, phone, deletedAt: null },
+        });
+        if (dupPhone) throw new AppError(`Ya existe un cliente con este celular: ${dupPhone.name}`, 409);
+      }
       const customer = await prisma.customer.create({
         data: {
           name,
@@ -104,6 +113,12 @@ export const customerController = {
       if (!existing) throw new AppError('Cliente no encontrado', 404);
 
       const { name, email, phone, document, documentType, address, city, notes, creditLimit } = req.body;
+      if (phone) {
+        const dupPhone = await prisma.customer.findFirst({
+          where: { businessId: req.user!.businessId, phone, deletedAt: null, id: { not: id } },
+        });
+        if (dupPhone) throw new AppError(`Ya existe un cliente con este celular: ${dupPhone.name}`, 409);
+      }
       const customer = await prisma.customer.update({
         where: { id },
         data: {

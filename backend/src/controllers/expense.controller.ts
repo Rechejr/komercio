@@ -17,7 +17,13 @@ export const expenseController = {
       if (startDate || endDate) {
         where.date = {};
         if (startDate) where.date.gte = new Date(startDate as string);
-        if (endDate) where.date.lte = new Date(endDate as string);
+        if (endDate) {
+          // Sin esto, "hasta" corta a las 00:00 del día final y excluye casi todo
+          // lo registrado ese mismo día (ver export.controller.ts, que sí lo hace).
+          const end = new Date(endDate as string);
+          end.setUTCHours(23, 59, 59, 999);
+          where.date.lte = end;
+        }
       }
 
       const [expenses, total] = await Promise.all([
@@ -39,14 +45,25 @@ export const expenseController = {
       const { description, amount, date, categoryId, notes, paymentMethod,
               recipientName, recipientDocument, recipientPhone, supplierId } = req.body;
       if (parseFloat(amount) <= 0) throw new AppError('El monto debe ser mayor a 0', 400);
+      const businessId = req.user!.businessId;
+      if (categoryId) {
+        const cat = await prisma.expenseCategory.findFirst({
+          where: { id: categoryId, OR: [{ businessId }, { businessId: null }] },
+        });
+        if (!cat) throw new AppError('Categoría inválida', 400);
+      }
+      if (supplierId) {
+        const sup = await prisma.supplier.findFirst({ where: { id: supplierId, businessId, deletedAt: null } });
+        if (!sup) throw new AppError('Proveedor inválido', 400);
+      }
       const base = {
         description,
         amount: parseFloat(amount),
         date: date ? new Date(date) : new Date(),
         categoryId: categoryId || null,
         notes: notes || null,
-        paymentMethod: paymentMethod || null,
-        businessId: req.user!.businessId,
+        paymentMethod: paymentMethod || 'CASH',
+        businessId,
       };
       let expense: any;
       try {
@@ -102,6 +119,17 @@ export const expenseController = {
       const { description, amount, date, categoryId, notes, paymentMethod,
               recipientName, recipientDocument, recipientPhone, supplierId } = req.body;
       if (amount !== undefined && parseFloat(amount) <= 0) throw new AppError('El monto debe ser mayor a 0', 400);
+      const businessId = req.user!.businessId;
+      if (categoryId) {
+        const cat = await prisma.expenseCategory.findFirst({
+          where: { id: categoryId, OR: [{ businessId }, { businessId: null }] },
+        });
+        if (!cat) throw new AppError('Categoría inválida', 400);
+      }
+      if (supplierId) {
+        const sup = await prisma.supplier.findFirst({ where: { id: supplierId, businessId, deletedAt: null } });
+        if (!sup) throw new AppError('Proveedor inválido', 400);
+      }
       const base = {
         description,
         amount: amount !== undefined ? parseFloat(amount) : undefined,
@@ -129,6 +157,49 @@ export const expenseController = {
           throw colErr;
         }
       }
+
+      // Reconciliar el movimiento de caja que este gasto generó al crearse — si no
+      // se toca aquí, corregir el monto (o el método de pago) de un gasto en
+      // efectivo deja el cierre de caja descuadrado con el valor viejo para siempre.
+      // Solo se ajusta si la caja donde se registró sigue abierta: una vez cerrada,
+      // ese cierre ya quedó conciliado y no se debe alterar en retrospectiva.
+      try {
+        const movement = await prisma.cashMovement.findFirst({
+          where: { referenceId: existing.id, type: 'OUT' },
+          include: { cashRegister: true },
+        });
+        const newPaymentMethod = paymentMethod !== undefined ? paymentMethod : existing.paymentMethod;
+        const newAmount = amount !== undefined ? parseFloat(amount) : Number(existing.amount);
+        const newDescription = (description !== undefined ? description : existing.description) || 'Gasto';
+
+        if (movement && movement.cashRegister.status === 'OPEN') {
+          if (newPaymentMethod !== 'CASH') {
+            await prisma.cashMovement.delete({ where: { id: movement.id } });
+          } else {
+            await prisma.cashMovement.update({
+              where: { id: movement.id },
+              data: { amount: newAmount, description: newDescription },
+            });
+          }
+        } else if (!movement && existing.paymentMethod !== 'CASH' && newPaymentMethod === 'CASH') {
+          const branchId = req.user!.branchId;
+          if (branchId) {
+            const openRegister = await prisma.cashRegister.findFirst({ where: { branchId, status: 'OPEN' } });
+            if (openRegister) {
+              await prisma.cashMovement.create({
+                data: {
+                  cashRegisterId: openRegister.id,
+                  type: 'OUT',
+                  amount: newAmount,
+                  description: newDescription,
+                  referenceId: existing.id,
+                },
+              });
+            }
+          }
+        }
+      } catch { /* no debe fallar la actualización del gasto */ }
+
       return success(res, expense, 'Gasto actualizado');
     } catch (err) { next(err); }
   },
@@ -140,6 +211,20 @@ export const expenseController = {
       });
       if (!existing) throw new AppError('Gasto no encontrado', 404);
       await prisma.expense.update({ where: { id: req.params.id }, data: { deletedAt: new Date() } });
+
+      // Igual que en update(): si la caja donde se registró el egreso sigue abierta,
+      // se elimina también — de lo contrario queda una salida de caja "huérfana"
+      // que ya no corresponde a ningún gasto real.
+      try {
+        const movement = await prisma.cashMovement.findFirst({
+          where: { referenceId: existing.id, type: 'OUT' },
+          include: { cashRegister: true },
+        });
+        if (movement && movement.cashRegister.status === 'OPEN') {
+          await prisma.cashMovement.delete({ where: { id: movement.id } });
+        }
+      } catch { /* no debe fallar la eliminación del gasto */ }
+
       return success(res, null, 'Gasto eliminado');
     } catch (err) { next(err); }
   },
@@ -151,8 +236,12 @@ export const expenseController = {
       const m = parseInt(month as string) || new Date().getMonth() + 1;
       const businessId = req.user!.businessId;
 
-      const start = new Date(y, m - 1, 1);
-      const end = new Date(y, m, 0, 23, 59, 59);
+      // UTC explícito: expense.date se guarda parseando strings "YYYY-MM-DD" como
+      // medianoche UTC (create() hace `new Date(dateString)`), así que construir
+      // este rango en el huso horario local del proceso podía correr los límites
+      // del mes y mezclar gastos entre meses si el servidor no corre en UTC.
+      const start = new Date(Date.UTC(y, m - 1, 1));
+      const end = new Date(Date.UTC(y, m, 0, 23, 59, 59, 999));
 
       const summary = await prisma.expense.groupBy({
         by: ['categoryId'],

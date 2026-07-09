@@ -30,6 +30,7 @@ enum CreditStatus {
   PAID
   OVERDUE
   PARTIAL
+  CANCELLED
 }
 
 enum PurchaseStatus {
@@ -321,6 +322,7 @@ model Supplier {
   updatedAt   DateTime   @updatedAt
   deletedAt   DateTime?
 
+  @@unique([businessId, document])
   @@index([businessId])
   @@map("suppliers")
 }

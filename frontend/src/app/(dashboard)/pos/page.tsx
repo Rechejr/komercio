@@ -936,7 +936,13 @@ export default function POSPage() {
                     </button>
                   </div>
                 </div>
-                {paymentMethod === 'CASH' && parseFloat(paidAmount) > 0 && (
+                {!isCredit && parseFloat(paidAmount || '0') > 0 && parseFloat(paidAmount) < total && (
+                  <div className="bg-amber-50 dark:bg-amber-500/10 rounded-xl p-2.5 text-center border border-amber-100 dark:border-amber-500/20">
+                    <p className="text-[11px] text-amber-700 dark:text-amber-400 font-semibold uppercase tracking-wide">Falta</p>
+                    <p className="font-bold text-amber-700 dark:text-amber-400 text-[18px] tabular">{formatCurrency(total - parseFloat(paidAmount))}</p>
+                  </div>
+                )}
+                {paymentMethod === 'CASH' && parseFloat(paidAmount) >= total && parseFloat(paidAmount) > 0 && (
                   <div className="bg-emerald-50 dark:bg-emerald-500/10 rounded-xl p-2.5 text-center border border-emerald-100 dark:border-emerald-500/20">
                     <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold uppercase tracking-wide">Cambio</p>
                     <p className="font-bold text-emerald-700 dark:text-emerald-400 text-[18px] tabular">{formatCurrency(change)}</p>
@@ -976,7 +982,11 @@ export default function POSPage() {
             <button
               type="button"
               onClick={handleSale}
-              disabled={saleMutation.isPending || (paymentMethod === 'MIXED' && mixedTotal < total && !isCredit)}
+              disabled={
+                saleMutation.isPending ||
+                (paymentMethod === 'MIXED' && mixedTotal < total && !isCredit) ||
+                (paymentMethod !== 'MIXED' && !isCredit && parseFloat(paidAmount || String(total)) < total)
+              }
               className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-bold py-3 rounded-xl transition-colors flex items-center justify-center gap-2 shadow-sm shadow-emerald-600/25"
             >
               {saleMutation.isPending ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle size={16} />}

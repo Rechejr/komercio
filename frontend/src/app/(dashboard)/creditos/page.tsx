@@ -103,6 +103,7 @@ export default function CreditosPage() {
           <option value="PARTIAL">Abonados</option>
           <option value="OVERDUE">Vencidos</option>
           <option value="PAID">Pagados</option>
+          <option value="CANCELLED">Anulados</option>
         </select>
 
         {/* Customer filter */}
