@@ -423,6 +423,7 @@ export default function ComprasPage() {
                         onChange={(e) => { setSupplierSearch(e.target.value); setShowSupplierDD(true); }}
                         onFocus={() => setShowSupplierDD(true)}
                         onBlur={() => setTimeout(() => setShowSupplierDD(false), 150)}
+                        autoComplete="off"
                         className="w-full pl-8 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition"
                       />
                     </div>

@@ -196,8 +196,13 @@ export const expenseController = {
     try {
       const name = req.body.name?.toString().trim();
       if (!name) throw new AppError('El nombre de la categoría es requerido', 400);
+      const businessId = req.user!.businessId;
+      const existing = await prisma.expenseCategory.findFirst({
+        where: { businessId, name: { equals: name, mode: 'insensitive' } },
+      });
+      if (existing) throw new AppError('Ya existe una categoría con ese nombre', 409);
       const cat = await prisma.expenseCategory.create({
-        data: { name, businessId: req.user!.businessId },
+        data: { name, businessId },
       });
       return created(res, cat, 'Categoría creada');
     } catch (err) { next(err); }

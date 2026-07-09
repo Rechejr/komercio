@@ -23,8 +23,13 @@ router.post('/', authorize('ADMIN', 'SUPERVISOR'), async (req: AuthRequest, res,
     const name = req.body.name?.toString().trim();
     if (!name) throw new AppError('El nombre de la marca es requerido', 400);
     const { logo } = req.body;
+    const businessId = req.user!.businessId;
+    const existing = await prisma.brand.findFirst({
+      where: { businessId, name: { equals: name, mode: 'insensitive' }, deletedAt: null },
+    });
+    if (existing) throw new AppError('Ya existe una marca con ese nombre', 409);
     const brand = await prisma.brand.create({
-      data: { name, logo, businessId: req.user!.businessId },
+      data: { name, logo, businessId },
     });
     return created(res, brand, 'Marca creada');
   } catch (err) { next(err); }

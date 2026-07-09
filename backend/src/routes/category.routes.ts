@@ -26,7 +26,7 @@ router.post('/', authorize('ADMIN', 'SUPERVISOR'), async (req: any, res, next) =
 
     const businessId = req.user.businessId;
     const existing = await prisma.category.findFirst({
-      where: { businessId: businessId || null, name: name.trim(), deletedAt: null },
+      where: { businessId: businessId || null, name: { equals: name.trim(), mode: 'insensitive' }, deletedAt: null },
     });
     if (existing) throw new AppError('Ya existe una categoría con ese nombre', 409);
 
