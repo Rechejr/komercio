@@ -1,52 +1,6 @@
 'use client';
 
 import toast from 'react-hot-toast';
-import { formatCurrency } from '@/lib/utils';
-import type { ReceiptItem } from '@/components/Receipt';
-
-const PM_LABEL: Record<string, string> = {
-  CASH: 'Efectivo', NEQUI: 'Nequi', DAVIPLATA: 'Daviplata',
-  TRANSFER: 'Transferencia', CARD: 'Tarjeta', MIXED: 'Mixto',
-};
-
-export function buildWhatsAppText(
-  sale: any,
-  items: ReceiptItem[],
-  business: any,
-  customerName: string | null,
-): string {
-  const date = new Date(sale.createdAt || Date.now());
-  const dateStr = date.toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric' });
-  const timeStr = date.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
-
-  const lines: string[] = [];
-  lines.push(`🧾 *${business?.name || 'Ventrix'}*`);
-  if (business?.city) lines.push(`📍 ${business.city}`);
-  lines.push(`📅 ${dateStr} ${timeStr}  •  Factura #${sale.invoiceNumber}`);
-  if (customerName) lines.push(`👤 ${customerName}`);
-  lines.push('');
-  lines.push('———————————————');
-  for (const item of items) {
-    const qty = item.quantity > 1 ? ` x${item.quantity}` : '';
-    lines.push(`• ${item.name}${qty}  →  ${formatCurrency(item.total)}`);
-  }
-  lines.push('———————————————');
-  if (Number(sale.discountAmount) > 0) {
-    lines.push(`Descuento: -${formatCurrency(Number(sale.discountAmount))}`);
-  }
-  lines.push(`*TOTAL: ${formatCurrency(Number(sale.total))}*`);
-  lines.push(`Pago: ${PM_LABEL[sale.paymentMethod] || sale.paymentMethod}`);
-  if (Number(sale.changeAmount) > 0) {
-    lines.push(`Cambio: ${formatCurrency(Number(sale.changeAmount))}`);
-  }
-  lines.push('');
-  if (sale.status === 'CANCELLED') {
-    lines.push('⚠️ Esta venta fue ANULADA.');
-  } else {
-    lines.push('¡Gracias por su compra! 🙏');
-  }
-  return lines.join('\n');
-}
 
 async function captureReceiptImage(elementId = 'receipt-content'): Promise<Blob | null> {
   const node = document.getElementById(elementId);
@@ -64,42 +18,38 @@ async function captureReceiptImage(elementId = 'receipt-content'): Promise<Blob 
   }
 }
 
-function buildWaUrl(phone: string | null | undefined, text: string): string {
+function buildWaUrl(phone: string | null | undefined): string | null {
   const digits = phone?.replace(/\D/g, '') || '';
-  const fullPhone = digits ? `57${digits.replace(/^57/, '')}` : '';
-  return `https://wa.me/${fullPhone}?text=${encodeURIComponent(text)}`;
+  if (!digits) return null;
+  const fullPhone = `57${digits.replace(/^57/, '')}`;
+  return `https://wa.me/${fullPhone}`;
 }
 
 /**
- * Comparte una venta por WhatsApp como imagen (móvil, vía panel nativo de compartir)
- * o, si el navegador no soporta compartir archivos, descarga el PNG del ticket
- * y abre WhatsApp con el texto para que el usuario adjunte la imagen manualmente.
+ * Comparte el ticket de una venta por WhatsApp como imagen (sin ningún texto):
+ * en móvil usa el panel nativo de compartir, adjuntando la imagen directo al chat.
+ * Si el navegador no soporta compartir archivos, descarga el PNG y abre el chat
+ * de WhatsApp del cliente para que el usuario la adjunte manualmente.
  */
 export async function shareSaleViaWhatsApp(
-  sale: any,
-  items: ReceiptItem[],
-  business: any,
+  invoiceNumber: string,
   customerPhone?: string | null,
-  customerName?: string | null,
 ): Promise<void> {
-  const text = buildWhatsAppText(sale, items, business, customerName || null);
-  const waUrl = buildWaUrl(customerPhone, text);
   const blob = await captureReceiptImage();
-
   if (!blob) {
-    window.open(waUrl, '_blank');
+    toast.error('No se pudo generar la imagen del ticket');
     return;
   }
 
-  const file = new File([blob], `${sale.invoiceNumber || 'ticket'}.png`, { type: 'image/png' });
+  const file = new File([blob], `${invoiceNumber || 'ticket'}.png`, { type: 'image/png' });
 
   if (typeof navigator.canShare === 'function' && navigator.canShare({ files: [file] })) {
     try {
-      await navigator.share({ files: [file], text });
+      await navigator.share({ files: [file] });
       return;
     } catch (err: any) {
       if (err?.name === 'AbortError') return; // el usuario cerró el panel de compartir
-      // cualquier otro error cae al fallback de descarga + wa.me
+      // cualquier otro error cae al fallback de descarga
     }
   }
 
@@ -113,5 +63,6 @@ export async function shareSaleViaWhatsApp(
   URL.revokeObjectURL(url);
   toast.success('Imagen del ticket descargada. Adjúntala en el chat de WhatsApp.', { duration: 5000 });
 
-  window.open(waUrl, '_blank');
+  const waUrl = buildWaUrl(customerPhone);
+  if (waUrl) window.open(waUrl, '_blank');
 }

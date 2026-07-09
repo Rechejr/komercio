@@ -378,7 +378,7 @@ export default function VentasPage() {
                   onClick={async () => {
                     setSharingWhatsApp(true);
                     try {
-                      await shareSaleViaWhatsApp(detail, receiptItems, businessInfo, detail.customer?.phone, detail.customer?.name);
+                      await shareSaleViaWhatsApp(detail.invoiceNumber, detail.customer?.phone);
                     } finally {
                       setSharingWhatsApp(false);
                     }

@@ -356,7 +356,7 @@ export default function POSPage() {
                 onClick={async () => {
                   setSharingWhatsApp(true);
                   try {
-                    await shareSaleViaWhatsApp(lastSale, receiptItemsRef.current, businessInfo, selectedCustomer?.phone, selectedCustomer?.name);
+                    await shareSaleViaWhatsApp(lastSale.invoiceNumber, selectedCustomer?.phone);
                   } finally {
                     setSharingWhatsApp(false);
                   }
