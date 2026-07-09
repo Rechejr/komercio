@@ -77,6 +77,18 @@ export default function GastosPage() {
     setShowSupplierDD(false);
   }
 
+  const supplierIdValue = watch('supplierId');
+  const recipientDocumentValue = watch('recipientDocument') || '';
+  const recipientPhoneValue = watch('recipientPhone') || '';
+
+  function openCreateSupplierModal() {
+    setNewSupName(recipientNameValue);
+    setNewSupDoc(recipientDocumentValue);
+    setNewSupPhone(recipientPhoneValue);
+    setShowSupplierDD(false);
+    setShowCreateSupplier(true);
+  }
+
   const { onChange: recipientNameOnChange, ...recipientNameField } = register('recipientName');
 
   const descriptionValue = watch('description') || '';
@@ -490,7 +502,7 @@ export default function GastosPage() {
                         )}
                         <button
                           type="button"
-                          onMouseDown={(e) => { e.preventDefault(); setShowSupplierDD(false); setNewSupName(recipientNameValue); setShowCreateSupplier(true); }}
+                          onMouseDown={(e) => { e.preventDefault(); openCreateSupplierModal(); }}
                           className="w-full flex items-center gap-1.5 px-3 py-2.5 text-[13px] text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-slate-700 border-t border-slate-100 dark:border-white/[0.06] transition"
                         >
                           <Plus size={13} /> Crear proveedor nuevo
@@ -512,6 +524,15 @@ export default function GastosPage() {
                       className={inputCls}
                     />
                   </div>
+                  {recipientNameValue.trim() && !supplierIdValue && (
+                    <button
+                      type="button"
+                      onClick={openCreateSupplierModal}
+                      className="flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400 hover:underline"
+                    >
+                      <Plus size={11} /> Guardar como proveedor
+                    </button>
+                  )}
                 </div>
               </div>
 
