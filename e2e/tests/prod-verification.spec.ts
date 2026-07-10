@@ -73,13 +73,13 @@ test('PROD-2: POS — agregar producto y cobrar', async ({ page }) => {
   await page.waitForTimeout(1500);
   await shot(page, 'v3-2b-busqueda');
 
-  // Los productos son <button> que contienen un span con "disp." (stock disponible)
+  // Los productos son <button> que contienen un span con "disponibles" (stock disponible)
   // Esperar a que al menos uno cargue (no skeletons)
-  const productBtn = page.locator('button:has(span:has-text("disp."))').first();
+  const productBtn = page.locator('button:has(span:has-text("disponibles"))').first();
   let productAdded = false;
 
   if (await productBtn.waitFor({ timeout: 10000, state: 'visible' }).then(() => true).catch(() => false)) {
-    const allProductBtns = page.locator('button:has(span:has-text("disp."))');
+    const allProductBtns = page.locator('button:has(span:has-text("disponibles"))');
     const count = await allProductBtns.count();
     console.log(`  Productos con stock visible: ${count}`);
     await allProductBtns.first().click();
@@ -89,7 +89,7 @@ test('PROD-2: POS — agregar producto y cobrar', async ({ page }) => {
   }
 
   if (!productAdded) {
-    console.log('  ⚠️ No se encontraron productos con "disp." — verificar inventario');
+    console.log('  ⚠️ No se encontraron productos con "disponibles" — verificar inventario');
   }
 
   await page.waitForTimeout(800);
