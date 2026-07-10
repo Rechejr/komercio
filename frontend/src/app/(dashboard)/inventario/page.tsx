@@ -62,7 +62,7 @@ export default function InventarioPage() {
   function shareCatalogWhatsApp() {
     if (!businessId) return;
     const url = `${window.location.origin}/catalogo/${businessId}`;
-    const text = `¡Mira nuestro catálogo de productos! 🛒\n${url}`;
+    const text = `¡Mira nuestro catálogo de productos!\n${url}`;
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
   }
   const [search, setSearch]         = useState(() => searchParams.get('search') || '');

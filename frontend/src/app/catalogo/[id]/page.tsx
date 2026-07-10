@@ -77,7 +77,7 @@ export default function CatalogoPage() {
     if (!business?.phone) return;
     const phone = business.phone.replace(/\D/g, '');
     const full  = `57${phone.replace(/^57/, '')}`;
-    const text  = `Hola, vi su catálogo de *${business.name}* y quisiera hacer un pedido 🛒`;
+    const text  = `Hola, vi su catálogo de *${business.name}* y quisiera hacer un pedido`;
     window.open(`https://wa.me/${full}?text=${encodeURIComponent(text)}`, '_blank');
   }
 
