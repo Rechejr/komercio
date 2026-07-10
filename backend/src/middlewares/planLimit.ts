@@ -109,7 +109,7 @@ export const planLimit = {
           where: { businessId: business.id, deletedAt: null },
         });
         if (count >= limits.branches) {
-          return next(planError(`Límite de ${limits.branches} sucursal(es)`, business.plan));
+          return next(planError(`Límite de ${limits.branches} bodega(s)`, business.plan));
         }
         next();
       } catch (err) { next(err); }

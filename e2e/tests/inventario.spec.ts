@@ -139,6 +139,20 @@ test.describe('Inventario', () => {
     }
   });
 
+  test('ver stock por bodega abre el desglose', async ({ page }) => {
+    const row = page.locator('table tbody tr').first();
+    if (await row.count() > 0) {
+      const breakdownBtn = row.locator('[aria-label="Ver stock por bodega"]');
+      if (await breakdownBtn.count() > 0) {
+        await breakdownBtn.click();
+        await page.waitForSelector('.fixed.inset-0', { timeout: 5_000 });
+        await expect(page.getByText('Stock por bodega')).toBeVisible();
+        await page.keyboard.press('Escape');
+        await page.waitForTimeout(300);
+      }
+    }
+  });
+
   test('paginación funciona', async ({ page }) => {
     const nextBtn = page.locator('button:has-text("Siguiente")');
     if (await nextBtn.isVisible() && await nextBtn.isEnabled()) {

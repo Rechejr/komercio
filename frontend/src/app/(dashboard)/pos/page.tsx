@@ -85,6 +85,7 @@ export default function POSPage() {
   const { items, addItem, updateQty, updateDiscount, removeItem, clear, totals, customerId, setCustomer } = useCartStore();
   const plan       = useAuthStore((s) => s.user?.plan);
   const cashierName = useAuthStore((s) => s.user?.name);
+  const branchId   = useAuthStore((s) => s.user?.branchId);
   const isFree     = !plan || plan === 'free';
   const openUpgrade = useUpgradeStore((s) => s.open);
   const { play }   = useSound();
@@ -130,9 +131,13 @@ export default function POSPage() {
   });
 
   const { data: productsData, isLoading } = useQuery({
-    queryKey: ['products-pos', search, categoryFilter],
+    queryKey: ['products-pos', search, categoryFilter, branchId],
+    // branchId: el stock que se muestra (y el que se valida al cobrar) es el de
+    // ESTA bodega del cajero, no el total del negocio — así la etiqueta nunca
+    // promete algo que Inventario ve en otra bodega. Un dueño sin bodega fija
+    // sigue viendo el total, como Inventario.
     queryFn: () => api.get(
-      `/products?search=${encodeURIComponent(search)}&limit=40&isActive=true${categoryFilter ? `&categoryId=${categoryFilter}` : ''}`,
+      `/products?search=${encodeURIComponent(search)}&limit=40&isActive=true${categoryFilter ? `&categoryId=${categoryFilter}` : ''}${branchId ? `&branchId=${branchId}` : ''}`,
     ).then((r) => r.data.data),
   });
 

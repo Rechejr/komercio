@@ -8,6 +8,7 @@ import { validate } from '../middlewares/validate';
 import { planLimit } from '../middlewares/planLimit';
 import { prisma } from '../config/database';
 import { success, AppError } from '../utils/response';
+import { resolveEffectiveBranchId } from '../utils/resolveBranch';
 
 const router = Router();
 
@@ -76,7 +77,10 @@ router.post('/import',
       if (!req.file) throw new AppError('Archivo requerido', 400);
       const dryRun = req.query.dryRun === 'true';
       const businessId = req.user!.businessId;
-      const branchId = req.user!.branchId;
+      // Selección de bodega por fila queda fuera de alcance — todo el archivo
+      // entra a una sola bodega (la del que importa, o la más antigua si no
+      // tiene una fija).
+      const branchId = await resolveEffectiveBranchId(prisma, req);
 
       const wb = new ExcelJS.Workbook();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -284,6 +288,15 @@ router.post('/import',
       // al actualizar — de lo contrario re-subir una plantilla sin esa columna
       // (por ejemplo, solo para corregir categorías) resetearía todo a 0 en silencio.
       const hasStockColumn = col.stock !== -1;
+      // El stock del archivo se trata como el de ESTA bodega (branchId, resuelta
+      // arriba para todo el importe) — se necesita el stock previo POR BODEGA, no
+      // el total del producto, para no pisar el de otras bodegas al aplicar el delta.
+      const prevBranchStockByProduct = existingProducts.length > 0
+        ? new Map((await prisma.productStock.findMany({
+            where: { branchId, productId: { in: existingProducts.map(p => p.id) } },
+            select: { productId: true, stock: true },
+          })).map(s => [s.productId, Number(s.stock)]))
+        : new Map<string, number>();
 
       for (const r of validRows) {
         try {
@@ -318,23 +331,33 @@ router.post('/import',
             const existing = existingByCode.get(r.rawCode);
             if (existing) {
               const prevStock = Number(existing.stock);
+              const prevBranchStock = prevBranchStockByProduct.get(existing.id) ?? 0;
+              const branchDelta = hasStockColumn ? r.stock - prevBranchStock : 0;
               await prisma.product.update({
                 where: { id: existing.id },
-                data: hasStockColumn ? { ...sharedData, stock: r.stock } : sharedData,
+                data: hasStockColumn ? { ...sharedData, stock: { increment: branchDelta } } : sharedData,
               });
+              if (hasStockColumn) {
+                await prisma.productStock.upsert({
+                  where: { productId_branchId: { productId: existing.id, branchId } },
+                  create: { productId: existing.id, branchId, stock: r.stock },
+                  update: { stock: r.stock },
+                });
+              }
               // Deja rastro del cambio de stock — antes se sobreescribía en silencio,
               // sin quedar registrado en el historial de inventario del producto.
-              if (hasStockColumn && r.stock !== prevStock) {
+              if (hasStockColumn && branchDelta !== 0) {
                 await prisma.inventoryMovement.create({
                   data: {
                     productId: existing.id,
-                    type: r.stock > prevStock ? 'IN' : 'OUT',
-                    quantity: Math.abs(r.stock - prevStock),
+                    type: branchDelta > 0 ? 'IN' : 'OUT',
+                    quantity: Math.abs(branchDelta),
                     previousStock: prevStock,
-                    newStock: r.stock,
+                    newStock: prevStock + branchDelta,
                     reason: 'Importación Excel',
                     unitCost: r.costPrice,
-                    totalCost: Math.abs(r.stock - prevStock) * r.costPrice,
+                    totalCost: Math.abs(branchDelta) * r.costPrice,
+                    branchId,
                   },
                 });
               }
@@ -342,6 +365,7 @@ router.post('/import',
             } else {
               try {
                 const created = await prisma.product.create({ data: { code: r.rawCode, ...createData } });
+                if (r.stock > 0) await prisma.productStock.create({ data: { productId: created.id, branchId, stock: r.stock } });
                 // Para que una segunda fila del mismo archivo con este código
                 // actualice en vez de volver a intentar crear (ver P2002 abajo).
                 existingByCode.set(r.rawCode, { id: created.id, code: r.rawCode, stock: r.stock as any });
@@ -351,6 +375,7 @@ router.post('/import',
                   // Code collides with another business — add suffix
                   const fallbackCode = `${r.rawCode}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
                   const created = await prisma.product.create({ data: { code: fallbackCode, ...createData } });
+                  if (r.stock > 0) await prisma.productStock.create({ data: { productId: created.id, branchId, stock: r.stock } });
                   existingByCode.set(r.rawCode, { id: created.id, code: r.rawCode, stock: r.stock as any });
                   results.imported++;
                 } else { throw e; }
@@ -358,7 +383,8 @@ router.post('/import',
             }
           } else {
             const autoCode = `IMP${String(r.rowNum).padStart(5, '0')}-${Date.now().toString(36).toUpperCase()}`;
-            await prisma.product.create({ data: { code: autoCode, ...createData } });
+            const created = await prisma.product.create({ data: { code: autoCode, ...createData } });
+            if (r.stock > 0) await prisma.productStock.create({ data: { productId: created.id, branchId, stock: r.stock } });
             results.imported++;
           }
         } catch (err: any) {
@@ -374,6 +400,7 @@ router.post('/import',
 // ── Standard CRUD ────────────────────────────────────────────────────────────
 router.get('/', productController.list);
 router.get('/low-stock', productController.getLowStock);
+router.get('/:id/stock-by-branch', productController.getStockByBranch);
 router.get('/:id', productController.getOne);
 
 router.post('/',

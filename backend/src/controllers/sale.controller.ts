@@ -1,4 +1,5 @@
 import { Response, NextFunction } from 'express';
+import { randomUUID } from 'crypto';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../config/database';
 import { cache } from '../config/redis';
@@ -10,6 +11,7 @@ import { notifyLowStockBatch } from '../services/notification.service';
 import { getPlan } from '../config/plans';
 import { acquirePlanLimitLock } from '../utils/planLimitLock';
 import { logger } from '../config/logger';
+import { resolveEffectiveBranchId } from '../utils/resolveBranch';
 
 // Checked once per process on first sale; avoids breaking when migration is pending.
 let _counterTableReady: boolean | undefined;
@@ -195,22 +197,7 @@ export const saleController = {
         throw new AppError('Uno o más productos no existen, están inactivos o no pertenecen a este negocio', 400);
       }
 
-      // Un usuario con sucursal fija (cajero/staff) no puede facturar a nombre de
-      // otra sucursal solo con mandar otro branchId en el body — antes se validaba
-      // que la sucursal perteneciera al negocio, pero no que fuera la del usuario.
-      const userBranchId = req.user!.branchId;
-      if (userBranchId) {
-        if (branchId && branchId !== userBranchId) throw new AppError('No tienes acceso a esta sucursal', 403);
-      } else if (branchId) {
-        const branch = await prisma.branch.findFirst({
-          where: { id: branchId, businessId: req.user!.businessId },
-          select: { id: true },
-        });
-        if (!branch) throw new AppError('Sucursal no válida para este negocio', 403);
-      }
-
-      const effectiveBranchId = userBranchId || branchId;
-      if (!effectiveBranchId) throw new AppError('No se encontró una sucursal para el usuario', 400);
+      const effectiveBranchId = await resolveEffectiveBranchId(prisma, req, branchId);
 
       // sale_number_counters guarantees uniqueness atomically; retry loop kept as
       // a safety net for unrelated P2002 collisions (e.g. concurrent product lock timeouts).
@@ -260,6 +247,11 @@ export const saleController = {
         // driver — ::float8 casts on NUMERIC(65,30) columns cause a Prisma type-resolution
         // error, so we skip the cast and convert with Number() after receiving.
         const lockedProducts: LockedProduct[] = [];
+        // Stock real por bodega — la fila puede no existir aún para este producto
+        // en esta bodega (nunca se le asignó nada aquí); el INSERT ... ON CONFLICT
+        // la crea en 0 y la bloquea en el mismo paso, mismo patrón de "contador
+        // atómico" que ya usa generateInvoiceNumber() más arriba en este archivo.
+        const branchStockByProduct = new Map<string, number>();
         for (const pid of [...productIds].sort()) {
           const rows = await tx.$queryRawUnsafe<any[]>(
             `SELECT id, stock, name, "allowNegativeStock",
@@ -283,6 +275,15 @@ export const saleController = {
               minStock: Number(r.minStock),
               lowStockNotifiedAt: r.lowStockNotifiedAt,
             });
+
+            const [psRow] = await tx.$queryRawUnsafe<any[]>(
+              `INSERT INTO product_stocks (id, "productId", "branchId", stock, "createdAt", "updatedAt")
+               VALUES ($1, $2, $3, 0, now(), now())
+               ON CONFLICT ("productId", "branchId") DO UPDATE SET "updatedAt" = product_stocks."updatedAt"
+               RETURNING stock`,
+              randomUUID(), pid, effectiveBranchId,
+            );
+            branchStockByProduct.set(pid, Number(psRow.stock));
           }
         }
 
@@ -303,7 +304,11 @@ export const saleController = {
         }
         for (const [pid, qty] of qtyByProduct) {
           const product = productMap.get(pid)!;
-          if (product.stock < qty && !product.allowNegativeStock) {
+          // El chequeo mira el stock de LA BODEGA que está vendiendo, no el total
+          // del negocio — otra bodega con stock de sobra no debe permitir vender
+          // algo que físicamente no está ahí.
+          const branchStock = branchStockByProduct.get(pid) ?? 0;
+          if (branchStock < qty && !product.allowNegativeStock) {
             throw new AppError(`Stock insuficiente para: ${product.name}`, 400);
           }
         }
@@ -385,6 +390,13 @@ export const saleController = {
             where: { id: pid },
             data: { stock: { decrement: qty }, ...(isNewLowStock ? { lowStockNotifiedAt: new Date() } : {}) },
           });
+          // La fila product_stocks de esta bodega ya quedó creada/bloqueada arriba
+          // (branchStockByProduct) — aquí solo se descuenta, el total en Product.stock
+          // se mantiene sincronizado con el update de arriba.
+          await tx.productStock.update({
+            where: { productId_branchId: { productId: pid, branchId: effectiveBranchId } },
+            data: { stock: { decrement: qty } },
+          });
           await tx.inventoryMovement.create({
             data: {
               productId: pid,
@@ -397,6 +409,7 @@ export const saleController = {
               referenceType: 'SALE',
               unitCost: product.costPrice,
               totalCost: product.costPrice * qty,
+              branchId: effectiveBranchId,
             },
           });
           if (isNewLowStock) {
@@ -509,6 +522,15 @@ export const saleController = {
           if (!locked) continue;
           const newStock = locked.stock + detail.quantity;
           await tx.product.update({ where: { id: detail.productId }, data: { stock: { increment: detail.quantity } } });
+          // Devuelve el stock a la bodega donde se vendió (sale.branchId) — se usa
+          // INSERT ... ON CONFLICT por si la venta es de antes de esta función y
+          // nunca tuvo una fila product_stocks creada.
+          await tx.$executeRawUnsafe(
+            `INSERT INTO product_stocks (id, "productId", "branchId", stock, "createdAt", "updatedAt")
+             VALUES ($1, $2, $3, $4, now(), now())
+             ON CONFLICT ("productId", "branchId") DO UPDATE SET stock = product_stocks.stock + $4, "updatedAt" = now()`,
+            randomUUID(), detail.productId, sale.branchId, detail.quantity,
+          );
           await tx.inventoryMovement.create({
             data: {
               productId: detail.productId,
@@ -522,6 +544,7 @@ export const saleController = {
               // Restaura al costo histórico guardado en el detalle de la venta
               unitCost: detail.costPrice,
               totalCost: Number(detail.costPrice) * detail.quantity,
+              branchId: sale.branchId,
             },
           });
         }

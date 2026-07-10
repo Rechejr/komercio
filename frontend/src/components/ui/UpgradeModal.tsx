@@ -19,7 +19,7 @@ type PeriodKey = typeof PERIODS[number]['key'];
 
 const PRO_FEATURES = [
   'Productos, clientes y ventas ilimitadas',
-  'Usuarios y sucursales ilimitadas',
+  'Usuarios ilimitados y hasta 2 bodegas',
   'Módulo de créditos y fiados',
   'Módulo de proveedores y compras',
   'Exportar reportes a Excel y PDF',

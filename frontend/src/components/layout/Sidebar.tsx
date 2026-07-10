@@ -14,7 +14,7 @@ import {
   LayoutDashboard, Package, ShoppingCart, Users, Truck,
   Receipt, CreditCard, TrendingUp, Settings,
   ChevronLeft, ChevronRight, ShoppingBag, DollarSign,
-  LogOut, Calculator, X, Sparkles, Zap, Shield,
+  LogOut, Calculator, X, Sparkles, Zap, Shield, ArrowLeftRight,
 } from 'lucide-react';
 
 // ── Navigation ────────────────────────────────────────────────────────────────
@@ -27,6 +27,7 @@ const NAV_GROUPS = [
       { href: '/ventas',     icon: ShoppingCart,    label: 'Ventas',           roles: ['ADMIN','SUPERVISOR','CASHIER','SELLER'],             pro: false },
       { href: '/inventario', icon: Package,         label: 'Inventario',       roles: ['ADMIN','SUPERVISOR','WAREHOUSE'],                   pro: false },
       { href: '/compras',    icon: ShoppingBag,     label: 'Compras',          roles: ['ADMIN','SUPERVISOR','WAREHOUSE','CASHIER'],         pro: false },
+      { href: '/transferencias', icon: ArrowLeftRight, label: 'Transferencias', roles: ['ADMIN','SUPERVISOR'],                             pro: false },
       { href: '/gastos',     icon: Receipt,         label: 'Gastos',           roles: ['ADMIN','SUPERVISOR'],                               pro: false },
       { href: '/caja',       icon: DollarSign,      label: 'Caja',             roles: ['ADMIN','SUPERVISOR','CASHIER'],                     pro: false },
       { href: '/reportes',   icon: TrendingUp,      label: 'Reportes',         roles: ['ADMIN','SUPERVISOR'],                               pro: true  },

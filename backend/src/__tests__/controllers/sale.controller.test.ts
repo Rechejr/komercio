@@ -17,7 +17,9 @@ jest.mock('../../config/database', () => ({
       delete: jest.fn(),
     },
     product: { count: jest.fn(), update: jest.fn() },
-    branch: { findFirst: jest.fn() },
+    productStock: { update: jest.fn() },
+    branch: { findFirst: jest.fn(), findMany: jest.fn() },
+    business: { findUnique: jest.fn() },
     cashRegister: { findFirst: jest.fn() },
     cashMovement: { create: jest.fn() },
     credit: {
@@ -220,6 +222,72 @@ describe('saleController.create', () => {
     expect(json).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
     expect(next).not.toHaveBeenCalled();
   });
+
+  // Ejercita el callback real de $transaction (no el atajo mockResolvedValue de
+  // arriba) para probar el chequeo de stock POR BODEGA que ahora vive adentro.
+  function makeSaleTx(overrides: { productRow?: any; branchStock?: number } = {}) {
+    const productRow = overrides.productRow ?? {
+      id: 'p1', stock: 100, name: 'Producto', allowNegativeStock: false,
+      salePrice: '10000', costPrice: '6000', taxRate: '0', minStock: '5', lowStockNotifiedAt: null,
+    };
+    const branchStock = overrides.branchStock ?? 50;
+
+    const txSaleCreate = jest.fn().mockResolvedValue({ id: 's-new', details: [] });
+    const txProductUpdate = jest.fn().mockResolvedValue({});
+    const txProductStockUpdate = jest.fn().mockResolvedValue({});
+    const txMovementCreate = jest.fn().mockResolvedValue({});
+    const queryRawUnsafe = jest.fn()
+      .mockResolvedValueOnce([productRow])
+      .mockResolvedValueOnce([{ stock: branchStock }]);
+
+    const tx = {
+      $executeRawUnsafe: jest.fn().mockResolvedValue(0),
+      $queryRawUnsafe: queryRawUnsafe,
+      business: { findUnique: jest.fn().mockResolvedValue({ plan: 'pro', planExpiresAt: null }) },
+      sale: { create: txSaleCreate },
+      product: { update: txProductUpdate },
+      productStock: { update: txProductStockUpdate },
+      inventoryMovement: { create: txMovementCreate },
+    };
+    return { tx, txSaleCreate, txProductUpdate, txProductStockUpdate, txMovementCreate };
+  }
+
+  it('rechaza con 400 si la bodega del vendedor no tiene stock, aunque el total del negocio sí', async () => {
+    (mockPrisma.product.count as jest.Mock).mockResolvedValue(1);
+    // Total del negocio: 100 unidades — pero en ESTA bodega solo hay 1.
+    const { tx } = makeSaleTx({ branchStock: 1 });
+    (mockPrisma.$transaction as jest.Mock).mockImplementation(async (fn: any) => fn(tx));
+
+    await saleController.create(
+      makeReq({ body: { items: [{ productId: 'p1', quantity: 5 }], paymentMethod: 'CARD' } }),
+      makeRes().res,
+      next,
+    );
+
+    expect((next as jest.Mock).mock.calls[0][0].statusCode).toBe(400);
+  });
+
+  it('descuenta la venta de la bodega del vendedor, no del total global', async () => {
+    (mockPrisma.product.count as jest.Mock).mockResolvedValue(1);
+    const { tx, txProductStockUpdate } = makeSaleTx({ branchStock: 20 });
+    (mockPrisma.$transaction as jest.Mock).mockImplementation(async (fn: any) => fn(tx));
+    mockCache.del.mockResolvedValue(1 as any);
+
+    const { res, json } = makeRes();
+    await saleController.create(
+      makeReq({ body: { items: [{ productId: 'p1', quantity: 3 }], paymentMethod: 'CARD' } }),
+      res,
+      next,
+    );
+
+    expect(txProductStockUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { productId_branchId: { productId: 'p1', branchId: 'br-1' } },
+        data: { stock: { decrement: 3 } },
+      })
+    );
+    expect(json).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
+  });
 });
 
 // ─── cancel ──────────────────────────────────────────────────────────────────
@@ -250,6 +318,35 @@ describe('saleController.cancel', () => {
     expect(mockPrisma.$transaction).toHaveBeenCalled();
     expect(json).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
     expect(mockCache.del).toHaveBeenCalledWith('dashboard:biz-1');
+  });
+
+  it('al anular, restaura el stock en la bodega donde se vendió (sale.branchId)', async () => {
+    const sale = makeSale({ branchId: 'br-sold-here', paymentMethod: 'CARD' });
+    (mockPrisma.sale.findFirst as jest.Mock).mockResolvedValue(sale);
+
+    const txExecuteRawUnsafe = jest.fn().mockResolvedValue(0);
+    const tx = {
+      sale: { update: jest.fn().mockResolvedValue({}) },
+      $queryRawUnsafe: jest.fn()
+        .mockResolvedValueOnce([{ id: 'p1', stock: 40 }]) // lock product row
+        .mockResolvedValueOnce([]), // no credit for this sale
+      $executeRawUnsafe: txExecuteRawUnsafe,
+      product: { update: jest.fn().mockResolvedValue({}) },
+      inventoryMovement: { create: jest.fn().mockResolvedValue({}) },
+      cashRegister: { findFirst: jest.fn().mockResolvedValue(null) },
+      cashMovement: { create: jest.fn() },
+    };
+    (mockPrisma.$transaction as jest.Mock).mockImplementation(async (fn: any) => fn(tx));
+    mockCache.del.mockResolvedValue(1 as any);
+
+    const { res, json } = makeRes();
+    await saleController.cancel(makeReq({ params: { id: 's1' }, body: { reason: 'Error' } }), res, next);
+
+    expect(txExecuteRawUnsafe).toHaveBeenCalledWith(
+      expect.stringContaining('product_stocks'),
+      expect.any(String), 'p1', 'br-sold-here', 2,
+    );
+    expect(json).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
   });
 });
 

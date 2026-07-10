@@ -1,4 +1,5 @@
 import { Router, Response, NextFunction } from 'express';
+import { randomUUID } from 'crypto';
 import { body } from 'express-validator';
 import { prisma } from '../config/database';
 import { authenticate, authorize, AuthRequest } from '../middlewares/auth';
@@ -6,6 +7,7 @@ import { success, created, paginated } from '../utils/response';
 import { getPagination } from '../utils/pagination';
 import { AppError } from '../utils/response';
 import { validate } from '../middlewares/validate';
+import { resolveEffectiveBranchId } from '../utils/resolveBranch';
 
 const purchaseItemValidators = [
   body('items').isArray({ min: 1 }).withMessage('Se requieren productos'),
@@ -13,9 +15,20 @@ const purchaseItemValidators = [
   body('items.*.quantity').isFloat({ min: 0.001 }).withMessage('Cantidad debe ser mayor a 0'),
   body('items.*.unitCost').isFloat({ min: 0 }).withMessage('Costo unitario inválido'),
   body('items.*.taxRate').optional().isFloat({ min: 0, max: 100 }).withMessage('IVA inválido'),
+  body('branchId').optional().isUUID().withMessage('branchId inválido'),
   body('invoiceNumber').optional().trim(),
   body('notes').optional().trim(),
 ];
+
+// Compras de antes de esta función quedaron con branchId null — al editarlas o
+// eliminarlas se asume la bodega más antigua del negocio, la misma a la que el
+// script de backfill le asignó todo el stock histórico.
+async function resolvePurchaseBranchId(tx: { branch: { findFirst: typeof prisma.branch.findFirst } }, businessId: string, existingBranchId: string | null): Promise<string> {
+  if (existingBranchId) return existingBranchId;
+  const oldest = await tx.branch.findFirst({ where: { businessId, deletedAt: null }, orderBy: { createdAt: 'asc' }, select: { id: true } });
+  if (!oldest) throw new AppError('No se encontró una bodega para este negocio', 400);
+  return oldest.id;
+}
 
 const router = Router();
 router.use(authenticate);
@@ -58,7 +71,7 @@ router.get('/:id', async (req: AuthRequest, res, next) => {
 // siendo una acción de ADMIN/SUPERVISOR/WAREHOUSE.
 router.post('/', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE', 'CASHIER'), purchaseItemValidators, validate, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const { supplierId, invoiceNumber, items, notes, purchaseDate } = req.body;
+    const { supplierId, invoiceNumber, items, notes, purchaseDate, branchId } = req.body;
     if (!items?.length) throw new AppError('Se requieren productos', 400);
     const businessId = req.user!.businessId;
 
@@ -75,6 +88,8 @@ router.post('/', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE', 'CASHIER'), purch
       const sup = await prisma.supplier.findFirst({ where: { id: supplierId, businessId, deletedAt: null } });
       if (!sup) throw new AppError('Proveedor inválido', 400);
     }
+
+    const effectiveBranchId = await resolveEffectiveBranchId(prisma, req, branchId);
 
     const purchase = await prisma.$transaction(async (tx) => {
       let subtotal = 0;
@@ -106,6 +121,7 @@ router.post('/', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE', 'CASHIER'), purch
           taxAmount,
           total: subtotal + taxAmount,
           details: { create: details },
+          branchId: effectiveBranchId,
         },
       });
 
@@ -128,6 +144,14 @@ router.post('/', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE', 'CASHIER'), purch
             ...(restocked ? { lowStockNotifiedAt: null } : {}),
           },
         });
+        // Bloquea (o crea en 0) la fila de stock de la bodega que recibe la
+        // compra e incrementa — mismo patrón INSERT ... ON CONFLICT que sale.controller.ts.
+        await tx.$executeRawUnsafe(
+          `INSERT INTO product_stocks (id, "productId", "branchId", stock, "createdAt", "updatedAt")
+           VALUES ($1, $2, $3, $4, now(), now())
+           ON CONFLICT ("productId", "branchId") DO UPDATE SET stock = product_stocks.stock + $4, "updatedAt" = now()`,
+          randomUUID(), item.productId, effectiveBranchId, qty,
+        );
         await tx.inventoryMovement.create({
           data: {
             productId: item.productId, type: 'IN',
@@ -137,6 +161,7 @@ router.post('/', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE', 'CASHIER'), purch
             referenceId: newPurchase.id, referenceType: 'PURCHASE',
             unitCost: parseFloat(item.unitCost),
             totalCost: parseFloat(item.unitCost) * qty,
+            branchId: effectiveBranchId,
           },
         });
       }
@@ -174,6 +199,10 @@ router.put('/:id', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE'), purchaseItemVa
     }
 
     const updated = await prisma.$transaction(async (tx) => {
+      // La compra no cambia de bodega al editarse — se usa la misma que se
+      // guardó al crearla (o la más antigua del negocio, si es de antes de esta función).
+      const purchaseBranchId = await resolvePurchaseBranchId(tx, businessId!, existing.branchId);
+
       // Cantidad neta por producto: la línea vieja resta, la línea nueva suma, y se
       // aplica un solo ajuste de stock por producto — en vez de "revertir todo lo
       // viejo (con un tope que perdía unidades ya vendidas) y luego reaplicar todo
@@ -199,7 +228,17 @@ router.put('/:id', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE'), purchaseItemVa
 
         if (delta !== 0) {
           const newStock = locked.stock + delta;
-          if (newStock < 0 && !locked.allowNegativeStock) {
+          // El chequeo mira la bodega de la compra, no solo el total — una
+          // bodega concreta podría quedar en negativo aunque el total aguante.
+          const [branchStockRow] = await tx.$queryRawUnsafe<any[]>(
+            `INSERT INTO product_stocks (id, "productId", "branchId", stock, "createdAt", "updatedAt")
+             VALUES ($1, $2, $3, 0, now(), now())
+             ON CONFLICT ("productId", "branchId") DO UPDATE SET "updatedAt" = product_stocks."updatedAt"
+             RETURNING stock`,
+            randomUUID(), productId, purchaseBranchId,
+          );
+          const newBranchStock = Number(branchStockRow.stock) + delta;
+          if ((newStock < 0 || newBranchStock < 0) && !locked.allowNegativeStock) {
             throw new AppError(
               `No se puede editar la compra: ya se vendieron más unidades de "${locked.name}" de las que quedarían tras el ajuste`,
               400,
@@ -215,6 +254,10 @@ router.put('/:id', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE'), purchaseItemVa
               ...(restocked ? { lowStockNotifiedAt: null } : {}),
             },
           });
+          await tx.productStock.update({
+            where: { productId_branchId: { productId, branchId: purchaseBranchId } },
+            data: { stock: { increment: delta } },
+          });
           await tx.inventoryMovement.create({
             data: {
               productId, type: delta > 0 ? 'IN' : 'OUT',
@@ -224,6 +267,7 @@ router.put('/:id', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE'), purchaseItemVa
               referenceId: req.params.id, referenceType: 'PURCHASE',
               unitCost,
               totalCost: Math.abs(delta) * unitCost,
+              branchId: purchaseBranchId,
             },
           });
         } else if (newItem) {
@@ -278,6 +322,8 @@ router.delete('/:id', authorize('ADMIN', 'SUPERVISOR'), async (req: AuthRequest,
     if (!existing) throw new AppError('Compra no encontrada', 404);
 
     await prisma.$transaction(async (tx) => {
+      const purchaseBranchId = await resolvePurchaseBranchId(tx, req.user!.businessId!, existing.branchId);
+
       interface DeleteProductRow { id: string; stock: number; allowNegativeStock: boolean; name: string; }
       for (const detail of existing.details) {
         // Lock row — provides accurate previousStock/newStock; use atomic decrement
@@ -290,10 +336,19 @@ router.delete('/:id', authorize('ADMIN', 'SUPERVISOR'), async (req: AuthRequest,
         );
         if (!locked) continue;
         const newStock = locked.stock - detail.quantity;
+        // El chequeo mira la bodega de la compra, no solo el total.
+        const [branchStockRow] = await tx.$queryRawUnsafe<any[]>(
+          `INSERT INTO product_stocks (id, "productId", "branchId", stock, "createdAt", "updatedAt")
+           VALUES ($1, $2, $3, 0, now(), now())
+           ON CONFLICT ("productId", "branchId") DO UPDATE SET "updatedAt" = product_stocks."updatedAt"
+           RETURNING stock`,
+          randomUUID(), detail.productId, purchaseBranchId,
+        );
+        const newBranchStock = Number(branchStockRow.stock) - detail.quantity;
         // A diferencia de la versión anterior, que descontaba sin tope: si ya se
         // vendieron unidades de esta compra y el producto no permite stock
         // negativo, no se debe poder eliminarla sin dejar el inventario en negativo.
-        if (newStock < 0 && !locked.allowNegativeStock) {
+        if ((newStock < 0 || newBranchStock < 0) && !locked.allowNegativeStock) {
           throw new AppError(
             `No se puede eliminar la compra: ya se vendieron unidades de "${locked.name}" que quedarían en stock negativo`,
             400,
@@ -301,6 +356,10 @@ router.delete('/:id', authorize('ADMIN', 'SUPERVISOR'), async (req: AuthRequest,
         }
         await tx.product.update({
           where: { id: detail.productId },
+          data: { stock: { decrement: detail.quantity } },
+        });
+        await tx.productStock.update({
+          where: { productId_branchId: { productId: detail.productId, branchId: purchaseBranchId } },
           data: { stock: { decrement: detail.quantity } },
         });
         await tx.inventoryMovement.create({
@@ -312,6 +371,7 @@ router.delete('/:id', authorize('ADMIN', 'SUPERVISOR'), async (req: AuthRequest,
             referenceId: req.params.id, referenceType: 'PURCHASE',
             unitCost: Number(detail.unitCost),
             totalCost: Number(detail.unitCost) * detail.quantity,
+            branchId: purchaseBranchId,
           },
         });
       }

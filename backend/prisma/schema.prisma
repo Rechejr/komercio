@@ -75,6 +75,7 @@ model User {
   branchId             String?
   branch               Branch?        @relation(fields: [branchId], references: [id])
   createdBranches      Branch[]       @relation("BranchCreator")
+  createdTransfers     StockTransfer[]
   sales                Sale[]
   auditLogs            AuditLog[]
   notifications        Notification[]
@@ -129,6 +130,7 @@ model Business {
   expenses          Expense[]
   expenseCategories ExpenseCategory[]
   products          Product[]
+  stockTransfers    StockTransfer[]
   plan              String            @default("free")
   planExpiresAt     DateTime?
   settings          Json?
@@ -175,6 +177,11 @@ model Branch {
   products      Product[]
   sales         Sale[]
   cashRegisters CashRegister[]
+  purchases     Purchase[]
+  inventoryMovements InventoryMovement[]
+  productStocks ProductStock[]
+  transfersOut  StockTransfer[] @relation("TransferFrom")
+  transfersIn   StockTransfer[] @relation("TransferTo")
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
   deletedAt     DateTime?
@@ -258,6 +265,12 @@ model Product {
   saleDetails        SaleDetail[]
   purchaseDetails    PurchaseDetail[]
   inventoryMovements InventoryMovement[]
+  // Total denominado en Product.stock = SUM(productStocks.stock) — se mantiene
+  // sincronizado en cada venta/compra/ajuste/transferencia para que dashboard,
+  // reportes, exportaciones, catálogo público y búsqueda sigan leyendo un solo
+  // número sin tener que enterarse de que el stock ahora vive por bodega.
+  productStocks      ProductStock[]
+  transferItems      StockTransferItem[]
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
   deletedAt          DateTime?
@@ -270,6 +283,56 @@ model Product {
   @@index([branchId])
   @@index([businessId])
   @@map("products")
+}
+
+// Stock real por bodega — un producto tiene una fila aquí por cada bodega
+// donde tiene existencias. Product.stock sigue siendo el total (ver arriba).
+model ProductStock {
+  id        String   @id @default(uuid())
+  productId String
+  product   Product  @relation(fields: [productId], references: [id])
+  branchId  String
+  branch    Branch   @relation(fields: [branchId], references: [id])
+  stock     Float    @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([productId, branchId])
+  @@index([branchId])
+  @@map("product_stocks")
+}
+
+model StockTransfer {
+  id           String              @id @default(uuid())
+  businessId   String
+  business     Business            @relation(fields: [businessId], references: [id])
+  fromBranchId String
+  fromBranch   Branch              @relation("TransferFrom", fields: [fromBranchId], references: [id])
+  toBranchId   String
+  toBranch     Branch              @relation("TransferTo", fields: [toBranchId], references: [id])
+  createdById  String
+  createdBy    User                @relation(fields: [createdById], references: [id])
+  notes        String?
+  items        StockTransferItem[]
+  createdAt    DateTime            @default(now())
+
+  @@index([businessId])
+  @@index([fromBranchId])
+  @@index([toBranchId])
+  @@map("stock_transfers")
+}
+
+model StockTransferItem {
+  id         String        @id @default(uuid())
+  transferId String
+  transfer   StockTransfer @relation(fields: [transferId], references: [id], onDelete: Cascade)
+  productId  String
+  product    Product       @relation(fields: [productId], references: [id])
+  quantity   Float
+
+  @@index([transferId])
+  @@index([productId])
+  @@map("stock_transfer_items")
 }
 
 // ─── INVENTORY MOVEMENTS ──────────────────────────────────────────────────────
@@ -289,12 +352,16 @@ model InventoryMovement {
   referenceId   String?
   referenceType String?
   notes         String?
+  // Nullable — movimientos históricos (antes de esta función) quedan sin bodega.
+  branchId      String?
+  branch        Branch?      @relation(fields: [branchId], references: [id])
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
 
   @@index([productId])
   @@index([referenceId])
   @@index([productId, createdAt])
+  @@index([branchId])
   @@map("inventory_movements")
 }
 
@@ -429,12 +496,16 @@ model Purchase {
   notes         String?
   purchaseDate  DateTime        @default(now())
   details       PurchaseDetail[]
+  // Nullable — compras históricas (antes de esta función) quedan sin bodega.
+  branchId      String?
+  branch        Branch?         @relation(fields: [branchId], references: [id])
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
   deletedAt     DateTime?
 
   @@index([supplierId])
   @@index([businessId])
+  @@index([branchId])
   @@index([businessId, purchaseDate])
   @@map("purchases")
 }

@@ -22,6 +22,7 @@ export default function ComprasPage() {
   // todas formas le va a fallar con un 403.
   const role = useAuthStore((s) => s.user?.role);
   const canDelete = role === 'ADMIN' || role === 'SUPERVISOR';
+  const myBranchId = useAuthStore((s) => s.user?.branchId) || '';
   const [page, setPage] = useState(1);
   const [showForm, setShowForm] = useState(false);
   const [editItem, setEditItem] = useState<any>(null);
@@ -57,8 +58,13 @@ export default function ComprasPage() {
     queryFn: () => api.get('/products?limit=500&isActive=true').then((r) => r.data.data),
   });
 
+  const { data: branches } = useQuery({
+    queryKey: ['branches'],
+    queryFn: () => api.get('/business/branches').then((r) => r.data.data),
+  });
+
   const { register, handleSubmit, control, reset, watch, setValue, formState: { errors } } = useForm({
-    defaultValues: { supplierId: '', invoiceNumber: '', notes: '', purchaseDate: '', items: [{ productId: '', quantity: 1, unitCost: 0, taxRate: 0 }] },
+    defaultValues: { branchId: '', supplierId: '', invoiceNumber: '', notes: '', purchaseDate: '', items: [{ productId: '', quantity: 1, unitCost: 0, taxRate: 0 }] },
   });
 
   const { fields, append, remove } = useFieldArray({ control, name: 'items' });
@@ -122,6 +128,7 @@ export default function ComprasPage() {
       setSelectedSupplierName(p.supplier?.name || '');
       setSupplierSearch('');
       reset({
+        branchId: p.branchId || '',
         supplierId: p.supplierId,
         invoiceNumber: p.invoiceNumber || '',
         notes: p.notes || '',
@@ -160,7 +167,7 @@ export default function ComprasPage() {
           type="button"
           onClick={() => {
             setEditItem(null);
-            reset({ supplierId: '', invoiceNumber: '', notes: '', purchaseDate: '', items: [{ productId: '', quantity: 1, unitCost: 0, taxRate: 0 }] });
+            reset({ branchId: myBranchId, supplierId: '', invoiceNumber: '', notes: '', purchaseDate: '', items: [{ productId: '', quantity: 1, unitCost: 0, taxRate: 0 }] });
             setSelectedSupplierName('');
             setSupplierSearch('');
             setShowForm(true);
@@ -487,6 +494,19 @@ export default function ComprasPage() {
                   <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5 block">Notas</label>
                   <input {...register('notes')} className={inputCls} placeholder="Opcional" />
                 </div>
+
+                {/* Bodega — solo al crear; una compra ya registrada no cambia de
+                    bodega al editarla. Si solo hay una, ni se muestra. */}
+                {!editItem && branches?.length > 1 && (
+                  <div>
+                    <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5 block">Bodega que recibe *</label>
+                    <select {...register('branchId', { required: true })} className={inputCls}>
+                      <option value="">Selecciona una bodega...</option>
+                      {branches.map((b: any) => <option key={b.id} value={b.id}>{b.name}</option>)}
+                    </select>
+                    {errors.branchId && <p className="mt-1 text-[11px] text-red-500">Selecciona en qué bodega entra la mercancía</p>}
+                  </div>
+                )}
               </div>
 
               {/* ── Líneas de producto ────────────────────────────────────────── */}

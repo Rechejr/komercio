@@ -206,7 +206,7 @@ function DeleteModal({ business, onClose }: { business: Business; onClose: () =>
           <p className="text-gray-400 text-xs mt-0.5">{business.owner.email}</p>
           <p className="text-red-400 text-xs mt-2 leading-relaxed">
             Esta acción es <strong>irreversible</strong>. Se eliminarán todos los datos: ventas,
-            productos, clientes, usuarios y sucursales.
+            productos, clientes, usuarios y bodegas.
           </p>
         </div>
 
@@ -434,7 +434,7 @@ export default function SuperAdminPage() {
                 <th className="text-left px-4 py-3 font-medium">Propietario</th>
                 <th className="text-left px-4 py-3 font-medium">Plan</th>
                 <th className="text-left px-4 py-3 font-medium">Vence</th>
-                <th className="text-left px-4 py-3 font-medium">Sucursales</th>
+                <th className="text-left px-4 py-3 font-medium">Bodegas</th>
                 <th className="text-left px-4 py-3 font-medium">Registrado</th>
                 <th className="text-left px-4 py-3 font-medium">Estado</th>
                 <th className="text-left px-4 py-3 font-medium">Acciones</th>

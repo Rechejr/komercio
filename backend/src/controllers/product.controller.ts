@@ -1,4 +1,5 @@
 import { Response, NextFunction } from 'express';
+import { randomUUID } from 'crypto';
 import { prisma } from '../config/database';
 import { cache } from '../config/redis';
 import { AppError, success, created, paginated } from '../utils/response';
@@ -10,6 +11,7 @@ import { getPlan } from '../config/plans';
 import { acquirePlanLimitLock } from '../utils/planLimitLock';
 import { deleteImage } from '../config/cloudinary';
 import { logger } from '../config/logger';
+import { resolveEffectiveBranchId } from '../utils/resolveBranch';
 
 const CACHE_TTL = 300;
 
@@ -18,7 +20,7 @@ export const productController = {
     try {
       const { page, limit, skip } = getPagination(req);
       const search = getSearch(req);
-      const { categoryId, brandId, supplierId, isActive } = req.query;
+      const { categoryId, brandId, supplierId, isActive, branchId } = req.query;
       const businessId = req.user!.businessId;
 
       const where: any = { deletedAt: null, businessId };
@@ -49,7 +51,42 @@ export const productController = {
         prisma.product.count({ where }),
       ]);
 
-      return paginated(res, products, total, page, limit);
+      // El POS manda su propia bodega para que la etiqueta de stock refleje lo
+      // que de verdad se va a descontar ahí — Inventario nunca manda esto y
+      // sigue viendo el total (Product.stock), como antes.
+      let result = products;
+      if (typeof branchId === 'string' && branchId) {
+        const stocks = await prisma.productStock.findMany({
+          where: { branchId, productId: { in: products.map((p) => p.id) } },
+          select: { productId: true, stock: true },
+        });
+        const stockByProduct = new Map(stocks.map((s) => [s.productId, Number(s.stock)]));
+        result = products.map((p) => ({ ...p, stock: stockByProduct.get(p.id) ?? 0 }));
+      }
+
+      return paginated(res, result, total, page, limit);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async getStockByBranch(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const businessId = req.user!.businessId;
+      const product = await prisma.product.findFirst({
+        where: { id: req.params.id, deletedAt: null, businessId },
+        select: { id: true },
+      });
+      if (!product) throw new AppError('Producto no encontrado', 404);
+
+      const [branches, stocks] = await Promise.all([
+        prisma.branch.findMany({ where: { businessId, deletedAt: null }, select: { id: true, name: true }, orderBy: { createdAt: 'asc' } }),
+        prisma.productStock.findMany({ where: { productId: req.params.id }, select: { branchId: true, stock: true } }),
+      ]);
+      const stockByBranch = new Map(stocks.map((s) => [s.branchId, Number(s.stock)]));
+
+      const data = branches.map((b) => ({ branchId: b.id, branchName: b.name, stock: stockByBranch.get(b.id) ?? 0 }));
+      return success(res, data);
     } catch (err) {
       next(err);
     }
@@ -89,21 +126,7 @@ export const productController = {
       if (!data.salePrice && data.salePrice !== 0) throw new AppError('El precio de venta es requerido', 400);
       const businessId = req.user!.businessId;
 
-      // Un usuario con sucursal fija (cajero/staff) no puede crear productos a
-      // nombre de otra sucursal solo con mandar otro branchId en el body — antes
-      // se validaba que la sucursal perteneciera al negocio, pero no que fuera la
-      // del usuario.
-      const userBranchId = req.user?.branchId || null;
-      if (userBranchId) {
-        if (data.branchId && data.branchId !== userBranchId) throw new AppError('No tienes acceso a esta sucursal', 403);
-      } else if (data.branchId) {
-        const branch = await prisma.branch.findFirst({
-          where: { id: data.branchId, businessId },
-          select: { id: true },
-        });
-        if (!branch) throw new AppError('Sucursal no válida para este negocio', 403);
-      }
-      const branchId = userBranchId || data.branchId || null;
+      const branchId = await resolveEffectiveBranchId(prisma, req, data.branchId);
 
       if (data.supplierId) {
         const sup = await prisma.supplier.findFirst({ where: { id: data.supplierId, businessId, deletedAt: null } });
@@ -166,7 +189,11 @@ export const productController = {
               reason: 'Stock inicial',
               unitCost: initialCost,
               totalCost: initialCost * initialQty,
+              branchId,
             },
+          });
+          await tx.productStock.create({
+            data: { productId: newProduct.id, branchId, stock: initialQty },
           });
         }
 
@@ -273,6 +300,26 @@ export const productController = {
       const { quantity, type, reason } = req.body;
       const qty = parseFloat(quantity);
 
+      // A diferencia de crear un producto (donde caer a la bodega más antigua es
+      // un default inofensivo), un ajuste de stock SÍ debe fallar si no está claro
+      // en cuál bodega — nunca se debe adivinar dónde quedó físicamente la mercancía.
+      const bodyBranchId: string | undefined = req.body.branchId;
+      const userBranchId = req.user?.branchId || null;
+      let targetBranchId: string;
+      if (userBranchId) {
+        if (bodyBranchId && bodyBranchId !== userBranchId) throw new AppError('No tienes acceso a esta bodega', 403);
+        targetBranchId = userBranchId;
+      } else if (bodyBranchId) {
+        const branch = await prisma.branch.findFirst({ where: { id: bodyBranchId, businessId: req.user!.businessId }, select: { id: true } });
+        if (!branch) throw new AppError('Bodega no válida para este negocio', 403);
+        targetBranchId = bodyBranchId;
+      } else {
+        const branches = await prisma.branch.findMany({ where: { businessId: req.user!.businessId, deletedAt: null }, select: { id: true } });
+        if (branches.length === 0) throw new AppError('No se encontró una bodega para este negocio', 400);
+        if (branches.length > 1) throw new AppError('Debes indicar en qué bodega ajustar el stock', 400);
+        targetBranchId = branches[0].id;
+      }
+
       interface AdjustProductRow {
         id: string; stock: number; name: string;
         allowNegativeStock: boolean; minStock: number; businessId: string;
@@ -304,12 +351,30 @@ export const productController = {
         if (!locked) throw new AppError('Producto no encontrado', 404);
         if (locked.businessId !== req.user!.businessId) throw new AppError('Producto no encontrado', 404);
 
-        const newStock = type === 'IN'
-          ? locked.stock + qty
-          : type === 'OUT'
-            ? locked.stock - qty
-            : qty; // ADJUSTMENT sets absolute value
+        // Bloquea (o crea en 0) la fila de stock de ESTA bodega — mismo patrón
+        // INSERT ... ON CONFLICT que ya usa sale.controller.ts.
+        const [psRow] = await tx.$queryRawUnsafe<any[]>(
+          `INSERT INTO product_stocks (id, "productId", "branchId", stock, "createdAt", "updatedAt")
+           VALUES ($1, $2, $3, 0, now(), now())
+           ON CONFLICT ("productId", "branchId") DO UPDATE SET "updatedAt" = product_stocks."updatedAt"
+           RETURNING stock`,
+          randomUUID(), id, targetBranchId,
+        );
+        const oldBranchStock = Number(psRow.stock);
 
+        const newBranchStock = type === 'IN'
+          ? oldBranchStock + qty
+          : type === 'OUT'
+            ? oldBranchStock - qty
+            : qty; // ADJUSTMENT fija el valor absoluto DE ESTA BODEGA
+        if (newBranchStock < 0 && !locked.allowNegativeStock) {
+          throw new AppError('Stock insuficiente', 400);
+        }
+        // El total del producto se mueve por el mismo delta que la bodega — así
+        // ADJUSTMENT (que fija un valor absoluto en la bodega) no pisa con ese
+        // mismo número absoluto el stock de las OTRAS bodegas del producto.
+        const branchDelta = newBranchStock - oldBranchStock;
+        const newStock = locked.stock + branchDelta;
         if (newStock < 0 && !locked.allowNegativeStock) {
           throw new AppError('Stock insuficiente', 400);
         }
@@ -322,10 +387,14 @@ export const productController = {
         await tx.product.update({
           where: { id },
           data: {
-            stock: type === 'IN' ? { increment: qty } : type === 'OUT' ? { decrement: qty } : newStock,
+            stock: { increment: branchDelta },
             ...(restocked ? { lowStockNotifiedAt: null } : {}),
             ...(isNewLowStock ? { lowStockNotifiedAt: new Date() } : {}),
           },
+        });
+        await tx.productStock.update({
+          where: { productId_branchId: { productId: id, branchId: targetBranchId } },
+          data: { stock: newBranchStock },
         });
 
         await tx.inventoryMovement.create({
@@ -334,6 +403,7 @@ export const productController = {
             type: type as any,
             quantity: qty,
             previousStock: locked.stock,
+            branchId: targetBranchId,
             newStock,
             reason,
             unitCost: locked.costPrice,

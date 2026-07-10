@@ -12,7 +12,7 @@ import toast from 'react-hot-toast';
 import {
   Plus, Search, Edit, Trash2, Package, AlertTriangle,
   X, Loader2, Barcode, FileUp, FileDown, CheckCircle2,
-  ArrowRight, Lock, ArrowUpDown, Share2, ScanLine,
+  ArrowRight, Lock, ArrowUpDown, Share2, ScanLine, Warehouse,
 } from 'lucide-react';
 import { BarcodeScanner } from '@/components/ui/BarcodeScanner';
 import { useAuthStore } from '@/store/auth.store';
@@ -78,6 +78,8 @@ export default function InventarioPage() {
   const [deleteTarget, setDeleteTarget] = useState<any>(null);
   const [stockTarget, setStockTarget] = useState<any>(null);
   const [stockForm, setStockForm] = useState({ quantity: '', reason: '' });
+  const [stockBranchId, setStockBranchId] = useState('');
+  const [breakdownTarget, setBreakdownTarget] = useState<any>(null);
   const [importResult, setImportResult] = useState<{ imported: number; updated: number; errors: { row: number; message: string }[] } | null>(null);
   const [previewData, setPreviewData] = useState<PreviewData | null>(null);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
@@ -102,6 +104,16 @@ export default function InventarioPage() {
   const { data: categories } = useQuery({
     queryKey: ['categories'],
     queryFn: () => api.get('/categories').then((r) => r.data.data),
+  });
+
+  // Desglose por bodega — se usa tanto para "ver stock por bodega" como para
+  // saber qué bodega ajustar en el modal de Ajustar Stock (el total que muestra
+  // la lista no sirve para eso si hay más de una).
+  const stockBreakdownId = breakdownTarget?.id || stockTarget?.id;
+  const { data: stockBreakdown } = useQuery({
+    queryKey: ['product-stock-by-branch', stockBreakdownId],
+    queryFn: () => api.get(`/products/${stockBreakdownId}/stock-by-branch`).then((r) => r.data.data),
+    enabled: !!stockBreakdownId,
   });
 
   const deleteMutation = useMutation({
@@ -152,13 +164,15 @@ export default function InventarioPage() {
   });
 
   const adjustMutation = useMutation({
-    mutationFn: ({ id, type, quantity, reason }: { id: string; type: string; quantity: number; reason: string }) =>
-      api.patch(`/products/${id}/adjust-stock`, { type, quantity, reason }),
+    mutationFn: ({ id, type, quantity, reason, branchId }: { id: string; type: string; quantity: number; reason: string; branchId?: string }) =>
+      api.patch(`/products/${id}/adjust-stock`, { type, quantity, reason, ...(branchId ? { branchId } : {}) }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['products'] });
+      qc.invalidateQueries({ queryKey: ['product-stock-by-branch'] });
       toast.success('Stock actualizado');
       setStockTarget(null);
       setStockForm({ quantity: '', reason: '' });
+      setStockBranchId('');
     },
     onError: (err: any) => toast.error(err.response?.data?.error || 'Error al ajustar stock'),
   });
@@ -186,6 +200,14 @@ export default function InventarioPage() {
     });
     setShowForm(true);
   }
+
+  // Auto-selecciona la bodega en el modal de Ajustar Stock cuando solo hay una
+  // — con 2+ el usuario tiene que elegir a propósito.
+  useEffect(() => {
+    if (stockTarget && stockBreakdown?.length === 1 && !stockBranchId) {
+      setStockBranchId(stockBreakdown[0].branchId);
+    }
+  }, [stockTarget, stockBreakdown, stockBranchId]);
 
   function closePreview() {
     setIsPreviewOpen(false);
@@ -468,8 +490,17 @@ export default function InventarioPage() {
                       <div className="flex items-center gap-1.5 justify-end">
                         <button
                           type="button"
+                          aria-label="Ver stock por bodega"
+                          onClick={() => setBreakdownTarget(p)}
+                          className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 transition"
+                          title="Ver stock por bodega"
+                        >
+                          <Warehouse size={14} />
+                        </button>
+                        <button
+                          type="button"
                           aria-label="Ajustar stock"
-                          onClick={() => { setStockTarget(p); setStockForm({ quantity: String(p.stock), reason: '' }); }}
+                          onClick={() => { setStockTarget(p); setStockForm({ quantity: String(p.stock), reason: '' }); setStockBranchId(''); }}
                           className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 transition"
                           title="Ajustar stock"
                         >
@@ -883,9 +914,13 @@ export default function InventarioPage() {
 
       {/* ── Ajustar Stock Modal ─────────────────────────────────────────────── */}
       {stockTarget && (() => {
+        const multiBranch = !!stockBreakdown && stockBreakdown.length > 1;
+        const currentStock = multiBranch
+          ? (stockBranchId ? stockBreakdown.find((b: any) => b.branchId === stockBranchId)?.stock ?? 0 : null)
+          : stockTarget.stock;
         const newQty = stockForm.quantity === '' ? null : parseFloat(stockForm.quantity);
-        const hasChange = newQty !== null && newQty !== stockTarget.stock;
-        const isValid = newQty !== null && newQty >= 0;
+        const hasChange = newQty !== null && currentStock !== null && newQty !== currentStock;
+        const isValid = newQty !== null && newQty >= 0 && (!multiBranch || !!stockBranchId);
         const REASONS = ['Error de conteo', 'Merma o daño', 'Pérdida', 'Edición masiva de unidades', 'Otro'];
 
         function handleConfirm(skipReason = false) {
@@ -895,6 +930,7 @@ export default function InventarioPage() {
             type: 'ADJUSTMENT',
             quantity: newQty!,
             reason: skipReason ? 'Ajuste manual' : stockForm.reason,
+            branchId: stockBranchId || undefined,
           });
         }
 
@@ -934,19 +970,39 @@ export default function InventarioPage() {
                   </div>
                   {hasChange && (
                     <div className="flex items-center gap-1.5 flex-shrink-0 text-[13px] font-semibold">
-                      <span className="text-slate-400 line-through tabular-nums">{stockTarget.stock}</span>
+                      <span className="text-slate-400 line-through tabular-nums">{currentStock}</span>
                       <ArrowRight size={12} className="text-slate-400" />
-                      <span className={newQty! > stockTarget.stock ? 'text-emerald-600' : 'text-red-500'}>
+                      <span className={newQty! > currentStock! ? 'text-emerald-600' : 'text-red-500'}>
                         {newQty}
                       </span>
                     </div>
                   )}
                 </div>
 
+                {multiBranch && (
+                  <div>
+                    <label className="block text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5">
+                      Bodega *
+                    </label>
+                    <select
+                      value={stockBranchId}
+                      onChange={(e) => { setStockBranchId(e.target.value); setStockForm((f) => ({ ...f, quantity: '' })); }}
+                      className={inputCls}
+                    >
+                      <option value="">Selecciona una bodega...</option>
+                      {stockBreakdown.map((b: any) => (
+                        <option key={b.branchId} value={b.branchId}>{b.branchName} — {b.stock} {stockTarget.unit || ''}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
                 <div>
                   <label className="block text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5">
                     Nueva cantidad
-                    <span className="ml-1.5 text-slate-400 font-normal">— actual: {stockTarget.stock} {stockTarget.unit || ''}</span>
+                    {currentStock !== null && (
+                      <span className="ml-1.5 text-slate-400 font-normal">— actual: {currentStock} {stockTarget.unit || ''}</span>
+                    )}
                   </label>
                   <input
                     type="number"
@@ -956,7 +1012,8 @@ export default function InventarioPage() {
                     value={stockForm.quantity}
                     onChange={(e) => setStockForm((f) => ({ ...f, quantity: e.target.value }))}
                     className={inputCls}
-                    placeholder={String(stockTarget.stock)}
+                    disabled={multiBranch && !stockBranchId}
+                    placeholder={currentStock !== null ? String(currentStock) : ''}
                     autoFocus
                   />
                 </div>
@@ -1005,6 +1062,55 @@ export default function InventarioPage() {
           </div>
         );
       })()}
+
+      {/* ── Stock por Bodega Modal ────────────────────────────────────────────── */}
+      {breakdownTarget && (
+        <div
+          className="fixed inset-0 bg-black/50 backdrop-blur-[2px] z-50 flex items-center justify-center p-4"
+          onClick={() => setBreakdownTarget(null)}
+        >
+          <div
+            className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/[0.08] rounded-2xl shadow-modal w-full max-w-sm animate-scale-in"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-white/[0.06]">
+              <div>
+                <h2 className="text-[15px] font-semibold text-slate-800 dark:text-white flex items-center gap-2">
+                  <Warehouse size={16} className="text-emerald-500" /> Stock por bodega
+                </h2>
+                <p className="text-[12px] text-slate-400 mt-0.5 truncate max-w-[240px]">{breakdownTarget.name}</p>
+              </div>
+              <button
+                type="button"
+                aria-label="Cerrar"
+                onClick={() => setBreakdownTarget(null)}
+                className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/[0.06] transition"
+              >
+                <X size={14} />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-2">
+              {!stockBreakdown ? (
+                <div className="flex justify-center py-4">
+                  <Loader2 size={20} className="animate-spin text-emerald-500" />
+                </div>
+              ) : stockBreakdown.length === 0 ? (
+                <p className="text-[13px] text-slate-400 text-center py-2">Sin bodegas registradas</p>
+              ) : stockBreakdown.map((b: any) => (
+                <div key={b.branchId} className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60">
+                  <span className="text-[13px] text-slate-600 dark:text-slate-300">{b.branchName}</span>
+                  <span className="text-[13px] font-semibold text-slate-800 dark:text-white tabular-nums">{b.stock} {breakdownTarget.unit || ''}</span>
+                </div>
+              ))}
+              <div className="flex items-center justify-between px-3 py-2.5 border-t border-slate-100 dark:border-white/[0.06] mt-2 pt-3">
+                <span className="text-[12px] font-semibold text-slate-400 uppercase tracking-wide">Total</span>
+                <span className="text-[13px] font-bold text-slate-800 dark:text-white tabular-nums">{breakdownTarget.stock} {breakdownTarget.unit || ''}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Import Results Modal ─────────────────────────────────────────────── */}
       {importResult && (

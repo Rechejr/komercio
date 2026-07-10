@@ -37,8 +37,8 @@ test.describe('Configuración', () => {
     }
   });
 
-  test('sección de sucursales (si disponible)', async ({ page }) => {
-    const branchTab = page.locator('button:has-text("Sucursales"), [role="tab"]:has-text("Sucursal")');
+  test('sección de bodegas (si disponible)', async ({ page }) => {
+    const branchTab = page.locator('button:has-text("Bodegas"), [role="tab"]:has-text("Bodega")');
     if (await branchTab.count() > 0) {
       await branchTab.first().click();
       await page.waitForTimeout(1_000);

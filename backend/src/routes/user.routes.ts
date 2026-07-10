@@ -53,7 +53,7 @@ router.post('/', authorize('ADMIN'), planLimit.users(), async (req: any, res, ne
         where: { id: branchId, businessId, deletedAt: null },
         select: { id: true },
       });
-      if (!validBranch) return next(new AppError('Sucursal no válida para este negocio', 403));
+      if (!validBranch) return next(new AppError('Bodega no válida para este negocio', 403));
     }
 
     const hashed = await bcrypt.hash(password, 12);
@@ -110,7 +110,7 @@ router.patch('/:id', authorize('ADMIN'), async (req: any, res, next) => {
         where: { id: branchId, businessId },
         select: { id: true },
       });
-      if (!validBranch) return next(new AppError('Sucursal no válida para este negocio', 400));
+      if (!validBranch) return next(new AppError('Bodega no válida para este negocio', 400));
     }
 
     const user = await prisma.user.update({

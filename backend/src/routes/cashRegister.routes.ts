@@ -57,7 +57,7 @@ router.get('/history', authorize('ADMIN', 'SUPERVISOR'), async (req: any, res, n
 
 router.get('/current', authorize('ADMIN', 'SUPERVISOR', 'CASHIER'), async (req: any, res, next) => {
   try {
-    if (!req.user.branchId) return next(new AppError('No tienes una sucursal asignada', 403));
+    if (!req.user.branchId) return next(new AppError('No tienes una bodega asignada', 403));
     const register = await prisma.cashRegister.findFirst({
       where: { branchId: req.user.branchId, status: 'OPEN' },
       include: { movements: { orderBy: { createdAt: 'desc' }, take: 50 } },
@@ -87,7 +87,7 @@ router.get('/current', authorize('ADMIN', 'SUPERVISOR', 'CASHIER'), async (req: 
 
 router.post('/open', authorize('ADMIN', 'SUPERVISOR', 'CASHIER'), async (req: any, res, next) => {
   try {
-    if (!req.user.branchId) return next(new AppError('No tienes una sucursal asignada', 403));
+    if (!req.user.branchId) return next(new AppError('No tienes una bodega asignada', 403));
     const existing = await prisma.cashRegister.findFirst({
       where: { branchId: req.user.branchId, status: 'OPEN' },
     });
@@ -112,7 +112,7 @@ router.post('/open', authorize('ADMIN', 'SUPERVISOR', 'CASHIER'), async (req: an
       // Red de seguridad ante la carrera findFirst→create: el índice único parcial
       // "cash_registers_branch_open_unique" (una sola caja OPEN por sucursal) rechaza
       // el segundo intento aunque ambos hayan pasado el chequeo `existing` de arriba.
-      if (err?.code === 'P2002') throw new AppError('Ya hay una caja abierta para esta sucursal', 400);
+      if (err?.code === 'P2002') throw new AppError('Ya hay una caja abierta para esta bodega', 400);
       throw err;
     }
     return created(res, register, 'Caja abierta');

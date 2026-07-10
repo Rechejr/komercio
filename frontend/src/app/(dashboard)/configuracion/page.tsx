@@ -144,19 +144,19 @@ export default function ConfiguracionPage() {
       : api.post('/business/branches', data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['branches'] });
-      toast.success(editBranch ? 'Sucursal actualizada' : 'Sucursal creada');
+      toast.success(editBranch ? 'Bodega actualizada' : 'Bodega creada');
       setShowBranchForm(false);
       setEditBranch(null);
       resetBranch();
     },
-    onError: (err: any) => toast.error(err.response?.data?.error || 'Error al guardar la sucursal'),
+    onError: (err: any) => toast.error(err.response?.data?.error || 'Error al guardar la bodega'),
   });
 
   function openNewBranch() {
     const limit = BRANCH_LIMIT[user?.plan || 'free'] ?? 1;
     if (branches.length >= limit) {
       if ((user?.plan || 'free') === 'free') { openUpgrade(); return; }
-      toast.error(`Límite de ${limit} sucursales alcanzado en el plan Pro`);
+      toast.error(`Límite de ${limit} bodegas alcanzado en el plan Pro`);
       return;
     }
     setEditBranch(null);
@@ -421,7 +421,7 @@ export default function ConfiguracionPage() {
         </div>
       )}
 
-      {/* ── Sucursales (solo ADMIN) ──────────────────────────────────────────── */}
+      {/* ── Bodegas (solo ADMIN) ──────────────────────────────────────────── */}
       {user?.role === 'ADMIN' && (
         <div className="card overflow-hidden">
           <div className="px-6 py-4 border-b border-slate-100 dark:border-white/[0.06] flex items-center justify-between">
@@ -430,7 +430,7 @@ export default function ConfiguracionPage() {
                 <Building2 size={14} className="text-sky-600 dark:text-sky-400" />
               </div>
               <div>
-                <h2 className="text-[14px] font-semibold text-slate-800 dark:text-white">Sucursales</h2>
+                <h2 className="text-[14px] font-semibold text-slate-800 dark:text-white">Bodegas</h2>
                 <p className="text-[11px] text-slate-400 dark:text-slate-500">
                   {branches.length} de {BRANCH_LIMIT[user?.plan || 'free'] ?? 1} · plan {user?.plan === 'pro' ? 'Pro' : 'Gratis'}
                 </p>
@@ -441,13 +441,13 @@ export default function ConfiguracionPage() {
               onClick={openNewBranch}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white rounded-xl text-[12px] font-semibold hover:bg-emerald-700 shadow-sm shadow-emerald-600/25 transition"
             >
-              <Plus size={13} /> Nueva sucursal
+              <Plus size={13} /> Nueva bodega
             </button>
           </div>
 
           <div className="divide-y divide-slate-50 dark:divide-white/[0.04]">
             {branches.length === 0 ? (
-              <p className="text-center py-8 text-[13px] text-slate-400">No hay sucursales registradas</p>
+              <p className="text-center py-8 text-[13px] text-slate-400">No hay bodegas registradas</p>
             ) : branches.map((b: any) => (
               <div key={b.id} className="px-6 py-3.5 flex items-center justify-between gap-3">
                 <div className="min-w-0">
@@ -460,7 +460,7 @@ export default function ConfiguracionPage() {
                 </div>
                 <button
                   type="button"
-                  aria-label="Editar sucursal"
+                  aria-label="Editar bodega"
                   onClick={() => openEditBranch(b)}
                   className="w-7 h-7 flex-shrink-0 flex items-center justify-center rounded-lg text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 transition"
                 >
@@ -624,9 +624,9 @@ export default function ConfiguracionPage() {
 
               {branches.length > 1 && (
                 <div>
-                  <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5 block">Sucursal</label>
+                  <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5 block">Bodega</label>
                   <select {...regEmp('branchId')} className={inputCls}>
-                    <option value="">Sin sucursal asignada</option>
+                    <option value="">Sin bodega asignada</option>
                     {branches.map((b: any) => (
                       <option key={b.id} value={b.id}>{b.name}</option>
                     ))}
@@ -662,7 +662,7 @@ export default function ConfiguracionPage() {
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/[0.08] rounded-2xl shadow-modal w-full max-w-sm animate-scale-in">
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-white/[0.06]">
               <h2 className="text-[15px] font-semibold text-slate-800 dark:text-white">
-                {editBranch ? 'Editar sucursal' : 'Nueva sucursal'}
+                {editBranch ? 'Editar bodega' : 'Nueva bodega'}
               </h2>
               <button
                 type="button"
@@ -679,7 +679,7 @@ export default function ConfiguracionPage() {
                 <input
                   {...regBranch('name', { required: 'El nombre es obligatorio' })}
                   className={inputCls}
-                  placeholder="Ej: Sucursal Norte"
+                  placeholder="Ej: Bodega Norte"
                 />
                 {branchErrors.name && <p className="text-[11px] text-red-500 mt-1">{branchErrors.name.message as string}</p>}
               </div>
@@ -706,7 +706,7 @@ export default function ConfiguracionPage() {
                   className="flex-1 px-4 py-2.5 bg-emerald-600 text-white rounded-xl text-[13px] font-semibold hover:bg-emerald-700 disabled:opacity-60 shadow-sm shadow-emerald-600/25 flex items-center justify-center gap-2 transition"
                 >
                   {saveBranchMutation.isPending && <Loader2 size={14} className="animate-spin" />}
-                  {editBranch ? 'Actualizar' : 'Crear sucursal'}
+                  {editBranch ? 'Actualizar' : 'Crear bodega'}
                 </button>
               </div>
             </form>

@@ -10,6 +10,7 @@
     "db:migrate": "prisma migrate dev",
     "db:generate": "prisma generate",
     "db:seed": "ts-node prisma/seed.ts",
+    "db:backfill-product-stock": "ts-node prisma/backfillProductStock.ts",
     "db:studio": "prisma studio",
     "db:push": "prisma db push",
     "test": "jest",

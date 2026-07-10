@@ -14,7 +14,12 @@ jest.mock('../../config/database', () => ({
       create: jest.fn(),
       update: jest.fn(),
     },
-    branch: { findFirst: jest.fn() },
+    productStock: {
+      findMany: jest.fn(),
+      create: jest.fn(),
+      update: jest.fn(),
+    },
+    branch: { findFirst: jest.fn(), findMany: jest.fn() },
     $transaction: jest.fn(),
     $queryRaw: jest.fn(),
     $queryRawUnsafe: jest.fn(),
@@ -111,6 +116,144 @@ describe('productController.list', () => {
       expect.objectContaining({ where: expect.objectContaining({ categoryId: 'cat-1', brandId: 'br-1' }) })
     );
   });
+
+  it('cuando se pasa branchId, reemplaza stock por el de esa bodega (POS)', async () => {
+    (mockPrisma.product.findMany as jest.Mock).mockResolvedValue([
+      makeProduct({ id: 'p1', stock: 100 }),
+      makeProduct({ id: 'p2', stock: 50 }),
+    ]);
+    (mockPrisma.product.count as jest.Mock).mockResolvedValue(2);
+    (mockPrisma.productStock.findMany as jest.Mock).mockResolvedValue([
+      { productId: 'p1', stock: 30 },
+      // p2 no tiene fila en esta bodega -> debe caer a 0, NO al stock total
+    ]);
+
+    const { res, json } = makeRes();
+    await productController.list(makeReq({ query: { branchId: 'br-1' } }), res, next);
+
+    const payload = json.mock.calls[0][0];
+    const byId = Object.fromEntries(payload.data.map((p: any) => [p.id, p.stock]));
+    expect(byId.p1).toBe(30);
+    expect(byId.p2).toBe(0);
+  });
+});
+
+// ─── getStockByBranch ────────────────────────────────────────────────────────
+
+describe('productController.getStockByBranch', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('retorna 404 si el producto no pertenece al negocio', async () => {
+    (mockPrisma.product.findFirst as jest.Mock).mockResolvedValue(null);
+    await productController.getStockByBranch(makeReq({ params: { id: 'p-x' } }), makeRes().res, next);
+    expect((next as jest.Mock).mock.calls[0][0].statusCode).toBe(404);
+  });
+
+  it('retorna el stock por cada bodega, 0 si no tiene fila', async () => {
+    (mockPrisma.product.findFirst as jest.Mock).mockResolvedValue({ id: 'p1' });
+    (mockPrisma.branch.findMany as jest.Mock).mockResolvedValue([
+      { id: 'br-1', name: 'Principal' },
+      { id: 'br-2', name: 'Bodega Norte' },
+    ]);
+    (mockPrisma.productStock.findMany as jest.Mock).mockResolvedValue([
+      { branchId: 'br-1', stock: 40 },
+    ]);
+
+    const { res, json } = makeRes();
+    await productController.getStockByBranch(makeReq({ params: { id: 'p1' } }), res, next);
+
+    expect(json).toHaveBeenCalledWith(expect.objectContaining({
+      success: true,
+      data: [
+        { branchId: 'br-1', branchName: 'Principal', stock: 40 },
+        { branchId: 'br-2', branchName: 'Bodega Norte', stock: 0 },
+      ],
+    }));
+  });
+});
+
+// ─── adjustStock ─────────────────────────────────────────────────────────────
+
+describe('productController.adjustStock', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  function makeAdjustTx(overrides: {
+    productRow?: any;
+    branchStock?: number;
+  } = {}) {
+    const productRow = overrides.productRow ?? {
+      id: 'p1', stock: 100, name: 'Producto', allowNegativeStock: false,
+      minStock: 10, businessId: 'biz-1', costPrice: 1000, lowStockNotifiedAt: null,
+    };
+    const branchStock = overrides.branchStock ?? 20;
+
+    const txProductUpdate = jest.fn().mockResolvedValue({});
+    const txProductStockUpdate = jest.fn().mockResolvedValue({});
+    const txMovementCreate = jest.fn().mockResolvedValue({});
+    const queryRawUnsafe = jest.fn()
+      .mockResolvedValueOnce([productRow])
+      .mockResolvedValueOnce([{ stock: branchStock }]);
+
+    const tx = {
+      $queryRawUnsafe: queryRawUnsafe,
+      product: { update: txProductUpdate },
+      productStock: { update: txProductStockUpdate },
+      inventoryMovement: { create: txMovementCreate },
+    };
+    return { tx, txProductUpdate, txProductStockUpdate, txMovementCreate };
+  }
+
+  it('rechaza con 403 si el body pide una bodega distinta a la fija del usuario', async () => {
+    await productController.adjustStock(
+      makeReq({ params: { id: 'p1' }, body: { type: 'ADJUSTMENT', quantity: 5, branchId: 'otra-bodega' } }),
+      makeRes().res,
+      next,
+    );
+    expect((next as jest.Mock).mock.calls[0][0].statusCode).toBe(403);
+  });
+
+  it('rechaza con 400 si el usuario no tiene bodega fija y el negocio tiene varias', async () => {
+    (mockPrisma.branch.findMany as jest.Mock).mockResolvedValue([{ id: 'br-1' }, { id: 'br-2' }]);
+    await productController.adjustStock(
+      makeReq({ user: { userId: 'u-1', email: 'a@b.com', role: 'ADMIN', businessId: 'biz-1', branchId: undefined }, params: { id: 'p1' }, body: { type: 'ADJUSTMENT', quantity: 5 } }),
+      makeRes().res,
+      next,
+    );
+    expect((next as jest.Mock).mock.calls[0][0].statusCode).toBe(400);
+  });
+
+  it('ADJUSTMENT fija el valor absoluto de LA BODEGA, no del total', async () => {
+    const { tx, txProductUpdate, txProductStockUpdate } = makeAdjustTx({ branchStock: 20 });
+    (mockPrisma.$transaction as jest.Mock).mockImplementation(async (fn: any) => fn(tx));
+
+    const { res, json } = makeRes();
+    await productController.adjustStock(
+      makeReq({ params: { id: 'p1' }, body: { type: 'ADJUSTMENT', quantity: 35, reason: 'Conteo' } }),
+      res,
+      next,
+    );
+
+    // bodega pasa de 20 a 35 -> delta +15 aplicado al TOTAL (que partía de 100)
+    expect(txProductUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ stock: { increment: 15 } }) })
+    );
+    expect(txProductStockUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { stock: 35 } })
+    );
+    expect(json).toHaveBeenCalledWith(expect.objectContaining({ success: true, data: { stock: 115 } }));
+  });
+
+  it('rechaza con 400 si el ajuste deja la bodega en negativo y no permite stock negativo', async () => {
+    const { tx } = makeAdjustTx({ branchStock: 5 });
+    (mockPrisma.$transaction as jest.Mock).mockImplementation(async (fn: any) => fn(tx));
+
+    await productController.adjustStock(
+      makeReq({ params: { id: 'p1' }, body: { type: 'OUT', quantity: 10 } }),
+      makeRes().res,
+      next,
+    );
+    expect((next as jest.Mock).mock.calls[0][0].statusCode).toBe(400);
+  });
 });
 
 // ─── getOne ──────────────────────────────────────────────────────────────────
@@ -163,6 +306,7 @@ describe('productController.create', () => {
     (mockPrisma.$transaction as jest.Mock).mockImplementation(async (fn: any) => {
       return fn({
         product: { create: jest.fn().mockResolvedValue(product) },
+        productStock: { create: jest.fn().mockResolvedValue({}) },
         inventoryMovement: { create: jest.fn().mockResolvedValue({}) },
         business: { findUnique: jest.fn().mockResolvedValue({ plan: 'pro', planExpiresAt: null }) },
         $executeRawUnsafe: jest.fn().mockResolvedValue(0),

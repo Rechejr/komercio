@@ -44,7 +44,7 @@ export const authController = {
               name: businessName,
               category: businessCategory || null,
               ownerId: newUser.id,
-              branches: { create: { name: 'Sucursal Principal', createdById: newUser.id } },
+              branches: { create: { name: 'Bodega Principal', createdById: newUser.id } },
             },
             include: { branches: true },
           });
@@ -437,7 +437,7 @@ export const authController = {
             data: {
               name: `Negocio de ${newUser.name}`,
               ownerId: newUser.id,
-              branches: { create: { name: 'Sucursal Principal', createdById: newUser.id } },
+              branches: { create: { name: 'Bodega Principal', createdById: newUser.id } },
             },
             include: { branches: true },
           });
