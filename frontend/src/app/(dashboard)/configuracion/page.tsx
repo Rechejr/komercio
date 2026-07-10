@@ -5,11 +5,12 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { api } from '@/lib/api';
 import toast from 'react-hot-toast';
-import { Loader2, Store, Lock, ImagePlus, X, Users, UserPlus, Edit, Shield, UserX, Volume2, VolumeX, Building2, MapPin, Plus } from 'lucide-react';
+import { Loader2, Store, Lock, ImagePlus, X, Users, UserPlus, Edit, Shield, UserX, Volume2, VolumeX, Building2, MapPin, Plus, Trash2 } from 'lucide-react';
 import { useAuthStore } from '@/store/auth.store';
 import { useSoundStore } from '@/store/sound.store';
 import { useUpgradeStore } from '@/store/upgrade.store';
 import { sounds } from '@/lib/sounds';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[16px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition';
 
@@ -60,6 +61,7 @@ export default function ConfiguracionPage() {
   // Employee form state
   const [showEmpForm, setShowEmpForm] = useState(false);
   const [editEmp, setEditEmp] = useState<any>(null);
+  const [deleteEmpTarget, setDeleteEmpTarget] = useState<any>(null);
 
   // Branch form state
   const [showBranchForm, setShowBranchForm] = useState(false);
@@ -124,6 +126,16 @@ export default function ConfiguracionPage() {
       toast.success('Estado actualizado');
     },
     onError: (err: any) => toast.error(err.response?.data?.error || 'Error'),
+  });
+
+  const deleteEmpMutation = useMutation({
+    mutationFn: (id: string) => api.delete(`/users/${id}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['users'] });
+      toast.success('Empleado eliminado');
+      setDeleteEmpTarget(null);
+    },
+    onError: (err: any) => toast.error(err.response?.data?.error || 'Error al eliminar'),
   });
 
   const saveBranchMutation = useMutation({
@@ -376,15 +388,29 @@ export default function ConfiguracionPage() {
                         >
                           <Edit size={13} />
                         </button>
-                        <button
-                          type="button"
-                          aria-label={emp.isActive ? 'Desactivar' : 'Activar'}
-                          disabled={toggleEmpMutation.isPending}
-                          onClick={() => toggleEmpMutation.mutate({ id: emp.id, isActive: !emp.isActive })}
-                          className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 disabled:opacity-40 transition"
-                        >
-                          <UserX size={13} />
-                        </button>
+                        {/* No puedes desactivarte ni eliminarte a ti mismo — mismo freno
+                            que ya exige el backend (bloquea quedarse sin ningún admin). */}
+                        {emp.id !== user?.id && (
+                          <>
+                            <button
+                              type="button"
+                              aria-label={emp.isActive ? 'Desactivar' : 'Activar'}
+                              disabled={toggleEmpMutation.isPending}
+                              onClick={() => toggleEmpMutation.mutate({ id: emp.id, isActive: !emp.isActive })}
+                              className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-500/10 disabled:opacity-40 transition"
+                            >
+                              <UserX size={13} />
+                            </button>
+                            <button
+                              type="button"
+                              aria-label="Eliminar empleado"
+                              onClick={() => setDeleteEmpTarget(emp)}
+                              className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 transition"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -687,6 +713,18 @@ export default function ConfiguracionPage() {
           </div>
         </div>
       )}
+
+      {/* ── Eliminar empleado ────────────────────────────────────────────────── */}
+      <ConfirmDialog
+        open={!!deleteEmpTarget}
+        onOpenChange={(open) => { if (!open) setDeleteEmpTarget(null); }}
+        title="Eliminar empleado"
+        description={deleteEmpTarget ? `¿Eliminar a "${deleteEmpTarget.name}"? Ya no podrá iniciar sesión, pero sus ventas anteriores se conservan.` : undefined}
+        confirmLabel="Eliminar"
+        onConfirm={() => deleteEmpTarget && deleteEmpMutation.mutate(deleteEmpTarget.id)}
+        loading={deleteEmpMutation.isPending}
+        variant="danger"
+      />
     </>
   );
 }

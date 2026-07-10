@@ -98,6 +98,12 @@ router.patch('/:id', authorize('ADMIN'), async (req: any, res, next) => {
       return next(new AppError('No puedes asignar el rol SUPER_ADMIN', 403));
     }
 
+    // Mismo riesgo que en DELETE — un admin no debería poder desactivarse ni
+    // quitarse el rol ADMIN a sí mismo y quedar el negocio sin nadie que administre.
+    if (req.params.id === req.user.userId && (isActive === false || (role && role !== 'ADMIN'))) {
+      return next(new AppError('No puedes desactivarte ni quitarte el rol de administrador a ti mismo', 400));
+    }
+
     // Validate branchId belongs to this business if it is being changed
     if (branchId && branchId !== target.branchId) {
       const validBranch = await prisma.branch.findFirst({
@@ -119,6 +125,12 @@ router.patch('/:id', authorize('ADMIN'), async (req: any, res, next) => {
 // CRIT-05 (DELETE): verifica que el usuario target pertenezca al mismo negocio
 router.delete('/:id', authorize('ADMIN'), async (req: any, res, next) => {
   try {
+    // Sin este chequeo, un admin podría eliminarse a sí mismo por la API y
+    // dejar el negocio sin ningún administrador con quien recuperar el acceso.
+    if (req.params.id === req.user.userId) {
+      return next(new AppError('No puedes eliminar tu propia cuenta', 400));
+    }
+
     const businessId: string = req.user.businessId;
 
     const target = await prisma.user.findFirst({
@@ -130,7 +142,7 @@ router.delete('/:id', authorize('ADMIN'), async (req: any, res, next) => {
       where: { id: req.params.id },
       data: { deletedAt: new Date(), isActive: false },
     });
-    return success(res, null, 'Usuario desactivado');
+    return success(res, null, 'Empleado eliminado');
   } catch (err) { next(err); }
 });
 
