@@ -10,6 +10,7 @@ import { Plus, X, Loader2, Receipt, Edit, Trash2, FileDown, Tag, Search, Buildin
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { PriceInput } from '@/components/ui/PriceInput';
 import { downloadExcel } from '@/lib/exportExcel';
+import { useAuthStore } from '@/store/auth.store';
 
 const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[16px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition';
 
@@ -23,6 +24,11 @@ const PAYMENT_BADGE: Record<string, string> = {
 
 export default function GastosPage() {
   const qc = useQueryClient();
+  // El backend ya rechaza eliminar gastos/categorías para Cajero/Supervisor
+  // (expense.routes.ts exige ADMIN) — esto solo evita mostrarle un botón que
+  // de todas formas le va a fallar con un 403.
+  const role = useAuthStore((s) => s.user?.role);
+  const canDelete = role === 'ADMIN';
   const [showForm, setShowForm] = useState(false);
   const [editItem, setEditItem] = useState<any>(null);
   const [deleteTarget, setDeleteTarget] = useState<any>(null);
@@ -346,15 +352,17 @@ export default function GastosPage() {
                       >
                         <Edit size={14} />
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => setDeleteTarget(e)}
-                        aria-label="Eliminar gasto"
-                        disabled={deleteMutation.isPending}
-                        className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 disabled:opacity-40 transition"
-                      >
-                        <Trash2 size={14} />
-                      </button>
+                      {canDelete && (
+                        <button
+                          type="button"
+                          onClick={() => setDeleteTarget(e)}
+                          aria-label="Eliminar gasto"
+                          disabled={deleteMutation.isPending}
+                          className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 disabled:opacity-40 transition"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -645,7 +653,7 @@ export default function GastosPage() {
                   {categories.map((c: any) => (
                     <div key={c.id} className="flex items-center justify-between px-1 py-1.5 text-[13px] text-slate-700 dark:text-slate-300">
                       <span>{c.name}</span>
-                      {c.businessId && (
+                      {c.businessId && canDelete && (
                         <button
                           type="button"
                           aria-label={`Eliminar categoría ${c.name}`}

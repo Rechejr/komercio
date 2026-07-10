@@ -45,6 +45,10 @@ export default function ClientesPage() {
   const plan = useAuthStore((s) => s.user?.plan);
   const isFree = !plan || plan === 'free';
   const openUpgrade = useUpgradeStore((s) => s.open);
+  // El backend ya rechaza eliminar clientes para Cajero (customer.routes.ts) —
+  // esto solo evita mostrarle un botón que de todas formas le va a fallar con un 403.
+  const role = useAuthStore((s) => s.user?.role);
+  const canDelete = role === 'ADMIN' || role === 'SUPERVISOR';
 
   const [search, setSearch] = useState(() => searchParams.get('search') || '');
   const [page, setPage] = useState(1);
@@ -320,10 +324,12 @@ export default function ClientesPage() {
                         className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 transition">
                         <Edit size={14} />
                       </button>
-                      <button type="button" aria-label="Eliminar cliente" onClick={() => setDeleteTarget(c)}
-                        className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 transition">
-                        <Trash2 size={14} />
-                      </button>
+                      {canDelete && (
+                        <button type="button" aria-label="Eliminar cliente" onClick={() => setDeleteTarget(c)}
+                          className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 transition">
+                          <Trash2 size={14} />
+                        </button>
+                      )}
                       <ChevronRight size={14} className="text-slate-300 dark:text-slate-600" />
                     </div>
                   </td>
@@ -571,10 +577,12 @@ export default function ClientesPage() {
                   className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 transition">
                   <Edit size={14} />
                 </button>
-                <button type="button" aria-label="Eliminar" onClick={() => { setSelected(null); setDeleteTarget(detail); }}
-                  className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 transition">
-                  <Trash2 size={14} />
-                </button>
+                {canDelete && (
+                  <button type="button" aria-label="Eliminar" onClick={() => { setSelected(null); setDeleteTarget(detail); }}
+                    className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 transition">
+                    <Trash2 size={14} />
+                  </button>
+                )}
                 <button type="button" aria-label="Cerrar" onClick={() => setSelected(null)}
                   className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/[0.06] transition">
                   <X size={16} />

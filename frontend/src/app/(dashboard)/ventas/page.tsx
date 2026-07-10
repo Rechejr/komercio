@@ -14,12 +14,18 @@ import Link from 'next/link';
 import { downloadExcel } from '@/lib/exportExcel';
 import { Receipt, type ReceiptItem } from '@/components/Receipt';
 import { shareSaleViaWhatsApp } from '@/lib/receiptShare';
+import { useAuthStore } from '@/store/auth.store';
 
 const inputCls = 'px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[16px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition';
 
 export default function VentasPage() {
   const qc = useQueryClient();
   const searchParams = useSearchParams();
+  // El backend ya rechaza anular/eliminar para Cajero (sale.routes.ts) — esto solo
+  // evita mostrarle un botón que de todas formas le va a fallar con un 403.
+  const role = useAuthStore((s) => s.user?.role);
+  const canCancel = role === 'ADMIN' || role === 'SUPERVISOR';
+  const canDelete = role === 'ADMIN';
 
   const [search, setSearch] = useState(() => searchParams.get('search') || '');
   const [page, setPage] = useState(1);
@@ -283,7 +289,7 @@ export default function VentasPage() {
                 <p className="text-[12px] text-slate-400 mt-0.5">{formatDateTime(detail.createdAt)}</p>
               </div>
               <div className="flex items-center gap-2">
-                {detail.status === 'COMPLETED' && (
+                {detail.status === 'COMPLETED' && canCancel && (
                   <button
                     type="button"
                     onClick={openCancel}
@@ -292,7 +298,7 @@ export default function VentasPage() {
                     <Ban size={12} /> Anular
                   </button>
                 )}
-                {detail.status === 'CANCELLED' && (
+                {detail.status === 'CANCELLED' && canDelete && (
                   <button
                     type="button"
                     onClick={() => setShowDeleteModal(true)}

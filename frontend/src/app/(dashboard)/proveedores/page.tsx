@@ -43,6 +43,11 @@ export default function ProveedoresPage() {
   const plan = useAuthStore((s) => s.user?.plan);
   const isFree = !plan || plan === 'free';
   const openUpgrade = useUpgradeStore((s) => s.open);
+  // El backend ya rechaza eliminar proveedores para Cajero/Supervisor
+  // (supplier.routes.ts exige ADMIN) — esto solo evita mostrarle un botón que
+  // de todas formas le va a fallar con un 403.
+  const role = useAuthStore((s) => s.user?.role);
+  const canDelete = role === 'ADMIN';
 
   const [search, setSearch] = useState(() => searchParams.get('search') || '');
   const [page, setPage] = useState(1);
@@ -307,11 +312,13 @@ export default function ProveedoresPage() {
                         className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 transition">
                         <Edit size={14} />
                       </button>
-                      <button type="button" aria-label="Eliminar proveedor"
-                        onClick={() => { if (window.confirm(`¿Eliminar a "${s.name}"?`)) deleteMutation.mutate(s.id); }}
-                        className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 transition">
-                        <Trash2 size={14} />
-                      </button>
+                      {canDelete && (
+                        <button type="button" aria-label="Eliminar proveedor"
+                          onClick={() => { if (window.confirm(`¿Eliminar a "${s.name}"?`)) deleteMutation.mutate(s.id); }}
+                          className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 transition">
+                          <Trash2 size={14} />
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>

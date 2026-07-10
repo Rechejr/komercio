@@ -562,6 +562,11 @@ export default function ConfiguracionPage() {
                     <input
                       {...regEmp('email', { required: 'El correo es obligatorio' })}
                       type="email"
+                      autoComplete="off"
+                      // El navegador reconoce este campo como un login del mismo sitio y
+                      // sugiere las credenciales guardadas del administrador — este es un
+                      // formulario para crear a OTRA persona, así que se bloquea el autofill.
+                      data-lpignore="true"
                       className={inputCls}
                       placeholder="correo@ejemplo.com"
                     />
@@ -572,6 +577,8 @@ export default function ConfiguracionPage() {
                     <input
                       {...regEmp('password', { required: 'La contraseña es obligatoria', minLength: { value: 8, message: 'Mínimo 8 caracteres' } })}
                       type="password"
+                      autoComplete="new-password"
+                      data-lpignore="true"
                       className={inputCls}
                       placeholder="Mínimo 8 caracteres"
                     />

@@ -53,6 +53,10 @@ export default function InventarioPage() {
   const businessId = useAuthStore((s) => s.user?.businessId);
   const isFree     = !plan || plan === 'free';
   const openUpgrade = useUpgradeStore((s) => s.open);
+  // El backend ya rechaza eliminar productos para Cajero (product.routes.ts) —
+  // esto solo evita mostrarle un botón que de todas formas le va a fallar con un 403.
+  const role = useAuthStore((s) => s.user?.role);
+  const canDelete = role === 'ADMIN' || role === 'SUPERVISOR';
 
   function shareCatalog() {
     if (!businessId) return;
@@ -479,14 +483,16 @@ export default function InventarioPage() {
                         >
                           <Edit size={14} />
                         </button>
-                        <button
-                          type="button"
-                          aria-label="Eliminar producto"
-                          onClick={() => setDeleteTarget(p)}
-                          className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 transition"
-                        >
-                          <Trash2 size={14} />
-                        </button>
+                        {canDelete && (
+                          <button
+                            type="button"
+                            aria-label="Eliminar producto"
+                            onClick={() => setDeleteTarget(p)}
+                            className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 transition"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </StaggerItem>

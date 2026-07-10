@@ -7,6 +7,7 @@ import { api } from '@/lib/api';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import { Plus, ShoppingBag, X, Loader2, Trash2, Edit, ChevronRight, FileDown, Search } from 'lucide-react';
+import { useAuthStore } from '@/store/auth.store';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { downloadExcel } from '@/lib/exportExcel';
 import { PriceInput } from '@/components/ui/PriceInput';
@@ -16,6 +17,11 @@ const inputSmCls = 'w-full px-2 py-2 bg-slate-50 border border-slate-200 rounded
 
 export default function ComprasPage() {
   const qc = useQueryClient();
+  // El backend ya rechaza eliminar compras para Cajero (purchase.routes.ts
+  // exige ADMIN/SUPERVISOR) — esto solo evita mostrarle un botón que de
+  // todas formas le va a fallar con un 403.
+  const role = useAuthStore((s) => s.user?.role);
+  const canDelete = role === 'ADMIN' || role === 'SUPERVISOR';
   const [page, setPage] = useState(1);
   const [showForm, setShowForm] = useState(false);
   const [editItem, setEditItem] = useState<any>(null);
@@ -247,14 +253,16 @@ export default function ComprasPage() {
                       >
                         <Edit size={14} />
                       </button>
-                      <button
-                        type="button"
-                        aria-label="Eliminar compra"
-                        onClick={() => handleDelete(p)}
-                        className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 transition"
-                      >
-                        <Trash2 size={14} />
-                      </button>
+                      {canDelete && (
+                        <button
+                          type="button"
+                          aria-label="Eliminar compra"
+                          onClick={() => handleDelete(p)}
+                          className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 transition"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      )}
                       <ChevronRight size={14} className="text-slate-300 dark:text-slate-600" />
                     </div>
                   </td>
@@ -311,13 +319,15 @@ export default function ComprasPage() {
                 >
                   <Edit size={12} /> Editar
                 </button>
-                <button
-                  type="button"
-                  onClick={() => handleDelete(selected)}
-                  className="flex items-center gap-1 px-3 py-1.5 text-[12px] text-red-600 dark:text-red-400 border border-red-200 dark:border-red-500/30 rounded-lg hover:bg-red-50 dark:hover:bg-red-500/10 transition"
-                >
-                  <Trash2 size={12} /> Eliminar
-                </button>
+                {canDelete && (
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(selected)}
+                    className="flex items-center gap-1 px-3 py-1.5 text-[12px] text-red-600 dark:text-red-400 border border-red-200 dark:border-red-500/30 rounded-lg hover:bg-red-50 dark:hover:bg-red-500/10 transition"
+                  >
+                    <Trash2 size={12} /> Eliminar
+                  </button>
+                )}
                 <button
                   type="button"
                   aria-label="Cerrar"
