@@ -29,3 +29,17 @@ export function authorize(...roles: string[]) {
     next();
   };
 }
+
+// Los endpoints que solo dependen de la cookie httpOnly (sin Authorization header)
+// no tienen ninguna defensa contra CSRF por sí solos — un sitio malicioso podría
+// disparar un POST cross-site y el navegador adjuntaría la cookie igual (más aún
+// en producción, donde sameSite es "none" para permitir el dominio cruzado
+// frontend/backend). Exigir este header fuerza un preflight de CORS en cualquier
+// request cross-origin, que ya rechazamos salvo que el origin esté en la lista
+// blanca — y un <form>/<img> clásico no puede agregar headers personalizados.
+export function requireCsrfHeader(req: Request, _res: Response, next: NextFunction) {
+  if (req.headers['x-requested-with'] !== 'XMLHttpRequest') {
+    return next(new AppError('Solicitud no permitida', 403));
+  }
+  next();
+}

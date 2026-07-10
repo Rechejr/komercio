@@ -106,19 +106,24 @@ router.post('/', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE'), purchaseItemVali
         },
       });
 
-      interface PurchaseProductRow { id: string; stock: number; }
+      interface PurchaseProductRow { id: string; stock: number; minStock: number; lowStockNotifiedAt: Date | null; }
       for (const item of items) {
         // Lock row — provides accurate previousStock for the movement log
         const [locked] = await tx.$queryRawUnsafe<PurchaseProductRow[]>(
-          'SELECT id, stock FROM products WHERE id::text = $1 FOR UPDATE',
+          'SELECT id, stock, "minStock", "lowStockNotifiedAt" FROM products WHERE id::text = $1 FOR UPDATE',
           item.productId,
         );
         if (!locked) continue;
         const qty = parseFloat(item.quantity);
         const newStock = locked.stock + qty;
+        // Reabastecer por encima del mínimo limpia la marca de "ya notificado".
+        const restocked = newStock > locked.minStock && !!locked.lowStockNotifiedAt;
         await tx.product.update({
           where: { id: item.productId },
-          data: { stock: { increment: qty }, costPrice: parseFloat(item.unitCost) },
+          data: {
+            stock: { increment: qty }, costPrice: parseFloat(item.unitCost),
+            ...(restocked ? { lowStockNotifiedAt: null } : {}),
+          },
         });
         await tx.inventoryMovement.create({
           data: {
@@ -175,7 +180,7 @@ router.put('/:id', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE'), purchaseItemVa
       const newItemByProduct = new Map<string, any>(items.map((i: any) => [i.productId, i]));
       const productIds = new Set<string>([...oldDetailByProduct.keys(), ...newItemByProduct.keys()]);
 
-      interface ProductRow { id: string; stock: number; allowNegativeStock: boolean; name: string; }
+      interface ProductRow { id: string; stock: number; allowNegativeStock: boolean; name: string; minStock: number; lowStockNotifiedAt: Date | null; }
       for (const productId of productIds) {
         const oldDetail = oldDetailByProduct.get(productId);
         const newItem: any = newItemByProduct.get(productId);
@@ -184,7 +189,7 @@ router.put('/:id', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE'), purchaseItemVa
         const delta = newQty - oldQty;
 
         const [locked] = await tx.$queryRawUnsafe<ProductRow[]>(
-          'SELECT id, stock, "allowNegativeStock", name FROM products WHERE id::text = $1 FOR UPDATE',
+          'SELECT id, stock, "allowNegativeStock", name, "minStock", "lowStockNotifiedAt" FROM products WHERE id::text = $1 FOR UPDATE',
           productId,
         );
         if (!locked) continue;
@@ -198,9 +203,14 @@ router.put('/:id', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE'), purchaseItemVa
             );
           }
           const unitCost = newItem ? parseFloat(newItem.unitCost) : Number(oldDetail!.unitCost);
+          // Reabastecer por encima del mínimo limpia la marca de "ya notificado".
+          const restocked = newStock > locked.minStock && !!locked.lowStockNotifiedAt;
           await tx.product.update({
             where: { id: productId },
-            data: { stock: { increment: delta }, ...(newItem ? { costPrice: unitCost } : {}) },
+            data: {
+              stock: { increment: delta }, ...(newItem ? { costPrice: unitCost } : {}),
+              ...(restocked ? { lowStockNotifiedAt: null } : {}),
+            },
           });
           await tx.inventoryMovement.create({
             data: {

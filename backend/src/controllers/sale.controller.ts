@@ -9,6 +9,7 @@ import { emitToBusinesss, socketEvents } from '../config/socket';
 import { notifyLowStockBatch } from '../services/notification.service';
 import { getPlan } from '../config/plans';
 import { acquirePlanLimitLock } from '../utils/planLimitLock';
+import { logger } from '../config/logger';
 
 // Checked once per process on first sale; avoids breaking when migration is pending.
 let _counterTableReady: boolean | undefined;
@@ -194,8 +195,13 @@ export const saleController = {
         throw new AppError('Uno o más productos no existen, están inactivos o no pertenecen a este negocio', 400);
       }
 
-      // Validate caller-supplied branchId belongs to this business
-      if (branchId && branchId !== req.user!.branchId) {
+      // Un usuario con sucursal fija (cajero/staff) no puede facturar a nombre de
+      // otra sucursal solo con mandar otro branchId en el body — antes se validaba
+      // que la sucursal perteneciera al negocio, pero no que fuera la del usuario.
+      const userBranchId = req.user!.branchId;
+      if (userBranchId) {
+        if (branchId && branchId !== userBranchId) throw new AppError('No tienes acceso a esta sucursal', 403);
+      } else if (branchId) {
         const branch = await prisma.branch.findFirst({
           where: { id: branchId, businessId: req.user!.businessId },
           select: { id: true },
@@ -203,7 +209,7 @@ export const saleController = {
         if (!branch) throw new AppError('Sucursal no válida para este negocio', 403);
       }
 
-      const effectiveBranchId = branchId || req.user?.branchId;
+      const effectiveBranchId = userBranchId || branchId;
       if (!effectiveBranchId) throw new AppError('No se encontró una sucursal para el usuario', 400);
 
       // sale_number_counters guarantees uniqueness atomically; retry loop kept as
@@ -247,6 +253,7 @@ export const saleController = {
         interface LockedProduct {
           id: string; stock: number; name: string; allowNegativeStock: boolean;
           salePrice: number; costPrice: number; taxRate: number; minStock: number;
+          lowStockNotifiedAt: Date | null;
         }
         // Lock each row individually (sorted order prevents deadlocks).
         // Decimal columns (salePrice, costPrice, taxRate) are returned as strings by the pg
@@ -256,7 +263,7 @@ export const saleController = {
         for (const pid of [...productIds].sort()) {
           const rows = await tx.$queryRawUnsafe<any[]>(
             `SELECT id, stock, name, "allowNegativeStock",
-                    "salePrice", "costPrice", "taxRate", "minStock"
+                    "salePrice", "costPrice", "taxRate", "minStock", "lowStockNotifiedAt"
              FROM products
              WHERE id::text = $1
                AND "deletedAt" IS NULL AND "isActive" = true
@@ -274,6 +281,7 @@ export const saleController = {
               costPrice: Number(r.costPrice),
               taxRate: Number(r.taxRate),
               minStock: Number(r.minStock),
+              lowStockNotifiedAt: r.lowStockNotifiedAt,
             });
           }
         }
@@ -369,7 +377,14 @@ export const saleController = {
         for (const [pid, qty] of qtyByProduct) {
           const product = productMap.get(pid)!;
           const newStock = product.stock - qty;
-          await tx.product.update({ where: { id: pid }, data: { stock: { decrement: qty } } });
+          // Solo se notifica la primera vez que el stock cae al mínimo — si ya se
+          // había notificado y sigue sin reabastecerse, las siguientes ventas no
+          // deben volver a disparar la misma alerta (antes se avisaba en cada venta).
+          const isNewLowStock = product.minStock > 0 && newStock <= product.minStock && !product.lowStockNotifiedAt;
+          await tx.product.update({
+            where: { id: pid },
+            data: { stock: { decrement: qty }, ...(isNewLowStock ? { lowStockNotifiedAt: new Date() } : {}) },
+          });
           await tx.inventoryMovement.create({
             data: {
               productId: pid,
@@ -384,7 +399,7 @@ export const saleController = {
               totalCost: product.costPrice * qty,
             },
           });
-          if (product.minStock > 0 && newStock <= product.minStock) {
+          if (isNewLowStock) {
             lowStockProducts.push({ id: product.id, name: product.name, stock: newStock, minStock: product.minStock });
           }
         }
@@ -453,7 +468,9 @@ export const saleController = {
           emitToBusinesss(businessId, socketEvents.LOW_STOCK_ALERT, { product });
         }
         if (lowStockProducts.length > 0) {
-          await notifyLowStockBatch(businessId, lowStockProducts).catch(() => {});
+          await notifyLowStockBatch(businessId, lowStockProducts).catch((err) => {
+            logger.error(`Fallo al notificar stock bajo (businessId=${businessId}): ${err?.message || err}`);
+          });
         }
         await cache.del(`dashboard:${businessId}`);
       }

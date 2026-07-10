@@ -251,8 +251,17 @@ describe('GET /api/v1/auth/me', () => {
 describe('POST /api/v1/auth/refresh-token', () => {
   beforeEach(() => jest.clearAllMocks());
 
+  it('retorna 403 cuando falta el header anti-CSRF', async () => {
+    const res = await request(app)
+      .post('/api/v1/auth/refresh-token')
+      .set('Cookie', 'refreshToken=valid-refresh');
+    expect(res.status).toBe(403);
+  });
+
   it('retorna 401 cuando no hay cookie refreshToken', async () => {
-    const res = await request(app).post('/api/v1/auth/refresh-token');
+    const res = await request(app)
+      .post('/api/v1/auth/refresh-token')
+      .set('X-Requested-With', 'XMLHttpRequest');
     expect(res.status).toBe(401);
   });
 
@@ -260,7 +269,8 @@ describe('POST /api/v1/auth/refresh-token', () => {
     (mockPrisma.refreshToken.findUnique as jest.Mock).mockResolvedValue(null);
     const res = await request(app)
       .post('/api/v1/auth/refresh-token')
-      .set('Cookie', 'refreshToken=invalid-token');
+      .set('Cookie', 'refreshToken=invalid-token')
+      .set('X-Requested-With', 'XMLHttpRequest');
     expect(res.status).toBe(401);
   });
 
@@ -276,7 +286,8 @@ describe('POST /api/v1/auth/refresh-token', () => {
 
     const res = await request(app)
       .post('/api/v1/auth/refresh-token')
-      .set('Cookie', 'refreshToken=valid-refresh');
+      .set('Cookie', 'refreshToken=valid-refresh')
+      .set('X-Requested-With', 'XMLHttpRequest');
 
     expect(res.status).toBe(200);
     expect(res.body.data.accessToken).toBe('mock-access-token');

@@ -246,6 +246,10 @@ model Product {
   taxRate            Decimal             @default(0)
   isActive           Boolean             @default(true)
   allowNegativeStock Boolean             @default(false)
+  // Marca cuándo se notificó por última vez el stock bajo — evita reenviar la
+  // misma alerta en cada venta mientras el stock sigue bajo el mínimo; se
+  // limpia (null) cuando el producto se reabastece por encima del mínimo.
+  lowStockNotifiedAt DateTime?
   saleDetails        SaleDetail[]
   purchaseDetails    PurchaseDetail[]
   inventoryMovements InventoryMovement[]

@@ -83,7 +83,7 @@ app.use(cors({
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
 }));
 
 // Rate limiting
@@ -106,6 +106,29 @@ const authLimiter = rateLimit({
   skipSuccessfulRequests: true,
   store: makeRateLimitStore('rl:auth:'),
   message: { error: 'Demasiados intentos, espere 15 minutos antes de reintentar.' },
+});
+
+// Menos estricto que authLimiter — para registro/cambio de contraseña, donde
+// bloquear tan agresivo estorbaría el uso normal, pero sí conviene un tope
+// más bajo que el límite general de la API.
+const moderateAuthLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: process.env.NODE_ENV === 'production' ? 20 : 1_000,
+  standardHeaders: true,
+  legacyHeaders: false,
+  store: makeRateLimitStore('rl:auth-mod:'),
+  message: { error: 'Demasiados intentos, espere 15 minutos antes de reintentar.' },
+});
+
+// El catálogo público no requiere sesión — sin este límite, cualquiera podría
+// raspar el catálogo completo de un negocio repetidamente sin restricción.
+const publicCatalogLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: process.env.NODE_ENV === 'production' ? 60 : 1_000,
+  standardHeaders: true,
+  legacyHeaders: false,
+  store: makeRateLimitStore('rl:catalog:'),
+  message: { error: 'Demasiadas solicitudes, intente de nuevo más tarde.' },
 });
 
 // Body parsing — rawBody capturado globalmente para la verificación de firma del webhook Wompi
@@ -136,7 +159,13 @@ const apiPrefix = '/api/v1';
 app.use(`${apiPrefix}/auth/login`, authLimiter);
 app.use(`${apiPrefix}/auth/forgot-password`, authLimiter);
 app.use(`${apiPrefix}/auth/resend-verification`, authLimiter);
-app.use(`${apiPrefix}/auth/refresh`, authLimiter);
+// La ruta real es /auth/refresh-token, no /auth/refresh — con el prefijo viejo
+// este limiter nunca hacía match y ese endpoint solo quedaba cubierto por el
+// límite general de la API (mucho más permisivo).
+app.use(`${apiPrefix}/auth/refresh-token`, authLimiter);
+app.use(`${apiPrefix}/auth/register`, moderateAuthLimiter);
+app.use(`${apiPrefix}/auth/change-password`, moderateAuthLimiter);
+app.use(`${apiPrefix}/auth/reset-password`, moderateAuthLimiter);
 app.use(`${apiPrefix}/auth`, authRoutes);
 app.use(`${apiPrefix}/users`, userRoutes);
 app.use(`${apiPrefix}/business`, businessRoutes);
@@ -158,7 +187,7 @@ app.use(`${apiPrefix}/exports`, exportRoutes);
 app.use(`${apiPrefix}/superadmin`, superadminRoutes);
 app.use(`${apiPrefix}/uploads`, uploadRoutes);
 app.use(`${apiPrefix}/payments`, paymentRoutes);
-app.use(`${apiPrefix}/public`, publicRoutes);
+app.use(`${apiPrefix}/public`, publicCatalogLimiter, publicRoutes);
 app.use(`${apiPrefix}/search`, searchRoutes);
 
 // Error handling

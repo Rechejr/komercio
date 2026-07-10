@@ -7,6 +7,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { Bell, Check, AlertTriangle, Info, CheckCheck, ArrowRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import toast from 'react-hot-toast';
 
 interface NotificationPanelProps {
   open: boolean;
@@ -112,11 +113,18 @@ export function NotificationPanel({ open, onClose, anchorRect }: NotificationPan
               <button
                 type="button"
                 key={n.id}
-                onClick={() => {
+                onClick={async () => {
                   if (!n.isRead) markRead.mutate(n.id);
-                  if (isLowStock) {
+                  if (!isLowStock) return;
+                  onClose();
+                  // Un aviso viejo puede apuntar a un producto que ya se borró — se
+                  // confirma antes de navegar, en vez de mandar al usuario a
+                  // inventario para que descubra ahí que no hay nada que ver.
+                  try {
+                    await api.get(`/products/${n.data.productId}`);
                     router.push(`/inventario?productId=${n.data.productId}`);
-                    onClose();
+                  } catch {
+                    toast.error('Ese producto ya no existe');
                   }
                 }}
                 className={cn(

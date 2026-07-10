@@ -8,6 +8,8 @@ import { emitToBusinesss, socketEvents } from '../config/socket';
 import { notifyLowStock } from '../services/notification.service';
 import { getPlan } from '../config/plans';
 import { acquirePlanLimitLock } from '../utils/planLimitLock';
+import { deleteImage } from '../config/cloudinary';
+import { logger } from '../config/logger';
 
 const CACHE_TTL = 300;
 
@@ -87,15 +89,21 @@ export const productController = {
       if (!data.salePrice && data.salePrice !== 0) throw new AppError('El precio de venta es requerido', 400);
       const businessId = req.user!.businessId;
 
-      // Validate caller-supplied branchId belongs to this business
-      const branchId = data.branchId || req.user?.branchId || null;
-      if (data.branchId && data.branchId !== req.user?.branchId) {
+      // Un usuario con sucursal fija (cajero/staff) no puede crear productos a
+      // nombre de otra sucursal solo con mandar otro branchId en el body — antes
+      // se validaba que la sucursal perteneciera al negocio, pero no que fuera la
+      // del usuario.
+      const userBranchId = req.user?.branchId || null;
+      if (userBranchId) {
+        if (data.branchId && data.branchId !== userBranchId) throw new AppError('No tienes acceso a esta sucursal', 403);
+      } else if (data.branchId) {
         const branch = await prisma.branch.findFirst({
           where: { id: data.branchId, businessId },
           select: { id: true },
         });
         if (!branch) throw new AppError('Sucursal no válida para este negocio', 403);
       }
+      const branchId = userBranchId || data.branchId || null;
 
       if (data.supplierId) {
         const sup = await prisma.supplier.findFirst({ where: { id: data.supplierId, businessId, deletedAt: null } });
@@ -220,6 +228,15 @@ export const productController = {
         emitToBusinesss(businessId, socketEvents.INVENTORY_UPDATED, { type: 'updated', product });
       }
 
+      // Limpieza best-effort de imágenes reemplazadas/quitadas — de lo contrario
+      // quedan huérfanas en Cloudinary para siempre (nadie vuelve a referenciarlas).
+      if (Array.isArray(data.images)) {
+        const removed = (existing.images || []).filter((url) => !data.images.includes(url));
+        for (const url of removed) {
+          deleteImage(url).catch((err) => logger.error(`Fallo al borrar imagen huérfana de Cloudinary: ${err?.message || err}`));
+        }
+      }
+
       return success(res, product, 'Producto actualizado');
     } catch (err) {
       next(err);
@@ -237,6 +254,13 @@ export const productController = {
       await prisma.product.update({ where: { id }, data: { deletedAt: new Date() } });
       await cache.del(`product:${req.user!.businessId}:${id}`);
 
+      // No hay endpoint de restauración — una vez borrado, el producto es
+      // inalcanzable para siempre, así que sus imágenes en Cloudinary quedarían
+      // huérfanas si no se limpian aquí (best-effort, no bloquea la respuesta).
+      for (const url of product.images || []) {
+        deleteImage(url).catch((err) => logger.error(`Fallo al borrar imagen huérfana de Cloudinary: ${err?.message || err}`));
+      }
+
       return success(res, null, 'Producto eliminado');
     } catch (err) {
       next(err);
@@ -252,16 +276,16 @@ export const productController = {
       interface AdjustProductRow {
         id: string; stock: number; name: string;
         allowNegativeStock: boolean; minStock: number; businessId: string;
-        costPrice: number;
+        costPrice: number; lowStockNotifiedAt: Date | null;
       }
 
-      const { newStock, locked } = await prisma.$transaction(async (tx) => {
+      const { newStock, locked, isNewLowStock } = await prisma.$transaction(async (tx) => {
         // Lock row before reading — prevents two concurrent adjustments from both reading
         // the same previousStock value and producing an inconsistent movement log.
         // costPrice is Decimal(65,30) — ::float8 cast on NUMERIC causes a Prisma
         // type-resolution error, so receive as string and convert with Number().
         const rows = await tx.$queryRawUnsafe<any[]>(
-          `SELECT id, stock, name, "allowNegativeStock", "minStock", "businessId", "costPrice"
+          `SELECT id, stock, name, "allowNegativeStock", "minStock", "businessId", "costPrice", "lowStockNotifiedAt"
            FROM products WHERE id::text = $1 AND "deletedAt" IS NULL FOR UPDATE`,
           id,
         );
@@ -274,6 +298,7 @@ export const productController = {
           minStock: Number(raw.minStock),
           businessId: raw.businessId,
           costPrice: Number(raw.costPrice),
+          lowStockNotifiedAt: raw.lowStockNotifiedAt,
         } : undefined;
 
         if (!locked) throw new AppError('Producto no encontrado', 404);
@@ -289,9 +314,18 @@ export const productController = {
           throw new AppError('Stock insuficiente', 400);
         }
 
+        // Reabastecer por encima del mínimo limpia la marca de "ya notificado", para
+        // que la próxima vez que vuelva a caer se avise de nuevo; y solo se notifica
+        // la primera vez que cae al mínimo (antes se avisaba en cada ajuste).
+        const restocked = newStock > locked.minStock && !!locked.lowStockNotifiedAt;
+        const isNewLowStock = newStock <= locked.minStock && !locked.lowStockNotifiedAt;
         await tx.product.update({
           where: { id },
-          data: { stock: type === 'IN' ? { increment: qty } : type === 'OUT' ? { decrement: qty } : newStock },
+          data: {
+            stock: type === 'IN' ? { increment: qty } : type === 'OUT' ? { decrement: qty } : newStock,
+            ...(restocked ? { lowStockNotifiedAt: null } : {}),
+            ...(isNewLowStock ? { lowStockNotifiedAt: new Date() } : {}),
+          },
         });
 
         await tx.inventoryMovement.create({
@@ -307,13 +341,13 @@ export const productController = {
           },
         });
 
-        return { newStock, locked };
+        return { newStock, locked, isNewLowStock };
       });
 
       await cache.del(`product:${req.user!.businessId}:${id}`);
 
       const businessId = req.user?.businessId;
-      if (businessId && newStock <= locked.minStock) {
+      if (businessId && isNewLowStock) {
         const lowStockProduct = { id, name: locked.name, stock: newStock, minStock: locked.minStock };
         emitToBusinesss(businessId, socketEvents.LOW_STOCK_ALERT, { product: lowStockProduct });
         await notifyLowStock(businessId, lowStockProduct);

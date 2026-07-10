@@ -10,9 +10,12 @@ export function initSocket(httpServer: HTTPServer): SocketServer {
   io = new SocketServer(httpServer, {
     cors: {
       origin: (origin, callback) => {
-        if (!origin || /^http:\/\/localhost(:\d+)?$/.test(origin)) return callback(null, true);
-        const allowed = process.env.CORS_ORIGIN?.split(',') || [];
-        callback(allowed.includes(origin) ? null : new Error('CORS'), allowed.includes(origin));
+        const isDev = process.env.NODE_ENV !== 'production';
+        if (!origin && isDev) return callback(null, true);
+        if (isDev && origin && /^http:\/\/localhost(:\d+)?$/.test(origin)) return callback(null, true);
+        const allowed = (process.env.CORS_ORIGIN?.split(',') || []).map((s) => s.trim());
+        const ok = allowed.includes(origin ?? '');
+        callback(ok ? null : new Error('CORS'), ok);
       },
       credentials: true,
     },

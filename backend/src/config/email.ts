@@ -36,7 +36,21 @@ export const emailService = {
   },
 };
 
+// El nombre viene del usuario (registro) y se inserta crudo en HTML — sin
+// escapar, un nombre como "<img src=x onerror=...>" se ejecutaría en el
+// cliente de correo de quien lo reciba (o en el propio nombre, vía self-XSS
+// contra el usuario que lo registró).
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function verificationTemplate(name: string, url: string) {
+  const safeName = escapeHtml(name);
   return `
 <!DOCTYPE html>
 <html>
@@ -49,7 +63,7 @@ function verificationTemplate(name: string, url: string) {
           <h1 style="color:#fff;margin:0;font-size:24px;">Komercio</h1>
         </td></tr>
         <tr><td style="padding:40px 32px;">
-          <p style="font-size:16px;color:#374151;margin:0 0 8px;">Hola, <strong>${name}</strong></p>
+          <p style="font-size:16px;color:#374151;margin:0 0 8px;">Hola, <strong>${safeName}</strong></p>
           <p style="font-size:15px;color:#6b7280;margin:0 0 32px;">Gracias por registrarte. Haz clic en el botón para verificar tu correo y activar tu cuenta.</p>
           <div style="text-align:center;margin:0 0 32px;">
             <a href="${url}" style="background:#2563eb;color:#fff;text-decoration:none;padding:14px 32px;border-radius:6px;font-size:15px;font-weight:bold;display:inline-block;">Verificar mi cuenta</a>
@@ -67,6 +81,7 @@ function verificationTemplate(name: string, url: string) {
 }
 
 function resetTemplate(name: string, url: string) {
+  const safeName = escapeHtml(name);
   return `
 <!DOCTYPE html>
 <html>
@@ -79,7 +94,7 @@ function resetTemplate(name: string, url: string) {
           <h1 style="color:#fff;margin:0;font-size:24px;">Komercio</h1>
         </td></tr>
         <tr><td style="padding:40px 32px;">
-          <p style="font-size:16px;color:#374151;margin:0 0 8px;">Hola, <strong>${name}</strong></p>
+          <p style="font-size:16px;color:#374151;margin:0 0 8px;">Hola, <strong>${safeName}</strong></p>
           <p style="font-size:15px;color:#6b7280;margin:0 0 32px;">Recibimos una solicitud para restablecer tu contraseña. Haz clic en el botón para continuar.</p>
           <div style="text-align:center;margin:0 0 32px;">
             <a href="${url}" style="background:#dc2626;color:#fff;text-decoration:none;padding:14px 32px;border-radius:6px;font-size:15px;font-weight:bold;display:inline-block;">Restablecer contraseña</a>

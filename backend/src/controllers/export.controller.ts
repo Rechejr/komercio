@@ -25,6 +25,15 @@ function fmtMoney(n: unknown): number {
   return Number(n || 0);
 }
 
+// Previene inyección de fórmulas en Excel/Sheets (CWE-1236): un nombre de
+// producto/cliente/proveedor/categoría que empiece por =, +, -, @ o tab se
+// interpreta como fórmula al abrir el archivo — se antepone un apóstrofe para
+// forzar que se trate como texto plano.
+function safeStr(val: unknown): string {
+  const s = val == null ? '' : String(val);
+  return /^[=+\-@\t\r]/.test(s) ? `'${s}` : s;
+}
+
 function initStreamWriter(res: Response, filename: string) {
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
@@ -108,8 +117,8 @@ export const exportController = {
           ws1.addRow({
             invoice: s.invoiceNumber,
             date: fmtDate(s.createdAt),
-            customer: s.customer?.name || 'Mostrador',
-            seller: s.user?.name || '',
+            customer: safeStr(s.customer?.name || 'Mostrador'),
+            seller: safeStr(s.user?.name || ''),
             method: String(s.paymentMethod),
             status: s.status,
             subtotal: fmtMoney(s.subtotal),
@@ -121,9 +130,9 @@ export const exportController = {
             ws2.addRow({
               invoice: s.invoiceNumber,
               date: fmtDate(s.createdAt),
-              customer: s.customer?.name || 'Mostrador',
-              code: d.product?.code || '',
-              product: d.product?.name || '',
+              customer: safeStr(s.customer?.name || 'Mostrador'),
+              code: safeStr(d.product?.code || ''),
+              product: safeStr(d.product?.name || ''),
               qty: d.quantity,
               price: fmtMoney(d.unitPrice),
               disc: d.discountPct,
@@ -207,20 +216,20 @@ export const exportController = {
           ws1.addRow({
             invoice: p.invoiceNumber || '',
             date: fmtDate(p.purchaseDate),
-            supplier: p.supplier?.name || '',
+            supplier: safeStr(p.supplier?.name || ''),
             items: p.details.length,
             subtotal: fmtMoney(p.subtotal),
             tax: fmtMoney(p.taxAmount),
             total: fmtMoney(p.total),
-            notes: p.notes || '',
+            notes: safeStr(p.notes || ''),
           }).commit();
           for (const d of p.details) {
             ws2.addRow({
               invoice: p.invoiceNumber || '',
               date: fmtDate(p.purchaseDate),
-              supplier: p.supplier?.name || '',
-              code: d.product?.code || '',
-              product: d.product?.name || '',
+              supplier: safeStr(p.supplier?.name || ''),
+              code: safeStr(d.product?.code || ''),
+              product: safeStr(d.product?.name || ''),
               qty: d.quantity,
               cost: fmtMoney(d.unitCost),
               taxRate: d.taxRate,
@@ -542,8 +551,8 @@ export const exportController = {
         const profit = rev - cogs;
         const margin = rev > 0 ? pct((profit / rev) * 100) : 0;
         ws3.addRow({
-          name: prod?.name || tp.productId,
-          code: prod?.code || '',
+          name: safeStr(prod?.name || tp.productId),
+          code: safeStr(prod?.code || ''),
           qty: tp.qty,
           revenue: money(rev),
           cogs: money(cogs),
@@ -566,7 +575,7 @@ export const exportController = {
         c.alignment = { horizontal: 'center' };
       });
       for (const [cat, amt] of [...expByCat.entries()].sort((a, b) => b[1] - a[1])) {
-        ws4.addRow({ cat, amount: money(amt), pct: totalExpenses > 0 ? pct((amt / totalExpenses) * 100) + '%' : '0%' });
+        ws4.addRow({ cat: safeStr(cat), amount: money(amt), pct: totalExpenses > 0 ? pct((amt / totalExpenses) * 100) + '%' : '0%' });
       }
       const exp4total = ws4.addRow({ cat: 'TOTAL', amount: money(totalExpenses), pct: '100%' });
       exp4total.font = { bold: true };
@@ -597,7 +606,7 @@ export const exportController = {
         const val   = cost * Number(p.stock);
         const margin = cost > 0 ? pct(((price - cost) / cost) * 100) : 0;
         totalInvValue += val;
-        ws5.addRow({ name: p.name, code: p.code || '', cat: p.category?.name || '—', stock: Number(p.stock), cost: money(cost), price: money(price), value: money(val), margin: margin + '%' });
+        ws5.addRow({ name: safeStr(p.name), code: safeStr(p.code || ''), cat: safeStr(p.category?.name || '—'), stock: Number(p.stock), cost: money(cost), price: money(price), value: money(val), margin: margin + '%' });
       }
       const inv5total = ws5.addRow({ name: `TOTAL (${inventory.length} productos)`, code: '', cat: '', stock: '', cost: '', price: '', value: money(totalInvValue), margin: '' });
       inv5total.font = { bold: true };
@@ -624,7 +633,7 @@ export const exportController = {
         const limit = Number(r.creditLimit);
         const usedPct = limit > 0 ? pct((debt / limit) * 100) : null;
         totalDebt += debt;
-        ws6.addRow({ name: r.name, doc: r.document || '—', debt: money(debt), limit: limit > 0 ? money(limit) : '—', pct: usedPct !== null ? usedPct + '%' : '—' });
+        ws6.addRow({ name: safeStr(r.name), doc: safeStr(r.document || '—'), debt: money(debt), limit: limit > 0 ? money(limit) : '—', pct: usedPct !== null ? usedPct + '%' : '—' });
       }
       if (receivables.length > 0) {
         const rec6total = ws6.addRow({ name: `TOTAL (${receivables.length} clientes)`, doc: '', debt: money(totalDebt), limit: '', pct: '' });
@@ -687,11 +696,11 @@ export const exportController = {
           total += Number(e.amount || 0);
           ws.addRow({
             date: fmtDate(e.date),
-            desc: e.description,
-            category: e.category?.name || 'Sin categoría',
+            desc: safeStr(e.description),
+            category: safeStr(e.category?.name || 'Sin categoría'),
             method: String(e.paymentMethod),
             amount: fmtMoney(e.amount),
-            notes: e.notes || '',
+            notes: safeStr(e.notes || ''),
           }).commit();
         }
 

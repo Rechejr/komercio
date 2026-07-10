@@ -7,7 +7,9 @@ export const api = axios.create({
   baseURL: API_URL,
   withCredentials: true,
   timeout: 30000,
-  headers: { 'Content-Type': 'application/json' },
+  // X-Requested-With: el backend lo exige en /auth/refresh-token y /auth/logout
+  // como protección CSRF — un <form>/<img> cross-site no puede agregar headers.
+  headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
 });
 
 let isRefreshing = false;
@@ -43,7 +45,11 @@ api.interceptors.response.use(
     isRefreshing = true;
 
     try {
-      const { data } = await axios.post(`${API_URL}/auth/refresh-token`, {}, { withCredentials: true, timeout: 8000 });
+      const { data } = await axios.post(`${API_URL}/auth/refresh-token`, {}, {
+        withCredentials: true,
+        timeout: 8000,
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+      });
       const newToken = data.data.accessToken;
       useAuthStore.getState().setAccessToken(newToken);
       processQueue(null, newToken);

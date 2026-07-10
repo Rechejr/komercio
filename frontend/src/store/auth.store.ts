@@ -84,7 +84,12 @@ export const useAuthStore = create<AuthState>()(
           // and the redirect below would never fire. AbortController caps it.
           const controller = new AbortController();
           const timer = setTimeout(() => controller.abort(), 5000);
-          fetch(`${API_URL}/auth/logout`, { method: 'POST', credentials: 'include', signal: controller.signal })
+          fetch(`${API_URL}/auth/logout`, {
+            method: 'POST',
+            credentials: 'include',
+            signal: controller.signal,
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+          })
             .catch(() => {})
             .finally(() => { clearTimeout(timer); window.location.href = '/login'; });
         }

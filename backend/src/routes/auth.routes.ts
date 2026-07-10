@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { body } from 'express-validator';
 import { rateLimit } from 'express-rate-limit';
 import { authController } from '../controllers/auth.controller';
-import { authenticate } from '../middlewares/auth';
+import { authenticate, requireCsrfHeader } from '../middlewares/auth';
 import { validate } from '../middlewares/validate';
 
 const loginLimiter = rateLimit({
@@ -43,8 +43,8 @@ router.post('/google',
   authController.googleAuth,
 );
 
-router.post('/refresh-token', authController.refreshToken);
-router.post('/logout', authController.logout);
+router.post('/refresh-token', requireCsrfHeader, authController.refreshToken);
+router.post('/logout', requireCsrfHeader, authController.logout);
 
 router.post('/forgot-password',
   [body('email').isEmail().normalizeEmail()],

@@ -9,7 +9,7 @@ const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
 
 interface Product {
   id: string; name: string; description?: string;
-  salePrice: number; unit: string; stock: number;
+  salePrice: number; unit: string; inStock: boolean;
   image?: string; category?: { id: string; name: string };
 }
 interface Business {
@@ -69,9 +69,9 @@ export default function CatalogoPage() {
     return matchSearch && matchCat;
   }), [products, search, catFilter]);
 
-  const inStock  = filtered.filter(p => p.stock > 0);
-  const outStock = filtered.filter(p => p.stock <= 0);
-  const grouped  = [...inStock, ...outStock];
+  const availableList   = filtered.filter(p => p.inStock);
+  const unavailableList = filtered.filter(p => !p.inStock);
+  const grouped  = [...availableList, ...unavailableList];
 
   function contactWhatsApp() {
     if (!business?.phone) return;
@@ -121,7 +121,7 @@ export default function CatalogoPage() {
                 </span>
               )}
               <span className="flex items-center gap-1 text-[12px] text-[#0DA06A] font-medium">
-                <ShoppingBag size={11} /> {products.filter(p => p.stock > 0).length} productos
+                <ShoppingBag size={11} /> {products.filter(p => p.inStock).length} productos
               </span>
             </div>
           </div>
@@ -184,7 +184,7 @@ export default function CatalogoPage() {
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             {grouped.map(p => {
-              const available = p.stock > 0;
+              const available = p.inStock;
               return (
                 <div
                   key={p.id}

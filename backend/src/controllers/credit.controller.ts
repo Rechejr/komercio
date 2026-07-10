@@ -49,7 +49,7 @@ export const creditController = {
           payments: { orderBy: { createdAt: 'desc' } },
         },
       });
-      if (!credit) throw new AppError('CrÃ©dito no encontrado', 404);
+      if (!credit) throw new AppError('Crédito no encontrado', 404);
       return success(res, credit);
     } catch (err) {
       next(err);
@@ -87,7 +87,7 @@ export const creditController = {
       });
 
       await cache.del(`dashboard:${req.user!.businessId}`).catch(() => {});
-      return created(res, credit, 'CrÃ©dito registrado');
+      return created(res, credit, 'Crédito registrado');
     } catch (err) {
       next(err);
     }
@@ -114,8 +114,8 @@ export const creditController = {
             AND cu."businessId" = ${businessId}
           FOR UPDATE
         `;
-        if (!locked) throw new AppError('CrÃ©dito no encontrado', 404);
-        if (locked.status === 'PAID') throw new AppError('Este crÃ©dito ya estÃ¡ saldado', 400);
+        if (!locked) throw new AppError('Crédito no encontrado', 404);
+        if (locked.status === 'PAID') throw new AppError('Este crédito ya está saldado', 400);
 
         const currentBalance = Number(locked.balance);
         if (paymentAmount > currentBalance) throw new AppError('El pago supera el saldo pendiente', 400);
