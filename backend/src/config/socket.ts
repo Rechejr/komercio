@@ -81,6 +81,7 @@ export const socketEvents = {
   CASH_REGISTER_OPENED: 'cash_register_opened',
   CASH_REGISTER_CLOSED: 'cash_register_closed',
   NEW_NOTIFICATION: 'new_notification',
+  CREDIT_OVERDUE: 'credit_overdue',
 };
 
 export function emitToBusinesss(businessId: string, event: string, data: unknown) {

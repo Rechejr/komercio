@@ -69,3 +69,42 @@ export async function notifyLowStockBatch(
 export async function notifyLowStock(businessId: string, product: { id: string; name: string; stock: number; minStock: number }) {
   await notifyLowStockBatch(businessId, [product]);
 }
+
+// Batch variant para créditos recién marcados como vencidos — mismo patrón que
+// notifyLowStockBatch: una sola consulta de administradores y un solo INSERT.
+export async function notifyCreditsOverdueBatch(
+  businessId: string,
+  credits: Array<{ id: string; customerName: string; balance: number }>,
+) {
+  if (credits.length === 0) return;
+
+  const managers = await prisma.user.findMany({
+    where: { branch: { businessId }, role: { in: ['ADMIN', 'SUPERVISOR'] }, deletedAt: null, isActive: true },
+    select: { id: true },
+  });
+
+  if (managers.length === 0) return;
+  const managerIds = managers.map((m) => m.id);
+
+  await prisma.notification.createMany({
+    data: credits.flatMap((credit) =>
+      managerIds.map((userId) => ({
+        userId,
+        title: 'Fiado vencido',
+        message: `El fiado de ${credit.customerName} venció — saldo pendiente de $${credit.balance.toLocaleString('es-CO')}.`,
+        type: 'WARNING',
+        data: { creditId: credit.id, kind: 'CREDIT_OVERDUE' } as any,
+      })),
+    ),
+  });
+
+  for (const credit of credits) {
+    const payload = {
+      title: 'Fiado vencido',
+      message: `El fiado de ${credit.customerName} venció — saldo pendiente de $${credit.balance.toLocaleString('es-CO')}.`,
+      type: 'WARNING',
+      data: { creditId: credit.id, kind: 'CREDIT_OVERDUE' },
+    };
+    managerIds.forEach((userId) => emitToUser(userId, socketEvents.NEW_NOTIFICATION, payload));
+  }
+}

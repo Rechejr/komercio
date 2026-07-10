@@ -4,11 +4,14 @@ import { getPlan } from '../config/plans';
 import { AppError } from '../utils/response';
 import { AuthRequest } from './auth';
 
+// `feature` es solo "Límite de N X" — el plan y el CTA de upgrade se arman aquí,
+// para no repetir (ni desincronizar) "en el plan gratuito" en cada mensaje,
+// que antes quedaba hardcodeado incluso cuando el límite lo alcanzaba un
+// negocio Pro (ej. sucursales, el único límite de Pro que no es Infinity).
 function planError(feature: string, plan: string) {
-  const upgrade = plan === 'free'
-    ? ' Actualiza a Pro para continuar.'
-    : '';
-  return new AppError(`${feature}${upgrade}`, 403);
+  const planLabel = plan === 'free' ? 'plan gratuito' : 'plan Pro';
+  const upgrade = plan === 'free' ? ' Actualiza a Pro para continuar.' : '';
+  return new AppError(`${feature} alcanzado en el ${planLabel}.${upgrade}`, 403);
 }
 
 export const planLimit = {
@@ -24,7 +27,7 @@ export const planLimit = {
           where: { branchId: { in: business.branches.map((b) => b.id) }, deletedAt: null },
         });
         if (count >= limits.products) {
-          return next(planError(`Límite de ${limits.products} productos alcanzado en el plan gratuito.`, business.plan));
+          return next(planError(`Límite de ${limits.products} productos`, business.plan));
         }
         next();
       } catch (err) { next(err); }
@@ -41,7 +44,7 @@ export const planLimit = {
 
         const count = await prisma.customer.count({ where: { deletedAt: null, businessId: business.id } });
         if (count >= limits.customers) {
-          return next(planError(`Límite de ${limits.customers} clientes alcanzado en el plan gratuito.`, business.plan));
+          return next(planError(`Límite de ${limits.customers} clientes`, business.plan));
         }
         next();
       } catch (err) { next(err); }
@@ -68,7 +71,7 @@ export const planLimit = {
           },
         });
         if (count >= limits.salesPerMonth) {
-          return next(planError(`Límite de ${limits.salesPerMonth} ventas por mes alcanzado en el plan gratuito.`, business.plan));
+          return next(planError(`Límite de ${limits.salesPerMonth} ventas por mes`, business.plan));
         }
         next();
       } catch (err) { next(err); }
@@ -87,7 +90,7 @@ export const planLimit = {
           where: { branchId: { in: business.branches.map((b) => b.id) }, deletedAt: null },
         });
         if (count >= limits.users) {
-          return next(planError(`Límite de ${limits.users} usuario(s) alcanzado en el plan gratuito.`, business.plan));
+          return next(planError(`Límite de ${limits.users} usuario(s)`, business.plan));
         }
         next();
       } catch (err) { next(err); }
@@ -106,7 +109,7 @@ export const planLimit = {
           where: { businessId: business.id, deletedAt: null },
         });
         if (count >= limits.branches) {
-          return next(planError(`Límite de ${limits.branches} sucursal(es) alcanzado en el plan gratuito.`, business.plan));
+          return next(planError(`Límite de ${limits.branches} sucursal(es)`, business.plan));
         }
         next();
       } catch (err) { next(err); }

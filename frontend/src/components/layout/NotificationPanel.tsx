@@ -109,28 +109,43 @@ export function NotificationPanel({ open, onClose, anchorRect }: NotificationPan
         ) : (
           notifications.map((n: any) => {
             const isLowStock = n.data?.kind === 'LOW_STOCK' && n.data?.productId;
+            const isCreditOverdue = n.data?.kind === 'CREDIT_OVERDUE' && n.data?.creditId;
+            const isClickable = isLowStock || isCreditOverdue;
             return (
               <button
                 type="button"
                 key={n.id}
                 onClick={async () => {
                   if (!n.isRead) markRead.mutate(n.id);
-                  if (!isLowStock) return;
+                  if (!isClickable) return;
                   onClose();
-                  // Un aviso viejo puede apuntar a un producto que ya se borró — se
-                  // confirma antes de navegar, en vez de mandar al usuario a
-                  // inventario para que descubra ahí que no hay nada que ver.
+                  // Un aviso viejo puede apuntar a un producto/crédito que ya no existe
+                  // o ya se saldó — se confirma antes de navegar, en vez de mandar al
+                  // usuario a la página para que descubra ahí que no hay nada que ver.
+                  if (isLowStock) {
+                    try {
+                      await api.get(`/products/${n.data.productId}`);
+                      router.push(`/inventario?productId=${n.data.productId}`);
+                    } catch {
+                      toast.error('Ese producto ya no existe');
+                    }
+                    return;
+                  }
                   try {
-                    await api.get(`/products/${n.data.productId}`);
-                    router.push(`/inventario?productId=${n.data.productId}`);
+                    const { data } = await api.get(`/credits/${n.data.creditId}`);
+                    if (data.data?.status === 'PAID') {
+                      toast.success('Ese fiado ya fue saldado');
+                      return;
+                    }
+                    router.push('/creditos?status=OVERDUE');
                   } catch {
-                    toast.error('Ese producto ya no existe');
+                    toast.error('Ese crédito ya no existe');
                   }
                 }}
                 className={cn(
                   'w-full text-left flex items-start gap-3 px-4 py-3 border-b border-slate-50 dark:border-white/[0.04] hover:bg-slate-50 dark:hover:bg-white/[0.02] transition-colors',
                   !n.isRead && 'bg-emerald-50/50 dark:bg-emerald-900/10',
-                  isLowStock && 'cursor-pointer',
+                  isClickable && 'cursor-pointer',
                 )}
               >
                 <div className={cn(
@@ -149,6 +164,11 @@ export function NotificationPanel({ open, onClose, anchorRect }: NotificationPan
                     {isLowStock && (
                       <span className="text-[10px] text-amber-600 dark:text-amber-400 font-medium flex items-center gap-0.5">
                         Ver en inventario <ArrowRight size={9} />
+                      </span>
+                    )}
+                    {isCreditOverdue && (
+                      <span className="text-[10px] text-amber-600 dark:text-amber-400 font-medium flex items-center gap-0.5">
+                        Ver en créditos <ArrowRight size={9} />
                       </span>
                     )}
                   </div>

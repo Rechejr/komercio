@@ -5,9 +5,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { api } from '@/lib/api';
 import toast from 'react-hot-toast';
-import { Loader2, Store, Lock, ImagePlus, X, Users, UserPlus, Edit, Shield, UserX, Volume2, VolumeX } from 'lucide-react';
+import { Loader2, Store, Lock, ImagePlus, X, Users, UserPlus, Edit, Shield, UserX, Volume2, VolumeX, Building2, MapPin, Plus } from 'lucide-react';
 import { useAuthStore } from '@/store/auth.store';
 import { useSoundStore } from '@/store/sound.store';
+import { useUpgradeStore } from '@/store/upgrade.store';
 import { sounds } from '@/lib/sounds';
 
 const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[16px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition';
@@ -44,16 +45,25 @@ const ROLE_LABEL: Record<string, string> = {
   CASHIER: 'Cajero',
 };
 
+// Debe reflejar backend/src/config/plans.ts — solo se usa para el aviso previo
+// en el frontend; el límite real siempre lo aplica el servidor.
+const BRANCH_LIMIT: Record<string, number> = { free: 1, pro: 2 };
+
 export default function ConfiguracionPage() {
   const { user } = useAuthStore();
   const qc = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const { enabled: soundEnabled, toggle: toggleSound } = useSoundStore();
+  const openUpgrade = useUpgradeStore((s) => s.open);
 
   // Employee form state
   const [showEmpForm, setShowEmpForm] = useState(false);
   const [editEmp, setEditEmp] = useState<any>(null);
+
+  // Branch form state
+  const [showBranchForm, setShowBranchForm] = useState(false);
+  const [editBranch, setEditBranch] = useState<any>(null);
 
   const { data: business } = useQuery({
     queryKey: ['business'],
@@ -78,6 +88,7 @@ export default function ConfiguracionPage() {
   const { register: regBusiness, handleSubmit: handleBusiness, formState: { isSubmitting: savingBusiness, errors: bizErrors } } = useForm({ values: business });
   const { register: regPwd, handleSubmit: handlePwd, reset: resetPwd, watch: watchPwd, formState: { isSubmitting: savingPwd } } = useForm();
   const { register: regEmp, handleSubmit: handleEmp, reset: resetEmp, formState: { errors: empErrors } } = useForm();
+  const { register: regBranch, handleSubmit: handleBranchSubmit, reset: resetBranch, formState: { errors: branchErrors } } = useForm();
 
   const businessMutation = useMutation({
     mutationFn: (data: any) => api.put('/business/me', data),
@@ -114,6 +125,38 @@ export default function ConfiguracionPage() {
     },
     onError: (err: any) => toast.error(err.response?.data?.error || 'Error'),
   });
+
+  const saveBranchMutation = useMutation({
+    mutationFn: (data: any) => editBranch
+      ? api.put(`/business/branches/${editBranch.id}`, data)
+      : api.post('/business/branches', data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['branches'] });
+      toast.success(editBranch ? 'Sucursal actualizada' : 'Sucursal creada');
+      setShowBranchForm(false);
+      setEditBranch(null);
+      resetBranch();
+    },
+    onError: (err: any) => toast.error(err.response?.data?.error || 'Error al guardar la sucursal'),
+  });
+
+  function openNewBranch() {
+    const limit = BRANCH_LIMIT[user?.plan || 'free'] ?? 1;
+    if (branches.length >= limit) {
+      if ((user?.plan || 'free') === 'free') { openUpgrade(); return; }
+      toast.error(`Límite de ${limit} sucursales alcanzado en el plan Pro`);
+      return;
+    }
+    setEditBranch(null);
+    resetBranch({ name: '', address: '', phone: '' });
+    setShowBranchForm(true);
+  }
+
+  function openEditBranch(branch: any) {
+    setEditBranch(branch);
+    resetBranch({ name: branch.name, address: branch.address || '', phone: branch.phone || '' });
+    setShowBranchForm(true);
+  }
 
   function openNewEmp() {
     setEditEmp(null);
@@ -352,6 +395,57 @@ export default function ConfiguracionPage() {
         </div>
       )}
 
+      {/* ── Sucursales (solo ADMIN) ──────────────────────────────────────────── */}
+      {user?.role === 'ADMIN' && (
+        <div className="card overflow-hidden">
+          <div className="px-6 py-4 border-b border-slate-100 dark:border-white/[0.06] flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="w-7 h-7 bg-sky-50 dark:bg-sky-500/10 rounded-lg flex items-center justify-center">
+                <Building2 size={14} className="text-sky-600 dark:text-sky-400" />
+              </div>
+              <div>
+                <h2 className="text-[14px] font-semibold text-slate-800 dark:text-white">Sucursales</h2>
+                <p className="text-[11px] text-slate-400 dark:text-slate-500">
+                  {branches.length} de {BRANCH_LIMIT[user?.plan || 'free'] ?? 1} · plan {user?.plan === 'pro' ? 'Pro' : 'Gratis'}
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={openNewBranch}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white rounded-xl text-[12px] font-semibold hover:bg-emerald-700 shadow-sm shadow-emerald-600/25 transition"
+            >
+              <Plus size={13} /> Nueva sucursal
+            </button>
+          </div>
+
+          <div className="divide-y divide-slate-50 dark:divide-white/[0.04]">
+            {branches.length === 0 ? (
+              <p className="text-center py-8 text-[13px] text-slate-400">No hay sucursales registradas</p>
+            ) : branches.map((b: any) => (
+              <div key={b.id} className="px-6 py-3.5 flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-[13px] font-medium text-slate-800 dark:text-white truncate">{b.name}</p>
+                  {b.address && (
+                    <p className="text-[12px] text-slate-500 dark:text-slate-400 mt-0.5 flex items-center gap-1 truncate">
+                      <MapPin size={11} className="flex-shrink-0" /> {b.address}
+                    </p>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  aria-label="Editar sucursal"
+                  onClick={() => openEditBranch(b)}
+                  className="w-7 h-7 flex-shrink-0 flex items-center justify-center rounded-lg text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 transition"
+                >
+                  <Edit size={13} />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* ── Cambiar contraseña ────────────────────────────────────────────── */}
       <div className="card overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-100 dark:border-white/[0.06] flex items-center gap-2.5">
@@ -522,6 +616,64 @@ export default function ConfiguracionPage() {
                 >
                   {saveEmpMutation.isPending && <Loader2 size={14} className="animate-spin" />}
                   {editEmp ? 'Actualizar' : 'Crear empleado'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── Branch Form Modal ────────────────────────────────────────────────── */}
+      {showBranchForm && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-[2px] z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/[0.08] rounded-2xl shadow-modal w-full max-w-sm animate-scale-in">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-white/[0.06]">
+              <h2 className="text-[15px] font-semibold text-slate-800 dark:text-white">
+                {editBranch ? 'Editar sucursal' : 'Nueva sucursal'}
+              </h2>
+              <button
+                type="button"
+                aria-label="Cerrar"
+                onClick={() => { setShowBranchForm(false); setEditBranch(null); }}
+                className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-white/[0.06] transition"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <form onSubmit={handleBranchSubmit((d: any) => saveBranchMutation.mutate(d))} className="p-6 space-y-4">
+              <div>
+                <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5 block">Nombre *</label>
+                <input
+                  {...regBranch('name', { required: 'El nombre es obligatorio' })}
+                  className={inputCls}
+                  placeholder="Ej: Sucursal Norte"
+                />
+                {branchErrors.name && <p className="text-[11px] text-red-500 mt-1">{branchErrors.name.message as string}</p>}
+              </div>
+              <div>
+                <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5 block">Dirección</label>
+                <input {...regBranch('address')} className={inputCls} placeholder="Opcional" />
+              </div>
+              <div>
+                <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5 block">Teléfono</label>
+                <input {...regBranch('phone')} className={inputCls} placeholder="Opcional" />
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => { setShowBranchForm(false); setEditBranch(null); }}
+                  className="flex-1 px-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-xl text-[13px] font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={saveBranchMutation.isPending}
+                  className="flex-1 px-4 py-2.5 bg-emerald-600 text-white rounded-xl text-[13px] font-semibold hover:bg-emerald-700 disabled:opacity-60 shadow-sm shadow-emerald-600/25 flex items-center justify-center gap-2 transition"
+                >
+                  {saveBranchMutation.isPending && <Loader2 size={14} className="animate-spin" />}
+                  {editBranch ? 'Actualizar' : 'Crear sucursal'}
                 </button>
               </div>
             </form>

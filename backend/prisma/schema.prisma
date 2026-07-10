@@ -74,6 +74,7 @@ model User {
   business             Business?      @relation("BusinessOwner")
   branchId             String?
   branch               Branch?        @relation(fields: [branchId], references: [id])
+  createdBranches      Branch[]       @relation("BranchCreator")
   sales                Sale[]
   auditLogs            AuditLog[]
   notifications        Notification[]
@@ -166,6 +167,10 @@ model Branch {
   phone         String?
   businessId    String
   business      Business       @relation(fields: [businessId], references: [id])
+  // Quién creó la sucursal — pista de auditoría; nunca se usa para autorizar nada,
+  // solo para poder revisar el historial si algo se ve raro (ej. reventa de sucursal).
+  createdById   String?
+  createdBy     User?          @relation("BranchCreator", fields: [createdById], references: [id])
   users         User[]
   products      Product[]
   sales         Sale[]

@@ -33,6 +33,13 @@ export default function CreditosPage() {
     }).catch(() => {});
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
+
+  // Deep-link desde notificaciones (ej. "Fiado vencido" → /creditos?status=OVERDUE)
+  useEffect(() => {
+    const s = searchParams.get('status');
+    if (s) setStatusFilter(s);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
   const [selected, setSelected] = useState<any>(null);
   const [showPayment, setShowPayment] = useState(false);
   const [showDetail, setShowDetail] = useState(false);

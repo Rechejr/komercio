@@ -48,6 +48,11 @@ export function useSocket() {
         qc.invalidateQueries({ queryKey: ['credits'] });
       });
 
+      socket.on('credit_overdue', () => {
+        qc.invalidateQueries({ queryKey: ['credits'] });
+        qc.invalidateQueries({ queryKey: ['dashboard-summary'] });
+      });
+
       socket.on('new_notification', () => {
         qc.invalidateQueries({ queryKey: ['notifications-unread-count'] });
         qc.invalidateQueries({ queryKey: ['notifications'] });
