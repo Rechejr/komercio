@@ -12,7 +12,7 @@ const BASE_PRICE = 29900;
 const PERIODS = [
   { key: 'monthly',   label: 'Mensual',    badge: null,   months: 1,  discount: 0    },
   { key: 'quarterly', label: 'Trimestral', badge: '-10%', months: 3,  discount: 0.10 },
-  { key: 'annual',    label: 'Anual',      badge: '-25%', months: 12, discount: 0.25 },
+  { key: 'annual',    label: 'Anual',      badge: '-20%', months: 12, discount: 0.20 },
 ] as const;
 
 type PeriodKey = typeof PERIODS[number]['key'];
