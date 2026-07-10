@@ -21,6 +21,8 @@ jest.mock('../../config/database', () => ({
       update: jest.fn(),
     },
     creditPayment: { create: jest.fn() },
+    cashRegister: { findFirst: jest.fn() },
+    cashMovement: { create: jest.fn() },
     $transaction: jest.fn(),
     $queryRaw: jest.fn(),
   },
@@ -255,5 +257,65 @@ describe('creditController.addPayment', () => {
 
     expect(next).toHaveBeenCalledWith(expect.any(AppError));
     expect((next as jest.Mock).mock.calls[0][0].statusCode).toBe(400);
+  });
+
+  it('crea un movimiento de caja IN cuando el abono es en efectivo y hay una caja abierta', async () => {
+    const lockedCredit = { id: 'credit-1', totalAmount: 100000, paidAmount: 0, balance: 100000, status: 'PENDING', customerId: 'cust-1' };
+
+    (mockPrisma.$transaction as jest.Mock).mockImplementation(async (fn: any) => {
+      const tx = {
+        $queryRaw: jest.fn().mockResolvedValue([lockedCredit]),
+        creditPayment: { create: jest.fn().mockResolvedValue({}) },
+        credit: { update: jest.fn().mockResolvedValue({}) },
+        customer: {
+          findUnique: jest.fn().mockResolvedValue({ currentDebt: 100000, name: 'Juan Pérez' }),
+          update: jest.fn().mockResolvedValue({}),
+        },
+      };
+      return fn(tx);
+    });
+    (mockPrisma.cashRegister.findFirst as jest.Mock).mockResolvedValue({ id: 'reg-1' });
+    (mockPrisma.cashMovement.create as jest.Mock).mockResolvedValue({});
+
+    const req = makeReq({ params: { id: 'credit-1' }, body: { amount: '30000', paymentMethod: 'CASH' }, user: { userId: 'user-1', email: 'u@test.com', role: 'ADMIN', businessId: 'biz-1', branchId: 'branch-1' } });
+    const { res } = makeRes();
+
+    await creditController.addPayment(req, res, next);
+
+    expect(mockPrisma.cashRegister.findFirst).toHaveBeenCalledWith({ where: { branchId: 'branch-1', status: 'OPEN' } });
+    expect(mockPrisma.cashMovement.create).toHaveBeenCalledWith({
+      data: {
+        cashRegisterId: 'reg-1',
+        type: 'IN',
+        amount: 30000,
+        description: 'Abono de crédito — Juan Pérez',
+        referenceId: 'credit-1',
+      },
+    });
+  });
+
+  it('no crea movimiento de caja cuando el abono no es en efectivo', async () => {
+    const lockedCredit = { id: 'credit-1', totalAmount: 100000, paidAmount: 0, balance: 100000, status: 'PENDING', customerId: 'cust-1' };
+
+    (mockPrisma.$transaction as jest.Mock).mockImplementation(async (fn: any) => {
+      const tx = {
+        $queryRaw: jest.fn().mockResolvedValue([lockedCredit]),
+        creditPayment: { create: jest.fn().mockResolvedValue({}) },
+        credit: { update: jest.fn().mockResolvedValue({}) },
+        customer: {
+          findUnique: jest.fn().mockResolvedValue({ currentDebt: 100000, name: 'Juan Pérez' }),
+          update: jest.fn().mockResolvedValue({}),
+        },
+      };
+      return fn(tx);
+    });
+
+    const req = makeReq({ params: { id: 'credit-1' }, body: { amount: '30000', paymentMethod: 'TRANSFER' }, user: { userId: 'user-1', email: 'u@test.com', role: 'ADMIN', businessId: 'biz-1', branchId: 'branch-1' } });
+    const { res } = makeRes();
+
+    await creditController.addPayment(req, res, next);
+
+    expect(mockPrisma.cashRegister.findFirst).not.toHaveBeenCalled();
+    expect(mockPrisma.cashMovement.create).not.toHaveBeenCalled();
   });
 });

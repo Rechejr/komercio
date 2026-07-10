@@ -103,7 +103,7 @@ export const creditController = {
 
       const businessId = req.user!.businessId;
 
-      const [newBalance, newStatus] = await prisma.$transaction(async (tx) => {
+      const [newBalance, newStatus, customerName] = await prisma.$transaction(async (tx) => {
         // Lock the row to prevent concurrent payment race conditions
         const [locked] = await tx.$queryRaw<any[]>`
           SELECT c.id, c."totalAmount", c."paidAmount", c.balance, c.status, c."customerId"
@@ -140,15 +140,39 @@ export const creditController = {
           data: { paidAmount: newPaid, balance, status: status as any },
         });
 
-        const customer = await tx.customer.findUnique({ where: { id: locked.customerId }, select: { currentDebt: true } });
+        const customer = await tx.customer.findUnique({ where: { id: locked.customerId }, select: { currentDebt: true, name: true } });
         const safeDecrement = Math.min(paymentAmount, Math.max(0, Number(customer?.currentDebt ?? paymentAmount)));
         await tx.customer.update({
           where: { id: locked.customerId },
           data: { currentDebt: { decrement: safeDecrement } },
         });
 
-        return [balance, status];
+        return [balance, status, customer?.name];
       });
+
+      // Registrar ingreso en caja abierta cuando el abono es en efectivo (best
+      // effort) — sin esto, el dinero entra físicamente a la caja pero el
+      // arqueo nunca lo espera, así que un cajero podría quedárselo sin que
+      // el cierre de turno muestre ningún faltante.
+      if (paymentMethod === 'CASH') {
+        try {
+          const branchId = req.user!.branchId;
+          if (branchId) {
+            const openRegister = await prisma.cashRegister.findFirst({ where: { branchId, status: 'OPEN' } });
+            if (openRegister) {
+              await prisma.cashMovement.create({
+                data: {
+                  cashRegisterId: openRegister.id,
+                  type: 'IN',
+                  amount: paymentAmount,
+                  description: `Abono de crédito${customerName ? ` — ${customerName}` : ''}`,
+                  referenceId: id,
+                },
+              });
+            }
+          }
+        } catch { /* no debe fallar el abono */ }
+      }
 
       if (businessId) {
         emitToBusinesss(businessId, socketEvents.PAYMENT_RECEIVED, { creditId: id, amount: paymentAmount });
