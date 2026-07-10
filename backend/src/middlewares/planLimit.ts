@@ -123,7 +123,7 @@ export const planLimit = {
         if (!business) return next();
         const limits = getPlan(business.plan);
         if (!limits.canExport) {
-          return next(planError('Las exportaciones están disponibles solo en el plan Pro.', business.plan));
+          return next(new AppError('Las exportaciones están disponibles solo en el plan Pro.', 403));
         }
         next();
       } catch (err) { next(err); }
@@ -137,7 +137,7 @@ export const planLimit = {
         if (!business) return next();
         const limits = getPlan(business.plan);
         if (!limits.canUseCredits) {
-          return next(planError('El módulo de créditos está disponible solo en el plan Pro.', business.plan));
+          return next(new AppError('El módulo de créditos está disponible solo en el plan Pro.', 403));
         }
         next();
       } catch (err) { next(err); }
@@ -151,7 +151,7 @@ export const planLimit = {
         if (!business) return next();
         const limits = getPlan(business.plan);
         if (!limits.canUseSuppliers) {
-          return next(planError('El módulo de proveedores está disponible solo en el plan Pro.', business.plan));
+          return next(new AppError('El módulo de proveedores está disponible solo en el plan Pro.', 403));
         }
         next();
       } catch (err) { next(err); }
@@ -165,7 +165,7 @@ export const planLimit = {
         if (!business) return next();
         const limits = getPlan(business.plan);
         if (!limits.canBulkImport) {
-          return next(planError('La importación masiva de productos está disponible solo en el plan Pro.', business.plan));
+          return next(new AppError('La importación masiva de productos está disponible solo en el plan Pro.', 403));
         }
         next();
       } catch (err) { next(err); }
@@ -182,7 +182,7 @@ export const planLimit = {
         if (!business) return next();
         const limits = getPlan(business.plan);
         if (!limits.canUseCredits) {
-          return next(planError('Las ventas a crédito están disponibles solo en el plan Pro.', business.plan));
+          return next(new AppError('Las ventas a crédito están disponibles solo en el plan Pro.', 403));
         }
         next();
       } catch (err) { next(err); }

@@ -53,7 +53,10 @@ router.get('/:id', async (req: AuthRequest, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.post('/', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE'), purchaseItemValidators, validate, async (req: AuthRequest, res: Response, next: NextFunction) => {
+// CASHIER puede registrar la compra (ej. un proveedor entrega un pedido y el
+// cajero lo recibe), pero no editar/eliminar una ya registrada — esa sigue
+// siendo una acción de ADMIN/SUPERVISOR/WAREHOUSE.
+router.post('/', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE', 'CASHIER'), purchaseItemValidators, validate, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const { supplierId, invoiceNumber, items, notes, purchaseDate } = req.body;
     if (!items?.length) throw new AppError('Se requieren productos', 400);

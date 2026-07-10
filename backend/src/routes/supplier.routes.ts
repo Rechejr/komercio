@@ -280,7 +280,10 @@ router.post('/import',
 // ── Standard CRUD ────────────────────────────────────────────────────────────
 router.get('/', supplierController.list);
 router.get('/:id', supplierController.getOne);
-router.post('/', authorize('ADMIN', 'SUPERVISOR'), planLimit.suppliers(), supplierController.create);
+// CASHIER puede crear un proveedor nuevo al vuelo (ej. registrando una compra
+// de un proveedor que aún no existe en el sistema), pero no editar/eliminar
+// uno existente — eso sigue siendo de ADMIN/SUPERVISOR.
+router.post('/', authorize('ADMIN', 'SUPERVISOR', 'CASHIER'), planLimit.suppliers(), supplierController.create);
 router.put('/:id', authorize('ADMIN', 'SUPERVISOR'), supplierController.update);
 router.delete('/:id', authorize('ADMIN'), supplierController.delete);
 

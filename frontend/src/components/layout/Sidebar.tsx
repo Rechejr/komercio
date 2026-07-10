@@ -26,7 +26,7 @@ const NAV_GROUPS = [
       { href: '/pos',        icon: Calculator,      label: 'Punto de Venta',   roles: ['ADMIN','SUPERVISOR','CASHIER','SELLER'],             pro: false },
       { href: '/ventas',     icon: ShoppingCart,    label: 'Ventas',           roles: ['ADMIN','SUPERVISOR','CASHIER','SELLER'],             pro: false },
       { href: '/inventario', icon: Package,         label: 'Inventario',       roles: ['ADMIN','SUPERVISOR','WAREHOUSE'],                   pro: false },
-      { href: '/compras',    icon: ShoppingBag,     label: 'Compras',          roles: ['ADMIN','SUPERVISOR','WAREHOUSE'],                   pro: false },
+      { href: '/compras',    icon: ShoppingBag,     label: 'Compras',          roles: ['ADMIN','SUPERVISOR','WAREHOUSE','CASHIER'],         pro: false },
       { href: '/gastos',     icon: Receipt,         label: 'Gastos',           roles: ['ADMIN','SUPERVISOR'],                               pro: false },
       { href: '/caja',       icon: DollarSign,      label: 'Caja',             roles: ['ADMIN','SUPERVISOR','CASHIER'],                     pro: false },
       { href: '/reportes',   icon: TrendingUp,      label: 'Reportes',         roles: ['ADMIN','SUPERVISOR'],                               pro: true  },
