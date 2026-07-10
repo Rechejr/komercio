@@ -268,7 +268,7 @@ export default function ProveedoresPage() {
                       <p className="text-[13px]">No hay proveedores{search ? ` para "${search}"` : ''}</p>
                       {!isFree && (
                         <p className="text-[12px] text-slate-300 dark:text-slate-600">
-                          Puedes importar proveedores desde un Excel con el botón "Importar Excel"
+                          Puedes importar proveedores desde un Excel con el botón &quot;Importar Excel&quot;
                         </p>
                       )}
                     </div>

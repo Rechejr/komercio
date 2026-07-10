@@ -280,7 +280,7 @@ export default function ClientesPage() {
                       <p className="text-[13px]">No hay clientes{search ? ` para "${search}"` : ''}</p>
                       {!isFree && (
                         <p className="text-[12px] text-slate-300 dark:text-slate-600">
-                          Puedes importar clientes desde un Excel con el botón "Importar Excel"
+                          Puedes importar clientes desde un Excel con el botón &quot;Importar Excel&quot;
                         </p>
                       )}
                     </div>

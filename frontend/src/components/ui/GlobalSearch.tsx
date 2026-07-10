@@ -248,7 +248,7 @@ export function GlobalSearch({ open, onClose }: GlobalSearchProps) {
                 >
                   <AlertTriangle size={13} className="flex-shrink-0" />
                   <span className="text-[12px] font-medium">
-                    Escribe <strong className="font-bold">"fiado"</strong> para ver todos los créditos pendientes
+                    Escribe <strong className="font-bold">&quot;fiado&quot;</strong> para ver todos los créditos pendientes
                   </span>
                   <ChevronRight size={12} className="flex-shrink-0 opacity-60" />
                 </button>
@@ -263,7 +263,7 @@ export function GlobalSearch({ open, onClose }: GlobalSearchProps) {
                 </div>
                 <p className="text-[13px] text-slate-500 dark:text-slate-400">
                   Sin resultados para{' '}
-                  <span className="font-semibold text-slate-700 dark:text-slate-300">"{q}"</span>
+                  <span className="font-semibold text-slate-700 dark:text-slate-300">&quot;{q}&quot;</span>
                 </p>
                 <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1">
                   Intenta con el nombre, código o número de documento
