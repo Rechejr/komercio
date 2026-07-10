@@ -7,7 +7,9 @@ import { PriceInput } from '@/components/ui/PriceInput';
 import { api } from '@/lib/api';
 import { formatCurrency, formatDateTime } from '@/lib/utils';
 import toast from 'react-hot-toast';
-import { Lock, Unlock, TrendingUp, TrendingDown, Loader2, ArrowUpCircle, ArrowDownCircle, Plus, X } from 'lucide-react';
+import { Lock, Unlock, TrendingUp, TrendingDown, Loader2, ArrowUpCircle, ArrowDownCircle, Plus, X, History, Wallet } from 'lucide-react';
+import { useAuthStore } from '@/store/auth.store';
+import { HistorialTurnos } from './HistorialTurnos';
 
 const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[16px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition';
 
@@ -15,6 +17,41 @@ export default function CajaPage() {
   const qc = useQueryClient();
   const [showMovement, setShowMovement] = useState(false);
   const [movementType, setMovementType] = useState<'IN' | 'OUT'>('IN');
+  const role = useAuthStore((s) => s.user?.role);
+  const canSeeHistory = role === 'ADMIN' || role === 'SUPERVISOR';
+  const [tab, setTab] = useState<'actual' | 'historial'>('actual');
+
+  const tabSwitcher = canSeeHistory && (
+    <div className="flex gap-1 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl w-fit mb-4">
+      <button
+        type="button"
+        onClick={() => setTab('actual')}
+        className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-[13px] font-semibold transition ${
+          tab === 'actual' ? 'bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-sm' : 'text-slate-500 dark:text-slate-400'
+        }`}
+      >
+        <Wallet size={13} /> Turno actual
+      </button>
+      <button
+        type="button"
+        onClick={() => setTab('historial')}
+        className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-[13px] font-semibold transition ${
+          tab === 'historial' ? 'bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-sm' : 'text-slate-500 dark:text-slate-400'
+        }`}
+      >
+        <History size={13} /> Historial de turnos
+      </button>
+    </div>
+  );
+
+  if (tab === 'historial' && canSeeHistory) {
+    return (
+      <div className="max-w-4xl animate-fade-up">
+        {tabSwitcher}
+        <HistorialTurnos />
+      </div>
+    );
+  }
 
   const { data: cashRegister, isLoading } = useQuery({
     queryKey: ['cash-register-current'],
@@ -65,6 +102,7 @@ export default function CajaPage() {
   if (!cashRegister) {
     return (
       <div className="max-w-sm mx-auto mt-12 animate-fade-up">
+        {tabSwitcher}
         <div className="card p-8 text-center space-y-5">
           <div className="w-14 h-14 bg-slate-100 dark:bg-slate-800 rounded-2xl flex items-center justify-center mx-auto">
             <Lock size={24} className="text-slate-400" />
@@ -101,6 +139,7 @@ export default function CajaPage() {
   return (
     <>
     <div className="space-y-4 max-w-2xl animate-fade-up">
+      {tabSwitcher}
 
       {/* ── Estado caja abierta ───────────────────────────────────────────── */}
       <div className="card p-6">

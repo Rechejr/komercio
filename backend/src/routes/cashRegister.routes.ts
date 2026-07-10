@@ -1,10 +1,59 @@
 import { Router } from 'express';
 import { prisma } from '../config/database';
 import { authenticate, authorize } from '../middlewares/auth';
-import { success, created, AppError } from '../utils/response';
+import { success, created, paginated, AppError } from '../utils/response';
+import { getPagination } from '../utils/pagination';
 
 const router = Router();
 router.use(authenticate);
+
+// Historial de turnos — solo ADMIN/SUPERVISOR, para poder rastrear en qué
+// turno (y con qué vendedor) apareció una diferencia de caja. openedBy/closedBy
+// son solo el id (sin relación Prisma a User), así que se resuelven los
+// nombres en un segundo query en batch en vez de con un include.
+router.get('/history', authorize('ADMIN', 'SUPERVISOR'), async (req: any, res, next) => {
+  try {
+    const { page, limit, skip } = getPagination(req);
+    const { userId, startDate, endDate } = req.query;
+    const businessId = req.user.businessId;
+
+    const branchIds = (await prisma.branch.findMany({
+      where: { businessId, deletedAt: null },
+      select: { id: true },
+    })).map((b) => b.id);
+
+    const where: any = { branchId: { in: branchIds } };
+    if (userId) where.openedBy = userId;
+    if (startDate || endDate) {
+      where.openedAt = {};
+      if (startDate) where.openedAt.gte = new Date(startDate);
+      if (endDate) { const end = new Date(endDate); end.setUTCHours(23, 59, 59, 999); where.openedAt.lte = end; }
+    }
+
+    const [registers, total] = await Promise.all([
+      prisma.cashRegister.findMany({
+        where, skip, take: limit,
+        orderBy: { openedAt: 'desc' },
+        include: { branch: { select: { id: true, name: true } } },
+      }),
+      prisma.cashRegister.count({ where }),
+    ]);
+
+    const userIds = [...new Set(registers.flatMap((r) => [r.openedBy, r.closedBy].filter(Boolean)))] as string[];
+    const users = userIds.length > 0
+      ? await prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, name: true } })
+      : [];
+    const nameById = new Map(users.map((u) => [u.id, u.name]));
+
+    const data = registers.map((r) => ({
+      ...r,
+      openedByName: nameById.get(r.openedBy) || 'Usuario eliminado',
+      closedByName: r.closedBy ? (nameById.get(r.closedBy) || 'Usuario eliminado') : null,
+    }));
+
+    return paginated(res, data, total, page, limit);
+  } catch (err) { next(err); }
+});
 
 router.get('/current', authorize('ADMIN', 'SUPERVISOR', 'CASHIER'), async (req: any, res, next) => {
   try {
