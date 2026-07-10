@@ -59,4 +59,25 @@ test.describe('Caja (Cash Register)', () => {
     // Just check page doesn't error — may be empty if caja is closed
     await expect(page.locator('body')).not.toContainText('Error de base de datos');
   });
+
+  // Regresión: el tab "Historial de turnos" llamaba a un return temprano ANTES
+  // de useQuery/useForm/useMutation, cambiando cuántos hooks se llaman entre
+  // renders y rompiendo la página con "Rendered fewer hooks than expected".
+  test('pestaña "Historial de turnos" no rompe la página (ADMIN/SUPERVISOR)', async ({ page }) => {
+    const historyTab = page.locator('button:has-text("Historial de turnos")');
+    if (await historyTab.count() > 0) {
+      await historyTab.first().click();
+      await page.waitForTimeout(1_000);
+      await expect(page.getByText('Algo salió mal')).not.toBeVisible();
+      const tableOrEmpty = page.locator('table').or(page.getByText(/No hay turnos registrados/));
+      await expect(tableOrEmpty.first()).toBeVisible({ timeout: 10_000 });
+
+      // Volver al tab de turno actual también debe seguir funcionando (mismo
+      // riesgo de orden de hooks al cambiar de vuelta).
+      const actualTab = page.locator('button:has-text("Turno actual")');
+      await actualTab.first().click();
+      await page.waitForTimeout(500);
+      await expect(page.getByText('Algo salió mal')).not.toBeVisible();
+    }
+  });
 });

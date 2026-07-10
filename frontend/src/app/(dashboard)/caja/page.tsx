@@ -44,19 +44,11 @@ export default function CajaPage() {
     </div>
   );
 
-  if (tab === 'historial' && canSeeHistory) {
-    return (
-      <div className="max-w-4xl animate-fade-up">
-        {tabSwitcher}
-        <HistorialTurnos />
-      </div>
-    );
-  }
-
   const { data: cashRegister, isLoading } = useQuery({
     queryKey: ['cash-register-current'],
     queryFn: () => api.get('/cash-register/current').then((r) => r.data.data),
     refetchInterval: 30000,
+    enabled: tab === 'actual',
   });
 
   const { register, handleSubmit, reset, control, formState: { errors: cajaErrors } } = useForm();
@@ -85,6 +77,20 @@ export default function CajaPage() {
     },
     onError: (err: any) => toast.error(err.response?.data?.error || 'Error al registrar movimiento'),
   });
+
+  /* ── Historial de turnos (tab aparte) ─────────────────────────────────── */
+  // Este return va DESPUÉS de todos los hooks a propósito — un return antes de
+  // llamar useQuery/useForm/useMutation cambia cuántos hooks se llaman entre
+  // renders al cambiar de pestaña, lo que React rechaza con "Rendered fewer
+  // hooks than expected" (así se rompía Caja al entrar a este tab).
+  if (tab === 'historial' && canSeeHistory) {
+    return (
+      <div className="max-w-4xl animate-fade-up">
+        {tabSwitcher}
+        <HistorialTurnos />
+      </div>
+    );
+  }
 
   /* ── Loading ──────────────────────────────────────────────────────────── */
   if (isLoading) return (
