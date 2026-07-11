@@ -2,8 +2,24 @@ import winston from 'winston';
 
 const { combine, timestamp, printf, colorize, errors } = winston.format;
 
-const logFormat = printf(({ level, message, timestamp: ts, stack }) => {
-  return `${ts} [${level}]: ${stack || message}`;
+// Los Error tienen `message`/`stack` como propiedades NO enumerables — un
+// JSON.stringify normal de { err } los serializa como "{}", perdiendo el
+// motivo real. Este replacer los expande antes de imprimir.
+function errorReplacer(_key: string, value: unknown) {
+  if (value instanceof Error) {
+    return { message: value.message, stack: value.stack, ...(value as any) };
+  }
+  return value;
+}
+
+// Antes esta función solo imprimía level/message/timestamp/stack — cualquier
+// metadata extra pasada como segundo argumento (logger.error('msg', { err }),
+// { userId, ... }, etc.) se descartaba en silencio, incluyendo el motivo real
+// de errores como el de envío de email (ver commit que agregó este comentario).
+const logFormat = printf(({ level, message, timestamp: ts, stack, ...meta }) => {
+  const metaKeys = Object.keys(meta);
+  const metaStr = metaKeys.length > 0 ? ` ${JSON.stringify(meta, errorReplacer)}` : '';
+  return `${ts} [${level}]: ${stack || message}${metaStr}`;
 });
 
 export const logger = winston.createLogger({

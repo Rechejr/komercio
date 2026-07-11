@@ -22,7 +22,7 @@ export const emailService = {
       to,
       subject: 'Verifica tu cuenta en Komercio',
       html: verificationTemplate(name, url),
-    }).catch((err) => logger.error('Email verification send error', { err }));
+    }).catch((err) => logger.error(`Email verification send error: ${err?.message || err}`, { code: err?.code, response: err?.response }));
   },
 
   async sendPasswordReset(to: string, name: string, token: string) {
@@ -32,7 +32,7 @@ export const emailService = {
       to,
       subject: 'Restablece tu contraseña en Komercio',
       html: resetTemplate(name, url),
-    }).catch((err) => logger.error('Email reset send error', { err }));
+    }).catch((err) => logger.error(`Email reset send error: ${err?.message || err}`, { code: err?.code, response: err?.response }));
   },
 };
 

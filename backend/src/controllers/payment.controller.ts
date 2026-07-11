@@ -179,8 +179,8 @@ export const paymentController = {
       logger.info('Plan Pro activado', { businessId: link.businessId, period: link.period, expiresAt });
 
       return res.json({ received: true });
-    } catch (err) {
-      logger.error('Wompi webhook error', err);
+    } catch (err: any) {
+      logger.error(`Wompi webhook error: ${err?.message || err}`, { stack: err?.stack });
       next(err);
     }
   },
