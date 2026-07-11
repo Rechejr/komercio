@@ -397,6 +397,23 @@ router.post('/import',
   },
 );
 
+// ── Carga/conteo masivo de stock en una bodega ("Cargar inventario" en
+// Transferencias) — solo ADMIN/SUPERVISOR, igual que transferencias entre
+// bodegas (mover/fijar cantidades grandes de stock es una decisión del
+// dueño/encargado, no de cualquier rol que pueda ajustar un producto suelto).
+router.post('/branch-stock-count',
+  authorize('ADMIN', 'SUPERVISOR'),
+  [
+    body('branchId').isUUID().withMessage('branchId inválido'),
+    body('items').isArray({ min: 1 }).withMessage('Se requiere al menos un producto'),
+    body('items.*.productId').isUUID().withMessage('productId inválido'),
+    body('items.*.quantity').isFloat({ min: 0 }).withMessage('Cantidad inválida'),
+    body('reason').optional().trim(),
+  ],
+  validate,
+  productController.bulkStockCount,
+);
+
 // ── Standard CRUD ────────────────────────────────────────────────────────────
 router.get('/', productController.list);
 router.get('/low-stock', productController.getLowStock);

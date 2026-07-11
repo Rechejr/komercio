@@ -41,6 +41,7 @@ jest.mock('../../config/socket', () => ({
 
 jest.mock('../../services/notification.service', () => ({
   notifyLowStock: jest.fn(),
+  notifyLowStockBatch: jest.fn().mockResolvedValue(undefined),
 }));
 
 jest.mock('../../utils/pagination', () => ({
@@ -402,5 +403,191 @@ describe('productController.delete', () => {
     );
     expect(mockCache.del).toHaveBeenCalledWith('product:biz-1:p1');
     expect(json).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
+  });
+});
+
+// ─── bulkStockCount ──────────────────────────────────────────────────────────
+
+describe('productController.bulkStockCount', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  function makeCountTx(rows: Record<string, { productRow: any; branchStock: number }>) {
+    const txProductUpdate = jest.fn().mockResolvedValue({});
+    const txProductStockUpdate = jest.fn().mockResolvedValue({});
+    const txMovementCreate = jest.fn().mockResolvedValue({});
+
+    const queryRawUnsafe = jest.fn().mockImplementation((_sql: string, ...args: any[]) => {
+      // La primera llamada por producto es el lock de `products` (1 solo param: id);
+      // la segunda es el lock-or-create de product_stocks (id nuevo, productId, branchId).
+      const isProductLock = args.length === 1;
+      const pid = isProductLock ? args[0] : args[1];
+      const entry = rows[pid];
+      if (isProductLock) return Promise.resolve(entry ? [entry.productRow] : []);
+      return Promise.resolve([{ stock: entry.branchStock }]);
+    });
+
+    const tx = {
+      $queryRawUnsafe: queryRawUnsafe,
+      product: { update: txProductUpdate },
+      productStock: { update: txProductStockUpdate },
+      inventoryMovement: { create: txMovementCreate },
+    };
+    return { tx, txProductUpdate, txProductStockUpdate, txMovementCreate };
+  }
+
+  it('rechaza con 403 si la bodega no pertenece al negocio', async () => {
+    (mockPrisma.branch.findFirst as jest.Mock).mockResolvedValue(null);
+    await productController.bulkStockCount(
+      makeReq({ body: { branchId: 'br-x', items: [{ productId: 'p1', quantity: 10 }] } }),
+      makeRes().res,
+      next,
+    );
+    expect((next as jest.Mock).mock.calls[0][0].statusCode).toBe(403);
+  });
+
+  it('rechaza con 403 si algun producto no pertenece al negocio', async () => {
+    (mockPrisma.branch.findFirst as jest.Mock).mockResolvedValue({ id: 'br-1' });
+    (mockPrisma.product.count as jest.Mock).mockResolvedValue(0);
+    await productController.bulkStockCount(
+      makeReq({ body: { branchId: 'br-1', items: [{ productId: 'p-invalido', quantity: 10 }] } }),
+      makeRes().res,
+      next,
+    );
+    expect((next as jest.Mock).mock.calls[0][0].statusCode).toBe(403);
+  });
+
+  it('deduplica productId repetidos antes de validar pertenencia (no infla productIds.length)', async () => {
+    (mockPrisma.branch.findFirst as jest.Mock).mockResolvedValue({ id: 'br-1' });
+    (mockPrisma.product.count as jest.Mock).mockResolvedValue(1); // solo 1 producto distinto
+    const { tx } = makeCountTx({
+      p1: { productRow: { id: 'p1', stock: 10, name: 'P1', allowNegativeStock: false, minStock: 2, lowStockNotifiedAt: null, costPrice: 100 }, branchStock: 5 },
+    });
+    (mockPrisma.$transaction as jest.Mock).mockImplementation(async (fn: any) => fn(tx));
+
+    const { res, json } = makeRes();
+    // Mismo productId dos veces — el segundo valor debe ganar (último de la Map).
+    await productController.bulkStockCount(
+      makeReq({ body: { branchId: 'br-1', items: [{ productId: 'p1', quantity: 8 }, { productId: 'p1', quantity: 20 }] } }),
+      res,
+      next,
+    );
+    expect(mockPrisma.product.count).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ id: { in: ['p1'] } }) })
+    );
+    expect(json).toHaveBeenCalledWith(expect.objectContaining({ success: true, data: { updated: 1, skipped: 0 } }));
+  });
+
+  it('salta productos sin cambio real (delta 0) sin crear movimiento', async () => {
+    (mockPrisma.branch.findFirst as jest.Mock).mockResolvedValue({ id: 'br-1' });
+    (mockPrisma.product.count as jest.Mock).mockResolvedValue(1);
+    const { tx, txMovementCreate, txProductUpdate } = makeCountTx({
+      p1: { productRow: { id: 'p1', stock: 10, name: 'P1', allowNegativeStock: false, minStock: 2, lowStockNotifiedAt: null, costPrice: 100 }, branchStock: 10 },
+    });
+    (mockPrisma.$transaction as jest.Mock).mockImplementation(async (fn: any) => fn(tx));
+
+    const { res, json } = makeRes();
+    await productController.bulkStockCount(
+      makeReq({ body: { branchId: 'br-1', items: [{ productId: 'p1', quantity: 10 }] } }),
+      res,
+      next,
+    );
+    expect(txMovementCreate).not.toHaveBeenCalled();
+    expect(txProductUpdate).not.toHaveBeenCalled();
+    expect(json).toHaveBeenCalledWith(expect.objectContaining({ data: { updated: 0, skipped: 1 } }));
+  });
+
+  it('rechaza con 400 si el nuevo total quedaria negativo sin allowNegativeStock', async () => {
+    (mockPrisma.branch.findFirst as jest.Mock).mockResolvedValue({ id: 'br-1' });
+    (mockPrisma.product.count as jest.Mock).mockResolvedValue(1);
+    // Total actual 3; la bodega tenía 10 (más de lo que hay en el total, dato
+    // ya inconsistente de antemano) — bajarla a 0 dejaría el total en -7.
+    const { tx } = makeCountTx({
+      p1: { productRow: { id: 'p1', stock: 3, name: 'P1', allowNegativeStock: false, minStock: 2, lowStockNotifiedAt: null, costPrice: 100 }, branchStock: 10 },
+    });
+    (mockPrisma.$transaction as jest.Mock).mockImplementation(async (fn: any) => fn(tx));
+
+    await productController.bulkStockCount(
+      makeReq({ body: { branchId: 'br-1', items: [{ productId: 'p1', quantity: 0 }] } }),
+      makeRes().res,
+      next,
+    );
+    // branchDelta = 0 - 10 = -10; newTotal = 3 - 10 = -7 < 0
+    expect((next as jest.Mock).mock.calls[0][0].statusCode).toBe(400);
+  });
+
+  it('aplica el delta al total y fija el valor absoluto en la bodega', async () => {
+    (mockPrisma.branch.findFirst as jest.Mock).mockResolvedValue({ id: 'br-1' });
+    (mockPrisma.product.count as jest.Mock).mockResolvedValue(1);
+    const { tx, txProductUpdate, txProductStockUpdate, txMovementCreate } = makeCountTx({
+      p1: { productRow: { id: 'p1', stock: 100, name: 'P1', allowNegativeStock: false, minStock: 10, lowStockNotifiedAt: null, costPrice: 500 }, branchStock: 20 },
+    });
+    (mockPrisma.$transaction as jest.Mock).mockImplementation(async (fn: any) => fn(tx));
+
+    const { res, json } = makeRes();
+    await productController.bulkStockCount(
+      makeReq({ body: { branchId: 'br-1', items: [{ productId: 'p1', quantity: 5 }], reason: 'Conteo físico' } }),
+      res,
+      next,
+    );
+
+    // bodega pasa de 20 a 5 -> delta -15 -> total pasa de 100 a 85 (por encima de minStock=10)
+    expect(txProductUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ stock: { increment: -15 } }) })
+    );
+    expect(txProductStockUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { stock: 5 } })
+    );
+    expect(txMovementCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ type: 'OUT', quantity: 15, referenceType: 'STOCK_COUNT', reason: 'Conteo físico' }) })
+    );
+    expect(json).toHaveBeenCalledWith(expect.objectContaining({ data: { updated: 1, skipped: 0 } }));
+  });
+
+  it('marca isNewLowStock cuando el total cae al minimo por primera vez y notifica', async () => {
+    const { notifyLowStockBatch } = require('../../services/notification.service');
+    (mockPrisma.branch.findFirst as jest.Mock).mockResolvedValue({ id: 'br-1' });
+    (mockPrisma.product.count as jest.Mock).mockResolvedValue(1);
+    const { tx, txProductUpdate } = makeCountTx({
+      p1: { productRow: { id: 'p1', stock: 20, name: 'P1', allowNegativeStock: false, minStock: 10, lowStockNotifiedAt: null, costPrice: 500 }, branchStock: 15 },
+    });
+    (mockPrisma.$transaction as jest.Mock).mockImplementation(async (fn: any) => fn(tx));
+
+    await productController.bulkStockCount(
+      makeReq({ body: { branchId: 'br-1', items: [{ productId: 'p1', quantity: 5 }] } }),
+      makeRes().res,
+      next,
+    );
+
+    // bodega pasa de 15 a 5 -> delta -10 -> total pasa de 20 a 10, que es <= minStock(10)
+    expect(txProductUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ lowStockNotifiedAt: expect.any(Date) }) })
+    );
+    expect(notifyLowStockBatch).toHaveBeenCalledWith('biz-1', [
+      expect.objectContaining({ id: 'p1', stock: 10, minStock: 10 }),
+    ]);
+  });
+
+  it('procesa en lotes de 50 — mas de 50 items dispara mas de una transaccion', async () => {
+    (mockPrisma.branch.findFirst as jest.Mock).mockResolvedValue({ id: 'br-1' });
+    const items = Array.from({ length: 55 }, (_, i) => ({ productId: `p${i}`, quantity: 1 }));
+    (mockPrisma.product.count as jest.Mock).mockResolvedValue(55);
+
+    const rowsMap: Record<string, { productRow: any; branchStock: number }> = {};
+    for (const it of items) {
+      rowsMap[it.productId] = {
+        productRow: { id: it.productId, stock: 0, name: it.productId, allowNegativeStock: false, minStock: 0, lowStockNotifiedAt: null, costPrice: 0 },
+        branchStock: 0,
+      };
+    }
+    const { tx } = makeCountTx(rowsMap);
+    (mockPrisma.$transaction as jest.Mock).mockImplementation(async (fn: any) => fn(tx));
+
+    await productController.bulkStockCount(
+      makeReq({ body: { branchId: 'br-1', items } }),
+      makeRes().res,
+      next,
+    );
+
+    expect((mockPrisma.$transaction as jest.Mock).mock.calls.length).toBe(2); // 50 + 5
   });
 });

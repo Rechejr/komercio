@@ -6,7 +6,7 @@ import { AppError, success, created, paginated } from '../utils/response';
 import { getPagination, getSearch } from '../utils/pagination';
 import { AuthRequest } from '../middlewares/auth';
 import { emitToBusinesss, socketEvents } from '../config/socket';
-import { notifyLowStock } from '../services/notification.service';
+import { notifyLowStock, notifyLowStockBatch } from '../services/notification.service';
 import { getPlan } from '../config/plans';
 import { acquirePlanLimitLock } from '../utils/planLimitLock';
 import { deleteImage } from '../config/cloudinary';
@@ -464,6 +464,139 @@ export const productController = {
       });
 
       return created(res, copy, 'Producto duplicado');
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  // Carga/conteo masivo de stock en UNA bodega — pantalla "Cargar inventario"
+  // en Transferencias. A diferencia de adjustStock (un producto a la vez),
+  // procesa en lotes de tamaño fijo (no una sola transacción gigante) para no
+  // tener transacciones larguísimas reteniendo locks contra ventas/ajustes
+  // concurrentes en negocios con catálogos grandes.
+  async bulkStockCount(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const { branchId, items, reason } = req.body;
+      const businessId = req.user!.businessId;
+
+      const branch = await prisma.branch.findFirst({
+        where: { id: branchId, businessId, deletedAt: null },
+        select: { id: true },
+      });
+      if (!branch) throw new AppError('Bodega no válida para este negocio', 403);
+
+      // Se deduplica ANTES de validar pertenencia — de lo contrario un mismo
+      // productId repetido infla productIds.length y el count() (que cuenta
+      // ids distintos) nunca cuadra, rechazando de forma incorrecta un batch válido.
+      const qtyByProduct = new Map<string, number>();
+      for (const item of items) {
+        qtyByProduct.set(item.productId, parseFloat(item.quantity));
+      }
+      const productIds = [...qtyByProduct.keys()];
+
+      const validCount = await prisma.product.count({
+        where: { id: { in: productIds }, businessId, deletedAt: null },
+      });
+      if (validCount !== productIds.length) {
+        throw new AppError('Uno o más productos no pertenecen a este negocio', 403);
+      }
+
+      const sortedIds = [...productIds].sort();
+      let updated = 0;
+      let skipped = 0;
+      const lowStockCrossed: Array<{ id: string; name: string; stock: number; minStock: number }> = [];
+
+      const CHUNK_SIZE = 50;
+      for (let i = 0; i < sortedIds.length; i += CHUNK_SIZE) {
+        const chunk = sortedIds.slice(i, i + CHUNK_SIZE);
+
+        await prisma.$transaction(async (tx) => {
+          for (const pid of chunk) {
+            const quantity = qtyByProduct.get(pid)!;
+
+            // Lock de la fila de products — igual que adjustStock, imprescindible
+            // porque este endpoint también toca Product.stock (el total).
+            const rows = await tx.$queryRawUnsafe<any[]>(
+              `SELECT id, stock, name, "allowNegativeStock", "minStock", "lowStockNotifiedAt", "costPrice"
+               FROM products WHERE id::text = $1 AND "deletedAt" IS NULL FOR UPDATE`,
+              pid,
+            );
+            const locked = rows[0];
+            if (!locked) continue; // ya validado arriba, defensivo por si acaso
+
+            // Lock-or-create de la fila product_stocks de esta bodega.
+            const [psRow] = await tx.$queryRawUnsafe<any[]>(
+              `INSERT INTO product_stocks (id, "productId", "branchId", stock, "createdAt", "updatedAt")
+               VALUES ($1, $2, $3, 0, now(), now())
+               ON CONFLICT ("productId", "branchId") DO UPDATE SET "updatedAt" = product_stocks."updatedAt"
+               RETURNING stock`,
+              randomUUID(), pid, branchId,
+            );
+            const oldBranchStock = Number(psRow.stock);
+            const branchDelta = quantity - oldBranchStock;
+
+            // Sin cambio real — se salta sin crear movimiento, para no inundar
+            // el historial en un reconteo donde la mayoría no cambió.
+            if (branchDelta === 0) { skipped++; continue; }
+
+            const totalStock = Number(locked.stock);
+            const newTotal = totalStock + branchDelta;
+            if ((quantity < 0 || newTotal < 0) && !locked.allowNegativeStock) {
+              throw new AppError(`Stock insuficiente para: ${locked.name}`, 400);
+            }
+
+            const minStock = Number(locked.minStock);
+            const restocked = newTotal > minStock && !!locked.lowStockNotifiedAt;
+            const isNewLowStock = newTotal <= minStock && !locked.lowStockNotifiedAt;
+
+            await tx.product.update({
+              where: { id: pid },
+              data: {
+                stock: { increment: branchDelta },
+                ...(restocked ? { lowStockNotifiedAt: null } : {}),
+                ...(isNewLowStock ? { lowStockNotifiedAt: new Date() } : {}),
+              },
+            });
+            await tx.productStock.update({
+              where: { productId_branchId: { productId: pid, branchId } },
+              data: { stock: quantity },
+            });
+            await tx.inventoryMovement.create({
+              data: {
+                productId: pid,
+                type: branchDelta > 0 ? 'IN' : 'OUT',
+                quantity: Math.abs(branchDelta),
+                previousStock: totalStock,
+                newStock: newTotal,
+                reason: reason || 'Conteo de bodega',
+                referenceType: 'STOCK_COUNT',
+                unitCost: Number(locked.costPrice),
+                totalCost: Number(locked.costPrice) * Math.abs(branchDelta),
+                branchId,
+              },
+            });
+
+            updated++;
+            if (isNewLowStock) {
+              lowStockCrossed.push({ id: pid, name: locked.name, stock: newTotal, minStock });
+            }
+          }
+        }, { timeout: 30000 });
+      }
+
+      if (businessId) {
+        emitToBusinesss(businessId, socketEvents.INVENTORY_UPDATED, { type: 'bulk-stock-count', branchId });
+        for (const product of lowStockCrossed) {
+          emitToBusinesss(businessId, socketEvents.LOW_STOCK_ALERT, { product });
+        }
+        if (lowStockCrossed.length > 0) {
+          await notifyLowStockBatch(businessId, lowStockCrossed).catch((err) => {
+            logger.error(`Fallo al notificar stock bajo (businessId=${businessId}): ${err?.message || err}`);
+          });
+        }
+      }
+
+      return success(res, { updated, skipped }, `${updated} producto(s) actualizados`);
     } catch (err) {
       next(err);
     }
