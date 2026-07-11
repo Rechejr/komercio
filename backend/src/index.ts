@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import dns from 'dns';
 import app from './app';
 import { createServer } from 'http';
 import { initSocket } from './config/socket';
@@ -7,6 +8,13 @@ import { prisma } from './config/database';
 import { redis } from './config/redis';
 import { initSentry } from './config/sentry';
 import { startCreditOverdueJob } from './jobs/creditOverdue.job';
+
+// El contenedor de Railway no tiene salida IPv6 funcional — Node por defecto
+// intenta conectar por IPv6 primero cuando el host (ej. smtp.gmail.com) tiene
+// ambos tipos de registro DNS, y falla con ENETUNREACH antes de siquiera
+// probar IPv4. Esto rompía el envío de correos (verificación y recuperar
+// contraseña) sin llegar nunca a autenticar contra Gmail.
+dns.setDefaultResultOrder('ipv4first');
 
 const PORT = process.env.PORT || 4000;
 

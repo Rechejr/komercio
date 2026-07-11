@@ -1,15 +1,49 @@
+import dns from 'dns';
 import nodemailer from 'nodemailer';
 import { logger } from './logger';
 
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST || 'smtp.gmail.com',
-  port: Number(process.env.SMTP_PORT) || 587,
-  secure: process.env.SMTP_SECURE === 'true',
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-  },
-});
+const SMTP_HOST = process.env.SMTP_HOST || 'smtp.gmail.com';
+const SMTP_PORT = Number(process.env.SMTP_PORT) || 587;
+const SMTP_SECURE = process.env.SMTP_SECURE === 'true';
+
+// nodemailer resuelve el host por su cuenta y, cuando hay tanto registros A
+// como AAAA (como smtp.gmail.com), ELIGE UNA IP AL AZAR entre ambas familias
+// combinadas — no prefiere IPv4 pese a intentarlo primero internamente (ver
+// nodemailer/lib/shared/index.js: formatDNSValue hace
+// `addresses[Math.floor(Math.random() * addresses.length)]`). El contenedor
+// de Railway no tiene salida IPv6 funcional, así que ~mitad de los envíos
+// fallaban con ENETUNREACH al azar. No hay ninguna opción de transporte que
+// nodemailer lea para forzar IPv4 (se probó `family` — la ignora por
+// completo), así que se resuelve la IP nosotros mismos antes de conectar y
+// se fuerza el certificado TLS a validar contra el hostname real (si no, la
+// verificación de certificado fallaría al conectar por IP directa).
+let cachedIPv4: { host: string; ip: string } | null = null;
+
+async function resolveSmtpIPv4(): Promise<string> {
+  if (cachedIPv4?.host === SMTP_HOST) return cachedIPv4.ip;
+  try {
+    const [ip] = await dns.promises.resolve4(SMTP_HOST);
+    cachedIPv4 = { host: SMTP_HOST, ip };
+    return ip;
+  } catch (err: any) {
+    logger.warn(`No se pudo resolver ${SMTP_HOST} a IPv4, se usará el hostname tal cual: ${err?.message || err}`);
+    return SMTP_HOST;
+  }
+}
+
+async function getTransporter() {
+  const host = await resolveSmtpIPv4();
+  return nodemailer.createTransport({
+    host,
+    port: SMTP_PORT,
+    secure: SMTP_SECURE,
+    tls: { servername: SMTP_HOST },
+    auth: {
+      user: process.env.SMTP_USER,
+      pass: process.env.SMTP_PASS,
+    },
+  });
+}
 
 const FROM = `"Komercio" <${process.env.SMTP_FROM || process.env.SMTP_USER}>`;
 const APP_URL = process.env.APP_URL || 'http://localhost:3000';
@@ -17,6 +51,7 @@ const APP_URL = process.env.APP_URL || 'http://localhost:3000';
 export const emailService = {
   async sendVerification(to: string, name: string, token: string) {
     const url = `${APP_URL}/verify-email?token=${token}`;
+    const transporter = await getTransporter();
     await transporter.sendMail({
       from: FROM,
       to,
@@ -27,6 +62,7 @@ export const emailService = {
 
   async sendPasswordReset(to: string, name: string, token: string) {
     const url = `${APP_URL}/reset-password?token=${token}`;
+    const transporter = await getTransporter();
     await transporter.sendMail({
       from: FROM,
       to,
