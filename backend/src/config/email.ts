@@ -1,74 +1,44 @@
-import dns from 'dns';
-import nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 import { logger } from './logger';
 
-const SMTP_HOST = process.env.SMTP_HOST || 'smtp.gmail.com';
-const SMTP_PORT = Number(process.env.SMTP_PORT) || 587;
-const SMTP_SECURE = process.env.SMTP_SECURE === 'true';
+// SMTP directo (nodemailer) se abandonó — Railway no logra completar la
+// conexión TCP contra Gmail en ningún puerto (587 y 465 dan ETIMEDOUT), muy
+// probablemente por una política de red que bloquea SMTP saliente (común en
+// varios proveedores de hosting para evitar spam). Resend envía por HTTPS,
+// que ningún proveedor bloquea.
+// El constructor de Resend lanza si el API key es undefined — un valor
+// dummy evita tumbar el arranque completo (y cualquier test que cargue
+// app.ts transitivamente) cuando la variable no está configurada; el envío
+// real simplemente fallará más adelante con un error claro en los logs,
+// mismo criterio de "degradar sin romper" que ya usa Redis en este proyecto.
+const resend = new Resend(process.env.RESEND_API_KEY || 're_dummy_not_configured');
 
-// nodemailer resuelve el host por su cuenta y, cuando hay tanto registros A
-// como AAAA (como smtp.gmail.com), ELIGE UNA IP AL AZAR entre ambas familias
-// combinadas — no prefiere IPv4 pese a intentarlo primero internamente (ver
-// nodemailer/lib/shared/index.js: formatDNSValue hace
-// `addresses[Math.floor(Math.random() * addresses.length)]`). El contenedor
-// de Railway no tiene salida IPv6 funcional, así que ~mitad de los envíos
-// fallaban con ENETUNREACH al azar. No hay ninguna opción de transporte que
-// nodemailer lea para forzar IPv4 (se probó `family` — la ignora por
-// completo), así que se resuelve la IP nosotros mismos antes de conectar y
-// se fuerza el certificado TLS a validar contra el hostname real (si no, la
-// verificación de certificado fallaría al conectar por IP directa).
-let cachedIPv4: { host: string; ip: string } | null = null;
+// Antes de verificar un dominio propio en Resend, la cuenta solo puede
+// enviar desde este remitente de prueba y únicamente al correo dueño de la
+// cuenta — suficiente para probar, no para clientes reales. Configurar
+// EMAIL_FROM (ej. "Komercio <noreply@ventrix.lat>") una vez el dominio esté
+// verificado en Resend.
+const FROM = process.env.EMAIL_FROM || 'Komercio <onboarding@resend.dev>';
+const APP_URL = process.env.APP_URL || 'http://localhost:3000';
 
-async function resolveSmtpIPv4(): Promise<string> {
-  if (cachedIPv4?.host === SMTP_HOST) return cachedIPv4.ip;
+async function send(to: string, subject: string, html: string, label: string) {
   try {
-    const [ip] = await dns.promises.resolve4(SMTP_HOST);
-    cachedIPv4 = { host: SMTP_HOST, ip };
-    return ip;
+    const { error } = await resend.emails.send({ from: FROM, to, subject, html });
+    if (error) logger.error(`${label}: ${error.message}`, { name: error.name });
   } catch (err: any) {
-    logger.warn(`No se pudo resolver ${SMTP_HOST} a IPv4, se usará el hostname tal cual: ${err?.message || err}`);
-    return SMTP_HOST;
+    logger.error(`${label} (excepción): ${err?.message || err}`);
   }
 }
-
-async function getTransporter() {
-  const host = await resolveSmtpIPv4();
-  return nodemailer.createTransport({
-    host,
-    port: SMTP_PORT,
-    secure: SMTP_SECURE,
-    tls: { servername: SMTP_HOST },
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
-    },
-  });
-}
-
-const FROM = `"Komercio" <${process.env.SMTP_FROM || process.env.SMTP_USER}>`;
-const APP_URL = process.env.APP_URL || 'http://localhost:3000';
 
 export const emailService = {
   async sendVerification(to: string, name: string, token: string) {
     const url = `${APP_URL}/verify-email?token=${token}`;
-    const transporter = await getTransporter();
-    await transporter.sendMail({
-      from: FROM,
-      to,
-      subject: 'Verifica tu cuenta en Komercio',
-      html: verificationTemplate(name, url),
-    }).catch((err) => logger.error(`Email verification send error: ${err?.message || err}`, { code: err?.code, response: err?.response }));
+    await send(to, 'Verifica tu cuenta en Komercio', verificationTemplate(name, url), 'Email verification send error');
   },
 
   async sendPasswordReset(to: string, name: string, token: string) {
     const url = `${APP_URL}/reset-password?token=${token}`;
-    const transporter = await getTransporter();
-    await transporter.sendMail({
-      from: FROM,
-      to,
-      subject: 'Restablece tu contraseña en Komercio',
-      html: resetTemplate(name, url),
-    }).catch((err) => logger.error(`Email reset send error: ${err?.message || err}`, { code: err?.code, response: err?.response }));
+    await send(to, 'Restablece tu contraseña en Komercio', resetTemplate(name, url), 'Email reset send error');
   },
 };
 
