@@ -11,6 +11,7 @@ import { errorHandler } from './middlewares/errorHandler';
 import { notFound } from './middlewares/notFound';
 import { logger } from './config/logger';
 import { redis } from './config/redis';
+import { AppError } from './utils/response';
 
 // Rate-limit Redis store — only in production with REDIS_URL; each limiter gets its own instance
 // (rate-limit-redis v4 forbids sharing one store across multiple limiters)
@@ -80,7 +81,10 @@ app.use(cors({
     }
     const allowed = (process.env.CORS_ORIGIN?.split(',') || []).map(s => s.trim());
     const ok = isDev ? (!origin || allowed.includes(origin)) : allowed.includes(origin ?? '');
-    callback(ok ? null : new Error('CORS'), ok);
+    // Un Error plano cae en el catch-all de errorHandler.ts y responde 500 —
+    // engañoso para algo que es, en realidad, un rechazo esperado (403), no
+    // una falla del servidor. AppError sí lo maneja como corresponde.
+    callback(ok ? null : new AppError('Origen no permitido', 403), ok);
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
