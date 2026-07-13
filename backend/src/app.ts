@@ -73,14 +73,22 @@ app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 app.use(cors({
   origin: (origin, callback) => {
     const isDev = process.env.NODE_ENV !== 'production';
+    // Sin header Origin no es una petición cross-origin de navegador
+    // (fetch/XHR) — es una navegación directa (ej. el link de "Plantilla"
+    // para descargar el Excel de importación, que abre la URL del backend
+    // en una pestaña nueva), una herramienta como curl/Postman, o un
+    // webhook. CORS no protege contra esos casos de todas formas — Origin es
+    // un header que cualquier cliente no-navegador puede omitir o falsear
+    // libremente. Los endpoints que sí dependen de la cookie de refresh
+    // token ya se protegen aparte con requireCsrfHeader.
+    if (!origin) return callback(null, true);
     // En desarrollo: acepta localhost y cualquier IP de red local
-    if (!origin && isDev) return callback(null, true);
-    if (isDev && origin && /^http:\/\/localhost(:\d+)?$/.test(origin)) return callback(null, true);
-    if (isDev && origin && /^http:\/\/(192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\.)\d+\.\d+(:\d+)?$/.test(origin)) {
+    if (isDev && /^http:\/\/localhost(:\d+)?$/.test(origin)) return callback(null, true);
+    if (isDev && /^http:\/\/(192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\.)\d+\.\d+(:\d+)?$/.test(origin)) {
       return callback(null, true);
     }
     const allowed = (process.env.CORS_ORIGIN?.split(',') || []).map(s => s.trim());
-    const ok = isDev ? (!origin || allowed.includes(origin)) : allowed.includes(origin ?? '');
+    const ok = allowed.includes(origin);
     // Un Error plano cae en el catch-all de errorHandler.ts y responde 500 —
     // engañoso para algo que es, en realidad, un rechazo esperado (403), no
     // una falla del servidor. AppError sí lo maneja como corresponde.
