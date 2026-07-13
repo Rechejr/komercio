@@ -153,6 +153,70 @@ test.describe('Inventario', () => {
     }
   });
 
+  test('pestañas de bodega (si hay 2+) cambian el stock mostrado sin romper la página', async ({ page }) => {
+    const tabs = page.locator('button:has-text("Todas las bodegas")');
+    if (await tabs.count() === 0) return; // solo 1 bodega, no aplica
+    await expect(tabs.first()).toBeVisible({ timeout: 8_000 });
+
+    // Busca la primera pestaña de bodega real (después de "Todas las bodegas")
+    const allTabButtons = page.locator('.rounded-xl.w-fit button');
+    if (await allTabButtons.count() > 1) {
+      await allTabButtons.nth(1).click();
+      await page.waitForTimeout(800);
+      const tableOrEmpty = page.locator('table').or(page.getByText(/No hay productos/));
+      await expect(tableOrEmpty.first()).toBeVisible({ timeout: 8_000 });
+      await expect(page.getByText('Algo salió mal')).not.toBeVisible();
+
+      // Volver a "Todas las bodegas" también debe seguir funcionando
+      await tabs.first().click();
+      await page.waitForTimeout(500);
+      await expect(page.getByText('Algo salió mal')).not.toBeVisible();
+    }
+  });
+
+  test('cargar inventario — escribir cantidad y guardar sin cerrarse', async ({ page }) => {
+    // exact:true — "Descargar inventario" contiene "cargar inventario" como
+    // subcadena y un match parcial terminaría haciendo clic en el botón
+    // equivocado (descarga el Excel en vez de abrir este modal).
+    const loadBtn = page.getByRole('button', { name: 'Cargar inventario', exact: true });
+    await expect(loadBtn.first()).toBeVisible({ timeout: 8_000 });
+    await loadBtn.first().click();
+    await page.waitForSelector('.fixed.inset-0', { timeout: 5_000 });
+
+    const branchSelect = page.locator('.fixed.inset-0 select').first();
+    await branchSelect.selectOption({ index: 1 });
+
+    const productRow = page.locator('.fixed.inset-0 input[type="number"]').first();
+    await expect(productRow).toBeVisible({ timeout: 8_000 });
+    await productRow.fill('7');
+
+    await page.locator('button:has-text("Guardar conteo")').click();
+    await expect(page.getByText(/actualizado/i)).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText('Algo salió mal')).not.toBeVisible();
+
+    // El cuadro debe seguir abierto después de guardar (no se cierra solo)
+    await expect(page.locator('.fixed.inset-0')).toBeVisible();
+    await page.keyboard.press('Escape');
+  });
+
+  test('cargar inventario — abrir "Nuevo producto" rápido', async ({ page }) => {
+    const loadBtn = page.getByRole('button', { name: 'Cargar inventario', exact: true });
+    await loadBtn.first().click();
+    await page.waitForSelector('.fixed.inset-0', { timeout: 5_000 });
+
+    const branchSelect = page.locator('.fixed.inset-0 select').first();
+    await branchSelect.selectOption({ index: 1 });
+
+    // Scoped al modal — la barra de herramientas de fondo tiene su PROPIO
+    // botón "+ Nuevo producto" (crear producto completo), que queda cubierto
+    // por el overlay del modal y un match sin scope haría clic en el equivocado.
+    const newProductBtn = page.locator('.fixed.inset-0 button:has-text("Nuevo producto")');
+    await expect(newProductBtn.first()).toBeVisible({ timeout: 8_000 });
+    await newProductBtn.first().click();
+    await expect(page.getByRole('heading', { name: 'Nuevo producto' })).toBeVisible({ timeout: 5_000 });
+    await page.keyboard.press('Escape');
+  });
+
   test('paginación funciona', async ({ page }) => {
     const nextBtn = page.locator('button:has-text("Siguiente")');
     if (await nextBtn.isVisible() && await nextBtn.isEnabled()) {

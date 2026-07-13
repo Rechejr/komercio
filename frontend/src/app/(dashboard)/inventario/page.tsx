@@ -13,6 +13,7 @@ import {
   Plus, Search, Edit, Trash2, Package, AlertTriangle,
   X, Loader2, Barcode, FileUp, FileDown, CheckCircle2,
   ArrowRight, Lock, ArrowUpDown, Share2, ScanLine, Warehouse, Download,
+  PackagePlus,
 } from 'lucide-react';
 import { BarcodeScanner } from '@/components/ui/BarcodeScanner';
 import { useAuthStore } from '@/store/auth.store';
@@ -88,6 +89,14 @@ export default function InventarioPage() {
   const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // ── Pestañas por bodega ────────────────────────────────────────────────
+  const [activeBranchTab, setActiveBranchTab] = useState('');
+  const [showStockCount, setShowStockCount] = useState(false);
+  const [countBranchId, setCountBranchId] = useState('');
+  const [countSearch, setCountSearch] = useState('');
+  const [countQuantities, setCountQuantities] = useState<Record<string, string>>({});
+  const [showQuickCreate, setShowQuickCreate] = useState(false);
+
   function handleDroppedFile(file: File) {
     const allowed = ['.xlsx', '.xls', '.csv'];
     const ext = file.name.slice(file.name.lastIndexOf('.')).toLowerCase();
@@ -98,13 +107,26 @@ export default function InventarioPage() {
   }
 
   const { data, isLoading } = useQuery({
-    queryKey: ['products', page, search],
-    queryFn: () => api.get(`/products?page=${page}&limit=20&search=${encodeURIComponent(search)}`).then((r) => r.data),
+    queryKey: ['products', page, search, activeBranchTab],
+    queryFn: () => api.get(`/products?page=${page}&limit=20&search=${encodeURIComponent(search)}${activeBranchTab ? `&branchId=${activeBranchTab}` : ''}`).then((r) => r.data),
   });
 
   const { data: categories } = useQuery({
     queryKey: ['categories'],
     queryFn: () => api.get('/categories').then((r) => r.data.data),
+  });
+
+  const { data: branches } = useQuery({
+    queryKey: ['branches'],
+    queryFn: () => api.get('/business/branches').then((r) => r.data.data),
+  });
+
+  // Stock de esta bodega específica por producto — mismo mecanismo que ya usa
+  // el POS (?branchId= en /products), no hace falta ningún endpoint nuevo.
+  const { data: branchProducts, isLoading: loadingBranchProducts } = useQuery({
+    queryKey: ['products-branch-stock-count', countBranchId],
+    queryFn: () => api.get(`/products?branchId=${countBranchId}&limit=500&isActive=true`).then((r) => r.data.data),
+    enabled: !!countBranchId,
   });
 
   // Desglose por bodega — se usa tanto para "ver stock por bodega" como para
@@ -181,7 +203,9 @@ export default function InventarioPage() {
   const saveMutation = useMutation({
     mutationFn: (data: any) => editItem
       ? api.put(`/products/${editItem.id}`, data)
-      : api.post('/products', data),
+      // Si se crea desde la pestaña de una bodega específica, el stock
+      // inicial debe quedar ahí — no en la que el backend adivine por defecto.
+      : api.post('/products', { ...data, ...(activeBranchTab ? { branchId: activeBranchTab } : {}) }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['products'] });
       toast.success(editItem ? 'Producto actualizado' : 'Producto creado');
@@ -190,6 +214,55 @@ export default function InventarioPage() {
       reset();
     },
     onError: (err: any) => toast.error(err.response?.data?.error || 'Error al guardar'),
+  });
+
+  function closeStockCount() {
+    setShowStockCount(false);
+    setCountBranchId('');
+    setCountSearch('');
+    setCountQuantities({});
+  }
+
+  const countMutation = useMutation({
+    mutationFn: (payload: { branchId: string; items: { productId: string; quantity: number }[] }) =>
+      api.post('/products/branch-stock-count', payload).then((r) => r.data),
+    onSuccess: (res: any) => {
+      qc.invalidateQueries({ queryKey: ['products'] });
+      qc.invalidateQueries({ queryKey: ['product-stock-by-branch'] });
+      qc.invalidateQueries({ queryKey: ['products-branch-stock-count'] });
+      toast.success(`${res.data.updated} producto${res.data.updated !== 1 ? 's' : ''} actualizado${res.data.updated !== 1 ? 's' : ''}`);
+      // A propósito NO se cierra el cuadro — se limpia y se deja abierto para
+      // que el usuario cambie la bodega de arriba y siga cargando la
+      // siguiente sin tener que cerrar y volver a abrir desde cero.
+      setCountQuantities({});
+    },
+    onError: (err: any) => toast.error(err.response?.data?.error || 'Error al guardar el conteo'),
+  });
+
+  function handleSaveCount() {
+    const items = Object.entries(countQuantities)
+      .filter(([, v]) => v.trim() !== '')
+      .map(([productId, v]) => ({ productId, quantity: parseFloat(v) }))
+      .filter((i) => !isNaN(i.quantity));
+    if (items.length === 0) { toast.error('Escribe al menos una cantidad'); return; }
+    countMutation.mutate({ branchId: countBranchId, items });
+  }
+
+  const {
+    register: registerQuick, handleSubmit: handleQuickSubmit, reset: resetQuick,
+    control: controlQuick, formState: { errors: quickErrors },
+  } = useForm({ defaultValues: { code: '', name: '', salePrice: 0, costPrice: 0, stock: 0 } });
+
+  const quickCreateMutation = useMutation({
+    mutationFn: (data: any) => api.post('/products', { ...data, branchId: countBranchId }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['products-branch-stock-count', countBranchId] });
+      qc.invalidateQueries({ queryKey: ['products'] });
+      toast.success('Producto creado');
+      setShowQuickCreate(false);
+      resetQuick();
+    },
+    onError: (err: any) => toast.error(err.response?.data?.error || 'Error al crear producto'),
   });
 
   function openEdit(item: any) {
@@ -246,6 +319,7 @@ export default function InventarioPage() {
 
   const products = data?.data || [];
   const pagination = data?.pagination;
+  const branchList: any[] = branches || [];
 
   return (
     <>
@@ -271,6 +345,33 @@ export default function InventarioPage() {
             <p className="text-[15px] font-semibold text-slate-800 dark:text-white">Suelta para importar</p>
             <p className="text-[13px] text-slate-400">.xlsx · .xls · .csv</p>
           </div>
+        </div>
+      )}
+
+      {/* ── Pestañas por bodega ──────────────────────────────────────────────── */}
+      {branchList.length > 1 && (
+        <div className="flex gap-1 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl w-fit max-w-full overflow-x-auto">
+          <button
+            type="button"
+            onClick={() => { setActiveBranchTab(''); setPage(1); }}
+            className={`flex-shrink-0 flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-[13px] font-semibold transition ${
+              activeBranchTab === '' ? 'bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-sm' : 'text-slate-500 dark:text-slate-400'
+            }`}
+          >
+            <Package size={13} /> Todas las bodegas
+          </button>
+          {branchList.map((b: any) => (
+            <button
+              key={b.id}
+              type="button"
+              onClick={() => { setActiveBranchTab(b.id); setPage(1); }}
+              className={`flex-shrink-0 flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-[13px] font-semibold transition ${
+                activeBranchTab === b.id ? 'bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-sm' : 'text-slate-500 dark:text-slate-400'
+              }`}
+            >
+              <Warehouse size={13} /> {b.name}
+            </button>
+          ))}
         </div>
       )}
 
@@ -324,6 +425,15 @@ export default function InventarioPage() {
             <Download size={15} /> Descargar inventario
           </button>
         )}
+
+        <button
+          type="button"
+          onClick={() => { setShowStockCount(true); setCountBranchId(activeBranchTab || ''); }}
+          title="Cargar o contar el stock físico de una bodega"
+          className="flex items-center gap-2 px-4 py-2.5 border border-emerald-200 dark:border-emerald-700/50 rounded-xl text-sm font-medium text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition"
+        >
+          <PackagePlus size={15} /> Cargar inventario
+        </button>
 
         {isFree ? (
           <button
@@ -525,7 +635,7 @@ export default function InventarioPage() {
                         <button
                           type="button"
                           aria-label="Ajustar stock"
-                          onClick={() => { setStockTarget(p); setStockForm({ quantity: String(p.stock), reason: '' }); setStockBranchId(''); }}
+                          onClick={() => { setStockTarget(p); setStockForm({ quantity: String(p.stock), reason: '' }); setStockBranchId(activeBranchTab || ''); }}
                           className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 transition"
                           title="Ajustar stock"
                         >
@@ -1203,6 +1313,192 @@ export default function InventarioPage() {
                 Entendido
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Cargar inventario (conteo masivo por bodega) ─────────────────────── */}
+      {showStockCount && (() => {
+        const list: any[] = branchProducts || [];
+        const filtered = countSearch
+          ? list.filter((p) =>
+              p.name.toLowerCase().includes(countSearch.toLowerCase()) ||
+              p.code?.toLowerCase().includes(countSearch.toLowerCase()))
+          : list;
+        const typedCount = Object.values(countQuantities).filter((v) => v.trim() !== '').length;
+
+        return (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-[2px] z-50 flex items-center justify-center p-4">
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/[0.08] rounded-2xl shadow-modal w-full max-w-4xl max-h-[90vh] flex flex-col animate-scale-in">
+
+              <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-white/[0.06] flex-shrink-0">
+                <div>
+                  <h2 className="text-[15px] font-semibold text-slate-800 dark:text-white">Cargar inventario</h2>
+                  <p className="text-[12px] text-slate-400 mt-0.5">Escribe la cantidad física de cada producto en la bodega — deja en blanco los que no quieras tocar</p>
+                </div>
+                <button
+                  type="button"
+                  aria-label="Cerrar"
+                  onClick={closeStockCount}
+                  className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/[0.06] transition"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              <div className="p-6 space-y-4 overflow-y-auto min-h-0 flex-1">
+                <div>
+                  <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5 block">Bodega *</label>
+                  <select
+                    value={countBranchId}
+                    onChange={(e) => { setCountBranchId(e.target.value); setCountQuantities({}); }}
+                    className={inputCls}
+                  >
+                    <option value="">Selecciona una bodega...</option>
+                    {branchList.map((b: any) => <option key={b.id} value={b.id}>{b.name}</option>)}
+                  </select>
+                </div>
+
+                {countBranchId && (
+                  <>
+                    <div className="flex items-center gap-2">
+                      <div className="relative flex-1">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+                        <input
+                          value={countSearch}
+                          onChange={(e) => setCountSearch(e.target.value)}
+                          placeholder="Buscar por nombre o código..."
+                          className="w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowQuickCreate(true)}
+                        className="flex-shrink-0 flex items-center gap-1.5 px-3.5 py-2.5 border border-emerald-200 dark:border-emerald-700/50 rounded-xl text-[13px] font-medium text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition"
+                      >
+                        <Plus size={14} /> Nuevo producto
+                      </button>
+                    </div>
+
+                    <div className="rounded-xl border border-slate-100 dark:border-white/[0.06] divide-y divide-slate-50 dark:divide-white/[0.04] max-h-[45vh] overflow-y-auto">
+                      {loadingBranchProducts ? (
+                        <div className="flex justify-center py-8">
+                          <Loader2 size={20} className="animate-spin text-emerald-500" />
+                        </div>
+                      ) : filtered.length === 0 ? (
+                        <p className="text-center py-8 text-[13px] text-slate-400">No hay productos que coincidan</p>
+                      ) : filtered.map((p: any) => (
+                        <div key={p.id} className="flex items-center justify-between gap-3 px-4 py-2.5">
+                          <div className="min-w-0 flex-1">
+                            <p className="text-[13px] font-medium text-slate-800 dark:text-white truncate">{p.name}</p>
+                            <p className="text-[11px] text-slate-400 mt-0.5">
+                              {p.code} · actual: {p.stock} {p.unit || ''}
+                            </p>
+                          </div>
+                          <input
+                            type="number"
+                            inputMode="decimal"
+                            min="0"
+                            step="any"
+                            value={countQuantities[p.id] ?? ''}
+                            onChange={(e) => setCountQuantities((q) => ({ ...q, [p.id]: e.target.value }))}
+                            placeholder="—"
+                            className="w-24 flex-shrink-0 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-[16px] sm:text-sm text-right focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+
+              <div className="flex items-center justify-between gap-3 px-6 py-4 border-t border-slate-100 dark:border-white/[0.06] flex-shrink-0">
+                <span className="text-[12px] text-slate-400">
+                  {countBranchId ? `${typedCount} producto${typedCount !== 1 ? 's' : ''} con cantidad escrita` : ''}
+                </span>
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={closeStockCount}
+                    className="px-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-xl text-[13px] font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+                  >
+                    Cerrar
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!countBranchId || typedCount === 0 || countMutation.isPending}
+                    onClick={handleSaveCount}
+                    className="px-6 py-2.5 bg-emerald-600 text-white rounded-xl text-[13px] font-semibold hover:bg-emerald-700 disabled:opacity-50 shadow-sm shadow-emerald-600/25 flex items-center gap-2 transition"
+                  >
+                    {countMutation.isPending && <Loader2 size={14} className="animate-spin" />}
+                    Guardar conteo
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ── Nuevo producto rápido (dentro de Cargar inventario) ──────────────── */}
+      {showQuickCreate && (
+        <div
+          className="fixed inset-0 bg-black/50 backdrop-blur-[2px] z-[60] flex items-center justify-center p-4"
+          onClick={() => { setShowQuickCreate(false); resetQuick(); }}
+        >
+          <div
+            className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/[0.08] rounded-2xl shadow-modal w-full max-w-sm p-6 space-y-4 animate-scale-in"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-[15px] font-semibold text-slate-800 dark:text-white">Nuevo producto</h3>
+
+            <form onSubmit={handleQuickSubmit((d: any) => quickCreateMutation.mutate(d))} className="space-y-3">
+              <div>
+                <input {...registerQuick('code', { required: true })} placeholder="Código *" className={inputCls} autoFocus />
+                {quickErrors.code && <p className="mt-1 text-[11px] text-red-500">El código es obligatorio</p>}
+              </div>
+              <div>
+                <input {...registerQuick('name', { required: true })} placeholder="Nombre del producto *" className={inputCls} />
+                {quickErrors.name && <p className="mt-1 text-[11px] text-red-500">El nombre es obligatorio</p>}
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Controller control={controlQuick} name="salePrice" rules={{ required: true, min: 1 }} render={({ field }) => (
+                    <PriceInput {...field} onChange={(n) => field.onChange(n ?? 0)} className={inputCls} placeholder="Precio venta *" />
+                  )} />
+                  {quickErrors.salePrice && <p className="mt-1 text-[11px] text-red-500">Requerido</p>}
+                </div>
+                <Controller control={controlQuick} name="costPrice" render={({ field }) => (
+                  <PriceInput {...field} onChange={(n) => field.onChange(n ?? 0)} className={inputCls} placeholder="Costo" />
+                )} />
+              </div>
+              <div>
+                <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5 block">Cantidad en esta bodega</label>
+                <input
+                  {...registerQuick('stock', { valueAsNumber: true, min: 0 })}
+                  type="number" inputMode="decimal" step="any" min="0" placeholder="0"
+                  className={inputCls}
+                />
+              </div>
+
+              <div className="flex gap-3 pt-1">
+                <button
+                  type="button"
+                  onClick={() => { setShowQuickCreate(false); resetQuick(); }}
+                  className="flex-1 px-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-xl text-[13px] font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={quickCreateMutation.isPending}
+                  className="flex-1 px-4 py-2.5 bg-emerald-600 text-white rounded-xl text-[13px] font-semibold hover:bg-emerald-700 disabled:opacity-50 shadow-sm shadow-emerald-600/25 transition flex items-center justify-center gap-2"
+                >
+                  {quickCreateMutation.isPending && <Loader2 size={14} className="animate-spin" />}
+                  Crear
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
