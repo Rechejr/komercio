@@ -36,6 +36,9 @@ export default function ComprasPage() {
   const [newSupPhone, setNewSupPhone] = useState('');
   const [newSupLegal, setNewSupLegal] = useState('');
   const [newSupDoc, setNewSupDoc] = useState('');
+  const [duplicateInvoice, setDuplicateInvoice] = useState<any>(null);
+  const [pendingFormData, setPendingFormData] = useState<any>(null);
+  const [checkingInvoice, setCheckingInvoice] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ['purchases', page],
@@ -89,9 +92,37 @@ export default function ComprasPage() {
       reset();
       setSelectedSupplierName('');
       setSupplierSearch('');
+      setDuplicateInvoice(null);
+      setPendingFormData(null);
     },
     onError: (err: any) => toast.error(err.response?.data?.error || 'Error al guardar'),
   });
+
+  // Antes de registrar/actualizar, avisa si ya existe una factura con el mismo
+  // número para ese proveedor — común cuando un vendedor ya la cargó y el
+  // dueño/administrador no se dio cuenta e intenta subirla de nuevo. Es solo
+  // una advertencia (no bloquea): puede haber casos legítimos de continuar.
+  async function onSubmit(d: any) {
+    const trimmedInvoice = (d.invoiceNumber || '').trim();
+    if (trimmedInvoice && d.supplierId) {
+      setCheckingInvoice(true);
+      try {
+        const params = new URLSearchParams({ supplierId: d.supplierId, invoiceNumber: trimmedInvoice });
+        if (editItem) params.set('excludeId', editItem.id);
+        const res = await api.get(`/purchases/check-invoice?${params.toString()}`);
+        if (res.data?.data?.duplicate) {
+          setPendingFormData(d);
+          setDuplicateInvoice(res.data.data.existing);
+          setCheckingInvoice(false);
+          return;
+        }
+      } catch {
+        // Si la verificación falla, no bloquear el registro de la compra.
+      }
+      setCheckingInvoice(false);
+    }
+    saveMutation.mutate(d);
+  }
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.delete(`/purchases/${id}`),
@@ -405,6 +436,19 @@ export default function ComprasPage() {
         variant="danger"
       />
 
+      {/* ── Factura duplicada ────────────────────────────────────────────────── */}
+      <ConfirmDialog
+        open={!!duplicateInvoice}
+        onOpenChange={(open) => { if (!open) { setDuplicateInvoice(null); setPendingFormData(null); } }}
+        title="Esta factura ya está registrada"
+        description={duplicateInvoice ? `Ya existe una compra a este proveedor con la factura N° "${pendingFormData?.invoiceNumber}" del ${formatDate(duplicateInvoice.purchaseDate)} por ${formatCurrency(duplicateInvoice.total)}. ¿Deseas continuar y registrarla de todas formas?` : undefined}
+        confirmLabel="Continuar de todas formas"
+        cancelLabel="Cancelar"
+        variant="warning"
+        loading={saveMutation.isPending}
+        onConfirm={() => pendingFormData && saveMutation.mutate(pendingFormData)}
+      />
+
       {/* ── Form Modal ───────────────────────────────────────────────────────── */}
       {showForm && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-[2px] z-50 flex items-center justify-center p-4">
@@ -424,7 +468,7 @@ export default function ComprasPage() {
               </button>
             </div>
 
-            <form onSubmit={handleSubmit((d: any) => saveMutation.mutate(d))} className="p-6 space-y-5 overflow-y-auto min-h-0">
+            <form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-5 overflow-y-auto min-h-0">
               <div className="grid grid-cols-2 gap-4">
                 {/* Proveedor */}
                 <div>
@@ -626,10 +670,10 @@ export default function ComprasPage() {
                 </button>
                 <button
                   type="submit"
-                  disabled={saveMutation.isPending}
+                  disabled={saveMutation.isPending || checkingInvoice}
                   className="px-6 py-2.5 bg-emerald-600 text-white rounded-xl text-[13px] font-semibold hover:bg-emerald-700 disabled:opacity-60 shadow-sm shadow-emerald-600/25 flex items-center gap-2 transition"
                 >
-                  {saveMutation.isPending && <Loader2 size={14} className="animate-spin" />}
+                  {(saveMutation.isPending || checkingInvoice) && <Loader2 size={14} className="animate-spin" />}
                   {editItem ? 'Actualizar compra' : 'Registrar compra'}
                 </button>
               </div>

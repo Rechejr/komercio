@@ -74,6 +74,61 @@ describe('POST /api/v1/purchases', () => {
   });
 });
 
+describe('GET /api/v1/purchases/check-invoice', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('responde duplicate:false si faltan supplierId o invoiceNumber', async () => {
+    const res = await request(app)
+      .get('/api/v1/purchases/check-invoice')
+      .query({ supplierId: 'sup-1' })
+      .set(authHeader('ADMIN'));
+
+    expect(res.status).toBe(200);
+    expect(res.body.data).toEqual({ duplicate: false });
+    expect(mockPrisma.purchase.findFirst).not.toHaveBeenCalled();
+  });
+
+  it('responde duplicate:true con los datos de la compra existente cuando ya hay una factura igual del mismo proveedor', async () => {
+    (mockPrisma.purchase.findFirst as jest.Mock).mockResolvedValue({
+      id: 'purch-1', purchaseDate: new Date('2026-07-01'), total: 50000,
+    });
+
+    const res = await request(app)
+      .get('/api/v1/purchases/check-invoice')
+      .query({ supplierId: 'sup-1', invoiceNumber: 'FAC-001' })
+      .set(authHeader('ADMIN'));
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.duplicate).toBe(true);
+    expect(res.body.data.existing).toEqual(expect.objectContaining({ id: 'purch-1', total: 50000 }));
+    expect(mockPrisma.purchase.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          supplierId: 'sup-1',
+          invoiceNumber: { equals: 'FAC-001', mode: 'insensitive' },
+        }),
+      })
+    );
+  });
+
+  it('excluye la propia compra al editar (excludeId)', async () => {
+    (mockPrisma.purchase.findFirst as jest.Mock).mockResolvedValue(null);
+
+    const res = await request(app)
+      .get('/api/v1/purchases/check-invoice')
+      .query({ supplierId: 'sup-1', invoiceNumber: 'FAC-001', excludeId: 'purch-1' })
+      .set(authHeader('ADMIN'));
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.duplicate).toBe(false);
+    expect(mockPrisma.purchase.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ id: { not: 'purch-1' } }),
+      })
+    );
+  });
+});
+
 describe('DELETE /api/v1/purchases/:id', () => {
   beforeEach(() => jest.clearAllMocks());
 

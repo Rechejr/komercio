@@ -52,6 +52,29 @@ router.get('/', async (req: AuthRequest, res, next) => {
   } catch (err) { next(err); }
 });
 
+// Debe ir antes de "/:id" — si no, Express la interpreta como un id.
+router.get('/check-invoice', async (req: AuthRequest, res, next) => {
+  try {
+    const supplierId = req.query.supplierId as string | undefined;
+    const invoiceNumber = ((req.query.invoiceNumber as string) || '').trim();
+    const excludeId = req.query.excludeId as string | undefined;
+    if (!supplierId || !invoiceNumber) return success(res, { duplicate: false });
+
+    const existing = await prisma.purchase.findFirst({
+      where: {
+        businessId: req.user!.businessId,
+        supplierId,
+        deletedAt: null,
+        invoiceNumber: { equals: invoiceNumber, mode: 'insensitive' },
+        ...(excludeId ? { id: { not: excludeId } } : {}),
+      },
+      select: { id: true, purchaseDate: true, total: true },
+      orderBy: { purchaseDate: 'desc' },
+    });
+    return success(res, { duplicate: !!existing, existing: existing || null });
+  } catch (err) { next(err); }
+});
+
 router.get('/:id', async (req: AuthRequest, res, next) => {
   try {
     const purchase = await prisma.purchase.findFirst({
