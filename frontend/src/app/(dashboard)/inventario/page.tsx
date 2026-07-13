@@ -12,7 +12,7 @@ import toast from 'react-hot-toast';
 import {
   Plus, Search, Edit, Trash2, Package, AlertTriangle,
   X, Loader2, Barcode, FileUp, FileDown, CheckCircle2,
-  ArrowRight, Lock, ArrowUpDown, Share2, ScanLine, Warehouse,
+  ArrowRight, Lock, ArrowUpDown, Share2, ScanLine, Warehouse, Download,
 } from 'lucide-react';
 import { BarcodeScanner } from '@/components/ui/BarcodeScanner';
 import { useAuthStore } from '@/store/auth.store';
@@ -20,6 +20,7 @@ import { useUpgradeStore } from '@/store/upgrade.store';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { StaggerList, StaggerItem } from '@/components/ui/StaggerList';
 import { PriceInput } from '@/components/ui/PriceInput';
+import { downloadExcel } from '@/lib/exportExcel';
 
 type PreviewData = {
   total: number;
@@ -306,6 +307,28 @@ export default function InventarioPage() {
           <button
             type="button"
             onClick={openUpgrade}
+            title="Descargar tu inventario actual en Excel"
+            className="flex items-center gap-2 px-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-medium text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+          >
+            <Download size={15} />
+            Descargar inventario
+            <span className="px-1.5 py-0.5 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 text-[10px] font-bold rounded-full leading-none">PRO</span>
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => downloadExcel('products', '', '')}
+            title="Descargar tu inventario actual en Excel"
+            className="flex items-center gap-2 px-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+          >
+            <Download size={15} /> Descargar inventario
+          </button>
+        )}
+
+        {isFree ? (
+          <button
+            type="button"
+            onClick={openUpgrade}
             className="flex items-center gap-2 px-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-medium text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
           >
             <FileDown size={15} />
@@ -317,6 +340,7 @@ export default function InventarioPage() {
             href={`${process.env.NEXT_PUBLIC_API_URL}/products/import-template`}
             target="_blank"
             rel="noopener noreferrer"
+            title="Ejemplo de formato para empezar desde cero — si ya tienes tu propio Excel, no lo necesitas, solo súbelo en 'Importar Excel'"
             className="flex items-center gap-2 px-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
           >
             <FileDown size={15} /> Plantilla
@@ -338,6 +362,7 @@ export default function InventarioPage() {
             type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={previewMutation.isPending || importMutation.isPending}
+            title="Sube directamente tu propio Excel — el sistema detecta automáticamente columnas como Nombre, Código, Precio o Stock aunque no se llamen igual"
             className="flex items-center gap-2 px-4 py-2.5 border border-emerald-200 dark:border-emerald-700/50 rounded-xl text-sm font-medium text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 disabled:opacity-50 transition"
           >
             {(previewMutation.isPending || importMutation.isPending)

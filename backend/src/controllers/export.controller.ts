@@ -720,4 +720,66 @@ export const exportController = {
       await wb.commit();
     } catch (err) { next(err); }
   },
+
+  // Mismas columnas/orden que /products/import-template — así lo que se
+  // descarga aquí se puede editar y volver a subir con "Importar Excel" sin
+  // que el detector de columnas tenga que adivinar nada.
+  async exportProducts(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const wb = initStreamWriter(res, `inventario-${new Date().toISOString().split('T')[0]}.xlsx`);
+
+      const ws = wb.addWorksheet('Productos');
+      ws.columns = [
+        { header: 'Nombre', key: 'name', width: 30 },
+        { header: 'Código', key: 'code', width: 15 },
+        { header: 'Precio Venta', key: 'salePrice', width: 15 },
+        { header: 'Precio Costo', key: 'costPrice', width: 15 },
+        { header: 'Stock', key: 'stock', width: 10 },
+        { header: 'Stock Mínimo', key: 'minStock', width: 13 },
+        { header: 'Categoría', key: 'category', width: 20 },
+        { header: 'Unidad', key: 'unit', width: 10 },
+        { header: 'Código de Barras', key: 'barcode', width: 18 },
+        { header: 'Descripción', key: 'description', width: 30 },
+      ];
+      styleHeaderStream(ws);
+
+      const where = { deletedAt: null, businessId: req.user!.businessId };
+      let lastId: string | undefined;
+      let fetched = 0;
+
+      while (fetched < MAX_EXPORT_ROWS) {
+        const batch = await prisma.product.findMany({
+          where,
+          orderBy: [{ name: 'asc' }, { id: 'asc' }],
+          take: Math.min(BATCH_SIZE, MAX_EXPORT_ROWS - fetched),
+          ...(lastId ? { skip: 1, cursor: { id: lastId } } : {}),
+          include: { category: { select: { name: true } } },
+        });
+
+        if (batch.length === 0) break;
+
+        for (const p of batch) {
+          ws.addRow({
+            name: safeStr(p.name),
+            code: safeStr(p.code),
+            salePrice: fmtMoney(p.salePrice),
+            costPrice: fmtMoney(p.costPrice),
+            stock: Number(p.stock),
+            minStock: Number(p.minStock),
+            category: safeStr(p.category?.name || ''),
+            unit: safeStr(p.unit || ''),
+            barcode: safeStr(p.barcode || ''),
+            description: safeStr(p.description || ''),
+          }).commit();
+        }
+
+        fetched += batch.length;
+        lastId = batch[batch.length - 1].id;
+        if (batch.length < BATCH_SIZE) break;
+      }
+
+      ws.commit();
+      await wb.commit();
+    } catch (err) { next(err); }
+  },
 };

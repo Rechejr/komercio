@@ -344,3 +344,58 @@ describe('exportController.exportFinancialReport', () => {
     expect(wsMock.addRow).toHaveBeenCalledWith(expect.objectContaining({ name: 'Pedro Ruiz', debt: 150000 }));
   });
 });
+
+// ─── exportProducts ───────────────────────────────────────────────────────────
+
+describe('exportController.exportProducts', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('establece headers Content-Disposition con nombre inventario-', async () => {
+    (mockPrisma.product.findMany as jest.Mock).mockResolvedValue([]);
+    const { res, setHeader } = makeRes();
+    await exportController.exportProducts(makeReq(), res, next);
+    expect(setHeader).toHaveBeenCalledWith('Content-Type', expect.stringContaining('spreadsheetml'));
+    expect(setHeader).toHaveBeenCalledWith('Content-Disposition', expect.stringContaining('inventario-'));
+  });
+
+  it('crea la hoja Productos con las mismas columnas que la plantilla de importación', async () => {
+    (mockPrisma.product.findMany as jest.Mock).mockResolvedValue([]);
+    await exportController.exportProducts(makeReq(), makeRes().res, next);
+    expect(streamWbMock.addWorksheet).toHaveBeenCalledWith('Productos');
+  });
+
+  it('escribe una fila por producto y hace commit del workbook', async () => {
+    const product = {
+      id: 'p1', name: 'Arroz Diana 1kg', code: 'P001',
+      salePrice: 3200, costPrice: 2500, stock: 50, minStock: 10,
+      unit: 'Und', barcode: '7701234567890', description: '',
+      category: { name: 'Alimentos' },
+    };
+    (mockPrisma.product.findMany as jest.Mock)
+      .mockResolvedValueOnce([product])
+      .mockResolvedValueOnce([]);
+
+    await exportController.exportProducts(makeReq(), makeRes().res, next);
+
+    expect(wsMock.addRow).toHaveBeenCalledWith(expect.objectContaining({
+      name: 'Arroz Diana 1kg', code: 'P001', salePrice: 3200, stock: 50, category: 'Alimentos',
+    }));
+    expect(streamWbMock.commit).toHaveBeenCalled();
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('solo trae productos del negocio del usuario y no eliminados', async () => {
+    (mockPrisma.product.findMany as jest.Mock).mockResolvedValue([]);
+    await exportController.exportProducts(makeReq({ user: { userId: 'u-1', email: 'a@b.com', role: 'ADMIN', businessId: 'biz-2', branchId: 'br-1' } }), makeRes().res, next);
+    expect(mockPrisma.product.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ businessId: 'biz-2', deletedAt: null }) })
+    );
+  });
+
+  it('hace commit del workbook aunque no haya productos', async () => {
+    (mockPrisma.product.findMany as jest.Mock).mockResolvedValue([]);
+    await exportController.exportProducts(makeReq(), makeRes().res, next);
+    expect(next).not.toHaveBeenCalled();
+    expect(streamWbMock.commit).toHaveBeenCalled();
+  });
+});

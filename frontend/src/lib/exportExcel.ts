@@ -6,10 +6,11 @@ const ENDPOINT_FILENAMES: Record<string, string> = {
   purchases: 'compras',
   expenses: 'gastos',
   financial: 'estado-resultados',
+  products: 'inventario',
 };
 
 export async function downloadExcel(
-  endpoint: 'sales' | 'purchases' | 'expenses' | 'financial',
+  endpoint: 'sales' | 'purchases' | 'expenses' | 'financial' | 'products',
   startDate: string,
   endDate: string,
 ) {
@@ -29,7 +30,12 @@ export async function downloadExcel(
     const a = document.createElement('a');
     a.href = url;
     const name = ENDPOINT_FILENAMES[endpoint] ?? endpoint;
-    a.download = `${name}-${startDate || 'inicio'}-${endDate || 'hoy'}.xlsx`;
+    // El inventario no tiene rango de fechas — usa la fecha de hoy en vez de
+    // los placeholders "inicio"/"hoy" (que no tendrían sentido sin rango).
+    const suffix = startDate || endDate
+      ? `-${startDate || 'inicio'}-${endDate || 'hoy'}`
+      : `-${new Date().toISOString().split('T')[0]}`;
+    a.download = `${name}${suffix}.xlsx`;
     document.body.appendChild(a);
     try { a.click(); } finally { a.remove(); }
     URL.revokeObjectURL(url);

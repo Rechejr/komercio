@@ -22,6 +22,7 @@ router.use(exportLimiter);
 router.get('/sales', exportController.exportSales);
 router.get('/purchases', exportController.exportPurchases);
 router.get('/expenses', exportController.exportExpenses);
+router.get('/products', exportController.exportProducts);
 router.get('/financial', exportController.exportFinancialReport);
 
 export default router;
