@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { rateLimit } from 'express-rate-limit';
 import { exportController } from '../controllers/export.controller';
-import { authenticate } from '../middlewares/auth';
+import { authenticate, authorize } from '../middlewares/auth';
 import { planLimit } from '../middlewares/planLimit';
 
 const router = Router();
@@ -23,6 +23,11 @@ router.get('/sales', exportController.exportSales);
 router.get('/purchases', exportController.exportPurchases);
 router.get('/expenses', exportController.exportExpenses);
 router.get('/products', exportController.exportProducts);
-router.get('/financial', exportController.exportFinancialReport);
+// A diferencia de los de arriba (mismos datos transaccionales que ya se ven
+// fila por fila en pantalla para esos roles), este trae costPrice/utilidad/
+// cartera consolidados — el mismo nivel de detalle que report.routes.ts, que
+// ya está restringido a ADMIN/SUPERVISOR. Sin esto, cualquier rol autenticado
+// (ej. CASHIER) podía bajar el estado de resultados completo del negocio.
+router.get('/financial', authorize('ADMIN', 'SUPERVISOR'), exportController.exportFinancialReport);
 
 export default router;

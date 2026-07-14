@@ -320,3 +320,80 @@ describe('creditController.addPayment', () => {
     expect(mockPrisma.cashMovement.create).not.toHaveBeenCalled();
   });
 });
+
+// ─── cancel ──────────────────────────────────────────────────────────────────
+
+describe('creditController.cancel', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('anula un crédito manual: revierte el saldo pendiente del cliente y marca CANCELLED', async () => {
+    const lockedCredit = { id: 'credit-1', status: 'PARTIAL', balance: 40000, customerId: 'cust-1', saleId: null };
+    const txCustomerUpdate = jest.fn().mockResolvedValue({});
+    const txCreditUpdate = jest.fn().mockResolvedValue({});
+    (mockPrisma.$transaction as jest.Mock).mockImplementation(async (fn: any) => {
+      const tx = {
+        $queryRaw: jest.fn().mockResolvedValue([lockedCredit]),
+        customer: { update: txCustomerUpdate },
+        credit: { update: txCreditUpdate },
+      };
+      return fn(tx);
+    });
+
+    const { res, json } = makeRes();
+    await creditController.cancel(makeReq({ params: { id: 'credit-1' } }), res, next);
+
+    expect(txCustomerUpdate).toHaveBeenCalledWith({
+      where: { id: 'cust-1' },
+      data: { currentDebt: { decrement: 40000 } },
+    });
+    expect(txCreditUpdate).toHaveBeenCalledWith({
+      where: { id: 'credit-1' },
+      data: { status: 'CANCELLED', balance: 0 },
+    });
+    expect(json).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('retorna 404 cuando el crédito no existe (o no pertenece al negocio)', async () => {
+    (mockPrisma.$transaction as jest.Mock).mockImplementation(async (fn: any) => {
+      const tx = { $queryRaw: jest.fn().mockResolvedValue([]) };
+      return fn(tx);
+    });
+
+    await creditController.cancel(makeReq({ params: { id: 'credit-x' } }), makeRes().res, next);
+    expect((next as jest.Mock).mock.calls[0][0].statusCode).toBe(404);
+  });
+
+  it('rechaza con 400 si el crédito ya está saldado', async () => {
+    const lockedCredit = { id: 'credit-1', status: 'PAID', balance: 0, customerId: 'cust-1', saleId: null };
+    (mockPrisma.$transaction as jest.Mock).mockImplementation(async (fn: any) => {
+      const tx = { $queryRaw: jest.fn().mockResolvedValue([lockedCredit]) };
+      return fn(tx);
+    });
+
+    await creditController.cancel(makeReq({ params: { id: 'credit-1' } }), makeRes().res, next);
+    expect((next as jest.Mock).mock.calls[0][0].statusCode).toBe(400);
+  });
+
+  it('rechaza con 400 si el crédito ya está anulado', async () => {
+    const lockedCredit = { id: 'credit-1', status: 'CANCELLED', balance: 0, customerId: 'cust-1', saleId: null };
+    (mockPrisma.$transaction as jest.Mock).mockImplementation(async (fn: any) => {
+      const tx = { $queryRaw: jest.fn().mockResolvedValue([lockedCredit]) };
+      return fn(tx);
+    });
+
+    await creditController.cancel(makeReq({ params: { id: 'credit-1' } }), makeRes().res, next);
+    expect((next as jest.Mock).mock.calls[0][0].statusCode).toBe(400);
+  });
+
+  it('rechaza con 400 si el crédito está ligado a una venta (debe anularse desde Ventas)', async () => {
+    const lockedCredit = { id: 'credit-1', status: 'PENDING', balance: 50000, customerId: 'cust-1', saleId: 'sale-1' };
+    (mockPrisma.$transaction as jest.Mock).mockImplementation(async (fn: any) => {
+      const tx = { $queryRaw: jest.fn().mockResolvedValue([lockedCredit]) };
+      return fn(tx);
+    });
+
+    await creditController.cancel(makeReq({ params: { id: 'credit-1' } }), makeRes().res, next);
+    expect((next as jest.Mock).mock.calls[0][0].statusCode).toBe(400);
+  });
+});

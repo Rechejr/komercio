@@ -65,7 +65,7 @@ export const paymentController = {
       const { period = 'monthly' } = req.body;
       const businessId = req.user!.businessId;
 
-      logger.info(`Wompi createLink: key=${process.env.WOMPI_PRIVATE_KEY?.slice(0, 12)}... host=${WOMPI_BASE} period=${period}`);
+      logger.info(`Wompi createLink: keyConfigured=${!!process.env.WOMPI_PRIVATE_KEY} testMode=${isTestMode} host=${WOMPI_BASE} period=${period}`);
       if (!businessId) throw new AppError('No tienes un negocio registrado', 400);
       if (!['monthly', 'quarterly', 'annual'].includes(period)) {
         throw new AppError('Período no válido', 400);
@@ -156,27 +156,46 @@ export const paymentController = {
         return res.json({ received: true });
       }
 
-      const business = await prisma.business.findUnique({ where: { id: link.businessId }, select: { planExpiresAt: true } });
-      // Si al negocio le quedaba tiempo vigente, se le suma desde ahí — no desde
-      // "ahora" — para no regalarle un mes gratis por renovar antes de vencerse
-      // (o, visto al revés, quitarle los días que ya tenía pagados).
-      const currentExpiry = business?.planExpiresAt;
-      const base = currentExpiry && currentExpiry > new Date() ? currentExpiry : new Date();
-      const expiresAt = new Date(base);
-      expiresAt.setMonth(expiresAt.getMonth() + link.months);
+      // Bloquea la fila del negocio dentro de una transacción interactiva — sin esto,
+      // dos webhooks casi simultáneos (dos pagos del mismo negocio, o el mismo evento
+      // reentregado por Wompi) podían leer el mismo planExpiresAt "base" antes de que
+      // cualquiera confirmara, y el que escribiera último pisaba al otro: el negocio
+      // quedaba acreditado con un solo pago, perdiendo el otro en silencio (sin error).
+      const expiresAt = await prisma.$transaction(async (tx) => {
+        const [lockedBiz] = await tx.$queryRawUnsafe<any[]>(
+          `SELECT "planExpiresAt" FROM businesses WHERE id = $1 FOR UPDATE`,
+          link.businessId,
+        );
+        if (!lockedBiz) return null;
 
-      await prisma.$transaction([
-        prisma.business.update({
-          where: { id: link.businessId },
-          data: { plan: 'pro', planExpiresAt: expiresAt },
-        }),
-        prisma.paymentLink.update({
+        // Re-chequeo de consumedAt DENTRO del lock — el chequeo de arriba (antes de
+        // abrir la transacción) no alcanza a evitar que dos entregas casi simultáneas
+        // del MISMO webhook pasen ambas antes de que cualquiera marque consumedAt.
+        const freshLink = await tx.paymentLink.findUnique({ where: { id: linkId } });
+        if (!freshLink || freshLink.consumedAt) return null;
+
+        // Si al negocio le quedaba tiempo vigente, se le suma desde ahí — no desde
+        // "ahora" — para no regalarle un mes gratis por renovar antes de vencerse
+        // (o, visto al revés, quitarle los días que ya tenía pagados).
+        const currentExpiry = lockedBiz.planExpiresAt ? new Date(lockedBiz.planExpiresAt) : null;
+        const base = currentExpiry && currentExpiry > new Date() ? currentExpiry : new Date();
+        const newExpiresAt = new Date(base);
+        newExpiresAt.setMonth(newExpiresAt.getMonth() + freshLink.months);
+
+        await tx.business.update({
+          where: { id: freshLink.businessId },
+          data: { plan: 'pro', planExpiresAt: newExpiresAt },
+        });
+        await tx.paymentLink.update({
           where: { id: linkId },
           data: { consumedAt: new Date() },
-        }),
-      ]);
+        });
+        return newExpiresAt;
+      });
 
-      logger.info('Plan Pro activado', { businessId: link.businessId, period: link.period, expiresAt });
+      if (expiresAt) {
+        logger.info('Plan Pro activado', { businessId: link.businessId, period: link.period, expiresAt });
+      }
 
       return res.json({ received: true });
     } catch (err: any) {

@@ -29,34 +29,35 @@ export const reportController = {
       if (groupBy === 'week') groupFormat = 'YYYY-WW';
       if (groupBy === 'month') groupFormat = 'YYYY-MM';
 
-      const sales = await prisma.$queryRaw<Array<any>>`
-        SELECT
-          TO_CHAR(s."createdAt", ${groupFormat})          AS period,
-          SUM(s.total)::float                             AS gross_revenue,
-          SUM(s.total - s."taxAmount")::float             AS net_revenue,
-          COUNT(*)::int                                   AS count,
-          SUM(s."taxAmount")::float                       AS taxes,
-          SUM(s."discountAmount")::float                  AS discounts
-        FROM sales s
-        JOIN branches br ON s."branchId" = br.id
-        WHERE s."createdAt" BETWEEN ${start} AND ${end}
-          AND s.status = 'COMPLETED'
-          AND s."deletedAt" IS NULL
-          AND br."businessId" = ${businessId}
-        GROUP BY period
-        ORDER BY period ASC
-      `;
-
-      const totals = await prisma.sale.aggregate({
-        where: {
-          createdAt: { gte: start, lte: end },
-          status: 'COMPLETED',
-          deletedAt: null,
-          branch: { businessId },
-        },
-        _sum: { total: true, taxAmount: true, discountAmount: true },
-        _count: { id: true },
-      });
+      const [sales, totals] = await Promise.all([
+        prisma.$queryRaw<Array<any>>`
+          SELECT
+            TO_CHAR(s."createdAt", ${groupFormat})          AS period,
+            SUM(s.total)::float                             AS gross_revenue,
+            SUM(s.total - s."taxAmount")::float             AS net_revenue,
+            COUNT(*)::int                                   AS count,
+            SUM(s."taxAmount")::float                       AS taxes,
+            SUM(s."discountAmount")::float                  AS discounts
+          FROM sales s
+          JOIN branches br ON s."branchId" = br.id
+          WHERE s."createdAt" BETWEEN ${start} AND ${end}
+            AND s.status = 'COMPLETED'
+            AND s."deletedAt" IS NULL
+            AND br."businessId" = ${businessId}
+          GROUP BY period
+          ORDER BY period ASC
+        `,
+        prisma.sale.aggregate({
+          where: {
+            createdAt: { gte: start, lte: end },
+            status: 'COMPLETED',
+            deletedAt: null,
+            branch: { businessId },
+          },
+          _sum: { total: true, taxAmount: true, discountAmount: true },
+          _count: { id: true },
+        }),
+      ]);
 
       const grossRevenue = Number(totals._sum.total || 0);
       const taxCollected = Number(totals._sum.taxAmount || 0);

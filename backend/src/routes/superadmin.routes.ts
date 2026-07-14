@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
+import { rateLimit } from 'express-rate-limit';
 import { prisma } from '../config/database';
 import { authenticate } from '../middlewares/auth';
 import { AppError, success, paginated } from '../utils/response';
@@ -12,6 +13,18 @@ router.use(authenticate);
 router.use((req: AuthRequest, _res, next) => {
   if (req.user?.role !== 'SUPER_ADMIN') return next(new AppError('Acceso restringido', 403));
   next();
+});
+
+// Borrado de negocio es destructivo e irreversible — un tope bajo (aparte del
+// límite general de /api) reduce el daño de una sesión de superadmin
+// comprometida o un doble-click accidental en un script.
+const deleteBusinessLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: process.env.NODE_ENV === 'test' ? 1_000 : 5,
+  keyGenerator: (req: any) => req.user?.userId || req.ip,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Demasiadas solicitudes de borrado. Espere 15 minutos antes de reintentar.' },
 });
 
 router.get('/stats', async (_req, res, next) => {
@@ -110,7 +123,7 @@ router.patch('/businesses/:id/status', async (req, res, next) => {
 });
 
 // Eliminar negocio permanentemente — requiere contraseña del superadmin
-router.delete('/businesses/:id', async (req: AuthRequest, res, next) => {
+router.delete('/businesses/:id', deleteBusinessLimiter, async (req: AuthRequest, res, next) => {
   try {
     const { password } = req.body;
     if (!password) throw new AppError('Se requiere la contraseña para confirmar', 400);
@@ -161,6 +174,14 @@ router.delete('/businesses/:id', async (req: AuthRequest, res, next) => {
       // 8. Compras (PurchaseDetail.productId FK requerido sin cascade → antes de productos)
       await tx.purchaseDetail.deleteMany({ where: { purchase: { businessId } } });
       await tx.purchase.deleteMany({ where: { businessId } });
+      // 8.5. Transferencias entre bodegas y stock por bodega — ambas tienen FK
+      // RESTRICT hacia products/branches (migración de bodegas del 2026-07-10):
+      // sin este paso, el borrado de productos (9) y de sucursales (14) de abajo
+      // fallaba para CUALQUIER negocio que hubiera comprado/vendido/ajustado
+      // stock alguna vez (prácticamente todos desde esa fecha) — la transacción
+      // completa hacía rollback y el superadmin no podía borrar ningún negocio real.
+      await tx.stockTransfer.deleteMany({ where: { businessId } }); // cascada a stock_transfer_items
+      await tx.productStock.deleteMany({ where: { product: { businessId } } });
       // 9. Productos (ahora sin referencias pendientes)
       await tx.product.deleteMany({ where: { businessId } });
       // 10. Gastos
@@ -179,6 +200,8 @@ router.delete('/businesses/:id', async (req: AuthRequest, res, next) => {
       }
       // 14. Sucursales
       await tx.branch.deleteMany({ where: { businessId } });
+      // 14.5. Links de pago (Wompi) — FK RESTRICT hacia businesses.
+      await tx.paymentLink.deleteMany({ where: { businessId } });
       // 15. Negocio (libera FK Business.ownerId → User)
       await tx.business.delete({ where: { id: businessId } });
       // 16. Owner

@@ -52,7 +52,7 @@ export const supplierController = {
       // proveedores sin documento guardados como "" chocarían entre sí (múltiples
       // NULL sí están permitidos bajo un índice único).
       const normalizedDoc = document?.toString().trim() || null;
-      const base = { name, document: normalizedDoc, phone, email, address, city, contactName, notes, businessId: req.user!.businessId };
+      const base = { name, document: normalizedDoc, phone, email, address, city, contactName, notes, businessId: req.user!.businessId! };
       // select for retry excludes legalName/mobile which may not exist in DB yet
       const oldSelect = { id: true, businessId: true, name: true, document: true, phone: true, email: true, address: true, city: true, contactName: true, notes: true, isActive: true, createdAt: true, updatedAt: true, deletedAt: true };
       let supplier: any;

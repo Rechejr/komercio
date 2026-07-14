@@ -29,6 +29,11 @@ async function counterTableReady(): Promise<boolean> {
 // Suma únicamente los splits en efectivo (puede haber más de uno) para pagos MIXED;
 // para CASH/sin método usa el neto recibido. Se comparte entre create() y cancel()
 // para que el registro y la reversión de caja siempre queden en sincronía.
+// El vuelto SIEMPRE sale del cajón de efectivo (no se puede "devolver" en tarjeta/
+// transferencia), así que se resta del total en efectivo — sin esto, un pago mixto
+// con sobrepago en efectivo (ej. $70.000 en efectivo para un total de $60.000, el
+// POS sí permite y muestra "Cambio" en este caso) inflaba la caja en el valor del
+// vuelto en cada venta así.
 function computeCashAmount(
   paymentMethod: string | null | undefined,
   paidAmount: number,
@@ -37,15 +42,18 @@ function computeCashAmount(
 ): number {
   if (paymentMethod === 'MIXED') {
     const splits: Array<{ method: string; amount: number }> = paymentDetails?.splits || [];
-    return splits
+    const cashSplits = splits
       .filter((s) => s.method === 'CASH')
       .reduce((sum, s) => sum + Number(s.amount), 0);
+    return Math.max(0, cashSplits - changeAmount);
   }
   if (paymentMethod === 'CASH' || !paymentMethod) {
     return paidAmount - changeAmount;
   }
   return 0;
 }
+
+const VALID_PAYMENT_METHODS = ['CASH', 'TRANSFER', 'NEQUI', 'DAVIPLATA', 'CARD'];
 
 // COP no maneja centavos en la práctica (formatCurrency ya muestra 0 decimales);
 // redondear cada línea antes de sumar evita que el binario de punto flotante
@@ -186,6 +194,37 @@ export const saleController = {
 
       if (!items || items.length === 0) throw new AppError('La venta debe tener productos', 400);
       if (isCredit && !customerId) throw new AppError('Se requiere un cliente para registrar una venta a crédito', 400);
+
+      // Sin esto, un cliente de la API (o un bug de frontend) podía mandar splits que
+      // no sumaran lo mismo que paidAmount — el movimiento de caja usa los splits, así
+      // que quedaría completamente desconectado del dinero real recibido. Se valida
+      // antes de tocar la base de datos (no depende del total, que se calcula más
+      // adelante con los precios ya bloqueados).
+      if (paymentMethod === 'MIXED') {
+        const splits = paymentDetails?.splits;
+        if (!Array.isArray(splits) || splits.length === 0) {
+          throw new AppError('Un pago mixto requiere al menos un método de pago', 400);
+        }
+        let splitsSum = 0;
+        for (const s of splits) {
+          if (!VALID_PAYMENT_METHODS.includes(s?.method)) {
+            throw new AppError('Método de pago inválido en el pago mixto', 400);
+          }
+          const amt = Number(s?.amount);
+          if (!isFinite(amt) || amt <= 0) {
+            throw new AppError('Monto inválido en el pago mixto', 400);
+          }
+          splitsSum += amt;
+        }
+        const declaredPaid = paidAmount != null ? parseFloat(paidAmount) : NaN;
+        if (isNaN(declaredPaid)) {
+          throw new AppError('Un pago mixto requiere indicar el monto pagado', 400);
+        }
+        // Redondeo de COP (sin centavos) — 1 de tolerancia por acumulación binaria.
+        if (Math.abs(splitsSum - declaredPaid) > 1) {
+          throw new AppError('La suma de los métodos de pago no coincide con el monto pagado', 400);
+        }
+      }
 
       const productIds: string[] = items.map((i: any) => i.productId);
 
@@ -347,6 +386,7 @@ export const saleController = {
 
         const paid = (paidAmount != null && !isNaN(parseFloat(paidAmount))) ? parseFloat(paidAmount) : total;
         if (paid < 0) throw new AppError('El monto pagado no puede ser negativo', 400);
+
         // Una venta que no se marca como fiado/crédito debe quedar cubierta por completo —
         // de lo contrario la diferencia no queda como deuda del cliente ni como error,
         // simplemente desaparece.

@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { randomUUID } from 'crypto';
 import { body } from 'express-validator';
 import multer from 'multer';
 import ExcelJS from 'exceljs';
@@ -7,6 +8,7 @@ import { authenticate, authorize, AuthRequest } from '../middlewares/auth';
 import { validate } from '../middlewares/validate';
 import { planLimit } from '../middlewares/planLimit';
 import { prisma } from '../config/database';
+import { cache } from '../config/redis';
 import { success, AppError } from '../utils/response';
 import { resolveEffectiveBranchId } from '../utils/resolveBranch';
 
@@ -76,7 +78,7 @@ router.post('/import',
     try {
       if (!req.file) throw new AppError('Archivo requerido', 400);
       const dryRun = req.query.dryRun === 'true';
-      const businessId = req.user!.businessId;
+      const businessId = req.user!.businessId!;
       // Selección de bodega por fila queda fuera de alcance — todo el archivo
       // entra a una sola bodega (la del que importa, o la más antigua si no
       // tiene una fija).
@@ -280,7 +282,7 @@ router.post('/import',
       const existingProducts = allCodes.length > 0
         ? await prisma.product.findMany({
             where: { code: { in: allCodes }, businessId },
-            select: { id: true, code: true, stock: true },
+            select: { id: true, code: true },
           })
         : [];
       const existingByCode = new Map(existingProducts.map(p => [p.code!, p]));
@@ -288,15 +290,6 @@ router.post('/import',
       // al actualizar — de lo contrario re-subir una plantilla sin esa columna
       // (por ejemplo, solo para corregir categorías) resetearía todo a 0 en silencio.
       const hasStockColumn = col.stock !== -1;
-      // El stock del archivo se trata como el de ESTA bodega (branchId, resuelta
-      // arriba para todo el importe) — se necesita el stock previo POR BODEGA, no
-      // el total del producto, para no pisar el de otras bodegas al aplicar el delta.
-      const prevBranchStockByProduct = existingProducts.length > 0
-        ? new Map((await prisma.productStock.findMany({
-            where: { branchId, productId: { in: existingProducts.map(p => p.id) } },
-            select: { productId: true, stock: true },
-          })).map(s => [s.productId, Number(s.stock)]))
-        : new Map<string, number>();
 
       for (const r of validRows) {
         try {
@@ -330,61 +323,94 @@ router.post('/import',
           if (r.rawCode) {
             const existing = existingByCode.get(r.rawCode);
             if (existing) {
-              const prevStock = Number(existing.stock);
-              const prevBranchStock = prevBranchStockByProduct.get(existing.id) ?? 0;
-              const branchDelta = hasStockColumn ? r.stock - prevBranchStock : 0;
-              await prisma.product.update({
-                where: { id: existing.id },
-                data: hasStockColumn ? { ...sharedData, stock: { increment: branchDelta } } : sharedData,
-              });
-              if (hasStockColumn) {
-                await prisma.productStock.upsert({
-                  where: { productId_branchId: { productId: existing.id, branchId } },
-                  create: { productId: existing.id, branchId, stock: r.stock },
-                  update: { stock: r.stock },
+              // Cada fila en SU PROPIA transacción con lock de fila — antes el stock
+              // previo por bodega se leía una sola vez en batch ANTES del loop, y el
+              // update de product_stocks hacía un SET absoluto sin volver a mirar el
+              // valor real: una venta/compra/ajuste concurrente mientras el import
+              // corría (archivos grandes pueden tardar minutos) quedaba pisada por el
+              // valor viejo del snapshot, dejando stock fantasma vendible en el POS.
+              await prisma.$transaction(async (tx) => {
+                const [locked] = await tx.$queryRawUnsafe<any[]>(
+                  `SELECT id, stock FROM products WHERE id::text = $1 AND "deletedAt" IS NULL FOR UPDATE`,
+                  existing.id,
+                );
+                if (!locked) throw new AppError('Producto no encontrado', 404);
+                const prevStock = Number(locked.stock);
+
+                let branchDelta = 0;
+                if (hasStockColumn) {
+                  const [psRow] = await tx.$queryRawUnsafe<any[]>(
+                    `INSERT INTO product_stocks (id, "productId", "branchId", stock, "createdAt", "updatedAt")
+                     VALUES ($1, $2, $3, 0, now(), now())
+                     ON CONFLICT ("productId", "branchId") DO UPDATE SET "updatedAt" = product_stocks."updatedAt"
+                     RETURNING stock`,
+                    randomUUID(), existing.id, branchId,
+                  );
+                  const prevBranchStock = Number(psRow.stock);
+                  branchDelta = r.stock - prevBranchStock;
+                }
+
+                await tx.product.update({
+                  where: { id: existing.id },
+                  data: hasStockColumn ? { ...sharedData, stock: { increment: branchDelta } } : sharedData,
                 });
-              }
-              // Deja rastro del cambio de stock — antes se sobreescribía en silencio,
-              // sin quedar registrado en el historial de inventario del producto.
-              if (hasStockColumn && branchDelta !== 0) {
-                await prisma.inventoryMovement.create({
-                  data: {
-                    productId: existing.id,
-                    type: branchDelta > 0 ? 'IN' : 'OUT',
-                    quantity: Math.abs(branchDelta),
-                    previousStock: prevStock,
-                    newStock: prevStock + branchDelta,
-                    reason: 'Importación Excel',
-                    unitCost: r.costPrice,
-                    totalCost: Math.abs(branchDelta) * r.costPrice,
-                    branchId,
-                  },
-                });
-              }
+                if (hasStockColumn) {
+                  await tx.productStock.update({
+                    where: { productId_branchId: { productId: existing.id, branchId } },
+                    data: { stock: r.stock },
+                  });
+                }
+                // Deja rastro del cambio de stock — antes se sobreescribía en silencio,
+                // sin quedar registrado en el historial de inventario del producto.
+                if (hasStockColumn && branchDelta !== 0) {
+                  await tx.inventoryMovement.create({
+                    data: {
+                      productId: existing.id,
+                      type: branchDelta > 0 ? 'IN' : 'OUT',
+                      quantity: Math.abs(branchDelta),
+                      previousStock: prevStock,
+                      newStock: prevStock + branchDelta,
+                      reason: 'Importación Excel',
+                      unitCost: r.costPrice,
+                      totalCost: Math.abs(branchDelta) * r.costPrice,
+                      branchId,
+                    },
+                  });
+                }
+              }, { timeout: 15000 });
               results.updated++;
             } else {
               try {
-                const created = await prisma.product.create({ data: { code: r.rawCode, ...createData } });
-                if (r.stock > 0) await prisma.productStock.create({ data: { productId: created.id, branchId, stock: r.stock } });
+                const created = await prisma.$transaction(async (tx) => {
+                  const created = await tx.product.create({ data: { code: r.rawCode, ...createData } });
+                  if (r.stock > 0) await tx.productStock.create({ data: { productId: created.id, branchId, stock: r.stock } });
+                  return created;
+                });
                 // Para que una segunda fila del mismo archivo con este código
                 // actualice en vez de volver a intentar crear (ver P2002 abajo).
-                existingByCode.set(r.rawCode, { id: created.id, code: r.rawCode, stock: r.stock as any });
+                existingByCode.set(r.rawCode, { id: created.id, code: r.rawCode });
                 results.imported++;
               } catch (e: any) {
                 if (e.code === 'P2002') {
                   // Code collides with another business — add suffix
                   const fallbackCode = `${r.rawCode}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
-                  const created = await prisma.product.create({ data: { code: fallbackCode, ...createData } });
-                  if (r.stock > 0) await prisma.productStock.create({ data: { productId: created.id, branchId, stock: r.stock } });
-                  existingByCode.set(r.rawCode, { id: created.id, code: r.rawCode, stock: r.stock as any });
+                  const created = await prisma.$transaction(async (tx) => {
+                    const created = await tx.product.create({ data: { code: fallbackCode, ...createData } });
+                    if (r.stock > 0) await tx.productStock.create({ data: { productId: created.id, branchId, stock: r.stock } });
+                    return created;
+                  });
+                  existingByCode.set(r.rawCode, { id: created.id, code: r.rawCode });
                   results.imported++;
                 } else { throw e; }
               }
             }
           } else {
             const autoCode = `IMP${String(r.rowNum).padStart(5, '0')}-${Date.now().toString(36).toUpperCase()}`;
-            const created = await prisma.product.create({ data: { code: autoCode, ...createData } });
-            if (r.stock > 0) await prisma.productStock.create({ data: { productId: created.id, branchId, stock: r.stock } });
+            const created = await prisma.$transaction(async (tx) => {
+              const created = await tx.product.create({ data: { code: autoCode, ...createData } });
+              if (r.stock > 0) await tx.productStock.create({ data: { productId: created.id, branchId, stock: r.stock } });
+              return created;
+            });
             results.imported++;
           }
         } catch (err: any) {
@@ -392,6 +418,7 @@ router.post('/import',
         }
       }
 
+      if (results.imported > 0 || results.updated > 0) await cache.del(`dashboard:${businessId}`).catch(() => {});
       return success(res, results, `Importación: ${results.imported} creados, ${results.updated} actualizados`);
     } catch (err) { next(err); }
   },
@@ -428,6 +455,10 @@ router.post('/',
     body('name').trim().notEmpty().withMessage('El nombre es requerido'),
     body('salePrice').isFloat({ min: 0 }).withMessage('Precio de venta inválido'),
     body('costPrice').optional().isFloat({ min: 0 }),
+    body('stock').optional().isFloat({ min: 0 }).withMessage('Stock inválido'),
+    body('wholesalePrice').optional({ checkFalsy: true }).isFloat({ min: 0 }).withMessage('Precio mayorista inválido'),
+    body('minStock').optional().isFloat({ min: 0 }).withMessage('Cantidad mínima inválida'),
+    body('taxRate').optional().isFloat({ min: 0, max: 100 }).withMessage('IVA inválido'),
   ],
   validate,
   productController.create,
@@ -446,7 +477,7 @@ router.put('/:id',
   productController.update,
 );
 router.delete('/:id', authorize('ADMIN', 'SUPERVISOR'), productController.delete);
-router.post('/:id/duplicate', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE'), productController.duplicate);
+router.post('/:id/duplicate', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE'), planLimit.products(), productController.duplicate);
 router.patch('/:id/adjust-stock',
   authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE'),
   [

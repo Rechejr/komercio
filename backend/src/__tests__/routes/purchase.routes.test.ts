@@ -19,7 +19,7 @@ jest.mock('../../config/database', () => ({
 }));
 
 jest.mock('../../config/redis', () => ({
-  cache: { get: jest.fn().mockResolvedValue(null), set: jest.fn(), del: jest.fn() },
+  cache: { get: jest.fn().mockResolvedValue(null), set: jest.fn(), del: jest.fn().mockResolvedValue(undefined) },
 }));
 
 jest.mock('../../utils/jwt', () => ({
@@ -262,6 +262,34 @@ describe('POST /api/v1/purchases', () => {
 
     expect(res.status).toBe(201);
   });
+
+  it('el costPrice final es el promedio ponderado cuando la compra trae 2 líneas del mismo producto a costos distintos', async () => {
+    (mockPrisma.product.count as jest.Mock).mockResolvedValue(1);
+    const txProductUpdate = jest.fn().mockResolvedValue({});
+    const tx = {
+      purchase: { create: jest.fn().mockResolvedValue({ id: 'purch-1', total: 11200 }) },
+      $queryRawUnsafe: jest.fn().mockResolvedValue([{ id: PROD, stock: 10, minStock: 2, lowStockNotifiedAt: null }]),
+      $executeRawUnsafe: jest.fn().mockResolvedValue(0),
+      product: { update: txProductUpdate },
+      inventoryMovement: { create: jest.fn().mockResolvedValue({}) },
+    };
+    (mockPrisma.$transaction as jest.Mock).mockImplementation(async (fn: any) => fn(tx));
+
+    const res = await request(app)
+      .post('/api/v1/purchases')
+      .set(authHeader('ADMIN', 'br-1'))
+      .send({
+        items: [
+          { productId: PROD, quantity: 6, unitCost: 1000 },
+          { productId: PROD, quantity: 4, unitCost: 1300 },
+        ],
+      });
+
+    expect(res.status).toBe(201);
+    // (6*1000 + 4*1300) / 10 = 1120 — sin importar el orden de las líneas.
+    expect(txProductUpdate).toHaveBeenNthCalledWith(1, expect.objectContaining({ data: expect.objectContaining({ costPrice: 1120 }) }));
+    expect(txProductUpdate).toHaveBeenNthCalledWith(2, expect.objectContaining({ data: expect.objectContaining({ costPrice: 1120 }) }));
+  });
 });
 
 describe('PUT /api/v1/purchases/:id', () => {
@@ -316,6 +344,53 @@ describe('PUT /api/v1/purchases/:id', () => {
     );
     expect(txPurchaseUpdate).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ branchId: BR2 }) }),
+    );
+  });
+
+  it('reemplazar una línea por 2 líneas del MISMO producto+bodega (misma cantidad total) no debe tocar el stock (bug: el Map se quedaba solo con la última línea)', async () => {
+    (mockPrisma.purchase.findFirst as jest.Mock).mockResolvedValue({
+      id: 'purch-1',
+      businessId: 'biz-1',
+      branchId: BR1,
+      purchaseDate: new Date('2026-07-01'),
+      details: [{ id: 'd1', productId: PROD, quantity: 10, unitCost: 1000, branchId: BR1 }],
+    });
+    (mockPrisma.product.count as jest.Mock).mockResolvedValue(1);
+
+    const txProductStockUpdate = jest.fn().mockResolvedValue({});
+    const txProductUpdate = jest.fn().mockResolvedValue({});
+    const tx = {
+      branch: { findFirst: jest.fn().mockResolvedValue({ id: BR1 }) },
+      // Una sola clave (PROD, BR1): delta 0 -> solo entra al lock del producto,
+      // sin tocar product_stocks (branchStockRow no debería ni consultarse).
+      $queryRawUnsafe: jest.fn().mockResolvedValue([{ id: PROD, stock: 100, allowNegativeStock: false, name: 'Producto X', minStock: 2, lowStockNotifiedAt: null }]),
+      product: { update: txProductUpdate },
+      productStock: { update: txProductStockUpdate },
+      inventoryMovement: { create: jest.fn().mockResolvedValue({}) },
+      purchaseDetail: { deleteMany: jest.fn().mockResolvedValue({}) },
+      purchase: { update: jest.fn().mockResolvedValue({ id: 'purch-1', total: 10000 }) },
+    };
+    (mockPrisma.$transaction as jest.Mock).mockImplementation(async (fn: any) => fn(tx));
+
+    // Antes del fix: newItemByKey (Map de valor único) se quedaba solo con la
+    // línea de qty 4, así que delta = 4 - 10 = -6 (descontaba stock aunque el
+    // total real seguía siendo 10). Con el fix, se suman ambas líneas -> delta 0.
+    const res = await request(app)
+      .put('/api/v1/purchases/purch-1')
+      .set(authHeader('ADMIN', null))
+      .send({
+        items: [
+          { productId: PROD, quantity: 6, unitCost: 1000, branchId: BR1 },
+          { productId: PROD, quantity: 4, unitCost: 1000, branchId: BR1 },
+        ],
+      });
+
+    expect(res.status).toBe(200);
+    // delta === 0 -> no debe ajustar stock por bodega.
+    expect(txProductStockUpdate).not.toHaveBeenCalled();
+    // Sigue actualizando el costo (rama "misma cantidad, costo pudo cambiar").
+    expect(txProductUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: PROD }, data: { costPrice: 1000 } }),
     );
   });
 

@@ -288,6 +288,59 @@ describe('saleController.create', () => {
     );
     expect(json).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
   });
+
+  it('rechaza un pago MIXTO si la suma de los splits no coincide con paidAmount', async () => {
+    (mockPrisma.product.count as jest.Mock).mockResolvedValue(1);
+
+    await saleController.create(
+      makeReq({
+        body: {
+          items: [{ productId: 'p1', quantity: 6 }],
+          paymentMethod: 'MIXED',
+          paidAmount: 70000,
+          paymentDetails: { splits: [{ method: 'CASH', amount: 50000 }] }, // no suma 70000
+        },
+      }),
+      makeRes().res,
+      next,
+    );
+
+    expect((next as jest.Mock).mock.calls[0][0].statusCode).toBe(400);
+    expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('pago MIXTO con sobrepago en efectivo: el movimiento de caja resta el vuelto (no infla la caja)', async () => {
+    (mockPrisma.product.count as jest.Mock).mockResolvedValue(1);
+    // producto a 10000, cantidad 6 -> total 60000. Cliente paga 70000 en efectivo -> vuelto 10000.
+    const { tx, txCashMovementCreate } = (() => {
+      const base = makeSaleTx({ branchStock: 20 });
+      const txCashMovementCreate = jest.fn().mockResolvedValue({});
+      (base.tx as any).cashRegister = { findFirst: jest.fn().mockResolvedValue({ id: 'reg-1' }) };
+      (base.tx as any).cashMovement = { create: txCashMovementCreate };
+      return { tx: base.tx, txCashMovementCreate };
+    })();
+    (mockPrisma.$transaction as jest.Mock).mockImplementation(async (fn: any) => fn(tx));
+    mockCache.del.mockResolvedValue(1 as any);
+
+    const { res, json } = makeRes();
+    await saleController.create(
+      makeReq({
+        body: {
+          items: [{ productId: 'p1', quantity: 6 }],
+          paymentMethod: 'MIXED',
+          paidAmount: 70000,
+          paymentDetails: { splits: [{ method: 'CASH', amount: 70000 }] },
+        },
+      }),
+      res,
+      next,
+    );
+
+    expect(json).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
+    expect(txCashMovementCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ type: 'IN', amount: 60000 }) }),
+    );
+  });
 });
 
 // ─── cancel ──────────────────────────────────────────────────────────────────

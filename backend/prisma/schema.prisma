@@ -195,8 +195,8 @@ model Branch {
 // ─── CATEGORIES & BRANDS ──────────────────────────────────────────────────────
 model Category {
   id          String     @id @default(uuid())
-  businessId  String?
-  business    Business?  @relation(fields: [businessId], references: [id])
+  businessId  String
+  business    Business   @relation(fields: [businessId], references: [id])
   name        String
   description String?
   color       String?
@@ -218,8 +218,8 @@ model Brand {
   id         String    @id @default(uuid())
   name       String
   logo       String?
-  businessId String?
-  business   Business? @relation(fields: [businessId], references: [id])
+  businessId String
+  business   Business  @relation(fields: [businessId], references: [id])
   products   Product[]
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
@@ -246,8 +246,8 @@ model Product {
   supplier           Supplier?           @relation(fields: [supplierId], references: [id])
   branchId           String?
   branch             Branch?             @relation(fields: [branchId], references: [id])
-  businessId         String?
-  business           Business?           @relation(fields: [businessId], references: [id])
+  businessId         String
+  business           Business            @relation(fields: [businessId], references: [id])
   costPrice          Decimal             @default(0)
   salePrice          Decimal             @default(0)
   wholesalePrice     Decimal?
@@ -370,8 +370,8 @@ model InventoryMovement {
 // ─── CUSTOMERS ────────────────────────────────────────────────────────────────
 model Customer {
   id            String    @id @default(uuid())
-  businessId    String?
-  business      Business? @relation(fields: [businessId], references: [id])
+  businessId    String
+  business      Business  @relation(fields: [businessId], references: [id])
   name          String
   document      String?
   documentType  String?   @default("CC")
@@ -401,8 +401,8 @@ model Customer {
 // ─── SUPPLIERS ────────────────────────────────────────────────────────────────
 model Supplier {
   id          String     @id @default(uuid())
-  businessId  String?
-  business    Business?  @relation(fields: [businessId], references: [id])
+  businessId  String
+  business    Business   @relation(fields: [businessId], references: [id])
   name        String
   legalName   String?
   document    String?
@@ -459,6 +459,7 @@ model Sale {
   @@index([createdAt])
   @@index([branchId, createdAt])
   @@index([status, createdAt])
+  @@index([branchId, status, createdAt])
   @@map("sales")
 }
 
@@ -485,8 +486,8 @@ model SaleDetail {
 // ─── PURCHASES ────────────────────────────────────────────────────────────────
 model Purchase {
   id            String          @id @default(uuid())
-  businessId    String?
-  business      Business?       @relation(fields: [businessId], references: [id])
+  businessId    String
+  business      Business        @relation(fields: [businessId], references: [id])
   invoiceNumber String?
   supplierId    String
   supplier      Supplier        @relation(fields: [supplierId], references: [id])

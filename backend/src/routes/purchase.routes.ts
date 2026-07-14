@@ -2,6 +2,7 @@ import { Router, Response, NextFunction } from 'express';
 import { randomUUID } from 'crypto';
 import { body } from 'express-validator';
 import { prisma } from '../config/database';
+import { cache } from '../config/redis';
 import { authenticate, authorize, AuthRequest } from '../middlewares/auth';
 import { resolveEffectiveBranchId } from '../utils/resolveBranch';
 import { success, created, paginated } from '../utils/response';
@@ -153,7 +154,7 @@ router.post('/', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE', 'CASHIER'), planL
       const newPurchase = await tx.purchase.create({
         data: {
           supplierId,
-          businessId,
+          businessId: businessId!,
           invoiceNumber,
           notes,
           purchaseDate: purchaseDate ? new Date(purchaseDate) : new Date(),
@@ -168,6 +169,24 @@ router.post('/', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE', 'CASHIER'), planL
           branchId: itemBranchIds[0],
         },
       });
+
+      // Costo ponderado por producto — costPrice es un campo global del producto,
+      // no por bodega/línea; si la misma compra trae 2+ líneas del mismo producto
+      // (repartido entre bodegas, o distintos lotes a distinto costo), el costo
+      // final no debe depender del ORDEN en que se procesan las líneas (antes
+      // ganaba la última línea sin ningún criterio de negocio).
+      const weightedCostByProduct = new Map<string, number>();
+      {
+        const acc = new Map<string, { qty: number; costWeighted: number }>();
+        for (const item of items) {
+          const q = parseFloat(item.quantity);
+          const c = parseFloat(item.unitCost);
+          const a = acc.get(item.productId) || { qty: 0, costWeighted: 0 };
+          a.qty += q; a.costWeighted += q * c;
+          acc.set(item.productId, a);
+        }
+        for (const [pid, a] of acc) weightedCostByProduct.set(pid, a.qty > 0 ? a.costWeighted / a.qty : 0);
+      }
 
       interface PurchaseProductRow { id: string; stock: number; minStock: number; lowStockNotifiedAt: Date | null; }
       for (let idx = 0; idx < items.length; idx++) {
@@ -186,7 +205,7 @@ router.post('/', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE', 'CASHIER'), planL
         await tx.product.update({
           where: { id: item.productId },
           data: {
-            stock: { increment: qty }, costPrice: parseFloat(item.unitCost),
+            stock: { increment: qty }, costPrice: weightedCostByProduct.get(item.productId)!,
             ...(restocked ? { lowStockNotifiedAt: null } : {}),
           },
         });
@@ -239,6 +258,7 @@ router.post('/', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE', 'CASHIER'), planL
       } catch { /* no debe fallar el registro de la compra */ }
     }
 
+    await cache.del(`dashboard:${businessId}`).catch(() => {});
     return created(res, purchase, 'Compra registrada');
   } catch (err) { next(err); }
 });
@@ -289,30 +309,67 @@ router.put('/:id', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE'), purchaseItemVa
       // Clave compuesta productId+bodega: el mismo producto puede tener líneas
       // en bodegas distintas dentro de la misma compra. Cambiar la bodega de
       // una línea existente sale solo de este esquema: la clave vieja
-      // (producto, bodega vieja) queda sin newItem → revierte todo; la clave
-      // nueva (producto, bodega nueva) aparece sin oldDetail → aplica todo.
+      // (producto, bodega vieja) queda sin newItems → revierte todo; la clave
+      // nueva (producto, bodega nueva) aparece sin oldRows → aplica todo.
       // Cantidad neta por clave: la línea vieja resta, la nueva suma, y se
       // aplica un solo ajuste de stock — en vez de "revertir todo lo viejo
       // (con un tope que perdía unidades ya vendidas) y luego reaplicar todo
       // lo nuevo", que en ese caso inflaba el stock (10→20 con 8 ya vendidas
       // terminaba en 20 en vez de los 12 correctos).
       const keyOf = (productId: string, branchId: string) => `${productId}::${branchId}`;
-      const oldDetailByKey = new Map(
-        existing.details.map((d) => [keyOf(d.productId, d.branchId || legacyBranchId), d]),
-      );
-      const newItemByKey = new Map<string, any>(
-        newItemsWithBranch.map((i: any) => [keyOf(i.productId, i.effectiveBranchId), i]),
-      );
-      const keys = new Set<string>([...oldDetailByKey.keys(), ...newItemByKey.keys()]);
+
+      // Se agrupa en ARREGLOS por clave (no un valor único) — si el usuario
+      // repite el mismo producto+bodega en 2+ líneas (ej. mismo lote repartido,
+      // o distintos costos), un Map de valor único se quedaba solo con la
+      // ÚLTIMA línea y perdía en silencio la cantidad de las demás, descuadrando
+      // el stock aunque el total mostrado en pantalla fuera el correcto.
+      const oldDetailsByKey = new Map<string, typeof existing.details>();
+      for (const d of existing.details) {
+        const key = keyOf(d.productId, d.branchId || legacyBranchId);
+        const arr = oldDetailsByKey.get(key);
+        if (arr) arr.push(d); else oldDetailsByKey.set(key, [d]);
+      }
+      const newItemsByKey = new Map<string, any[]>();
+      for (const item of newItemsWithBranch) {
+        const key = keyOf(item.productId, item.effectiveBranchId);
+        const arr = newItemsByKey.get(key);
+        if (arr) arr.push(item); else newItemsByKey.set(key, [item]);
+      }
+      const keys = new Set<string>([...oldDetailsByKey.keys(), ...newItemsByKey.keys()]);
+
+      function sumQty(rows: Array<{ quantity: any }>): number {
+        return rows.reduce((sum, r) => sum + Number(r.quantity), 0);
+      }
+      function weightedAvgCost(rows: Array<{ quantity: any; unitCost: any }>): number {
+        let qty = 0; let costWeighted = 0;
+        for (const r of rows) { const q = Number(r.quantity); qty += q; costWeighted += q * Number(r.unitCost); }
+        return qty > 0 ? costWeighted / qty : 0;
+      }
+      // Costo ponderado por producto (no por bodega) — costPrice es un campo
+      // global del producto; se calcula UNA vez sobre TODAS las líneas nuevas de
+      // ese producto (aunque estén repartidas en varias claves/bodegas), para que
+      // el resultado sea el mismo sin importar en qué orden se procesen las claves.
+      const weightedCostByProduct = new Map<string, number>();
+      {
+        const acc = new Map<string, { qty: number; costWeighted: number }>();
+        for (const item of newItemsWithBranch) {
+          const q = parseFloat(item.quantity);
+          const c = parseFloat(item.unitCost);
+          const a = acc.get(item.productId) || { qty: 0, costWeighted: 0 };
+          a.qty += q; a.costWeighted += q * c;
+          acc.set(item.productId, a);
+        }
+        for (const [pid, a] of acc) weightedCostByProduct.set(pid, a.qty > 0 ? a.costWeighted / a.qty : 0);
+      }
 
       interface ProductRow { id: string; stock: number; allowNegativeStock: boolean; name: string; minStock: number; lowStockNotifiedAt: Date | null; }
       for (const key of keys) {
-        const oldDetail = oldDetailByKey.get(key);
-        const newItem: any = newItemByKey.get(key);
-        const productId = (oldDetail?.productId ?? newItem.productId) as string;
-        const lineBranchId = (oldDetail ? (oldDetail.branchId || legacyBranchId) : newItem.effectiveBranchId) as string;
-        const oldQty = oldDetail ? Number(oldDetail.quantity) : 0;
-        const newQty = newItem ? parseFloat(newItem.quantity) : 0;
+        const oldRows = oldDetailsByKey.get(key);
+        const newRows = newItemsByKey.get(key);
+        const productId = (oldRows ? oldRows[0].productId : newRows![0].productId) as string;
+        const lineBranchId = (oldRows ? (oldRows[0].branchId || legacyBranchId) : newRows![0].effectiveBranchId) as string;
+        const oldQty = oldRows ? sumQty(oldRows) : 0;
+        const newQty = newRows ? sumQty(newRows) : 0;
         const delta = newQty - oldQty;
 
         const [locked] = await tx.$queryRawUnsafe<ProductRow[]>(
@@ -339,13 +396,13 @@ router.put('/:id', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE'), purchaseItemVa
               400,
             );
           }
-          const unitCost = newItem ? parseFloat(newItem.unitCost) : Number(oldDetail!.unitCost);
+          const unitCost = newRows ? weightedCostByProduct.get(productId)! : weightedAvgCost(oldRows!);
           // Reabastecer por encima del mínimo limpia la marca de "ya notificado".
           const restocked = newStock > locked.minStock && !!locked.lowStockNotifiedAt;
           await tx.product.update({
             where: { id: productId },
             data: {
-              stock: { increment: delta }, ...(newItem ? { costPrice: unitCost } : {}),
+              stock: { increment: delta }, ...(newRows ? { costPrice: unitCost } : {}),
               ...(restocked ? { lowStockNotifiedAt: null } : {}),
             },
           });
@@ -365,10 +422,10 @@ router.put('/:id', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE'), purchaseItemVa
               branchId: lineBranchId,
             },
           });
-        } else if (newItem) {
+        } else if (newRows) {
           // Misma cantidad, pero el costo unitario pudo haber cambiado — se conserva
-          // el "último costo" aunque el delta de stock haya quedado en cero.
-          await tx.product.update({ where: { id: productId }, data: { costPrice: parseFloat(newItem.unitCost) } });
+          // el costo ponderado aunque el delta de stock haya quedado en cero.
+          await tx.product.update({ where: { id: productId }, data: { costPrice: weightedCostByProduct.get(productId)! } });
         }
       }
 
@@ -445,6 +502,7 @@ router.put('/:id', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE'), purchaseItemVa
       }
     } catch { /* no debe fallar la actualización de la compra */ }
 
+    await cache.del(`dashboard:${businessId}`).catch(() => {});
     return success(res, updated, 'Compra actualizada');
   } catch (err) { next(err); }
 });
@@ -529,6 +587,7 @@ router.delete('/:id', authorize('ADMIN', 'SUPERVISOR'), async (req: AuthRequest,
       }
     } catch { /* no debe fallar la eliminación de la compra */ }
 
+    await cache.del(`dashboard:${req.user!.businessId}`).catch(() => {});
     return success(res, null, 'Compra eliminada y stock revertido');
   } catch (err) { next(err); }
 });

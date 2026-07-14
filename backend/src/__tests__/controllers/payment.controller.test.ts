@@ -20,6 +20,7 @@ jest.mock('../../config/database', () => ({
       findUnique: jest.fn(),
       update: jest.fn(),
     },
+    $queryRawUnsafe: jest.fn(),
     $transaction: jest.fn(),
   },
 }));
@@ -112,7 +113,11 @@ describe('paymentController.webhook', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     process.env.WOMPI_EVENTS_SECRET = EVENTS_SECRET;
-    (mockPrisma.$transaction as jest.Mock).mockImplementation((ops: any[]) => Promise.all(ops));
+    // La transacción ahora es interactiva (bloquea la fila del negocio antes de
+    // leer planExpiresAt) — se reutiliza mockPrisma como "tx" ya que expone los
+    // mismos métodos (business.update, paymentLink.findUnique/update) que se
+    // configuran por test más abajo.
+    (mockPrisma.$transaction as jest.Mock).mockImplementation((fn: any) => fn(mockPrisma));
   });
 
   afterAll(() => {
@@ -191,7 +196,7 @@ describe('paymentController.webhook', () => {
     (mockPrisma.paymentLink.findUnique as jest.Mock).mockResolvedValue({
       id: linkId, businessId: 'biz-1', period: 'monthly', months: 1, consumedAt: null,
     });
-    (mockPrisma.business.findUnique as jest.Mock).mockResolvedValue({ planExpiresAt: null });
+    (mockPrisma.$queryRawUnsafe as jest.Mock).mockResolvedValue([{ planExpiresAt: null }]);
 
     const { res, json } = makeRes();
     await paymentController.webhook(
@@ -240,7 +245,7 @@ describe('paymentController.webhook', () => {
     (mockPrisma.paymentLink.findUnique as jest.Mock).mockResolvedValue({
       id: linkId, businessId: 'biz-1', period: 'monthly', months: 1, consumedAt: null,
     });
-    (mockPrisma.business.findUnique as jest.Mock).mockResolvedValue({ planExpiresAt: futureExpiry });
+    (mockPrisma.$queryRawUnsafe as jest.Mock).mockResolvedValue([{ planExpiresAt: futureExpiry }]);
 
     const { res } = makeRes();
     await paymentController.webhook(
@@ -255,5 +260,50 @@ describe('paymentController.webhook', () => {
     const expectedFloor = new Date(futureExpiry);
     expectedFloor.setDate(expectedFloor.getDate() + 25); // al menos 25 días de margen (1 mes - unos días)
     expect(newExpiry.getTime()).toBeGreaterThan(expectedFloor.getTime());
+  });
+
+  it('bloquea la fila del negocio con FOR UPDATE antes de leer planExpiresAt (evita el lost-update entre webhooks concurrentes)', async () => {
+    const linkId = 'link-lock-test';
+    const txBody = { event: 'transaction.updated', data: { transaction: { status: 'APPROVED', payment_link_id: linkId } } };
+    const { rawBody, sig } = signedBody(txBody);
+
+    (mockPrisma.paymentLink.findUnique as jest.Mock).mockResolvedValue({
+      id: linkId, businessId: 'biz-1', period: 'monthly', months: 1, consumedAt: null,
+    });
+    (mockPrisma.$queryRawUnsafe as jest.Mock).mockResolvedValue([{ planExpiresAt: null }]);
+
+    await paymentController.webhook(
+      makeWebhookReq({ headers: { 'x-event-signature': sig }, body: txBody, rawBody } as any),
+      makeRes().res,
+      next,
+    );
+
+    expect(mockPrisma.$queryRawUnsafe).toHaveBeenCalledWith(
+      expect.stringContaining('FOR UPDATE'),
+      'biz-1',
+    );
+  });
+
+  it('no activa el plan si otro webhook concurrente ya consumió el link dentro del lock (re-chequeo tras el FOR UPDATE)', async () => {
+    const linkId = 'link-race';
+    const txBody = { event: 'transaction.updated', data: { transaction: { status: 'APPROVED', payment_link_id: linkId } } };
+    const { rawBody, sig } = signedBody(txBody);
+
+    // El chequeo de fuera de la transacción ve consumedAt: null (llegó primero),
+    // pero para cuando entra al lock, otro webhook ya lo marcó consumido.
+    (mockPrisma.paymentLink.findUnique as jest.Mock)
+      .mockResolvedValueOnce({ id: linkId, businessId: 'biz-1', period: 'monthly', months: 1, consumedAt: null })
+      .mockResolvedValueOnce({ id: linkId, businessId: 'biz-1', period: 'monthly', months: 1, consumedAt: new Date() });
+    (mockPrisma.$queryRawUnsafe as jest.Mock).mockResolvedValue([{ planExpiresAt: null }]);
+
+    const { res, json } = makeRes();
+    await paymentController.webhook(
+      makeWebhookReq({ headers: { 'x-event-signature': sig }, body: txBody, rawBody } as any),
+      res,
+      next,
+    );
+
+    expect(mockPrisma.business.update).not.toHaveBeenCalled();
+    expect(json).toHaveBeenCalledWith({ received: true });
   });
 });

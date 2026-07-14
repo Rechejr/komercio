@@ -185,5 +185,55 @@ export const creditController = {
       next(err);
     }
   },
+
+  // Un crédito manual (fiado sin venta, "POST /credits") no tenía forma de
+  // corregirse: si se registraba con el cliente o el monto equivocado, el
+  // incremento en customer.currentDebt quedaba atrapado para siempre — solo
+  // intervención directa en la base de datos. Los créditos LIGADOS a una venta
+  // ya se revierten al anular la venta (sale.controller.cancel); este endpoint
+  // cubre el caso que faltaba.
+  async cancel(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const { id } = req.params;
+      const businessId = req.user!.businessId;
+
+      await prisma.$transaction(async (tx) => {
+        // Lock — misma fila que addPayment()/sale.controller.cancel() bloquean,
+        // para no correr contra un abono o una anulación de venta concurrente.
+        const [locked] = await tx.$queryRaw<any[]>`
+          SELECT c.id, c.status, c.balance, c."customerId", c."saleId"
+          FROM credits c
+          JOIN customers cu ON c."customerId" = cu.id
+          WHERE c.id::text = ${id}
+            AND c."deletedAt" IS NULL
+            AND cu."businessId" = ${businessId}
+          FOR UPDATE
+        `;
+        if (!locked) throw new AppError('Crédito no encontrado', 404);
+        if (locked.status === 'CANCELLED') throw new AppError('Este crédito ya está anulado', 400);
+        if (locked.status === 'PAID') throw new AppError('No se puede anular un crédito ya saldado', 400);
+        if (locked.saleId) {
+          throw new AppError('Este crédito está ligado a una venta — anula la venta para revertirlo', 400);
+        }
+
+        // Se revierte el SALDO pendiente, no el monto total — los abonos ya
+        // hechos ya descontaron su parte de currentDebt cuando se registraron
+        // (ver addPayment), y esos pagos reales se conservan en el historial.
+        await tx.customer.update({
+          where: { id: locked.customerId },
+          data: { currentDebt: { decrement: Number(locked.balance) } },
+        });
+        await tx.credit.update({
+          where: { id },
+          data: { status: 'CANCELLED', balance: 0 },
+        });
+      });
+
+      await cache.del(`dashboard:${businessId}`).catch(() => {});
+      return success(res, null, 'Crédito anulado');
+    } catch (err) {
+      next(err);
+    }
+  },
 };
 

@@ -27,4 +27,8 @@ router.post('/:id/payments',
   creditController.addPayment,
 );
 
+// Anular un crédito manual (registrado con el cliente o monto equivocado) —
+// requiere ADMIN/SUPERVISOR, igual que anular una venta.
+router.patch('/:id/cancel', authorize('ADMIN', 'SUPERVISOR'), creditController.cancel);
+
 export default router;

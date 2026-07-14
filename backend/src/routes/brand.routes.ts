@@ -23,7 +23,7 @@ router.post('/', authorize('ADMIN', 'SUPERVISOR'), async (req: AuthRequest, res,
     const name = req.body.name?.toString().trim();
     if (!name) throw new AppError('El nombre de la marca es requerido', 400);
     const { logo } = req.body;
-    const businessId = req.user!.businessId;
+    const businessId = req.user!.businessId!;
     const existing = await prisma.brand.findFirst({
       where: { businessId, name: { equals: name, mode: 'insensitive' }, deletedAt: null },
     });

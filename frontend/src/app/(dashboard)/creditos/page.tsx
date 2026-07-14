@@ -8,7 +8,9 @@ import { PriceInput } from '@/components/ui/PriceInput';
 import { api } from '@/lib/api';
 import { formatCurrency, formatDate, formatDateTime, statusColor, statusLabel } from '@/lib/utils';
 import toast from 'react-hot-toast';
-import { CreditCard, X, Loader2, Plus, DollarSign, ChevronRight, Clock, Search } from 'lucide-react';
+import { CreditCard, X, Loader2, Plus, DollarSign, ChevronRight, Clock, Search, Ban } from 'lucide-react';
+import { useAuthStore } from '@/store/auth.store';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[16px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition';
 
@@ -44,6 +46,11 @@ export default function CreditosPage() {
   const [showPayment, setShowPayment] = useState(false);
   const [showDetail, setShowDetail] = useState(false);
   const [showNewCredit, setShowNewCredit] = useState(false);
+  const [cancelTarget, setCancelTarget] = useState<any>(null);
+  // El backend ya rechaza anular para roles distintos de ADMIN/SUPERVISOR — esto
+  // solo evita mostrar un botón que de todas formas fallaría con 403.
+  const role = useAuthStore((s) => s.user?.role);
+  const canCancel = role === 'ADMIN' || role === 'SUPERVISOR';
 
   const { data: filterCustomers } = useQuery({
     queryKey: ['customers-filter', customerFilter],
@@ -102,6 +109,25 @@ export default function CreditosPage() {
     },
     onError: (err: any) => toast.error(err.response?.data?.error || 'Error al crear crédito'),
   });
+
+  const cancelMutation = useMutation({
+    mutationFn: (id: string) => api.patch(`/credits/${id}/cancel`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['credits'] });
+      qc.invalidateQueries({ queryKey: ['customers'] });
+      toast.success('Crédito anulado');
+      setCancelTarget(null);
+      setShowDetail(false);
+      setSelected(null);
+    },
+    onError: (err: any) => toast.error(err.response?.data?.error || 'Error al anular el crédito'),
+  });
+
+  // Un crédito ligado a una venta se anula desde Ventas (anular la venta) — el
+  // backend lo rechaza si se intenta acá, así que ni se muestra el botón.
+  function canCancelCredit(c: any) {
+    return canCancel && c.status !== 'PAID' && c.status !== 'CANCELLED' && !c.sale?.invoiceNumber;
+  }
 
   const credits = data?.data || [];
   const pagination = data?.pagination;
@@ -247,6 +273,16 @@ export default function CreditosPage() {
                           <Plus size={11} /> Abonar
                         </button>
                       )}
+                      {canCancelCredit(c) && (
+                        <button
+                          type="button"
+                          aria-label="Anular crédito"
+                          onClick={() => setCancelTarget(c)}
+                          className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 transition"
+                        >
+                          <Ban size={13} />
+                        </button>
+                      )}
                       <ChevronRight size={14} className="text-slate-300 dark:text-slate-600" />
                     </div>
                   </td>
@@ -294,6 +330,15 @@ export default function CreditosPage() {
                     className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-semibold text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/10 rounded-lg hover:bg-emerald-100 dark:hover:bg-emerald-500/20 transition"
                   >
                     <Plus size={12} /> Abonar
+                  </button>
+                )}
+                {canCancelCredit(selected) && (
+                  <button
+                    type="button"
+                    onClick={() => setCancelTarget(selected)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-semibold text-red-600 dark:text-red-400 border border-red-200 dark:border-red-500/30 rounded-lg hover:bg-red-50 dark:hover:bg-red-500/10 transition"
+                  >
+                    <Ban size={12} /> Anular
                   </button>
                 )}
                 <button
@@ -501,6 +546,18 @@ export default function CreditosPage() {
           </div>
         </div>
       )}
+
+      {/* ── Anular crédito ───────────────────────────────────────────────────── */}
+      <ConfirmDialog
+        open={!!cancelTarget}
+        onOpenChange={(open) => { if (!open) setCancelTarget(null); }}
+        title="Anular crédito"
+        description={cancelTarget ? `¿Anular el crédito de "${cancelTarget.customer?.name}" por ${formatCurrency(cancelTarget.balance)}? El cliente ya no deberá ese saldo. Los abonos ya registrados no se revierten.` : undefined}
+        confirmLabel="Anular"
+        onConfirm={() => cancelTarget && cancelMutation.mutate(cancelTarget.id)}
+        loading={cancelMutation.isPending}
+        variant="danger"
+      />
     </>
   );
 }

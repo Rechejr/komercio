@@ -162,7 +162,7 @@ export const productController = {
             brandId: data.brandId || null,
             supplierId: data.supplierId || null,
             branchId,
-            businessId,
+            businessId: businessId!,
             costPrice: parseFloat(data.costPrice) || 0,
             salePrice: parseFloat(data.salePrice) || 0,
             wholesalePrice: data.wholesalePrice ? parseFloat(data.wholesalePrice) : null,
@@ -203,6 +203,7 @@ export const productController = {
       if (businessId) {
         emitToBusinesss(businessId, socketEvents.INVENTORY_UPDATED, { type: 'created', product });
       }
+      await cache.del(`dashboard:${businessId}`).catch(() => {});
 
       return created(res, product, 'Producto creado');
     } catch (err) {
@@ -250,6 +251,7 @@ export const productController = {
       });
 
       await cache.del(`product:${businessId}:${id}`);
+      await cache.del(`dashboard:${businessId}`).catch(() => {});
 
       if (businessId) {
         emitToBusinesss(businessId, socketEvents.INVENTORY_UPDATED, { type: 'updated', product });
@@ -280,6 +282,7 @@ export const productController = {
 
       await prisma.product.update({ where: { id }, data: { deletedAt: new Date() } });
       await cache.del(`product:${req.user!.businessId}:${id}`);
+      await cache.del(`dashboard:${req.user!.businessId}`).catch(() => {});
 
       // No hay endpoint de restauración — una vez borrado, el producto es
       // inalcanzable para siempre, así que sus imágenes en Cloudinary quedarían
@@ -423,6 +426,7 @@ export const productController = {
       });
 
       await cache.del(`product:${req.user!.businessId}:${id}`);
+      await cache.del(`dashboard:${req.user!.businessId}`).catch(() => {});
 
       const businessId = req.user?.businessId;
       if (businessId && isNewLowStock) {
@@ -459,18 +463,36 @@ export const productController = {
   async duplicate(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const { id } = req.params;
+      const businessId = req.user!.businessId!;
       const original = await prisma.product.findFirst({
-        where: { id, deletedAt: null, businessId: req.user!.businessId },
+        where: { id, deletedAt: null, businessId },
       });
       if (!original) throw new AppError('Producto no encontrado', 404);
 
       const { id: _id, createdAt: _c, updatedAt: _u, code, barcode, ...rest } = original;
       const newCode = `${code}-COPIA-${Date.now()}`;
 
-      const copy = await prisma.product.create({
-        data: { ...rest, code: newCode, barcode: null, stock: 0 },
+      // Mismo recuento atómico que create() — el middleware planLimit.products()
+      // ya rechazó el caso normal, pero su count()-then-allow no es atómico.
+      const copy = await prisma.$transaction(async (tx) => {
+        await acquirePlanLimitLock(tx, businessId, 'products');
+        const biz = await tx.business.findUnique({ where: { id: businessId }, select: { plan: true, planExpiresAt: true } });
+        if (biz) {
+          const effectivePlan = biz.plan === 'pro' && biz.planExpiresAt && biz.planExpiresAt < new Date() ? 'free' : biz.plan;
+          const limits = getPlan(effectivePlan);
+          if (limits.products !== Infinity) {
+            const count = await tx.product.count({ where: { businessId, deletedAt: null } });
+            if (count >= limits.products) {
+              throw new AppError(`Límite de ${limits.products} productos alcanzado en el plan gratuito. Actualiza a Pro para continuar.`, 403);
+            }
+          }
+        }
+        return tx.product.create({
+          data: { ...rest, code: newCode, barcode: null, stock: 0 },
+        });
       });
 
+      await cache.del(`dashboard:${businessId}`).catch(() => {});
       return created(res, copy, 'Producto duplicado');
     } catch (err) {
       next(err);
@@ -604,6 +626,7 @@ export const productController = {
         }
       }
 
+      if (updated > 0) await cache.del(`dashboard:${businessId}`).catch(() => {});
       return success(res, { updated, skipped }, `${updated} producto(s) actualizados`);
     } catch (err) {
       next(err);

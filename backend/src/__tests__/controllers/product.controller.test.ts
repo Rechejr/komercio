@@ -30,7 +30,7 @@ jest.mock('../../config/redis', () => ({
   cache: {
     get: jest.fn(),
     set: jest.fn(),
-    del: jest.fn(),
+    del: jest.fn().mockResolvedValue(undefined),
   },
 }));
 
@@ -365,6 +365,58 @@ describe('productController.create', () => {
     );
 
     expect(mockTxInventory).not.toHaveBeenCalled();
+  });
+});
+
+// ─── duplicate ───────────────────────────────────────────────────────────────
+
+describe('productController.duplicate', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('duplica el producto con código nuevo y stock en 0', async () => {
+    const original = makeProduct({ id: 'p1', code: 'PROD-001', stock: 50 });
+    (mockPrisma.product.findFirst as jest.Mock).mockResolvedValue(original);
+    const mockTxCreate = jest.fn().mockResolvedValue({ ...original, id: 'p2', stock: 0 });
+    (mockPrisma.$transaction as jest.Mock).mockImplementation(async (fn: any) => {
+      return fn({
+        product: { create: mockTxCreate, count: jest.fn().mockResolvedValue(1) },
+        business: { findUnique: jest.fn().mockResolvedValue({ plan: 'pro', planExpiresAt: null }) },
+        $executeRawUnsafe: jest.fn().mockResolvedValue(0),
+      });
+    });
+
+    const { res, json } = makeRes();
+    await productController.duplicate(makeReq({ params: { id: 'p1' } }), res, next);
+
+    expect(mockTxCreate).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ stock: 0, barcode: null }),
+    }));
+    expect(json).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
+  });
+
+  it('rechaza con 403 si el negocio ya alcanzó el límite de productos del plan gratuito', async () => {
+    const original = makeProduct({ id: 'p1' });
+    (mockPrisma.product.findFirst as jest.Mock).mockResolvedValue(original);
+    (mockPrisma.$transaction as jest.Mock).mockImplementation(async (fn: any) => {
+      return fn({
+        product: { create: jest.fn(), count: jest.fn().mockResolvedValue(50) },
+        business: { findUnique: jest.fn().mockResolvedValue({ plan: 'free', planExpiresAt: null }) },
+        $executeRawUnsafe: jest.fn().mockResolvedValue(0),
+      });
+    });
+
+    await productController.duplicate(makeReq({ params: { id: 'p1' } }), makeRes().res, next);
+
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 403 }));
+  });
+
+  it('devuelve 404 si el producto original no existe en este negocio', async () => {
+    (mockPrisma.product.findFirst as jest.Mock).mockResolvedValue(null);
+
+    await productController.duplicate(makeReq({ params: { id: 'p1' } }), makeRes().res, next);
+
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 404 }));
+    expect(mockPrisma.$transaction).not.toHaveBeenCalled();
   });
 });
 
