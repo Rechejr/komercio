@@ -60,7 +60,13 @@ router.get('/current', authorize('ADMIN', 'SUPERVISOR', 'CASHIER'), async (req: 
     if (!req.user.branchId) return next(new AppError('No tienes una bodega asignada', 403));
     const register = await prisma.cashRegister.findFirst({
       where: { branchId: req.user.branchId, status: 'OPEN' },
-      include: { movements: { orderBy: { createdAt: 'desc' }, take: 50 } },
+      include: {
+        movements: {
+          orderBy: { createdAt: 'desc' },
+          take: 50,
+          include: { createdBy: { select: { name: true } } },
+        },
+      },
     });
 
     if (!register) return success(res, null);
@@ -189,6 +195,7 @@ router.post('/:id/movement', authorize('ADMIN', 'SUPERVISOR', 'CASHIER'), async 
         type: req.body.type,
         amount,
         description: req.body.description,
+        createdById: req.user.userId,
       },
     });
     return created(res, movement, 'Movimiento registrado');

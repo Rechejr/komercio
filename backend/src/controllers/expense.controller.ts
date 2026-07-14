@@ -101,6 +101,7 @@ export const expenseController = {
                   amount: parseFloat(amount),
                   description: description || 'Gasto',
                   referenceId: expense.id,
+                  createdById: req.user!.userId,
                 },
               });
             }
@@ -195,6 +196,7 @@ export const expenseController = {
                   amount: newAmount,
                   description: newDescription,
                   referenceId: existing.id,
+                  createdById: req.user!.userId,
                 },
               });
             }

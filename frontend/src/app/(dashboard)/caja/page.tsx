@@ -242,7 +242,9 @@ export default function CajaPage() {
               <div key={m.id} className="flex items-center justify-between px-5 py-3 hover:bg-slate-50/60 dark:hover:bg-white/[0.02] transition-colors">
                 <div>
                   <p className="text-[13px] text-slate-700 dark:text-slate-300">{m.description}</p>
-                  <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">{formatDateTime(m.createdAt)}</p>
+                  <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">
+                    {formatDateTime(m.createdAt)}{m.createdBy?.name ? ` · por ${m.createdBy.name}` : ''}
+                  </p>
                 </div>
                 <span className={`text-[13px] font-bold tabular-nums ${m.type === 'IN' ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
                   {m.type === 'IN' ? '+' : '−'}{formatCurrency(m.amount)}

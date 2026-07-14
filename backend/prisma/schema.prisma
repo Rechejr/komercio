@@ -76,6 +76,7 @@ model User {
   branch               Branch?        @relation(fields: [branchId], references: [id])
   createdBranches      Branch[]       @relation("BranchCreator")
   createdTransfers     StockTransfer[]
+  cashMovements        CashMovement[]
   sales                Sale[]
   auditLogs            AuditLog[]
   notifications        Notification[]
@@ -652,9 +653,13 @@ model CashMovement {
   amount         Decimal
   description    String
   referenceId    String?
+  // Nullable — movimientos de antes de este campo quedan sin autor conocido.
+  createdById    String?
+  createdBy      User?        @relation(fields: [createdById], references: [id])
   createdAt      DateTime     @default(now())
 
   @@index([cashRegisterId])
+  @@index([createdById])
   @@map("cash_movements")
 }
 

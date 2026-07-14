@@ -452,6 +452,7 @@ export const saleController = {
                 amount: cashAmount,
                 description: `Venta ${invoiceNumber}`,
                 referenceId: newSale.id,
+                createdById: req.user!.userId,
               },
             });
           }
@@ -588,6 +589,7 @@ export const saleController = {
                 amount: netCash,
                 description: `Anulación venta ${sale.invoiceNumber}`,
                 referenceId: id,
+                createdById: req.user!.userId,
               },
             });
           }

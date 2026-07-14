@@ -290,6 +290,7 @@ describe('creditController.addPayment', () => {
         amount: 30000,
         description: 'Abono de crédito — Juan Pérez',
         referenceId: 'credit-1',
+        createdById: 'user-1',
       },
     });
   });

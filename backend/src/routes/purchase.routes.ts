@@ -230,6 +230,7 @@ router.post('/', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE', 'CASHIER'), purch
                 amount: Number(purchase.total),
                 description: sup?.name ? `Compra a ${sup.name}` : 'Compra de mercancía',
                 referenceId: purchase.id,
+                createdById: req.user!.userId,
               },
             });
           }
@@ -435,6 +436,7 @@ router.put('/:id', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE'), purchaseItemVa
                 amount: newAmount,
                 description: 'Compra de mercancía',
                 referenceId: existing.id,
+                createdById: req.user!.userId,
               },
             });
           }

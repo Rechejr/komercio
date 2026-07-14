@@ -167,6 +167,7 @@ export const creditController = {
                   amount: paymentAmount,
                   description: `Abono de crédito${customerName ? ` — ${customerName}` : ''}`,
                   referenceId: id,
+                  createdById: req.user!.userId,
                 },
               });
             }
