@@ -3,11 +3,11 @@ import { randomUUID } from 'crypto';
 import { body } from 'express-validator';
 import { prisma } from '../config/database';
 import { authenticate, authorize, AuthRequest } from '../middlewares/auth';
+import { resolveEffectiveBranchId } from '../utils/resolveBranch';
 import { success, created, paginated } from '../utils/response';
 import { getPagination } from '../utils/pagination';
 import { AppError } from '../utils/response';
 import { validate } from '../middlewares/validate';
-import { resolveEffectiveBranchId } from '../utils/resolveBranch';
 
 const purchaseItemValidators = [
   body('items').isArray({ min: 1 }).withMessage('Se requieren productos'),
@@ -15,6 +15,7 @@ const purchaseItemValidators = [
   body('items.*.quantity').isFloat({ min: 0.001 }).withMessage('Cantidad debe ser mayor a 0'),
   body('items.*.unitCost').isFloat({ min: 0 }).withMessage('Costo unitario inválido'),
   body('items.*.taxRate').optional().isFloat({ min: 0, max: 100 }).withMessage('IVA inválido'),
+  body('items.*.branchId').optional({ nullable: true }).isUUID().withMessage('branchId de línea inválido'),
   body('branchId').optional().isUUID().withMessage('branchId inválido'),
   body('invoiceNumber').optional().trim(),
   body('notes').optional().trim(),
@@ -112,13 +113,19 @@ router.post('/', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE', 'CASHIER'), purch
       if (!sup) throw new AppError('Proveedor inválido', 400);
     }
 
-    const effectiveBranchId = await resolveEffectiveBranchId(prisma, req, branchId);
+    // Cada línea puede traer su propia bodega (una sola factura puede repartir
+    // mercancía entre varias bodegas); si no, cae al branchId de nivel
+    // superior. Se resuelve ANTES de abrir la transacción para fallar rápido
+    // con 403 si un cajero con bodega fija intenta escribir en otra.
+    const itemBranchIds = await Promise.all(
+      items.map((item: any) => resolveEffectiveBranchId(prisma, req, item.branchId || branchId)),
+    );
 
     const purchase = await prisma.$transaction(async (tx) => {
       let subtotal = 0;
       let taxAmount = 0;
 
-      const details = items.map((item: any) => {
+      const details = items.map((item: any, idx: number) => {
         const lineSub = parseFloat(item.unitCost) * parseFloat(item.quantity);
         const lineTax = lineSub * ((parseFloat(item.taxRate) || 0) / 100);
         subtotal += lineSub;
@@ -130,6 +137,7 @@ router.post('/', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE', 'CASHIER'), purch
           taxRate: parseFloat(item.taxRate) || 0,
           subtotal: lineSub,
           total: lineSub + lineTax,
+          branchId: itemBranchIds[idx],
         };
       });
 
@@ -144,12 +152,17 @@ router.post('/', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE', 'CASHIER'), purch
           taxAmount,
           total: subtotal + taxAmount,
           details: { create: details },
-          branchId: effectiveBranchId,
+          // Valor de referencia/compat: la bodega de la primera línea. No se
+          // lee en ningún otro lado del backend — solo sirve de fallback
+          // legado para compras hechas antes de que existiera bodega por línea.
+          branchId: itemBranchIds[0],
         },
       });
 
       interface PurchaseProductRow { id: string; stock: number; minStock: number; lowStockNotifiedAt: Date | null; }
-      for (const item of items) {
+      for (let idx = 0; idx < items.length; idx++) {
+        const item = items[idx];
+        const lineBranchId = itemBranchIds[idx];
         // Lock row — provides accurate previousStock for the movement log
         const [locked] = await tx.$queryRawUnsafe<PurchaseProductRow[]>(
           'SELECT id, stock, "minStock", "lowStockNotifiedAt" FROM products WHERE id::text = $1 FOR UPDATE',
@@ -167,13 +180,13 @@ router.post('/', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE', 'CASHIER'), purch
             ...(restocked ? { lowStockNotifiedAt: null } : {}),
           },
         });
-        // Bloquea (o crea en 0) la fila de stock de la bodega que recibe la
-        // compra e incrementa — mismo patrón INSERT ... ON CONFLICT que sale.controller.ts.
+        // Bloquea (o crea en 0) la fila de stock de la bodega de ESTA línea e
+        // incrementa — mismo patrón INSERT ... ON CONFLICT que sale.controller.ts.
         await tx.$executeRawUnsafe(
           `INSERT INTO product_stocks (id, "productId", "branchId", stock, "createdAt", "updatedAt")
            VALUES ($1, $2, $3, $4, now(), now())
            ON CONFLICT ("productId", "branchId") DO UPDATE SET stock = product_stocks.stock + $4, "updatedAt" = now()`,
-          randomUUID(), item.productId, effectiveBranchId, qty,
+          randomUUID(), item.productId, lineBranchId, qty,
         );
         await tx.inventoryMovement.create({
           data: {
@@ -184,7 +197,7 @@ router.post('/', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE', 'CASHIER'), purch
             referenceId: newPurchase.id, referenceType: 'PURCHASE',
             unitCost: parseFloat(item.unitCost),
             totalCost: parseFloat(item.unitCost) * qty,
-            branchId: effectiveBranchId,
+            branchId: lineBranchId,
           },
         });
       }
@@ -222,23 +235,46 @@ router.put('/:id', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE'), purchaseItemVa
     }
 
     const updated = await prisma.$transaction(async (tx) => {
-      // La compra no cambia de bodega al editarse — se usa la misma que se
-      // guardó al crearla (o la más antigua del negocio, si es de antes de esta función).
-      const purchaseBranchId = await resolvePurchaseBranchId(tx, businessId!, existing.branchId);
+      // Fallback para detalles viejos sin branchId propio (compras de antes de
+      // que existiera bodega por línea): se asume la bodega guardada en
+      // Purchase.branchId, o la más antigua del negocio si tampoco existe.
+      const legacyBranchId = await resolvePurchaseBranchId(tx, businessId!, existing.branchId);
 
-      // Cantidad neta por producto: la línea vieja resta, la línea nueva suma, y se
-      // aplica un solo ajuste de stock por producto — en vez de "revertir todo lo
-      // viejo (con un tope que perdía unidades ya vendidas) y luego reaplicar todo
+      // Cada línea nueva declara su propia bodega; si no trae una, cae a
+      // legacyBranchId y de ahí a la guardia de resolveEffectiveBranchId
+      // (bodega fija del usuario / bodega del negocio) — validación por línea.
+      const newItemsWithBranch = await Promise.all(
+        items.map(async (item: any) => ({
+          ...item,
+          effectiveBranchId: await resolveEffectiveBranchId(tx, req, item.branchId || legacyBranchId),
+        })),
+      );
+
+      // Clave compuesta productId+bodega: el mismo producto puede tener líneas
+      // en bodegas distintas dentro de la misma compra. Cambiar la bodega de
+      // una línea existente sale solo de este esquema: la clave vieja
+      // (producto, bodega vieja) queda sin newItem → revierte todo; la clave
+      // nueva (producto, bodega nueva) aparece sin oldDetail → aplica todo.
+      // Cantidad neta por clave: la línea vieja resta, la nueva suma, y se
+      // aplica un solo ajuste de stock — en vez de "revertir todo lo viejo
+      // (con un tope que perdía unidades ya vendidas) y luego reaplicar todo
       // lo nuevo", que en ese caso inflaba el stock (10→20 con 8 ya vendidas
       // terminaba en 20 en vez de los 12 correctos).
-      const oldDetailByProduct = new Map(existing.details.map((d) => [d.productId, d]));
-      const newItemByProduct = new Map<string, any>(items.map((i: any) => [i.productId, i]));
-      const productIds = new Set<string>([...oldDetailByProduct.keys(), ...newItemByProduct.keys()]);
+      const keyOf = (productId: string, branchId: string) => `${productId}::${branchId}`;
+      const oldDetailByKey = new Map(
+        existing.details.map((d) => [keyOf(d.productId, d.branchId || legacyBranchId), d]),
+      );
+      const newItemByKey = new Map<string, any>(
+        newItemsWithBranch.map((i: any) => [keyOf(i.productId, i.effectiveBranchId), i]),
+      );
+      const keys = new Set<string>([...oldDetailByKey.keys(), ...newItemByKey.keys()]);
 
       interface ProductRow { id: string; stock: number; allowNegativeStock: boolean; name: string; minStock: number; lowStockNotifiedAt: Date | null; }
-      for (const productId of productIds) {
-        const oldDetail = oldDetailByProduct.get(productId);
-        const newItem: any = newItemByProduct.get(productId);
+      for (const key of keys) {
+        const oldDetail = oldDetailByKey.get(key);
+        const newItem: any = newItemByKey.get(key);
+        const productId = (oldDetail?.productId ?? newItem.productId) as string;
+        const lineBranchId = (oldDetail ? (oldDetail.branchId || legacyBranchId) : newItem.effectiveBranchId) as string;
         const oldQty = oldDetail ? Number(oldDetail.quantity) : 0;
         const newQty = newItem ? parseFloat(newItem.quantity) : 0;
         const delta = newQty - oldQty;
@@ -251,14 +287,14 @@ router.put('/:id', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE'), purchaseItemVa
 
         if (delta !== 0) {
           const newStock = locked.stock + delta;
-          // El chequeo mira la bodega de la compra, no solo el total — una
+          // El chequeo mira la bodega de ESTA línea, no solo el total — una
           // bodega concreta podría quedar en negativo aunque el total aguante.
           const [branchStockRow] = await tx.$queryRawUnsafe<any[]>(
             `INSERT INTO product_stocks (id, "productId", "branchId", stock, "createdAt", "updatedAt")
              VALUES ($1, $2, $3, 0, now(), now())
              ON CONFLICT ("productId", "branchId") DO UPDATE SET "updatedAt" = product_stocks."updatedAt"
              RETURNING stock`,
-            randomUUID(), productId, purchaseBranchId,
+            randomUUID(), productId, lineBranchId,
           );
           const newBranchStock = Number(branchStockRow.stock) + delta;
           if ((newStock < 0 || newBranchStock < 0) && !locked.allowNegativeStock) {
@@ -278,7 +314,7 @@ router.put('/:id', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE'), purchaseItemVa
             },
           });
           await tx.productStock.update({
-            where: { productId_branchId: { productId, branchId: purchaseBranchId } },
+            where: { productId_branchId: { productId, branchId: lineBranchId } },
             data: { stock: { increment: delta } },
           });
           await tx.inventoryMovement.create({
@@ -290,7 +326,7 @@ router.put('/:id', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE'), purchaseItemVa
               referenceId: req.params.id, referenceType: 'PURCHASE',
               unitCost,
               totalCost: Math.abs(delta) * unitCost,
-              branchId: purchaseBranchId,
+              branchId: lineBranchId,
             },
           });
         } else if (newItem) {
@@ -304,7 +340,7 @@ router.put('/:id', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE'), purchaseItemVa
 
       let subtotal = 0;
       let taxAmount = 0;
-      const details = items.map((item: any) => {
+      const details = newItemsWithBranch.map((item: any) => {
         const lineSub = parseFloat(item.unitCost) * parseFloat(item.quantity);
         const lineTax = lineSub * ((parseFloat(item.taxRate) || 0) / 100);
         subtotal += lineSub;
@@ -316,6 +352,7 @@ router.put('/:id', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE'), purchaseItemVa
           taxRate: parseFloat(item.taxRate) || 0,
           subtotal: lineSub,
           total: lineSub + lineTax,
+          branchId: item.effectiveBranchId,
         };
       });
 
@@ -326,6 +363,8 @@ router.put('/:id', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE'), purchaseItemVa
           purchaseDate: purchaseDate ? new Date(purchaseDate) : existing.purchaseDate,
           subtotal, taxAmount, total: subtotal + taxAmount,
           details: { create: details },
+          // Se mantiene alineado con la primera línea, igual que en POST.
+          branchId: newItemsWithBranch[0]?.effectiveBranchId ?? existing.branchId,
         },
       });
 
@@ -345,10 +384,12 @@ router.delete('/:id', authorize('ADMIN', 'SUPERVISOR'), async (req: AuthRequest,
     if (!existing) throw new AppError('Compra no encontrada', 404);
 
     await prisma.$transaction(async (tx) => {
-      const purchaseBranchId = await resolvePurchaseBranchId(tx, req.user!.businessId!, existing.branchId);
+      // Fallback solo para detalles legados sin branchId propio.
+      const legacyBranchId = await resolvePurchaseBranchId(tx, req.user!.businessId!, existing.branchId);
 
       interface DeleteProductRow { id: string; stock: number; allowNegativeStock: boolean; name: string; }
       for (const detail of existing.details) {
+        const lineBranchId = detail.branchId || legacyBranchId;
         // Lock row — provides accurate previousStock/newStock; use atomic decrement
         // instead of the previous `stock: Math.max(0, staleValue - qty)` which:
         //   1. used a stale read susceptible to concurrent updates
@@ -359,13 +400,13 @@ router.delete('/:id', authorize('ADMIN', 'SUPERVISOR'), async (req: AuthRequest,
         );
         if (!locked) continue;
         const newStock = locked.stock - detail.quantity;
-        // El chequeo mira la bodega de la compra, no solo el total.
+        // El chequeo mira la bodega de ESTA línea, no solo el total.
         const [branchStockRow] = await tx.$queryRawUnsafe<any[]>(
           `INSERT INTO product_stocks (id, "productId", "branchId", stock, "createdAt", "updatedAt")
            VALUES ($1, $2, $3, 0, now(), now())
            ON CONFLICT ("productId", "branchId") DO UPDATE SET "updatedAt" = product_stocks."updatedAt"
            RETURNING stock`,
-          randomUUID(), detail.productId, purchaseBranchId,
+          randomUUID(), detail.productId, lineBranchId,
         );
         const newBranchStock = Number(branchStockRow.stock) - detail.quantity;
         // A diferencia de la versión anterior, que descontaba sin tope: si ya se
@@ -382,7 +423,7 @@ router.delete('/:id', authorize('ADMIN', 'SUPERVISOR'), async (req: AuthRequest,
           data: { stock: { decrement: detail.quantity } },
         });
         await tx.productStock.update({
-          where: { productId_branchId: { productId: detail.productId, branchId: purchaseBranchId } },
+          where: { productId_branchId: { productId: detail.productId, branchId: lineBranchId } },
           data: { stock: { decrement: detail.quantity } },
         });
         await tx.inventoryMovement.create({
@@ -394,7 +435,7 @@ router.delete('/:id', authorize('ADMIN', 'SUPERVISOR'), async (req: AuthRequest,
             referenceId: req.params.id, referenceType: 'PURCHASE',
             unitCost: Number(detail.unitCost),
             totalCost: Number(detail.unitCost) * detail.quantity,
-            branchId: purchaseBranchId,
+            branchId: lineBranchId,
           },
         });
       }

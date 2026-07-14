@@ -37,6 +37,10 @@ function authHeader(role: string, branchId: string | null = 'br-1') {
 }
 
 const PROD = '33333333-3333-4333-8333-333333333333';
+const PROD2 = '44444444-4444-4444-8444-444444444444';
+// items.*.branchId se valida con isUUID() — hace falta formato real, no 'br-1'.
+const BR1 = '11111111-1111-4111-8111-111111111111';
+const BR2 = '22222222-2222-4222-8222-222222222222';
 
 describe('POST /api/v1/purchases', () => {
   beforeEach(() => jest.clearAllMocks());
@@ -70,6 +74,113 @@ describe('POST /api/v1/purchases', () => {
     expect(txExecuteRawUnsafe).toHaveBeenCalledWith(
       expect.stringContaining('product_stocks'),
       expect.any(String), PROD, 'br-1', 5,
+    );
+  });
+
+  it('registra una compra con 2 líneas en 2 bodegas distintas — cada product_stocks recibe su propia bodega', async () => {
+    (mockPrisma.product.count as jest.Mock).mockResolvedValue(2);
+    (mockPrisma.branch.findFirst as jest.Mock).mockImplementation(({ where }: any) => Promise.resolve({ id: where.id }));
+
+    const txPurchaseCreate = jest.fn().mockResolvedValue({ id: 'purch-1' });
+    const txExecuteRawUnsafe = jest.fn().mockResolvedValue(0);
+    const tx = {
+      purchase: { create: txPurchaseCreate },
+      $queryRawUnsafe: jest.fn()
+        .mockResolvedValueOnce([{ id: PROD, stock: 10, minStock: 2, lowStockNotifiedAt: null }])
+        .mockResolvedValueOnce([{ id: PROD2, stock: 4, minStock: 2, lowStockNotifiedAt: null }]),
+      $executeRawUnsafe: txExecuteRawUnsafe,
+      product: { update: jest.fn().mockResolvedValue({}) },
+      inventoryMovement: { create: jest.fn().mockResolvedValue({}) },
+    };
+    (mockPrisma.$transaction as jest.Mock).mockImplementation(async (fn: any) => fn(tx));
+
+    // ADMIN sin bodega fija: puede elegir bodega por línea libremente.
+    const res = await request(app)
+      .post('/api/v1/purchases')
+      .set(authHeader('ADMIN', null))
+      .send({
+        items: [
+          { productId: PROD, quantity: 30, unitCost: 1000, branchId: BR1 },
+          { productId: PROD2, quantity: 20, unitCost: 2000, branchId: BR2 },
+        ],
+      });
+
+    expect(res.status).toBe(201);
+    expect(txExecuteRawUnsafe).toHaveBeenNthCalledWith(1, expect.stringContaining('product_stocks'), expect.any(String), PROD, BR1, 30);
+    expect(txExecuteRawUnsafe).toHaveBeenNthCalledWith(2, expect.stringContaining('product_stocks'), expect.any(String), PROD2, BR2, 20);
+    // Purchase.branchId queda alineado con la primera línea, solo de referencia/compat.
+    expect(txPurchaseCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ branchId: BR1 }) }),
+    );
+  });
+
+  it('rechaza con 403 si un cajero con bodega fija manda items[].branchId de otra bodega', async () => {
+    (mockPrisma.product.count as jest.Mock).mockResolvedValue(1);
+
+    const res = await request(app)
+      .post('/api/v1/purchases')
+      .set(authHeader('CASHIER', BR1))
+      .send({ items: [{ productId: PROD, quantity: 5, unitCost: 1000, branchId: BR2 }] });
+
+    expect(res.status).toBe(403);
+    expect(res.body.error).toMatch(/no tienes acceso/i);
+    // Falla en el Promise.all previo a abrir la transacción — no debió escribir nada.
+    expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+  });
+});
+
+describe('PUT /api/v1/purchases/:id', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('mover una línea existente de bodega revierte el stock de la vieja y lo aplica en la nueva (clave compuesta productId+branchId)', async () => {
+    (mockPrisma.purchase.findFirst as jest.Mock).mockResolvedValue({
+      id: 'purch-1',
+      businessId: 'biz-1',
+      branchId: BR1,
+      purchaseDate: new Date('2026-07-01'),
+      details: [{ id: 'd1', productId: PROD, quantity: 10, unitCost: 1000, branchId: BR1 }],
+    });
+    (mockPrisma.product.count as jest.Mock).mockResolvedValue(1);
+
+    const txProductStockUpdate = jest.fn().mockResolvedValue({});
+    const txPurchaseUpdate = jest.fn().mockResolvedValue({});
+    const tx = {
+      branch: { findFirst: jest.fn().mockResolvedValue({ id: BR2 }) },
+      $queryRawUnsafe: jest.fn()
+        // key vieja (PROD, BR1): lock del producto + upsert de stock en BR1
+        .mockResolvedValueOnce([{ id: PROD, stock: 100, allowNegativeStock: false, name: 'Producto X', minStock: 2, lowStockNotifiedAt: null }])
+        .mockResolvedValueOnce([{ stock: 50 }])
+        // key nueva (PROD, BR2): lock del producto + upsert de stock en BR2
+        .mockResolvedValueOnce([{ id: PROD, stock: 100, allowNegativeStock: false, name: 'Producto X', minStock: 2, lowStockNotifiedAt: null }])
+        .mockResolvedValueOnce([{ stock: 5 }]),
+      product: { update: jest.fn().mockResolvedValue({}) },
+      productStock: { update: txProductStockUpdate },
+      inventoryMovement: { create: jest.fn().mockResolvedValue({}) },
+      purchaseDetail: { deleteMany: jest.fn().mockResolvedValue({}) },
+      purchase: { update: txPurchaseUpdate },
+    };
+    (mockPrisma.$transaction as jest.Mock).mockImplementation(async (fn: any) => fn(tx));
+
+    const res = await request(app)
+      .put('/api/v1/purchases/purch-1')
+      .set(authHeader('ADMIN', null))
+      .send({ items: [{ productId: PROD, quantity: 10, unitCost: 1000, branchId: BR2 }] });
+
+    expect(res.status).toBe(200);
+    expect(txProductStockUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { productId_branchId: { productId: PROD, branchId: BR1 } },
+        data: { stock: { increment: -10 } },
+      }),
+    );
+    expect(txProductStockUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { productId_branchId: { productId: PROD, branchId: BR2 } },
+        data: { stock: { increment: 10 } },
+      }),
+    );
+    expect(txPurchaseUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ branchId: BR2 }) }),
     );
   });
 });

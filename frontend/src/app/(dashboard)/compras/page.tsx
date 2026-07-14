@@ -67,7 +67,7 @@ export default function ComprasPage() {
   });
 
   const { register, handleSubmit, control, reset, watch, setValue, formState: { errors } } = useForm({
-    defaultValues: { branchId: '', supplierId: '', invoiceNumber: '', notes: '', purchaseDate: '', items: [{ productId: '', quantity: 1, unitCost: 0, taxRate: 0 }] },
+    defaultValues: { supplierId: '', invoiceNumber: '', notes: '', purchaseDate: '', items: [{ productId: '', quantity: 1, unitCost: 0, taxRate: 0, branchId: '' }] },
   });
 
   const { fields, append, remove } = useFieldArray({ control, name: 'items' });
@@ -159,7 +159,6 @@ export default function ComprasPage() {
       setSelectedSupplierName(p.supplier?.name || '');
       setSupplierSearch('');
       reset({
-        branchId: p.branchId || '',
         supplierId: p.supplierId,
         invoiceNumber: p.invoiceNumber || '',
         notes: p.notes || '',
@@ -169,6 +168,7 @@ export default function ComprasPage() {
           quantity: d.quantity,
           unitCost: d.unitCost,
           taxRate: d.taxRate,
+          branchId: d.branchId || p.branchId || '',
         })),
       });
       setShowForm(true);
@@ -198,7 +198,7 @@ export default function ComprasPage() {
           type="button"
           onClick={() => {
             setEditItem(null);
-            reset({ branchId: myBranchId, supplierId: '', invoiceNumber: '', notes: '', purchaseDate: '', items: [{ productId: '', quantity: 1, unitCost: 0, taxRate: 0 }] });
+            reset({ supplierId: '', invoiceNumber: '', notes: '', purchaseDate: '', items: [{ productId: '', quantity: 1, unitCost: 0, taxRate: 0, branchId: myBranchId }] });
             setSelectedSupplierName('');
             setSupplierSearch('');
             setShowForm(true);
@@ -539,18 +539,6 @@ export default function ComprasPage() {
                   <input {...register('notes')} className={inputCls} placeholder="Opcional" />
                 </div>
 
-                {/* Bodega — solo al crear; una compra ya registrada no cambia de
-                    bodega al editarla. Si solo hay una, ni se muestra. */}
-                {!editItem && branches?.length > 1 && (
-                  <div>
-                    <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5 block">Bodega que recibe *</label>
-                    <select {...register('branchId', { required: true })} className={inputCls}>
-                      <option value="">Selecciona una bodega...</option>
-                      {branches.map((b: any) => <option key={b.id} value={b.id}>{b.name}</option>)}
-                    </select>
-                    {errors.branchId && <p className="mt-1 text-[11px] text-red-500">Selecciona en qué bodega entra la mercancía</p>}
-                  </div>
-                )}
               </div>
 
               {/* ── Líneas de producto ────────────────────────────────────────── */}
@@ -559,7 +547,13 @@ export default function ComprasPage() {
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Productos</p>
                   <button
                     type="button"
-                    onClick={() => append({ productId: '', quantity: 1, unitCost: 0, taxRate: 0 })}
+                    onClick={() => {
+                      // Autocompleta con la bodega de la última línea (o la del
+                      // usuario) para no obligar a re-elegirla cuando casi todo
+                      // va al mismo lugar.
+                      const lastBranchId = watchItems?.length ? watchItems[watchItems.length - 1]?.branchId : '';
+                      append({ productId: '', quantity: 1, unitCost: 0, taxRate: 0, branchId: lastBranchId || myBranchId || '' });
+                    }}
                     className="flex items-center gap-1 text-[12px] text-emerald-600 dark:text-emerald-400 hover:underline"
                   >
                     <Plus size={12} /> Agregar línea
@@ -576,7 +570,25 @@ export default function ComprasPage() {
                   </div>
 
                   {fields.map((field: any, i: number) => (
-                    <div key={field.id} className="grid grid-cols-6 sm:grid-cols-12 gap-2 items-center">
+                    <div key={field.id} className="space-y-1.5 pb-2 border-b border-slate-100 dark:border-white/[0.04] last:border-0 last:pb-0">
+                      {/* Bodega por línea — una sola factura puede repartir
+                          mercancía entre varias bodegas. Solo se muestra si
+                          hay más de una. */}
+                      {branches?.length > 1 && (
+                        <div>
+                          <select
+                            {...register(`items.${i}.branchId`, { required: true })}
+                            className={inputSmCls}
+                          >
+                            <option value="">Bodega que recibe...</option>
+                            {branches.map((b: any) => <option key={b.id} value={b.id}>{b.name}</option>)}
+                          </select>
+                          {(errors.items as any)?.[i]?.branchId && (
+                            <p className="mt-0.5 text-[10px] text-red-500">Selecciona en qué bodega entra esta línea</p>
+                          )}
+                        </div>
+                      )}
+                    <div className="grid grid-cols-6 sm:grid-cols-12 gap-2 items-center">
                       <div className="col-span-5 sm:col-span-5">
                         <select
                           {...register(`items.${i}.productId`, { required: true })}
@@ -641,6 +653,7 @@ export default function ComprasPage() {
                           </button>
                         )}
                       </div>
+                    </div>
                     </div>
                   ))}
                 </div>

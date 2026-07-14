@@ -180,6 +180,7 @@ model Branch {
   purchases     Purchase[]
   inventoryMovements InventoryMovement[]
   productStocks ProductStock[]
+  purchaseDetails PurchaseDetail[]
   transfersOut  StockTransfer[] @relation("TransferFrom")
   transfersIn   StockTransfer[] @relation("TransferTo")
   createdAt     DateTime       @default(now())
@@ -521,10 +522,16 @@ model PurchaseDetail {
   taxRate    Decimal  @default(0)
   subtotal   Decimal
   total      Decimal
+  // Nullable — detalles de antes de este campo quedan sin bodega propia; se
+  // asume la de Purchase.branchId (o la más antigua del negocio) al editar/
+  // eliminar. Ver legacyBranchId en purchase.routes.ts.
+  branchId   String?
+  branch     Branch?  @relation(fields: [branchId], references: [id])
   createdAt  DateTime @default(now())
 
   @@index([purchaseId])
   @@index([productId])
+  @@index([branchId])
   @@map("purchase_details")
 }
 
