@@ -493,6 +493,7 @@ model Purchase {
   subtotal      Decimal
   taxAmount     Decimal         @default(0)
   total         Decimal
+  paymentMethod PaymentMethod   @default(CASH)
   invoicePdf    String?
   notes         String?
   purchaseDate  DateTime        @default(now())

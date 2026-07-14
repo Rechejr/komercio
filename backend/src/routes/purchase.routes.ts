@@ -19,6 +19,8 @@ const purchaseItemValidators = [
   body('branchId').optional().isUUID().withMessage('branchId inválido'),
   body('invoiceNumber').optional().trim(),
   body('notes').optional().trim(),
+  // MIXED no se ofrece aquí — mismo criterio que el <select> de Gastos.
+  body('paymentMethod').optional().isIn(['CASH', 'TRANSFER', 'NEQUI', 'DAVIPLATA', 'CARD']).withMessage('Método de pago inválido'),
 ];
 
 // Compras de antes de esta función quedaron con branchId null — al editarlas o
@@ -95,12 +97,17 @@ router.get('/:id', async (req: AuthRequest, res, next) => {
 // siendo una acción de ADMIN/SUPERVISOR/WAREHOUSE.
 router.post('/', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE', 'CASHIER'), purchaseItemValidators, validate, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const { supplierId, invoiceNumber, items, notes, purchaseDate, branchId } = req.body;
+    const { supplierId, invoiceNumber, items, notes, purchaseDate, branchId, paymentMethod } = req.body;
     if (!items?.length) throw new AppError('Se requieren productos', 400);
     const businessId = req.user!.businessId;
+    const effectivePaymentMethod = paymentMethod || 'CASH';
 
-    // Validate all products belong to this business before starting the transaction
-    const productIds: string[] = items.map((item: any) => item.productId);
+    // Validate all products belong to this business before starting the transaction.
+    // Dedupe primero — con bodega por línea, un mismo producto puede repetirse en
+    // varias líneas (para repartirlo entre bodegas), y `product.count` con `in`
+    // solo cuenta filas distintas: sin el dedupe, el conteo nunca cuadraba con
+    // `productIds.length` y rechazaba compras válidas con "no pertenecen a este negocio".
+    const productIds: string[] = [...new Set<string>(items.map((item: any) => item.productId))];
     const validCount = await prisma.product.count({
       where: { id: { in: productIds }, businessId, deletedAt: null },
     });
@@ -108,8 +115,9 @@ router.post('/', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE', 'CASHIER'), purch
       throw new AppError('Uno o más productos no pertenecen a este negocio', 403);
     }
 
+    let sup: { name: string } | null = null;
     if (supplierId) {
-      const sup = await prisma.supplier.findFirst({ where: { id: supplierId, businessId, deletedAt: null } });
+      sup = await prisma.supplier.findFirst({ where: { id: supplierId, businessId, deletedAt: null }, select: { name: true } });
       if (!sup) throw new AppError('Proveedor inválido', 400);
     }
 
@@ -151,6 +159,7 @@ router.post('/', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE', 'CASHIER'), purch
           subtotal,
           taxAmount,
           total: subtotal + taxAmount,
+          paymentMethod: effectivePaymentMethod,
           details: { create: details },
           // Valor de referencia/compat: la bodega de la primera línea. No se
           // lee en ningún otro lado del backend — solo sirve de fallback
@@ -204,13 +213,37 @@ router.post('/', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE', 'CASHIER'), purch
       return newPurchase;
     });
 
+    // Registrar egreso en caja abierta cuando se paga en efectivo (best effort,
+    // mismo patrón que expense.controller.ts) — la caja a afectar es la del
+    // usuario que registra la compra, no la(s) bodega(s) donde entra la
+    // mercancía: son dos cosas distintas, igual que ya pasa en Gastos.
+    if (effectivePaymentMethod === 'CASH') {
+      try {
+        const userBranchId = req.user!.branchId;
+        if (userBranchId) {
+          const openRegister = await prisma.cashRegister.findFirst({ where: { branchId: userBranchId, status: 'OPEN' } });
+          if (openRegister) {
+            await prisma.cashMovement.create({
+              data: {
+                cashRegisterId: openRegister.id,
+                type: 'OUT',
+                amount: Number(purchase.total),
+                description: sup?.name ? `Compra a ${sup.name}` : 'Compra de mercancía',
+                referenceId: purchase.id,
+              },
+            });
+          }
+        }
+      } catch { /* no debe fallar el registro de la compra */ }
+    }
+
     return created(res, purchase, 'Compra registrada');
   } catch (err) { next(err); }
 });
 
 router.put('/:id', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE'), purchaseItemValidators, validate, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const { supplierId, invoiceNumber, items, notes, purchaseDate } = req.body;
+    const { supplierId, invoiceNumber, items, notes, purchaseDate, paymentMethod } = req.body;
     if (!items?.length) throw new AppError('Se requieren productos', 400);
     const businessId = req.user!.businessId;
 
@@ -220,8 +253,9 @@ router.put('/:id', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE'), purchaseItemVa
     });
     if (!existing) throw new AppError('Compra no encontrada', 404);
 
-    // Validate new items' products belong to this business
-    const newProductIds: string[] = items.map((item: any) => item.productId);
+    // Validate new items' products belong to this business (dedupe — ver nota
+    // equivalente en POST sobre por qué hace falta con bodega por línea).
+    const newProductIds: string[] = [...new Set<string>(items.map((item: any) => item.productId))];
     const validCount = await prisma.product.count({
       where: { id: { in: newProductIds }, businessId, deletedAt: null },
     });
@@ -359,7 +393,7 @@ router.put('/:id', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE'), purchaseItemVa
       const updatedPurchase = await tx.purchase.update({
         where: { id: req.params.id },
         data: {
-          supplierId, invoiceNumber, notes,
+          supplierId, invoiceNumber, notes, paymentMethod,
           purchaseDate: purchaseDate ? new Date(purchaseDate) : existing.purchaseDate,
           subtotal, taxAmount, total: subtotal + taxAmount,
           details: { create: details },
@@ -370,6 +404,43 @@ router.put('/:id', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE'), purchaseItemVa
 
       return updatedPurchase;
     });
+
+    // Reconciliar el movimiento de caja que esta compra generó al crearse —
+    // mismo patrón que expenseController.update. Solo se ajusta si la caja
+    // donde se registró sigue abierta; una vez cerrada, ese cierre ya quedó
+    // conciliado y no se debe alterar en retrospectiva.
+    try {
+      const movement = await prisma.cashMovement.findFirst({
+        where: { referenceId: existing.id, type: 'OUT' },
+        include: { cashRegister: true },
+      });
+      const newPaymentMethod = paymentMethod !== undefined ? paymentMethod : existing.paymentMethod;
+      const newAmount = Number(updated.total);
+
+      if (movement && movement.cashRegister.status === 'OPEN') {
+        if (newPaymentMethod !== 'CASH') {
+          await prisma.cashMovement.delete({ where: { id: movement.id } });
+        } else {
+          await prisma.cashMovement.update({ where: { id: movement.id }, data: { amount: newAmount } });
+        }
+      } else if (!movement && existing.paymentMethod !== 'CASH' && newPaymentMethod === 'CASH') {
+        const userBranchId = req.user!.branchId;
+        if (userBranchId) {
+          const openRegister = await prisma.cashRegister.findFirst({ where: { branchId: userBranchId, status: 'OPEN' } });
+          if (openRegister) {
+            await prisma.cashMovement.create({
+              data: {
+                cashRegisterId: openRegister.id,
+                type: 'OUT',
+                amount: newAmount,
+                description: 'Compra de mercancía',
+                referenceId: existing.id,
+              },
+            });
+          }
+        }
+      }
+    } catch { /* no debe fallar la actualización de la compra */ }
 
     return success(res, updated, 'Compra actualizada');
   } catch (err) { next(err); }
@@ -441,6 +512,19 @@ router.delete('/:id', authorize('ADMIN', 'SUPERVISOR'), async (req: AuthRequest,
       }
       await tx.purchase.update({ where: { id: req.params.id }, data: { deletedAt: new Date() } });
     });
+
+    // Igual que en expenseController.delete: si la caja donde se registró el
+    // egreso sigue abierta, se elimina también — de lo contrario queda una
+    // salida de caja "huérfana" que ya no corresponde a ninguna compra real.
+    try {
+      const movement = await prisma.cashMovement.findFirst({
+        where: { referenceId: existing.id, type: 'OUT' },
+        include: { cashRegister: true },
+      });
+      if (movement && movement.cashRegister.status === 'OPEN') {
+        await prisma.cashMovement.delete({ where: { id: movement.id } });
+      }
+    } catch { /* no debe fallar la eliminación de la compra */ }
 
     return success(res, null, 'Compra eliminada y stock revertido');
   } catch (err) { next(err); }

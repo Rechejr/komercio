@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm, useFieldArray, Controller } from 'react-hook-form';
 import { api } from '@/lib/api';
-import { formatCurrency, formatDate } from '@/lib/utils';
+import { formatCurrency, formatDate, paymentMethodLabel } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import { Plus, ShoppingBag, X, Loader2, Trash2, Edit, ChevronRight, FileDown, Search } from 'lucide-react';
 import { useAuthStore } from '@/store/auth.store';
@@ -14,6 +14,14 @@ import { PriceInput } from '@/components/ui/PriceInput';
 
 const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[16px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition';
 const inputSmCls = 'w-full px-2 py-2 bg-slate-50 border border-slate-200 rounded-lg text-[16px] sm:text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition';
+
+const PAYMENT_BADGE: Record<string, string> = {
+  CASH: 'badge-green',
+  TRANSFER: 'badge-indigo',
+  NEQUI: 'badge-blue',
+  DAVIPLATA: 'badge-amber',
+  CARD: 'badge-slate',
+};
 
 export default function ComprasPage() {
   const qc = useQueryClient();
@@ -67,7 +75,7 @@ export default function ComprasPage() {
   });
 
   const { register, handleSubmit, control, reset, watch, setValue, formState: { errors } } = useForm({
-    defaultValues: { supplierId: '', invoiceNumber: '', notes: '', purchaseDate: '', items: [{ productId: '', quantity: 1, unitCost: 0, taxRate: 0, branchId: '' }] },
+    defaultValues: { supplierId: '', invoiceNumber: '', notes: '', purchaseDate: '', paymentMethod: 'CASH', items: [{ productId: '', quantity: 1, unitCost: 0, taxRate: 0, branchId: '' }] },
   });
 
   const { fields, append, remove } = useFieldArray({ control, name: 'items' });
@@ -163,6 +171,7 @@ export default function ComprasPage() {
         invoiceNumber: p.invoiceNumber || '',
         notes: p.notes || '',
         purchaseDate: p.purchaseDate ? p.purchaseDate.split('T')[0] : '',
+        paymentMethod: p.paymentMethod || 'CASH',
         items: p.details.map((d: any) => ({
           productId: d.productId,
           quantity: d.quantity,
@@ -198,7 +207,7 @@ export default function ComprasPage() {
           type="button"
           onClick={() => {
             setEditItem(null);
-            reset({ supplierId: '', invoiceNumber: '', notes: '', purchaseDate: '', items: [{ productId: '', quantity: 1, unitCost: 0, taxRate: 0, branchId: myBranchId }] });
+            reset({ supplierId: '', invoiceNumber: '', notes: '', purchaseDate: '', paymentMethod: 'CASH', items: [{ productId: '', quantity: 1, unitCost: 0, taxRate: 0, branchId: myBranchId }] });
             setSelectedSupplierName('');
             setSupplierSearch('');
             setShowForm(true);
@@ -247,6 +256,7 @@ export default function ComprasPage() {
                 <th className="hidden md:table-cell text-center px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Productos</th>
                 <th className="text-right px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Total</th>
                 <th className="hidden sm:table-cell text-left px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Fecha</th>
+                <th className="hidden md:table-cell text-left px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Pago</th>
                 <th className="w-24 sr-only">Acciones</th>
               </tr>
             </thead>
@@ -254,7 +264,7 @@ export default function ComprasPage() {
               {isLoading ? (
                 [...Array(5)].map((_, i) => (
                   <tr key={i}>
-                    {[...Array(6)].map((_, j) => (
+                    {[...Array(7)].map((_, j) => (
                       <td key={j} className="px-4 py-3">
                         <div className="h-4 bg-slate-100 dark:bg-slate-800 rounded-lg animate-pulse" />
                       </td>
@@ -263,7 +273,7 @@ export default function ComprasPage() {
                 ))
               ) : purchases.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="text-center py-16">
+                  <td colSpan={7} className="text-center py-16">
                     <div className="flex flex-col items-center gap-3 text-slate-400 dark:text-slate-600">
                       <ShoppingBag size={36} strokeWidth={1.5} />
                       <p className="text-[13px]">No hay compras registradas</p>
@@ -281,6 +291,11 @@ export default function ComprasPage() {
                   <td className="hidden md:table-cell px-4 py-3 text-center text-[13px] text-slate-500 dark:text-slate-400 tabular-nums">{p._count?.details}</td>
                   <td className="px-4 py-3 text-right text-[13px] font-semibold text-slate-900 dark:text-white tabular-nums">{formatCurrency(p.total)}</td>
                   <td className="hidden sm:table-cell px-4 py-3 text-[12px] text-slate-400 dark:text-slate-500">{formatDate(p.purchaseDate)}</td>
+                  <td className="hidden md:table-cell px-4 py-3">
+                    <span className={`badge ${PAYMENT_BADGE[p.paymentMethod] || 'badge-slate'}`}>
+                      {paymentMethodLabel[p.paymentMethod] || p.paymentMethod}
+                    </span>
+                  </td>
                   <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                     <div className="flex items-center gap-1.5 justify-end">
                       <button
@@ -348,6 +363,9 @@ export default function ComprasPage() {
                 <p className="text-[12px] text-slate-400 mt-0.5">
                   {detail.invoiceNumber ? `Factura: ${detail.invoiceNumber}` : 'Sin número de factura'} · {formatDate(detail.purchaseDate)}
                 </p>
+                <span className={`badge ${PAYMENT_BADGE[detail.paymentMethod] || 'badge-slate'} mt-1.5 inline-block`}>
+                  {paymentMethodLabel[detail.paymentMethod] || detail.paymentMethod}
+                </span>
               </div>
               <div className="flex items-center gap-2">
                 <button
@@ -537,6 +555,18 @@ export default function ComprasPage() {
                 <div>
                   <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5 block">Notas</label>
                   <input {...register('notes')} className={inputCls} placeholder="Opcional" />
+                </div>
+
+                {/* Método de pago */}
+                <div>
+                  <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5 block">Método de pago</label>
+                  <select {...register('paymentMethod')} className={inputCls}>
+                    <option value="CASH">Efectivo</option>
+                    <option value="TRANSFER">Transferencia</option>
+                    <option value="NEQUI">Nequi</option>
+                    <option value="DAVIPLATA">Daviplata</option>
+                    <option value="CARD">Tarjeta</option>
+                  </select>
                 </div>
 
               </div>

@@ -11,6 +11,8 @@ jest.mock('../../config/database', () => ({
     product: { count: jest.fn() },
     supplier: { findFirst: jest.fn() },
     branch: { findFirst: jest.fn() },
+    cashRegister: { findFirst: jest.fn() },
+    cashMovement: { create: jest.fn(), findFirst: jest.fn(), update: jest.fn(), delete: jest.fn() },
     $transaction: jest.fn(),
   },
 }));
@@ -114,6 +116,84 @@ describe('POST /api/v1/purchases', () => {
     );
   });
 
+  it('no rechaza cuando el MISMO producto se repite en varias líneas con bodegas distintas (bug: product.count con id duplicados en "in" solo cuenta filas distintas)', async () => {
+    // Solo 1 producto real de por medio, pero aparece en 3 líneas — product.count
+    // con `id: { in: [...] }` deduplica internamente (PK única), así que sin
+    // dedupe en el código, productIds.length (3) nunca cuadraba con validCount (1).
+    (mockPrisma.product.count as jest.Mock).mockResolvedValue(1);
+    (mockPrisma.branch.findFirst as jest.Mock).mockImplementation(({ where }: any) => Promise.resolve({ id: where.id }));
+
+    const tx = {
+      purchase: { create: jest.fn().mockResolvedValue({ id: 'purch-1' }) },
+      $queryRawUnsafe: jest.fn().mockResolvedValue([{ id: PROD, stock: 10, minStock: 2, lowStockNotifiedAt: null }]),
+      $executeRawUnsafe: jest.fn().mockResolvedValue(0),
+      product: { update: jest.fn().mockResolvedValue({}) },
+      inventoryMovement: { create: jest.fn().mockResolvedValue({}) },
+    };
+    (mockPrisma.$transaction as jest.Mock).mockImplementation(async (fn: any) => fn(tx));
+
+    const res = await request(app)
+      .post('/api/v1/purchases')
+      .set(authHeader('ADMIN', null))
+      .send({
+        items: [
+          { productId: PROD, quantity: 5, unitCost: 1000, branchId: BR1 },
+          { productId: PROD, quantity: 5, unitCost: 1000, branchId: BR2 },
+          { productId: PROD, quantity: 1, unitCost: 1000, branchId: BR1 },
+        ],
+      });
+
+    expect(res.status).toBe(201);
+  });
+
+  it('crea un movimiento de caja OUT cuando la compra se paga en efectivo y hay una caja abierta', async () => {
+    (mockPrisma.product.count as jest.Mock).mockResolvedValue(1);
+    (mockPrisma.cashRegister.findFirst as jest.Mock).mockResolvedValue({ id: 'reg-1' });
+
+    const tx = {
+      purchase: { create: jest.fn().mockResolvedValue({ id: 'purch-1', total: 5000 }) },
+      $queryRawUnsafe: jest.fn().mockResolvedValue([{ id: PROD, stock: 10, minStock: 2, lowStockNotifiedAt: null }]),
+      $executeRawUnsafe: jest.fn().mockResolvedValue(0),
+      product: { update: jest.fn().mockResolvedValue({}) },
+      inventoryMovement: { create: jest.fn().mockResolvedValue({}) },
+    };
+    (mockPrisma.$transaction as jest.Mock).mockImplementation(async (fn: any) => fn(tx));
+
+    const res = await request(app)
+      .post('/api/v1/purchases')
+      .set(authHeader('ADMIN', 'br-1'))
+      .send({ items: [{ productId: PROD, quantity: 5, unitCost: 1000 }], paymentMethod: 'CASH' });
+
+    expect(res.status).toBe(201);
+    expect(mockPrisma.cashRegister.findFirst).toHaveBeenCalledWith({ where: { branchId: 'br-1', status: 'OPEN' } });
+    expect(mockPrisma.cashMovement.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ cashRegisterId: 'reg-1', type: 'OUT', amount: 5000, referenceId: 'purch-1' }),
+      }),
+    );
+  });
+
+  it('no falla el registro de la compra si el movimiento de caja falla (best effort)', async () => {
+    (mockPrisma.product.count as jest.Mock).mockResolvedValue(1);
+    (mockPrisma.cashRegister.findFirst as jest.Mock).mockRejectedValue(new Error('db down'));
+
+    const tx = {
+      purchase: { create: jest.fn().mockResolvedValue({ id: 'purch-1', total: 5000 }) },
+      $queryRawUnsafe: jest.fn().mockResolvedValue([{ id: PROD, stock: 10, minStock: 2, lowStockNotifiedAt: null }]),
+      $executeRawUnsafe: jest.fn().mockResolvedValue(0),
+      product: { update: jest.fn().mockResolvedValue({}) },
+      inventoryMovement: { create: jest.fn().mockResolvedValue({}) },
+    };
+    (mockPrisma.$transaction as jest.Mock).mockImplementation(async (fn: any) => fn(tx));
+
+    const res = await request(app)
+      .post('/api/v1/purchases')
+      .set(authHeader('ADMIN', 'br-1'))
+      .send({ items: [{ productId: PROD, quantity: 5, unitCost: 1000 }] });
+
+    expect(res.status).toBe(201);
+  });
+
   it('rechaza con 403 si un cajero con bodega fija manda items[].branchId de otra bodega', async () => {
     (mockPrisma.product.count as jest.Mock).mockResolvedValue(1);
 
@@ -182,6 +262,39 @@ describe('PUT /api/v1/purchases/:id', () => {
     expect(txPurchaseUpdate).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ branchId: BR2 }) }),
     );
+  });
+
+  it('si se cambia de Efectivo a otro método y la caja donde se registró sigue abierta, borra el movimiento de caja', async () => {
+    (mockPrisma.purchase.findFirst as jest.Mock).mockResolvedValue({
+      id: 'purch-1',
+      businessId: 'biz-1',
+      branchId: BR1,
+      paymentMethod: 'CASH',
+      purchaseDate: new Date('2026-07-01'),
+      details: [{ id: 'd1', productId: PROD, quantity: 10, unitCost: 1000, branchId: BR1 }],
+    });
+    (mockPrisma.product.count as jest.Mock).mockResolvedValue(1);
+    (mockPrisma.cashMovement.findFirst as jest.Mock).mockResolvedValue({ id: 'mov-1', cashRegister: { status: 'OPEN' } });
+
+    const tx = {
+      branch: { findFirst: jest.fn().mockResolvedValue({ id: BR1 }) },
+      // Misma bodega y cantidad — delta 0, solo entra al lock del producto.
+      $queryRawUnsafe: jest.fn().mockResolvedValue([{ id: PROD, stock: 100, allowNegativeStock: false, name: 'Producto X', minStock: 2, lowStockNotifiedAt: null }]),
+      product: { update: jest.fn().mockResolvedValue({}) },
+      productStock: { update: jest.fn().mockResolvedValue({}) },
+      inventoryMovement: { create: jest.fn().mockResolvedValue({}) },
+      purchaseDetail: { deleteMany: jest.fn().mockResolvedValue({}) },
+      purchase: { update: jest.fn().mockResolvedValue({ id: 'purch-1', total: 10000 }) },
+    };
+    (mockPrisma.$transaction as jest.Mock).mockImplementation(async (fn: any) => fn(tx));
+
+    const res = await request(app)
+      .put('/api/v1/purchases/purch-1')
+      .set(authHeader('ADMIN', null))
+      .send({ items: [{ productId: PROD, quantity: 10, unitCost: 1000, branchId: BR1 }], paymentMethod: 'TRANSFER' });
+
+    expect(res.status).toBe(200);
+    expect(mockPrisma.cashMovement.delete).toHaveBeenCalledWith({ where: { id: 'mov-1' } });
   });
 });
 
@@ -304,5 +417,33 @@ describe('DELETE /api/v1/purchases/:id', () => {
       })
     );
     expect(txPurchaseUpdate).toHaveBeenCalled();
+  });
+
+  it('elimina el movimiento de caja si la compra se pagó en efectivo y la caja donde se registró sigue abierta', async () => {
+    (mockPrisma.purchase.findFirst as jest.Mock).mockResolvedValue({
+      id: 'purch-1',
+      branchId: 'br-1',
+      paymentMethod: 'CASH',
+      details: [{ productId: PROD, quantity: 5, unitCost: 1000 }],
+    });
+    (mockPrisma.cashMovement.findFirst as jest.Mock).mockResolvedValue({ id: 'mov-1', cashRegister: { status: 'OPEN' } });
+
+    const tx = {
+      $queryRawUnsafe: jest.fn()
+        .mockResolvedValueOnce([{ id: PROD, stock: 100, allowNegativeStock: false, name: 'Producto X' }])
+        .mockResolvedValueOnce([{ stock: 20 }]),
+      product: { update: jest.fn().mockResolvedValue({}) },
+      productStock: { update: jest.fn().mockResolvedValue({}) },
+      inventoryMovement: { create: jest.fn().mockResolvedValue({}) },
+      purchase: { update: jest.fn().mockResolvedValue({}) },
+    };
+    (mockPrisma.$transaction as jest.Mock).mockImplementation(async (fn: any) => fn(tx));
+
+    const res = await request(app)
+      .delete('/api/v1/purchases/purch-1')
+      .set(authHeader('ADMIN', 'br-1'));
+
+    expect(res.status).toBe(200);
+    expect(mockPrisma.cashMovement.delete).toHaveBeenCalledWith({ where: { id: 'mov-1' } });
   });
 });
