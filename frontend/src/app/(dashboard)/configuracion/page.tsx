@@ -48,7 +48,7 @@ const ROLE_LABEL: Record<string, string> = {
 
 // Debe reflejar backend/src/config/plans.ts — solo se usa para el aviso previo
 // en el frontend; el límite real siempre lo aplica el servidor.
-const BRANCH_LIMIT: Record<string, number> = { free: 1, pro: 2 };
+const BRANCH_LIMIT: Record<string, number> = { free: 1, pro: 3 };
 
 export default function ConfiguracionPage() {
   const { user } = useAuthStore();

@@ -31,9 +31,9 @@ export const PLANS: Record<PlanName, PlanLimits> = {
     users: Infinity,
     // Tope duro a propósito (no ilimitado): una sucursal vive por completo dentro
     // del negocio del dueño, sin forma de "transferirla" — este límite evita que
-    // el plan Pro se use para operar más de dos puntos de venta bajo una sola
+    // el plan Pro se use para operar más de tres puntos de venta bajo una sola
     // suscripción, y deja espacio para un plan superior a futuro.
-    branches: 2,
+    branches: 3,
     canExport: true,
     canUseCredits: true,
     canUseSuppliers: true,

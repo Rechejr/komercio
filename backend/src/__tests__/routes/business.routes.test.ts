@@ -84,12 +84,12 @@ describe('POST /api/v1/business/branches', () => {
     );
   });
 
-  it('retorna 403 cuando el plan Pro ya alcanzó el límite de 2 sucursales', async () => {
-    mockBusinessWithPlan('pro', 2);
+  it('retorna 403 cuando el plan Pro ya alcanzó el límite de 3 sucursales', async () => {
+    mockBusinessWithPlan('pro', 3);
     const res = await request(app)
       .post('/api/v1/business/branches')
       .set(authHeader('ADMIN'))
-      .send({ name: 'Sucursal 3' });
+      .send({ name: 'Sucursal 4' });
 
     expect(res.status).toBe(403);
     expect(mockPrisma.branch.create).not.toHaveBeenCalled();
