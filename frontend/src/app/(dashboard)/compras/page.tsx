@@ -627,6 +627,15 @@ export default function ComprasPage() {
                           <option value="">Producto...</option>
                           {products?.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}
                         </select>
+                        {(() => {
+                          const selectedProduct = products?.find((p: any) => p.id === watchItems?.[i]?.productId);
+                          if (!selectedProduct || !(Number(selectedProduct.costPrice) > 0)) return null;
+                          return (
+                            <p className="mt-0.5 text-[10px] text-slate-400">
+                              Último costo: {formatCurrency(selectedProduct.costPrice)}
+                            </p>
+                          );
+                        })()}
                       </div>
                       <div className="col-span-1 sm:hidden flex justify-center">
                         {fields.length > 1 && (

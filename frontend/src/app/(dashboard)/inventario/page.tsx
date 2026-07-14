@@ -18,6 +18,14 @@ import {
 import { BarcodeScanner } from '@/components/ui/BarcodeScanner';
 import { useAuthStore } from '@/store/auth.store';
 import { useUpgradeStore } from '@/store/upgrade.store';
+
+// Cuánto dura la etiqueta "Nuevo" en un producto recién agregado.
+const NEW_PRODUCT_DAYS = 7;
+function isNewProduct(createdAt?: string) {
+  if (!createdAt) return false;
+  const ageMs = Date.now() - new Date(createdAt).getTime();
+  return ageMs < NEW_PRODUCT_DAYS * 24 * 60 * 60 * 1000;
+}
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { StaggerList, StaggerItem } from '@/components/ui/StaggerList';
 import { PriceInput } from '@/components/ui/PriceInput';
@@ -587,7 +595,12 @@ export default function InventarioPage() {
                     </td>
                     <td className="hidden sm:table-cell px-4 py-3 font-mono text-[12px] text-slate-400 dark:text-slate-500">{p.code}</td>
                     <td className="px-4 py-3">
-                      <p className="text-[13px] font-medium text-slate-800 dark:text-white">{p.name}</p>
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-[13px] font-medium text-slate-800 dark:text-white">{p.name}</p>
+                        {isNewProduct(p.createdAt) && (
+                          <span className="badge badge-blue text-[10px] px-1.5 py-0.5">Nuevo</span>
+                        )}
+                      </div>
                       {p.barcode && <p className="text-[11px] text-slate-400 mt-0.5">{p.barcode}</p>}
                     </td>
                     <td className="hidden md:table-cell px-4 py-3 text-[13px] text-slate-500 dark:text-slate-400">{p.category?.name || '—'}</td>
