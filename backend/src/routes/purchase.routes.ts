@@ -8,6 +8,7 @@ import { success, created, paginated } from '../utils/response';
 import { getPagination } from '../utils/pagination';
 import { AppError } from '../utils/response';
 import { validate } from '../middlewares/validate';
+import { planLimit } from '../middlewares/planLimit';
 
 const purchaseItemValidators = [
   body('items').isArray({ min: 1 }).withMessage('Se requieren productos'),
@@ -95,7 +96,7 @@ router.get('/:id', async (req: AuthRequest, res, next) => {
 // CASHIER puede registrar la compra (ej. un proveedor entrega un pedido y el
 // cajero lo recibe), pero no editar/eliminar una ya registrada — esa sigue
 // siendo una acción de ADMIN/SUPERVISOR/WAREHOUSE.
-router.post('/', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE', 'CASHIER'), purchaseItemValidators, validate, async (req: AuthRequest, res: Response, next: NextFunction) => {
+router.post('/', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE', 'CASHIER'), planLimit.purchases(), purchaseItemValidators, validate, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const { supplierId, invoiceNumber, items, notes, purchaseDate, branchId, paymentMethod } = req.body;
     if (!items?.length) throw new AppError('Se requieren productos', 400);

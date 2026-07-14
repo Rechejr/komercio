@@ -11,6 +11,7 @@ jest.mock('../../config/database', () => ({
     product: { count: jest.fn() },
     supplier: { findFirst: jest.fn() },
     branch: { findFirst: jest.fn() },
+    business: { findUnique: jest.fn() },
     cashRegister: { findFirst: jest.fn() },
     cashMovement: { create: jest.fn(), findFirst: jest.fn(), update: jest.fn(), delete: jest.fn() },
     $transaction: jest.fn(),
@@ -38,6 +39,15 @@ function authHeader(role: string, branchId: string | null = 'br-1') {
   return { Authorization: 'Bearer valid-token' };
 }
 
+// Compras exige plan Pro (planLimit.purchases(), gate solo en la creación) —
+// por defecto los tests corren como si el negocio fuera Pro; los que necesiten
+// probar el bloqueo en plan gratis lo sobreescriben explícitamente.
+function mockBusinessPlan(plan: 'free' | 'pro') {
+  (mockPrisma.business.findUnique as jest.Mock).mockResolvedValue({
+    id: 'biz-1', plan, planExpiresAt: null, branches: [{ id: 'br-1' }],
+  });
+}
+
 const PROD = '33333333-3333-4333-8333-333333333333';
 const PROD2 = '44444444-4444-4444-8444-444444444444';
 // items.*.branchId se valida con isUUID() — hace falta formato real, no 'br-1'.
@@ -45,7 +55,21 @@ const BR1 = '11111111-1111-4111-8111-111111111111';
 const BR2 = '22222222-2222-4222-8222-222222222222';
 
 describe('POST /api/v1/purchases', () => {
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => { jest.clearAllMocks(); mockBusinessPlan('pro'); });
+
+  it('rechaza con 403 si el negocio está en el plan gratuito (Compras es solo Pro)', async () => {
+    mockBusinessPlan('free');
+
+    const res = await request(app)
+      .post('/api/v1/purchases')
+      .set(authHeader('ADMIN', 'br-1'))
+      .send({ items: [{ productId: PROD, quantity: 5, unitCost: 1000 }] });
+
+    expect(res.status).toBe(403);
+    expect(res.body.error).toMatch(/plan pro/i);
+    // No debió ni siquiera validar productos/proveedor — el gate corre primero.
+    expect(mockPrisma.product.count).not.toHaveBeenCalled();
+  });
 
   it('registra la compra e incrementa el stock de la bodega resuelta (branchId fijo del usuario)', async () => {
     (mockPrisma.product.count as jest.Mock).mockResolvedValue(1);

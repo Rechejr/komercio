@@ -158,6 +158,26 @@ export const planLimit = {
     };
   },
 
+  // Toda compra exige un proveedor, y crear proveedores ya es Pro — pero antes
+  // de este gate, Compras en sí no tenía ningún bloqueo directo: un negocio que
+  // fue Pro, creó proveedores, y luego bajó a gratis podía seguir registrando
+  // compras con esos proveedores viejos. Solo se aplica a la creación (POST),
+  // igual que suppliers()/credits() — editar/ver compras ya existentes no se
+  // restringe, para no dejar esos datos inaccesibles tras un downgrade.
+  purchases() {
+    return async (req: AuthRequest, res: Response, next: NextFunction) => {
+      try {
+        const business = await getBusinessWithPlan(req);
+        if (!business) return next();
+        const limits = getPlan(business.plan);
+        if (!limits.canUseSuppliers) {
+          return next(new AppError('El módulo de compras está disponible solo en el plan Pro.', 403));
+        }
+        next();
+      } catch (err) { next(err); }
+    };
+  },
+
   bulkImport() {
     return async (req: AuthRequest, res: Response, next: NextFunction) => {
       try {
