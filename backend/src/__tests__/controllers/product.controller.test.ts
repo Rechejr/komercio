@@ -204,13 +204,34 @@ describe('productController.adjustStock', () => {
     return { tx, txProductUpdate, txProductStockUpdate, txMovementCreate };
   }
 
-  it('rechaza con 403 si el body pide una bodega distinta a la fija del usuario', async () => {
+  it('rechaza con 403 si el body pide una bodega distinta a la fija del usuario (rol no-manager)', async () => {
     await productController.adjustStock(
-      makeReq({ params: { id: 'p1' }, body: { type: 'ADJUSTMENT', quantity: 5, branchId: 'otra-bodega' } }),
+      makeReq({
+        user: { userId: 'u-1', email: 'a@b.com', role: 'CASHIER', businessId: 'biz-1', branchId: 'br-1' },
+        params: { id: 'p1' }, body: { type: 'ADJUSTMENT', quantity: 5, branchId: 'otra-bodega' },
+      }),
       makeRes().res,
       next,
     );
     expect((next as jest.Mock).mock.calls[0][0].statusCode).toBe(403);
+  });
+
+  it('un ADMIN con bodega fija SÍ puede ajustar stock en otra bodega válida del negocio (no queda restringido a la suya)', async () => {
+    (mockPrisma.branch.findFirst as jest.Mock).mockResolvedValue({ id: 'otra-bodega' });
+    const { tx, txProductUpdate } = makeAdjustTx({ branchStock: 20 });
+    (mockPrisma.$transaction as jest.Mock).mockImplementation(async (fn: any) => fn(tx));
+
+    const { res, json } = makeRes();
+    // makeReq por defecto ya es role: 'ADMIN', branchId: 'br-1' — se pide una bodega distinta.
+    await productController.adjustStock(
+      makeReq({ params: { id: 'p1' }, body: { type: 'ADJUSTMENT', quantity: 35, reason: 'Conteo', branchId: 'otra-bodega' } }),
+      res,
+      next,
+    );
+
+    expect(next).not.toHaveBeenCalled();
+    expect(txProductUpdate).toHaveBeenCalled();
+    expect(json).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
   });
 
   it('rechaza con 400 si el usuario no tiene bodega fija y el negocio tiene varias', async () => {

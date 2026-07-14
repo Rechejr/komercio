@@ -305,14 +305,22 @@ export const productController = {
       // en cuál bodega — nunca se debe adivinar dónde quedó físicamente la mercancía.
       const bodyBranchId: string | undefined = req.body.branchId;
       const userBranchId = req.user?.branchId || null;
+      // ADMIN/SUPERVISOR administran todo el negocio — su bodega fija (si la
+      // tienen, ej. la que se les asignó al registrar el negocio) es solo un
+      // default, no debe impedirles ajustar stock en otra bodega. Ver la nota
+      // equivalente en resolveBranch.ts (resolveEffectiveBranchId).
+      const isManager = req.user?.role === 'ADMIN' || req.user?.role === 'SUPERVISOR';
       let targetBranchId: string;
-      if (userBranchId) {
+      if (userBranchId && !isManager) {
         if (bodyBranchId && bodyBranchId !== userBranchId) throw new AppError('No tienes acceso a esta bodega', 403);
         targetBranchId = userBranchId;
       } else if (bodyBranchId) {
         const branch = await prisma.branch.findFirst({ where: { id: bodyBranchId, businessId: req.user!.businessId }, select: { id: true } });
         if (!branch) throw new AppError('Bodega no válida para este negocio', 403);
         targetBranchId = bodyBranchId;
+      } else if (userBranchId) {
+        // Manager sin bodega explícita en el body: usa la suya propia como default.
+        targetBranchId = userBranchId;
       } else {
         const branches = await prisma.branch.findMany({ where: { businessId: req.user!.businessId, deletedAt: null }, select: { id: true } });
         if (branches.length === 0) throw new AppError('No se encontró una bodega para este negocio', 400);

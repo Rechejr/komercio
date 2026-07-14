@@ -207,6 +207,37 @@ describe('POST /api/v1/purchases', () => {
     // Falla en el Promise.all previo a abrir la transacción — no debió escribir nada.
     expect(mockPrisma.$transaction).not.toHaveBeenCalled();
   });
+
+  it('un ADMIN con bodega fija SÍ puede registrar líneas para otra bodega del negocio (bug real reportado en producción)', async () => {
+    (mockPrisma.product.count as jest.Mock).mockResolvedValue(2);
+    (mockPrisma.branch.findFirst as jest.Mock).mockImplementation(({ where }: any) => Promise.resolve({ id: where.id }));
+
+    const tx = {
+      purchase: { create: jest.fn().mockResolvedValue({ id: 'purch-1', total: 178000 }) },
+      $queryRawUnsafe: jest.fn()
+        .mockResolvedValueOnce([{ id: PROD, stock: 10, minStock: 2, lowStockNotifiedAt: null }])
+        .mockResolvedValueOnce([{ id: PROD2, stock: 4, minStock: 2, lowStockNotifiedAt: null }]),
+      $executeRawUnsafe: jest.fn().mockResolvedValue(0),
+      product: { update: jest.fn().mockResolvedValue({}) },
+      inventoryMovement: { create: jest.fn().mockResolvedValue({}) },
+    };
+    (mockPrisma.$transaction as jest.Mock).mockImplementation(async (fn: any) => fn(tx));
+
+    // El dueño quedó con bodega fija BR1 (asignada al registrar el negocio),
+    // pero una de las líneas es para BR2 — antes esto daba 403 aunque BR2
+    // fuera una bodega real y válida de su propio negocio.
+    const res = await request(app)
+      .post('/api/v1/purchases')
+      .set(authHeader('ADMIN', BR1))
+      .send({
+        items: [
+          { productId: PROD, quantity: 5, unitCost: 8900, branchId: BR1 },
+          { productId: PROD2, quantity: 15, unitCost: 8900, branchId: BR2 },
+        ],
+      });
+
+    expect(res.status).toBe(201);
+  });
 });
 
 describe('PUT /api/v1/purchases/:id', () => {
