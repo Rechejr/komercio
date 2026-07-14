@@ -14,6 +14,9 @@ export const metadata: Metadata = {
       { url: '/ventrix-logo.svg', type: 'image/svg+xml' },
     ],
   },
+  verification: {
+    google: 'rOPXfKr57z3QXaT-HrpBjAO1g6HY07lkZhwhrax5Bf4',
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
