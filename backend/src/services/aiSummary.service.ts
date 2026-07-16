@@ -12,6 +12,8 @@ interface WeeklyMetrics {
   producto_mas_vendido: { nombre: string; unidades: number } | null;
   stock_bajo: Array<{ nombre: string; stock: number; minimo: number }>;
   clientes_con_deuda: { cantidad: number; monto: number };
+  producto_reabastecer: { nombre: string; unidades_vendidas: number } | null;
+  cliente_riesgo: { nombre: string; monto: number; dias_mora: number } | null;
 }
 
 const SYSTEM_PROMPT = `Eres un asistente que redacta resúmenes semanales breves para el dueño de un
@@ -22,7 +24,9 @@ escribe un resumen de EXACTAMENTE 2 a 4 frases, en español, hablándole directo
 al dueño ("vendiste", "te estás quedando sin"), cubriendo — solo si el dato lo
 respalda — la comparación de ventas contra la semana anterior, el producto que
 más se destacó (por ganancia o por unidades, el que sea más notable), y una
-alerta accionable si hay stock bajo o deuda de clientes pendiente.
+alerta accionable si hay stock bajo, deuda de clientes pendiente, un cliente
+con riesgo alto de no pagar (cliente_riesgo), o un producto que se está
+vendiendo rápido y le queda poco stock (producto_reabastecer).
 
 Reglas estrictas:
 - Nunca inventes una cifra que no esté en el JSON de entrada.
@@ -39,7 +43,7 @@ async function gatherMetrics(businessId: string): Promise<WeeklyMetrics> {
   const weekStart = bogotaDayStart(now, -7);
   const prevWeekStart = bogotaDayStart(now, -14);
 
-  const [salesRaw, profitRaw, topByQtyRaw, lowStockRaw, debtAgg] = await Promise.all([
+  const [salesRaw, profitRaw, topByQtyRaw, lowStockRaw, debtAgg, restockRaw, riskCustomerRaw] = await Promise.all([
     prisma.$queryRaw<any[]>`
       SELECT
         COALESCE(SUM(CASE WHEN s."createdAt" >= ${weekStart} AND s.status = 'COMPLETED' THEN s.total END), 0) AS current_total,
@@ -96,11 +100,47 @@ async function gatherMetrics(businessId: string): Promise<WeeklyMetrics> {
       _sum: { balance: true },
       _count: { id: true },
     }),
+    prisma.$queryRaw<any[]>`
+      SELECT p.name, SUM(sd.quantity) AS qty
+      FROM products p
+      JOIN sale_details sd ON sd."productId" = p.id
+      JOIN sales s ON sd."saleId" = s.id
+      JOIN branches br ON s."branchId" = br.id
+      WHERE p.stock <= p."minStock"
+        AND p."deletedAt" IS NULL
+        AND p."isActive" = true
+        AND p."businessId" = ${businessId}
+        AND s."createdAt" >= ${weekStart}
+        AND s.status = 'COMPLETED'
+        AND s."deletedAt" IS NULL
+        AND br."businessId" = ${businessId}
+      GROUP BY p.id, p.name
+      ORDER BY qty DESC
+      LIMIT 1
+    `,
+    // Riesgo = mora en dias * monto adeudado — mientras mas vieja y mas grande
+    // la deuda vencida, mas arriba queda.
+    prisma.$queryRaw<any[]>`
+      SELECT cu.name, c.balance,
+             EXTRACT(DAY FROM (NOW() - c."dueDate")) AS dias_mora
+      FROM credits c
+      JOIN customers cu ON c."customerId" = cu.id
+      WHERE cu."businessId" = ${businessId}
+        AND cu."deletedAt" IS NULL
+        AND c."deletedAt" IS NULL
+        AND c.status IN ('PENDING', 'PARTIAL', 'OVERDUE')
+        AND c."dueDate" IS NOT NULL
+        AND c."dueDate" < NOW()
+      ORDER BY (EXTRACT(EPOCH FROM (NOW() - c."dueDate")) * c.balance) DESC
+      LIMIT 1
+    `,
   ]);
 
   const s = salesRaw[0] || {};
   const profit = profitRaw[0];
   const topQty = topByQtyRaw[0];
+  const restock = restockRaw[0];
+  const riskCustomer = riskCustomerRaw[0];
 
   return {
     semana_actual: { total: Number(s.current_total || 0), moneda: 'COP' },
@@ -109,6 +149,10 @@ async function gatherMetrics(businessId: string): Promise<WeeklyMetrics> {
     producto_mas_vendido: topQty ? { nombre: topQty.name, unidades: Number(topQty.qty) } : null,
     stock_bajo: lowStockRaw.map((r) => ({ nombre: r.name, stock: Number(r.stock), minimo: Number(r.minStock) })),
     clientes_con_deuda: { cantidad: debtAgg._count.id, monto: Number(debtAgg._sum.balance || 0) },
+    producto_reabastecer: restock ? { nombre: restock.name, unidades_vendidas: Number(restock.qty) } : null,
+    cliente_riesgo: riskCustomer
+      ? { nombre: riskCustomer.name, monto: Number(riskCustomer.balance), dias_mora: Number(riskCustomer.dias_mora) }
+      : null,
   };
 }
 

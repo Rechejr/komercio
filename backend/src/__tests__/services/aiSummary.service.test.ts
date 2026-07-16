@@ -29,7 +29,9 @@ function mockMetricsQueries() {
     .mockResolvedValueOnce([{ current_total: 150000, prev_total: 100000 }]) // sales
     .mockResolvedValueOnce([{ name: 'Café Molido', profit: 30000 }]) // profit
     .mockResolvedValueOnce([{ name: 'Pan Tajado', qty: 40 }]) // top qty
-    .mockResolvedValueOnce([{ name: 'Leche 1L', stock: 2, minStock: 5 }]); // low stock
+    .mockResolvedValueOnce([{ name: 'Leche 1L', stock: 2, minStock: 5 }]) // low stock
+    .mockResolvedValueOnce([{ name: 'Leche 1L', qty: 15 }]) // producto a reabastecer
+    .mockResolvedValueOnce([{ name: 'Doña Marta', balance: 45000, dias_mora: 10 }]); // cliente en riesgo
   mockPrisma.credit.aggregate = jest.fn().mockResolvedValue({
     _sum: { balance: 20000 },
     _count: { id: 2 },
@@ -52,7 +54,7 @@ describe('aiSummary.service — generateWeeklySummaryForBusiness', () => {
     await generateWeeklySummaryForBusiness(BUSINESS_ID);
 
     const queryCalls = (mockPrisma.$queryRaw as unknown as jest.Mock).mock.calls;
-    expect(queryCalls.length).toBe(4);
+    expect(queryCalls.length).toBe(6);
     // Cada llamada es un tagged template — los valores interpolados (incluido
     // businessId) llegan como argumentos posicionales después del array de strings.
     for (const call of queryCalls) {
