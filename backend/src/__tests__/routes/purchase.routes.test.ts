@@ -53,9 +53,14 @@ const PROD2 = '44444444-4444-4444-8444-444444444444';
 // items.*.branchId se valida con isUUID() — hace falta formato real, no 'br-1'.
 const BR1 = '11111111-1111-4111-8111-111111111111';
 const BR2 = '22222222-2222-4222-8222-222222222222';
+const SUP = '55555555-5555-4555-8555-555555555555';
 
 describe('POST /api/v1/purchases', () => {
-  beforeEach(() => { jest.clearAllMocks(); mockBusinessPlan('pro'); });
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockBusinessPlan('pro');
+    (mockPrisma.supplier.findFirst as jest.Mock).mockResolvedValue({ name: 'Proveedor Test' });
+  });
 
   it('rechaza con 403 si el negocio está en el plan gratuito (Compras es solo Pro)', async () => {
     mockBusinessPlan('free');
@@ -90,7 +95,7 @@ describe('POST /api/v1/purchases', () => {
     const res = await request(app)
       .post('/api/v1/purchases')
       .set(authHeader('ADMIN', 'br-1'))
-      .send({ items: [{ productId: PROD, quantity: 5, unitCost: 1000 }] });
+      .send({ supplierId: SUP, items: [{ productId: PROD, quantity: 5, unitCost: 1000 }] });
 
     expect(res.status).toBe(201);
     expect(txPurchaseCreate).toHaveBeenCalledWith(
@@ -125,6 +130,7 @@ describe('POST /api/v1/purchases', () => {
       .post('/api/v1/purchases')
       .set(authHeader('ADMIN', null))
       .send({
+        supplierId: SUP,
         items: [
           { productId: PROD, quantity: 30, unitCost: 1000, branchId: BR1 },
           { productId: PROD2, quantity: 20, unitCost: 2000, branchId: BR2 },
@@ -160,6 +166,7 @@ describe('POST /api/v1/purchases', () => {
       .post('/api/v1/purchases')
       .set(authHeader('ADMIN', null))
       .send({
+        supplierId: SUP,
         items: [
           { productId: PROD, quantity: 5, unitCost: 1000, branchId: BR1 },
           { productId: PROD, quantity: 5, unitCost: 1000, branchId: BR2 },
@@ -186,7 +193,7 @@ describe('POST /api/v1/purchases', () => {
     const res = await request(app)
       .post('/api/v1/purchases')
       .set(authHeader('ADMIN', 'br-1'))
-      .send({ items: [{ productId: PROD, quantity: 5, unitCost: 1000 }], paymentMethod: 'CASH' });
+      .send({ supplierId: SUP, items: [{ productId: PROD, quantity: 5, unitCost: 1000 }], paymentMethod: 'CASH' });
 
     expect(res.status).toBe(201);
     expect(mockPrisma.cashRegister.findFirst).toHaveBeenCalledWith({ where: { branchId: 'br-1', status: 'OPEN' } });
@@ -213,7 +220,7 @@ describe('POST /api/v1/purchases', () => {
     const res = await request(app)
       .post('/api/v1/purchases')
       .set(authHeader('ADMIN', 'br-1'))
-      .send({ items: [{ productId: PROD, quantity: 5, unitCost: 1000 }] });
+      .send({ supplierId: SUP, items: [{ productId: PROD, quantity: 5, unitCost: 1000 }] });
 
     expect(res.status).toBe(201);
   });
@@ -224,7 +231,7 @@ describe('POST /api/v1/purchases', () => {
     const res = await request(app)
       .post('/api/v1/purchases')
       .set(authHeader('CASHIER', BR1))
-      .send({ items: [{ productId: PROD, quantity: 5, unitCost: 1000, branchId: BR2 }] });
+      .send({ supplierId: SUP, items: [{ productId: PROD, quantity: 5, unitCost: 1000, branchId: BR2 }] });
 
     expect(res.status).toBe(403);
     expect(res.body.error).toMatch(/no tienes acceso/i);
@@ -254,6 +261,7 @@ describe('POST /api/v1/purchases', () => {
       .post('/api/v1/purchases')
       .set(authHeader('ADMIN', BR1))
       .send({
+        supplierId: SUP,
         items: [
           { productId: PROD, quantity: 5, unitCost: 8900, branchId: BR1 },
           { productId: PROD2, quantity: 15, unitCost: 8900, branchId: BR2 },
@@ -279,6 +287,7 @@ describe('POST /api/v1/purchases', () => {
       .post('/api/v1/purchases')
       .set(authHeader('ADMIN', 'br-1'))
       .send({
+        supplierId: SUP,
         items: [
           { productId: PROD, quantity: 6, unitCost: 1000 },
           { productId: PROD, quantity: 4, unitCost: 1300 },
