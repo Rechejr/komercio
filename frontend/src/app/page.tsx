@@ -92,6 +92,7 @@ function CheckIcon() {
 
 export default function LandingPage() {
   const receiptRef = useRef<HTMLDivElement>(null);
+  const receiptStageRef = useRef<HTMLDivElement>(null);
   const [playing, setPlaying] = useState(false);
 
   useEffect(() => {
@@ -114,6 +115,32 @@ export default function LandingPage() {
     }
 
     return () => io.disconnect();
+  }, []);
+
+  // Parallax leve del recibo del hero al mover el mouse — solo en pantallas
+  // con puntero fino y si el usuario no pidió reducir el movimiento.
+  useEffect(() => {
+    const stage = receiptStageRef.current;
+    const receipt = receiptRef.current;
+    if (!stage || !receipt) return;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    if (!window.matchMedia('(pointer: fine)').matches) return;
+
+    function handleMove(e: MouseEvent) {
+      const rect = stage!.getBoundingClientRect();
+      const px = (e.clientX - rect.left) / rect.width - 0.5;
+      const py = (e.clientY - rect.top) / rect.height - 0.5;
+      receipt!.style.transform = `rotate(${-1.4 + px * 5}deg) rotateX(${py * -6}deg) translateY(${py * -4}px)`;
+    }
+    function handleLeave() {
+      receipt!.style.transform = 'rotate(-1.4deg)';
+    }
+    stage.addEventListener('mousemove', handleMove);
+    stage.addEventListener('mouseleave', handleLeave);
+    return () => {
+      stage.removeEventListener('mousemove', handleMove);
+      stage.removeEventListener('mouseleave', handleLeave);
+    };
   }, []);
 
   return (
@@ -162,7 +189,7 @@ export default function LandingPage() {
             </p>
           </div>
 
-          <div className="lp-receipt-stage lp-reveal">
+          <div className="lp-receipt-stage lp-reveal" ref={receiptStageRef}>
             <div ref={receiptRef} className={`lp-receipt${playing ? ' play' : ''}`}>
               <div className="lp-r-head">
                 <div className="lp-r-brand">VENTRIX</div>
@@ -204,8 +231,12 @@ export default function LandingPage() {
       <section className="lp-trust">
         <div className="lp-wrap lp-trust-inner lp-reveal">
           <p>Negocios de todo el país ya cobran mejor con Ventrix</p>
-          <div className="lp-chips">
-            {CHIPS.map(c => <span key={c} className="lp-chip">{c}</span>)}
+        </div>
+        <div className="lp-marquee-viewport">
+          <div className="lp-marquee-track">
+            {[...CHIPS, ...CHIPS].map((c, i) => (
+              <span key={`${c}-${i}`} className="lp-chip">{c}</span>
+            ))}
           </div>
         </div>
       </section>
@@ -254,13 +285,17 @@ export default function LandingPage() {
       {/* ── Quote ────────────────────────────────────────────────────────── */}
       <section className="lp-quote-block">
         <div className="lp-wrap">
-          <div className="lp-quote lp-reveal">
-            <div className="lp-stars" aria-hidden="true">★★★★★</div>
-            <blockquote>
-              &ldquo;Antes cuadraba la caja con calculadora y a veces no me daba.
-              Con Ventrix cierro el día en un minuto.&rdquo;
-            </blockquote>
-            <cite>— Nombre del cliente · Su negocio, ciudad</cite>
+          <div className="lp-quote-bg lp-reveal">
+            <span className="lp-quote-blob" aria-hidden="true" />
+            <span className="lp-quote-blob b2" aria-hidden="true" />
+            <div className="lp-quote">
+              <div className="lp-stars" aria-hidden="true">★★★★★</div>
+              <blockquote>
+                &ldquo;Antes cuadraba la caja con calculadora y a veces no me daba.
+                Con Ventrix cierro el día en un minuto.&rdquo;
+              </blockquote>
+              <cite>— Nombre del cliente · Su negocio, ciudad</cite>
+            </div>
           </div>
         </div>
       </section>
@@ -313,6 +348,7 @@ export default function LandingPage() {
       <section className="lp-final">
         <div className="lp-wrap">
           <div className="lp-final-card lp-reveal">
+            <span className="lp-final-glow" aria-hidden="true" />
             <h2>Empieza gratis hoy</h2>
             <p>Tu próxima venta puede quedar registrada en Ventrix.</p>
             <Link href="/register" className="lp-btn lp-btn-primary lp-btn-lg">
