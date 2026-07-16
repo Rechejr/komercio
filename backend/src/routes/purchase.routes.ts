@@ -16,7 +16,7 @@ const purchaseItemValidators = [
   body('items.*.productId').isUUID().withMessage('productId inválido'),
   body('items.*.quantity').isFloat({ min: 0.001 }).withMessage('Cantidad debe ser mayor a 0'),
   body('items.*.unitCost').isFloat({ min: 0 }).withMessage('Costo unitario inválido'),
-  body('items.*.taxRate').optional().isFloat({ min: 0, max: 100 }).withMessage('IVA inválido'),
+  body('items.*.taxRate').optional({ checkFalsy: true }).isFloat({ min: 0, max: 100 }).withMessage('IVA inválido'),
   body('items.*.branchId').optional({ nullable: true }).isUUID().withMessage('branchId de línea inválido'),
   body('branchId').optional().isUUID().withMessage('branchId inválido'),
   body('invoiceNumber').optional().trim(),
