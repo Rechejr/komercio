@@ -234,7 +234,10 @@ export default function LandingPage() {
         </div>
         <div className="lp-marquee-viewport">
           <div className="lp-marquee-track">
-            {[...CHIPS, ...CHIPS].map((c, i) => (
+            {/* 3 repeticiones reales (dobladas a 6 para el loop sin costura) — con
+                solo 7 rubros, 2 copias caben casi enteras en una pantalla ancha y
+                se ve repetir el mismo nombre casi de inmediato cerca del centro. */}
+            {[...CHIPS, ...CHIPS, ...CHIPS, ...CHIPS, ...CHIPS, ...CHIPS].map((c, i) => (
               <span key={`${c}-${i}`} className="lp-chip">{c}</span>
             ))}
           </div>
