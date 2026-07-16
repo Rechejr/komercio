@@ -178,6 +178,20 @@ export const planLimit = {
     };
   },
 
+  aiInsights() {
+    return async (req: AuthRequest, res: Response, next: NextFunction) => {
+      try {
+        const business = await getBusinessWithPlan(req);
+        if (!business) return next();
+        const limits = getPlan(business.plan);
+        if (!limits.canUseAIInsights) {
+          return next(new AppError('Los análisis con IA están disponibles solo en el plan Pro.', 403));
+        }
+        next();
+      } catch (err) { next(err); }
+    };
+  },
+
   bulkImport() {
     return async (req: AuthRequest, res: Response, next: NextFunction) => {
       try {

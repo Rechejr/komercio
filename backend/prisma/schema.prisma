@@ -136,11 +136,29 @@ model Business {
   planExpiresAt     DateTime?
   settings          Json?
   paymentLinks      PaymentLink[]
+  aiWeeklySummaries AiWeeklySummary[]
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
   deletedAt         DateTime?
 
   @@map("businesses")
+}
+
+// ─── AI WEEKLY SUMMARY ─────────────────────────────────────────────────────────
+// Resumen semanal en lenguaje natural (Pro) — generado perezosamente (no cron),
+// persistido en Postgres porque Redis en esta app es opcional/efímero y no debe
+// ser la única copia de algo que cuesta dinero real generar.
+model AiWeeklySummary {
+  id         String   @id @default(uuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id])
+  summary    String   @db.Text
+  metrics    Json
+  model      String
+  createdAt  DateTime @default(now())
+
+  @@index([businessId, createdAt])
+  @@map("ai_weekly_summaries")
 }
 
 // ─── PAYMENT LINKS (Wompi) ─────────────────────────────────────────────────────

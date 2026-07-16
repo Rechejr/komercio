@@ -15,6 +15,7 @@ import {
 import Link from 'next/link';
 import { Tooltip as InfoTooltip } from '@/components/ui/Tooltip';
 import { CountUp } from '@/components/ui/CountUp';
+import { AiSummaryCard } from '@/components/dashboard/AiSummaryCard';
 
 // ── Trend badge ───────────────────────────────────────────────────────────────
 function TrendBadge({ current, prev }: { current: number; prev?: number }) {
@@ -189,6 +190,9 @@ export default function DashboardPage() {
           </>
         )}
       </div>
+
+      {/* ── Resumen semanal con IA (Pro) ─────────────────────────────────────── */}
+      <AiSummaryCard />
 
       {/* ── Chart + Top products ────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">

@@ -202,6 +202,8 @@ router.delete('/businesses/:id', deleteBusinessLimiter, async (req: AuthRequest,
       await tx.branch.deleteMany({ where: { businessId } });
       // 14.5. Links de pago (Wompi) — FK RESTRICT hacia businesses.
       await tx.paymentLink.deleteMany({ where: { businessId } });
+      // 14.6. Resúmenes semanales con IA — mismo FK RESTRICT.
+      await tx.aiWeeklySummary.deleteMany({ where: { businessId } });
       // 15. Negocio (libera FK Business.ownerId → User)
       await tx.business.delete({ where: { id: businessId } });
       // 16. Owner

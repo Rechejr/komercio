@@ -10,6 +10,7 @@ export interface PlanLimits {
   canUseCredits: boolean;
   canUseSuppliers: boolean;
   canBulkImport: boolean;
+  canUseAIInsights: boolean;
 }
 
 export const PLANS: Record<PlanName, PlanLimits> = {
@@ -23,6 +24,7 @@ export const PLANS: Record<PlanName, PlanLimits> = {
     canUseCredits: false,
     canUseSuppliers: false,
     canBulkImport: false,
+    canUseAIInsights: false,
   },
   pro: {
     products: Infinity,
@@ -38,6 +40,7 @@ export const PLANS: Record<PlanName, PlanLimits> = {
     canUseCredits: true,
     canUseSuppliers: true,
     canBulkImport: true,
+    canUseAIInsights: true,
   },
 };
 

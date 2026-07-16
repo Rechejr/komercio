@@ -69,6 +69,7 @@ describe('DELETE /api/v1/superadmin/businesses/:id', () => {
       user: { deleteMany: jest.fn().mockResolvedValue({}), delete: jest.fn().mockResolvedValue({}) },
       branch: { deleteMany: jest.fn().mockResolvedValue({}) },
       paymentLink: { deleteMany: jest.fn().mockResolvedValue({}) },
+      aiWeeklySummary: { deleteMany: jest.fn().mockResolvedValue({}) },
       business: { delete: jest.fn().mockResolvedValue({}) },
     };
     (mockPrisma.$transaction as jest.Mock).mockImplementation(async (fn: any) => fn(tx));
@@ -82,6 +83,7 @@ describe('DELETE /api/v1/superadmin/businesses/:id', () => {
     expect(tx.stockTransfer.deleteMany).toHaveBeenCalledWith({ where: { businessId: 'biz-1' } });
     expect(tx.productStock.deleteMany).toHaveBeenCalledWith({ where: { product: { businessId: 'biz-1' } } });
     expect(tx.paymentLink.deleteMany).toHaveBeenCalledWith({ where: { businessId: 'biz-1' } });
+    expect(tx.aiWeeklySummary.deleteMany).toHaveBeenCalledWith({ where: { businessId: 'biz-1' } });
 
     // Orden: transferencias/stock por bodega ANTES de borrar productos (FK RESTRICT).
     const stockTransferOrder = (tx.stockTransfer.deleteMany as jest.Mock).mock.invocationCallOrder[0];
@@ -90,10 +92,12 @@ describe('DELETE /api/v1/superadmin/businesses/:id', () => {
     expect(stockTransferOrder).toBeLessThan(productOrder);
     expect(productStockOrder).toBeLessThan(productOrder);
 
-    // paymentLink ANTES de borrar el negocio (FK RESTRICT hacia businesses).
+    // paymentLink y aiWeeklySummary ANTES de borrar el negocio (FK RESTRICT hacia businesses).
     const paymentLinkOrder = (tx.paymentLink.deleteMany as jest.Mock).mock.invocationCallOrder[0];
+    const aiSummaryOrder = (tx.aiWeeklySummary.deleteMany as jest.Mock).mock.invocationCallOrder[0];
     const businessDeleteOrder = (tx.business.delete as jest.Mock).mock.invocationCallOrder[0];
     expect(paymentLinkOrder).toBeLessThan(businessDeleteOrder);
+    expect(aiSummaryOrder).toBeLessThan(businessDeleteOrder);
   });
 
   it('rechaza con 401 si la contraseña es incorrecta', async () => {
