@@ -290,6 +290,46 @@
   .lp-marquee-track { animation: none; }
 }
 
+/* ── Features ticker (todo lo que incluye Ventrix, en carrusel infinito) ── */
+.lp-features { padding: 64px 0 76px; }
+.lp-features .lp-sec-head { margin-bottom: 36px; }
+.lp-feature-viewport {
+  width: 100%;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
+}
+.lp-feature-track {
+  display: flex;
+  width: max-content;
+  gap: 14px;
+  padding: 4px 0;
+  animation: lp-marquee 84s linear infinite;
+}
+.lp-feature-track:hover { animation-play-state: paused; }
+.lp-feature-item {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--lp-surface);
+  border: 1px solid var(--lp-mint-line);
+  color: var(--lp-ink-soft);
+  font-weight: 600;
+  font-size: .92rem;
+  padding: .7em 1.2em;
+  border-radius: 999px;
+  box-shadow: var(--lp-shadow);
+}
+.lp-feature-icon {
+  display: inline-flex;
+  color: var(--lp-brand-deep);
+  flex-shrink: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .lp-feature-track { animation: none; }
+}
+
 /* ── Section shell ── */
 .lp-block { padding: 76px 0; }
 .lp-sec-head { max-width: 38ch; margin-bottom: 44px; }
@@ -591,4 +631,12 @@
 }
 .lp-page .lp-receipt.lp-receipt.lp-receipt {
   transition: transform .15s ease-out;
+}
+.lp-page .lp-feature-item.lp-feature-item.lp-feature-item {
+  transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
+}
+.lp-page .lp-feature-item.lp-feature-item.lp-feature-item:hover {
+  transform: scale(1.06);
+  border-color: var(--lp-brand);
+  box-shadow: var(--lp-shadow-lg), 0 0 0 3px rgba(13,160,106,.12);
 }
