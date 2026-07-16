@@ -332,7 +332,10 @@ export default function LandingPage() {
                 &ldquo;Antes cuadraba la caja con calculadora y a veces no me daba.
                 Con Ventrix cierro el día en un minuto.&rdquo;
               </blockquote>
-              <cite>— Nombre del cliente · Su negocio, ciudad</cite>
+              {/* TODO: cambiar por un cliente real con su permiso — por ahora
+                  queda genérico (sin nombre inventado) para no simular una
+                  reseña que no existe. */}
+              <cite>— Tendero en Mocoa</cite>
             </div>
           </div>
         </div>
