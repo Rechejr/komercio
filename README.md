@@ -1,6 +1,8 @@
-# Komercio
+# Ventrix
 
-Plataforma de gestión para pequeños negocios. Incluye control de inventario, ventas, compras, créditos, caja, reportes y más.
+Punto de venta y plataforma de gestión para pequeños negocios. Incluye control de inventario por bodegas, ventas, compras, créditos y fiados, caja, reportes y más.
+
+> El repositorio se llama `komercio` por razones históricas; la marca del producto es **Ventrix** (ventrix.lat).
 
 ## Stack
 
@@ -198,3 +200,54 @@ npm test
 | `__tests__/utils/response.test.ts` | Helpers de respuesta HTTP y clase `AppError` |
 | `__tests__/middlewares/auth.test.ts` | Middleware `authenticate` y `authorize` |
 | `__tests__/middlewares/validate.test.ts` | Middleware de validación con express-validator |
+
+La suite completa son **28 archivos de test** que además cubren los controladores
+(ventas, compras, productos, clientes, exportaciones, pagos) y el control de
+acceso por rol de las rutas sensibles.
+
+---
+
+## Pruebas end-to-end
+
+Playwright, en la carpeta `e2e/`.
+
+```bash
+cd e2e
+npm install
+cp .env.example .env     # define E2E_EMAIL y E2E_PASSWORD
+npx playwright test
+```
+
+Las credenciales **no van en el código**: se leen de `e2e/.env`, que está
+ignorado por git. Conviene usar un usuario dedicado a pruebas y no la cuenta de
+administrador real.
+
+Para verificar un entorno ya desplegado:
+
+```bash
+E2E_BASE_URL=https://tu-entorno npx playwright test --config=playwright-prod.config.ts
+```
+
+Esa suite (`prod-verification.spec.ts`) es de **solo lectura** a propósito:
+comprueba que las pantallas carguen, sin crear ni modificar datos. Una prueba
+automatizada no distingue "mi dato de prueba" del dato de un cliente real.
+
+---
+
+## Integración continua
+
+`.github/workflows/ci.yml` corre en cada push a `main` o `develop` y en cada pull
+request, con PostgreSQL y Redis levantados como servicios:
+
+| Job | Pasos |
+|---|---|
+| **Backend** | `npm ci` · Prisma generate · lint · migraciones · build · tests |
+| **Frontend** | `npm ci` · lint · `tsc --noEmit` · build |
+
+Se usa `npm ci` (no `npm install`) para que el build falle si `package.json` y
+`package-lock.json` están desincronizados, en vez de corregirlo en silencio.
+
+> Los lock files se generan en Windows y el CI corre en Linux. Si `npm ci` falla
+> con `Missing: ... from lock file`, se arregla con
+> `npm install --package-lock-only`. Ver `RESPALDOS.md` y el historial de commits
+> para el detalle.

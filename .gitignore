@@ -7,6 +7,9 @@
 .env.production.local
 !.env.example
 !.env.sample
+# Plantilla del frontend: `.env.*` de arriba la capturaba y quedaba fuera del
+# repo, aunque el README manda copiarla.
+!.env.local.example
 
 # ─── DEPENDENCIAS ────────────────────────────────────────────────────────────
 node_modules/
