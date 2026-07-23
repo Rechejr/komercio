@@ -1,11 +1,19 @@
 import { Router } from 'express';
 import { prisma } from '../config/database';
-import { authenticate, AuthRequest } from '../middlewares/auth';
+import { authenticate, authorize, AuthRequest } from '../middlewares/auth';
 import { success, paginated } from '../utils/response';
 import { getPagination } from '../utils/pagination';
 
 const router = Router();
 router.use(authenticate);
+
+// Ambos endpoints de este archivo revelan el costo de la mercancía:
+// /valuation devuelve directamente totalCostValue y potentialProfit, y
+// /movements devuelve las filas completas de inventory_movements, que incluyen
+// unitCost y totalCost. El margen del negocio no es información que deba ver un
+// cajero o un vendedor, así que se restringen a los mismos roles que ya protegen
+// reportes y exportaciones financieras.
+router.use(authorize('ADMIN', 'SUPERVISOR'));
 
 router.get('/movements', async (req: AuthRequest, res, next) => {
   try {

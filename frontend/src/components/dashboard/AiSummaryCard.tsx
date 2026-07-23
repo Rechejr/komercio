@@ -12,12 +12,19 @@ export function AiSummaryCard() {
   const openUpgrade = useUpgradeStore((s) => s.open);
   const isFree = !user?.plan || user.plan === 'free';
 
+  // El resumen interpreta rentabilidad por producto y riesgo de cartera: es
+  // información de gestión. El backend limita el endpoint a estos roles, así
+  // que la tarjeta se oculta para los demás en vez de mostrarles un error.
+  const canSeeInsights = user?.role === 'ADMIN' || user?.role === 'SUPERVISOR';
+
   const { data, isLoading } = useQuery({
     queryKey: ['ai-weekly-summary'],
     queryFn: () => api.get('/dashboard/ai-summary').then((r) => r.data.data),
-    enabled: !isFree,
+    enabled: !isFree && canSeeInsights,
     staleTime: 60 * 60 * 1000,
   });
+
+  if (!canSeeInsights) return null;
 
   return (
     <div className="card p-5 relative overflow-hidden">

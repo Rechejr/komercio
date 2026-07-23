@@ -62,4 +62,25 @@ describe('GET /api/v1/dashboard/ai-summary', () => {
     expect(res.status).toBe(200);
     expect(res.body.data.summary).toBe('Resumen de prueba');
   });
+
+  // El resumen interpreta rentabilidad por producto y riesgo de cartera: es
+  // información de gestión, no operativa. Se restringe por rol además de por
+  // plan, y el rol se evalúa antes que el plan.
+  it.each(['CASHIER', 'SELLER', 'WAREHOUSE'])(
+    'rechaza con 403 al rol %s aunque el negocio tenga plan Pro',
+    async (role) => {
+      (mockPrisma.business.findUnique as jest.Mock).mockResolvedValue({
+        id: 'biz-1', plan: 'pro', planExpiresAt: null, branches: [{ id: 'br-1' }],
+      });
+
+      const res = await request(app)
+        .get('/api/v1/dashboard/ai-summary')
+        .set(authHeader(role));
+
+      expect(res.status).toBe(403);
+      expect(res.body.error).toMatch(/permisos/i);
+      // No debe llegar a consultar el resumen almacenado.
+      expect(mockPrisma.aiWeeklySummary.findFirst).not.toHaveBeenCalled();
+    },
+  );
 });
