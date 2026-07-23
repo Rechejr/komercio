@@ -11,10 +11,13 @@ const WOMPI_BASE = isTestMode
   ? 'sandbox.wompi.co'
   : 'production.wompi.co';
 
+// Precios "ancla" fijos en pesos redondos (no derivados de una fórmula) para que
+// los totales queden limpios en Colombia: mensual $29.900, trimestral $80.700
+// (equivale a $26.900/mes, −10%), anual $287.000 (−20% exacto sobre 358.800).
 const PLAN_PRICES: Record<string, number> = {
   monthly:   29900,
-  quarterly: Math.round(29900 * 3 * 0.9),
-  annual:    Math.round(29900 * 12 * 0.80),
+  quarterly: 80700,
+  annual:    287000,
 };
 
 const PLAN_MONTHS: Record<string, number> = {

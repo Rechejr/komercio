@@ -9,10 +9,13 @@ import { api } from '@/lib/api';
 // ─── Config ────────────────────────────────────────────────────────────────────
 const BASE_PRICE = 29900;
 
+// Precios "ancla" fijos en pesos redondos (deben coincidir con PLAN_PRICES del
+// backend en payment.controller.ts). Trimestral $80.700 = $26.900/mes (−10%),
+// anual $287.000 (−20% exacto). El % de `saving` se calcula contra BASE_PRICE.
 const PERIODS = [
-  { key: 'monthly',   label: 'Mensual',    badge: null,   months: 1,  discount: 0    },
-  { key: 'quarterly', label: 'Trimestral', badge: '-10%', months: 3,  discount: 0.10 },
-  { key: 'annual',    label: 'Anual',      badge: '-20%', months: 12, discount: 0.20 },
+  { key: 'monthly',   label: 'Mensual',    badge: null,   months: 1,  price: 29900  },
+  { key: 'quarterly', label: 'Trimestral', badge: '-10%', months: 3,  price: 80700  },
+  { key: 'annual',    label: 'Anual',      badge: '-20%', months: 12, price: 287000 },
 ] as const;
 
 type PeriodKey = typeof PERIODS[number]['key'];
@@ -42,9 +45,9 @@ export function UpgradeModal() {
   if (!isOpen) return null;
 
   const p       = PERIODS.find((x) => x.key === period)!;
-  const monthly = Math.round(BASE_PRICE * (1 - p.discount));
-  const total   = Math.round(BASE_PRICE * p.months * (1 - p.discount));
-  const saving  = Math.round(BASE_PRICE * p.months * p.discount);
+  const total   = p.price;
+  const monthly = Math.round(p.price / p.months);
+  const saving  = BASE_PRICE * p.months - p.price;
 
   async function handlePay() {
     setPayError('');
