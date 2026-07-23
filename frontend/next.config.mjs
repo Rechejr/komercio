@@ -21,7 +21,12 @@ const nextConfig = {
           { key: 'X-Frame-Options', value: 'DENY' },
           { key: 'X-Content-Type-Options', value: 'nosniff' },
           { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
-          { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
+          // camera=(self) — el propio sitio SÍ necesita la cámara: el escáner de
+          // códigos de barras del POS y de Inventario usa getUserMedia
+          // (components/ui/BarcodeScanner.tsx). Con camera=() el navegador la
+          // bloqueaba incluso para ventrix.lat y el escáner nunca arrancaba.
+          // microphone y geolocation siguen negados: la aplicación no los usa.
+          { key: 'Permissions-Policy', value: 'camera=(self), microphone=(), geolocation=()' },
         ],
       },
     ];
