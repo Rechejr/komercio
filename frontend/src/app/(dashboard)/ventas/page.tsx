@@ -14,6 +14,7 @@ import Link from 'next/link';
 import { downloadExcel } from '@/lib/exportExcel';
 import { Receipt, type ReceiptItem } from '@/components/Receipt';
 import { shareSaleViaWhatsApp } from '@/lib/receiptShare';
+import { ErrorState } from '@/components/ui/ErrorState';
 import { useAuthStore } from '@/store/auth.store';
 
 const inputCls = 'px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[16px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition';
@@ -49,7 +50,7 @@ export default function VentasPage() {
   });
   const [exportEnd, setExportEnd] = useState(() => new Date().toISOString().split('T')[0]);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['sales', page, search, status],
     queryFn: () => api.get(`/sales?page=${page}&limit=20&search=${encodeURIComponent(search)}&status=${status}`).then((r) => r.data),
   });
@@ -199,6 +200,12 @@ export default function VentasPage() {
                     ))}
                   </tr>
                 ))
+              ) : isError ? (
+                <tr>
+                  <td colSpan={9} className="p-4">
+                    <ErrorState error={error} onRetry={() => refetch()} compact />
+                  </td>
+                </tr>
               ) : sales.length === 0 ? (
                 <tr>
                   <td colSpan={9} className="text-center py-16">

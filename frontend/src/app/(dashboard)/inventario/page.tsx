@@ -9,6 +9,7 @@ import { api } from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
 import { ImageUpload } from '@/components/ui/ImageUpload';
 import { CategorySelect } from '@/components/ui/CategorySelect';
+import { ErrorState } from '@/components/ui/ErrorState';
 import toast from 'react-hot-toast';
 import {
   Plus, Search, Edit, Trash2, Package, AlertTriangle,
@@ -120,7 +121,7 @@ export default function InventarioPage() {
     previewMutation.mutate(file);
   }
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['products', page, search, activeBranchTab],
     queryFn: () => api.get(`/products?page=${page}&limit=20&search=${encodeURIComponent(search)}${activeBranchTab ? `&branchId=${activeBranchTab}` : ''}`).then((r) => r.data),
   });
@@ -573,6 +574,12 @@ export default function InventarioPage() {
                     ))}
                   </tr>
                 ))
+              ) : isError ? (
+                <tr>
+                  <td colSpan={10} className="p-4">
+                    <ErrorState error={error} onRetry={() => refetch()} compact />
+                  </td>
+                </tr>
               ) : products.length === 0 ? (
                 <tr>
                   <td colSpan={10} className="text-center py-16">

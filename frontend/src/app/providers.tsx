@@ -1,14 +1,34 @@
 'use client';
 
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, QueryCache } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { ThemeProvider } from 'next-themes';
 import { Toaster } from 'react-hot-toast';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import { useState } from 'react';
+import toast from 'react-hot-toast';
+import { getApiErrorMessage } from '@/lib/apiError';
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(() => new QueryClient({
+    // Sin esto, una consulta GET que falla no avisa nada: la pantalla queda
+    // vacía y el usuario cree que no tiene productos o clientes, en vez de
+    // entender que no se pudo cargar. El toast da el aviso inmediato; las
+    // pantallas críticas además muestran un banner con opción de reintentar.
+    queryCache: new QueryCache({
+      onError: (error, query) => {
+        // Si la consulta ya tiene datos en caché, la vista sigue mostrando algo
+        // útil y un toast por cada refetch fallido sería ruido.
+        if (query.state.data !== undefined) return;
+
+        // 401 lo maneja el interceptor de api.ts (renueva token o cierra
+        // sesión); avisar aquí solo confundiría durante ese proceso.
+        const status = (error as { response?: { status?: number } })?.response?.status;
+        if (status === 401) return;
+
+        toast.error(getApiErrorMessage(error), { id: 'query-error' });
+      },
+    }),
     defaultOptions: {
       queries: {
         staleTime: 1000 * 30,

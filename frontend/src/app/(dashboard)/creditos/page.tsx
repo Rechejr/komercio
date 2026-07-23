@@ -11,6 +11,7 @@ import toast from 'react-hot-toast';
 import { CreditCard, X, Loader2, Plus, DollarSign, ChevronRight, Clock, Search, Ban } from 'lucide-react';
 import { useAuthStore } from '@/store/auth.store';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { ErrorState } from '@/components/ui/ErrorState';
 
 const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[16px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition';
 
@@ -58,7 +59,7 @@ export default function CreditosPage() {
     enabled: customerFilter.length > 1,
   });
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['credits', statusFilter, customerFilterId, page],
     queryFn: () => {
       const params = new URLSearchParams({ page: String(page), limit: '20' });
@@ -226,6 +227,12 @@ export default function CreditosPage() {
                     ))}
                   </tr>
                 ))
+              ) : isError ? (
+                <tr>
+                  <td colSpan={8} className="p-4">
+                    <ErrorState error={error} onRetry={() => refetch()} compact />
+                  </td>
+                </tr>
               ) : credits.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="text-center py-16">

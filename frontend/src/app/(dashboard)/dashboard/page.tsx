@@ -16,6 +16,7 @@ import Link from 'next/link';
 import { Tooltip as InfoTooltip } from '@/components/ui/Tooltip';
 import { CountUp } from '@/components/ui/CountUp';
 import { AiSummaryCard } from '@/components/dashboard/AiSummaryCard';
+import { ErrorState } from '@/components/ui/ErrorState';
 
 // ── Trend badge ───────────────────────────────────────────────────────────────
 function TrendBadge({ current, prev }: { current: number; prev?: number }) {
@@ -110,7 +111,13 @@ const PERIOD_LABELS: Record<Period, string> = { '7d': '7 días', '30d': '30 día
 export default function DashboardPage() {
   const [period, setPeriod] = useState<Period>('30d');
 
-  const { data: summaryData, isLoading: loadingSummary } = useQuery({
+  const {
+    data: summaryData,
+    isLoading: loadingSummary,
+    isError: summaryError,
+    error: summaryErrorObj,
+    refetch: refetchSummary,
+  } = useQuery({
     queryKey: ['dashboard-summary'],
     queryFn: () => api.get('/dashboard/summary').then((r) => r.data.data),
     refetchInterval: 60000,
@@ -145,6 +152,12 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-5 animate-fade-up">
+
+      {/* Sin este aviso, un fallo de red dejaba todas las tarjetas en cero y el
+          dueño leía "vendiste $0 hoy" como un dato real. */}
+      {summaryError && (
+        <ErrorState error={summaryErrorObj} onRetry={() => refetchSummary()} className="mb-4" />
+      )}
 
       {/* ── KPI cards ──────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

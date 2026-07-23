@@ -30,6 +30,7 @@ const BarcodeScanner = dynamic(
   { ssr: false },
 );
 import { WhatsAppIcon } from '@/components/ui/WhatsAppIcon';
+import { ErrorState } from '@/components/ui/ErrorState';
 import { shareSaleViaWhatsApp } from '@/lib/receiptShare';
 
 const PAYMENT_METHODS = ['CASH', 'NEQUI', 'DAVIPLATA', 'TRANSFER', 'CARD', 'MIXED'];
@@ -138,7 +139,7 @@ export default function POSPage() {
     queryFn: () => api.get('/categories').then((r) => r.data.data),
   });
 
-  const { data: productsData, isLoading } = useQuery({
+  const { data: productsData, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['products-pos', search, categoryFilter, branchId],
     // branchId: el stock que se muestra (y el que se valida al cobrar) es el de
     // ESTA bodega del cajero, no el total del negocio — así la etiqueta nunca
@@ -482,6 +483,11 @@ export default function POSPage() {
                   </div>
                 ))}
               </div>
+            ) : isError ? (
+              // Antes este caso caía en el estado vacío de abajo y el POS decía
+              // "No hay productos disponibles" aunque el negocio tuviera cientos:
+              // el cajero culpaba a su inventario en vez de reintentar.
+              <ErrorState error={error} onRetry={() => refetch()} compact />
             ) : productsData?.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-10 gap-2 text-slate-400 dark:text-slate-600">
                 <Package size={32} strokeWidth={1.5} />

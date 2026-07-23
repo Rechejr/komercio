@@ -14,6 +14,7 @@ import {
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { StaggerList, StaggerItem } from '@/components/ui/StaggerList';
 import { PriceInput } from '@/components/ui/PriceInput';
+import { ErrorState } from '@/components/ui/ErrorState';
 import { useAuthStore } from '@/store/auth.store';
 import { useUpgradeStore } from '@/store/upgrade.store';
 
@@ -70,7 +71,7 @@ export default function ClientesPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['customers', page, search],
     queryFn: () => api.get(`/customers?page=${page}&limit=20&search=${encodeURIComponent(search)}`).then((r) => r.data),
   });
@@ -272,6 +273,12 @@ export default function ClientesPage() {
                     <td key={j} className="px-4 py-3"><div className="h-4 bg-slate-100 dark:bg-slate-800 rounded-lg animate-pulse" /></td>
                   ))}</tr>
                 ))
+              ) : isError ? (
+                <tr>
+                  <td colSpan={7} className="p-4">
+                    <ErrorState error={error} onRetry={() => refetch()} compact />
+                  </td>
+                </tr>
               ) : customers.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="text-center py-16">
