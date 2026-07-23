@@ -65,7 +65,12 @@ export const useAuthStore = create<AuthState>()(
           // Non-sensitive flag cookie so Next.js middleware can redirect unauthenticated users
           // server-side. This is NOT an auth token — real auth is enforced by the backend.
           const maxAge = rememberMe ? 60 * 60 * 24 * 30 : 0; // 30 days or session
-          document.cookie = `logged_in=1; path=/; SameSite=Lax${maxAge ? `; max-age=${maxAge}` : ''}`;
+          // Secure solo bajo HTTPS: en producción impide que la cookie viaje por
+          // texto plano, y en desarrollo (http://localhost) se omite porque el
+          // navegador rechazaría una cookie Secure y el middleware dejaría de
+          // reconocer la sesión.
+          const secure = window.location.protocol === 'https:' ? '; Secure' : '';
+          document.cookie = `logged_in=1; path=/; SameSite=Lax${secure}${maxAge ? `; max-age=${maxAge}` : ''}`;
         }
         set({ user, accessToken, isAuthenticated: true });
       },

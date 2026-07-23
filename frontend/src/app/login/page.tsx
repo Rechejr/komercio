@@ -22,6 +22,10 @@ type LoginForm = z.infer<typeof loginSchema>;
 
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '';
 
+// Inicio de sesión con Facebook y Apple: aún no implementado. Poner en true
+// cuando los flujos existan de verdad (ver el bloque de SocialBtn más abajo).
+const FEATURE_SOCIAL_LOGIN = false;
+
 const RECEIPT_ITEMS = [
   { name: 'Arroz 500g',  price: '2.800' },
   { name: 'Leche 1L',    price: '3.900' },
@@ -286,18 +290,27 @@ function LoginForm() {
             faded
           />
         )}
-        <SocialBtn
-          onClick={() => toast('Facebook próximamente', { icon: '🚧' })}
-          icon={<FacebookIcon />}
-          label="Facebook"
-          faded
-        />
-        <SocialBtn
-          onClick={() => toast('Apple próximamente', { icon: '🚧' })}
-          icon={<AppleIcon />}
-          label="Apple"
-          faded
-        />
+        {/* Facebook y Apple no están implementados: al pulsarlos solo salía un
+            aviso de "próximamente". Un botón que no hace nada erosiona la
+            confianza justo en la pantalla donde el usuario decide si entregar
+            sus credenciales. Se ocultan tras un flag hasta que existan de
+            verdad; el código queda listo para reactivarlos. */}
+        {FEATURE_SOCIAL_LOGIN && (
+          <>
+            <SocialBtn
+              onClick={() => toast('Facebook próximamente', { icon: '🚧' })}
+              icon={<FacebookIcon />}
+              label="Facebook"
+              faded
+            />
+            <SocialBtn
+              onClick={() => toast('Apple próximamente', { icon: '🚧' })}
+              icon={<AppleIcon />}
+              label="Apple"
+              faded
+            />
+          </>
+        )}
       </div>
     </div>
   );

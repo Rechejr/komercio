@@ -21,14 +21,20 @@ function formatCOP(n: number) {
   return new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(n);
 }
 
-// Emoji por categoría para productos sin imagen
+// Emoji por categoría para productos sin imagen.
+//
+// Las claves van SIN tilde a propósito: catEmoji() normaliza el nombre y quita
+// los diacríticos antes de buscar, así que una clave acentuada nunca podría
+// coincidir. La entrada "lácteos" además tenía por valor el texto 'lacteos' en
+// vez de un emoji, lo que habría pintado esa palabra dentro de la tarjeta si la
+// clave hubiese sido alcanzable.
 const CAT_EMOJI: Record<string, string> = {
-  bebidas: '🥤', lácteos: 'lacteos', lacteos: '🥛', snacks: '🍿',
+  bebidas: '🥤', lacteos: '🥛', snacks: '🍿',
   aseo: '🧴', limpieza: '🧹', abarrotes: '🛒', carnes: '🥩',
-  frutas: '🍎', verduras: '🥦', panaderia: '🍞', panadería: '🍞',
+  frutas: '🍎', verduras: '🥦', panaderia: '🍞',
   dulces: '🍬', confiteria: '🍭', tecnologia: '💻', electronica: '📱',
-  ropa: '👕', ferreteria: '🔨', ferretería: '🔨',
-  papeleria: '📚', papelería: '📚', drogueria: '💊', farmacia: '💊',
+  ropa: '👕', ferreteria: '🔨',
+  papeleria: '📚', drogueria: '💊', farmacia: '💊',
 };
 function catEmoji(name?: string) {
   if (!name) return '📦';

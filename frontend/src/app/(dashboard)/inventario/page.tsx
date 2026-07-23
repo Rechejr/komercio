@@ -1,6 +1,7 @@
 ﻿'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import dynamic from 'next/dynamic';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm, Controller } from 'react-hook-form';
@@ -15,7 +16,12 @@ import {
   ArrowRight, Lock, ArrowUpDown, Share2, ScanLine, Warehouse, Download,
   PackagePlus,
 } from 'lucide-react';
-import { BarcodeScanner } from '@/components/ui/BarcodeScanner';
+// Ver la nota en pos/page.tsx: @zxing pesa ~250 KB y solo hace falta al abrir
+// la cámara, así que se carga bajo demanda.
+const BarcodeScanner = dynamic(
+  () => import('@/components/ui/BarcodeScanner').then((m) => m.BarcodeScanner),
+  { ssr: false },
+);
 import { useAuthStore } from '@/store/auth.store';
 import { useUpgradeStore } from '@/store/upgrade.store';
 

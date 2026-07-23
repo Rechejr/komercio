@@ -1,6 +1,7 @@
 ﻿'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import dynamic from 'next/dynamic';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import { api } from '@/lib/api';
@@ -20,7 +21,14 @@ import {
   Heart, Droplets, Cookie, Baby, ScanLine, type LucideIcon,
 } from 'lucide-react';
 import { Receipt, type ReceiptItem } from '@/components/Receipt';
-import { BarcodeScanner } from '@/components/ui/BarcodeScanner';
+// El escáner arrastra @zxing/browser y @zxing/library (~250 KB) y solo se usa
+// cuando el usuario abre la cámara. Con next/dynamic ese código se descarga en
+// ese momento y no en cada carga del POS. ssr:false porque depende de
+// getUserMedia, que no existe en el servidor.
+const BarcodeScanner = dynamic(
+  () => import('@/components/ui/BarcodeScanner').then((m) => m.BarcodeScanner),
+  { ssr: false },
+);
 import { WhatsAppIcon } from '@/components/ui/WhatsAppIcon';
 import { shareSaleViaWhatsApp } from '@/lib/receiptShare';
 
