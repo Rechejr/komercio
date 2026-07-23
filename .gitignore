@@ -61,6 +61,13 @@ Desktop.ini
 uploads/
 public/uploads/
 
+# ─── RESPALDOS DE BASE DE DATOS ──────────────────────────────────────────────
+# NUNCA subir al repositorio: contienen datos personales de los clientes de cada
+# negocio (nombres, cédulas, teléfonos, deudas). El repo es público.
+backups/
+*.dump
+*.sql.gz
+
 # ─── PRISMA ──────────────────────────────────────────────────────────────────
 # Las migraciones SÍ deben estar en el repo; solo ignorar lock local
 prisma/migrations/migration_lock.toml
