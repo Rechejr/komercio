@@ -26,6 +26,7 @@ function makeRateLimitStore(prefix: string) {
 }
 
 // Routes
+import healthRoutes from './routes/health.routes';
 import authRoutes from './routes/auth.routes';
 import userRoutes from './routes/user.routes';
 import businessRoutes from './routes/business.routes';
@@ -162,10 +163,9 @@ app.use(morgan('combined', {
   stream: { write: (msg) => logger.http(msg.trim()) },
 }));
 
-// Health check
-app.get('/health', (_req, res) => {
-  res.json({ status: 'ok', service: 'Komercio API', version: '1.0.0' });
-});
+// Health checks: /health (liveness, barato) y /health/ready (readiness, verifica
+// dependencias). Ver health.routes.ts para por qué están separados.
+app.use(healthRoutes);
 
 // API Routes
 const apiPrefix = '/api/v1';
