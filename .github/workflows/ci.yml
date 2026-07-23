@@ -38,6 +38,14 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: '22', cache: 'npm', cache-dependency-path: backend/package-lock.json }
 
+      # Node 22 trae npm 10, pero los lock files se generan en desarrollo con
+      # npm 11, que resuelve de forma distinta las dependencias transitivas de
+      # los binarios opcionales (npm 11 omite @emnapi/* y npm 10 los exige).
+      # Con versiones distintas, "npm ci" falla con EUSAGE aunque el lock file
+      # esté bien. Se alinea el CI con la versión que escribe el lock file.
+      - name: Alinear versión de npm
+        run: npm install -g npm@11
+
       # npm ci (no npm install): instala exactamente lo que dice el lock file y
       # falla ruidosamente si package.json y package-lock.json están
       # desincronizados, en vez de "arreglarlo" en silencio como hace install.
@@ -75,6 +83,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: '22', cache: 'npm', cache-dependency-path: frontend/package-lock.json }
+
+      # Ver la explicación en el job de backend.
+      - name: Alinear versión de npm
+        run: npm install -g npm@11
 
       - name: Instalar dependencias
         run: cd frontend && npm ci
