@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "Komercio - Plataforma de gestión para pequeños negocios",
   "main": "dist/index.js",
+  "engines": {
+    "node": ">=22 <23"
+  },
   "scripts": {
     "dev": "nodemon",
     "build": "prisma generate && tsc",
