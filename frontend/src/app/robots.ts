@@ -1,4 +1,5 @@
 import type { MetadataRoute } from 'next';
+import { LEGAL_READY } from '@/lib/legal';
 
 const BASE_URL = 'https://www.ventrix.lat';
 
@@ -10,8 +11,10 @@ export default function robots(): MetadataRoute.Robots {
   return {
     rules: {
       userAgent: '*',
-      allow: ['/', '/login', '/register', '/terminos', '/privacidad'],
+      allow: ['/', '/login', '/register', ...(LEGAL_READY ? ['/terminos', '/privacidad'] : [])],
       disallow: [
+        // Mientras los documentos legales sean un borrador, se bloquean.
+        ...(LEGAL_READY ? [] : ['/terminos', '/privacidad']),
         '/dashboard',
         '/pos',
         '/inventario',

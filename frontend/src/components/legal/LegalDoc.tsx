@@ -1,6 +1,30 @@
+import { LEGAL_READY } from '@/lib/legal';
+
 // Primitivas de maquetación compartidas por los documentos legales. Existen para
 // que Términos y Privacidad se vean idénticos y para que el contenido de cada
 // página quede legible como texto, sin ruido de clases de Tailwind repetidas.
+
+/**
+ * Aviso mostrado mientras los datos legales estén incompletos. Las páginas ya no
+ * se enlazan ni se indexan en ese estado, pero alguien puede llegar por URL
+ * directa: más vale que sepa que está viendo un borrador y no un documento
+ * vigente. Desaparece solo al completar LEGAL.
+ */
+export function DraftNotice() {
+  if (LEGAL_READY) return null;
+  return (
+    <div className="mb-8 rounded-lg border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-4 py-3">
+      <p className="text-sm font-semibold text-amber-900 dark:text-amber-300 mb-1">
+        Borrador — documento sin vigencia
+      </p>
+      <p className="text-sm text-amber-800 dark:text-amber-400 leading-relaxed">
+        Este texto aún está en preparación y no constituye el documento legal
+        definitivo de Ventrix. Faltan por definir los datos de identificación de la
+        empresa.
+      </p>
+    </div>
+  );
+}
 
 export function LegalTitle({ title, updated }: { title: string; updated: string }) {
   return (

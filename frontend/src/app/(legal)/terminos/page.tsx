@@ -1,18 +1,20 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { LEGAL } from '@/lib/legal';
-import { LegalTitle, Section, Bullets, Callout } from '@/components/legal/LegalDoc';
+import { LEGAL, LEGAL_READY } from '@/lib/legal';
+import { LegalTitle, Section, Bullets, Callout, DraftNotice } from '@/components/legal/LegalDoc';
 
 export const metadata: Metadata = {
   title: 'Términos y Condiciones',
   description:
     'Términos y condiciones de uso del servicio Ventrix: planes, pagos, cancelación, responsabilidades y ley aplicable en Colombia.',
   alternates: { canonical: `${LEGAL.domain}/terminos` },
+  robots: LEGAL_READY ? undefined : { index: false, follow: false },
 };
 
 export default function TerminosPage() {
   return (
     <article>
+      <DraftNotice />
       <LegalTitle title="Términos y Condiciones de Uso" updated={LEGAL.lastUpdated} />
 
       <Section n={1} title="Identificación del prestador">

@@ -1,18 +1,20 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { LEGAL, SUBPROCESSORS } from '@/lib/legal';
-import { LegalTitle, Section, Bullets, Callout, DataTable } from '@/components/legal/LegalDoc';
+import { LEGAL, LEGAL_READY, SUBPROCESSORS } from '@/lib/legal';
+import { LegalTitle, Section, Bullets, Callout, DataTable, DraftNotice } from '@/components/legal/LegalDoc';
 
 export const metadata: Metadata = {
   title: 'Política de Privacidad y Tratamiento de Datos',
   description:
     'Política de tratamiento de datos personales de Ventrix, conforme a la Ley 1581 de 2012 y el Decreto 1074 de 2015 de Colombia.',
   alternates: { canonical: `${LEGAL.domain}/privacidad` },
+  robots: LEGAL_READY ? undefined : { index: false, follow: false },
 };
 
 export default function PrivacidadPage() {
   return (
     <article>
+      <DraftNotice />
       <LegalTitle
         title="Política de Privacidad y Tratamiento de Datos Personales"
         updated={LEGAL.lastUpdated}

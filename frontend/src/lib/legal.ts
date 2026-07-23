@@ -46,6 +46,21 @@ export const LEGAL = {
 } as const;
 
 /**
+ * ¿Están los datos legales completos?
+ *
+ * Mientras quede algún "[COMPLETAR", los documentos siguen siendo un borrador:
+ * no se enlazan desde el footer, no entran al sitemap y se marcan como noindex,
+ * porque publicar una política de privacidad a medio llenar es peor que no
+ * tener ninguna — un visitante ve un documento sin terminar y, ante la SIC, un
+ * documento incompleto no cumple el deber de identificar al Responsable.
+ *
+ * Se calcula solo: en cuanto se llenen todos los campos de LEGAL, las páginas
+ * se publican e indexan automáticamente, sin tener que acordarse de activar
+ * nada a mano.
+ */
+export const LEGAL_READY: boolean = !JSON.stringify(LEGAL).includes('[COMPLETAR');
+
+/**
  * Proveedores externos que procesan datos por cuenta de Ventrix. La Ley 1581
  * obliga a informar al Titular a quién se transmiten sus datos, así que esta
  * lista debe mantenerse sincronizada con la infraestructura real: si mañana se

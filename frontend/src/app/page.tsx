@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Bricolage_Grotesque, Instrument_Sans, Space_Mono } from 'next/font/google';
+import { LEGAL_READY } from '@/lib/legal';
 import './landing.css';
 
 const bricolage = Bricolage_Grotesque({
@@ -410,8 +411,13 @@ export default function LandingPage() {
           <nav className="lp-foot-links">
             <Link href="/register">Crear cuenta</Link>
             <Link href="/login">Iniciar sesión</Link>
-            <Link href="/terminos">Términos</Link>
-            <Link href="/privacidad">Privacidad</Link>
+            {/* Se enlazan solo cuando los datos legales están completos (ver LEGAL_READY). */}
+            {LEGAL_READY && (
+              <>
+                <Link href="/terminos">Términos</Link>
+                <Link href="/privacidad">Privacidad</Link>
+              </>
+            )}
           </nav>
           <span>© 2026 Ventrix · Punto de venta</span>
         </div>
