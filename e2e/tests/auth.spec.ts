@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
-import { login, TEST_EMAIL } from '../helpers/auth';
+import { login } from '../helpers/auth';
+import { getTestEmail } from '../helpers/credentials';
 
 test.describe('Autenticación', () => {
   test('redirige a /login si no hay sesión', async ({ page }) => {
@@ -15,7 +16,7 @@ test.describe('Autenticación', () => {
 
   test('login con contraseña incorrecta muestra error', async ({ page }) => {
     await page.goto('/login');
-    await page.fill('input[type="email"]', TEST_EMAIL);
+    await page.fill('input[type="email"]', getTestEmail());
     await page.fill('input[type="password"]', 'wrongpassword');
     await page.click('button[type="submit"]');
     const error = page.locator('[role="alert"], .text-red-500, [data-hot-toast]');

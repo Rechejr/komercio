@@ -1,6 +1,7 @@
 import { chromium } from '@playwright/test';
 import path from 'path';
 import fs from 'fs';
+import { getTestEmail, getTestPassword } from './helpers/credentials';
 
 export default async function globalSetup() {
   const authDir = path.join(__dirname, '.auth');
@@ -12,8 +13,8 @@ export default async function globalSetup() {
 
   await page.goto('http://localhost:3001/login');
   await page.waitForLoadState('domcontentloaded');
-  await page.locator('input[name="email"], input[type="email"]').first().fill('admin@komercio.app');
-  await page.locator('input[name="password"], input[type="password"]').first().fill('Admin123!');
+  await page.locator('input[name="email"], input[type="email"]').first().fill(getTestEmail());
+  await page.locator('input[name="password"], input[type="password"]').first().fill(getTestPassword());
   await page.locator('button[type="submit"]').first().click();
   await page.waitForURL('**/dashboard', { timeout: 40_000 });
 

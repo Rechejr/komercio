@@ -1,226 +1,119 @@
-import { test, Page } from '@playwright/test';
+import { test, expect, Page } from '@playwright/test';
 import path from 'path';
 import fs from 'fs';
+import { getTestEmail, getTestPassword, getBaseUrl } from '../helpers/credentials';
 
-const BASE = 'https://ventrix.lat';
-const EMAIL = 'admin@komercio.app';
-const PASS = 'Admin123!';
+/**
+ * Smoke test de verificación — SOLO LECTURA.
+ *
+ * Esta suite comprueba que la aplicación desplegada responde y que sus pantallas
+ * principales cargan. Nada más.
+ *
+ * ── Por qué no crea, edita ni borra datos ────────────────────────────────────
+ *
+ * La versión anterior de este archivo se autenticaba contra ventrix.lat con
+ * credenciales de administrador escritas en el código y ejecutaba operaciones de
+ * escritura reales: registraba una venta (descontando stock verdadero), creaba
+ * un gasto de $15.000 y daba de alta proveedores de prueba. Cada corrida dejaba
+ * basura en la base de un negocio en producción y alteraba su inventario.
+ *
+ * Una prueba automatizada no puede distinguir "mi dato de prueba" de "el dato
+ * del cliente". Por eso aquí solo se navega y se verifica que la interfaz
+ * responda; cualquier prueba que necesite escribir debe correr contra el entorno
+ * local o contra un negocio de pruebas dedicado (variable E2E_BASE_URL).
+ */
+
+const BASE = getBaseUrl();
 const SHOTS = path.join(__dirname, '..', 'test-results', 'prod-shots');
 
 async function login(page: Page) {
   await page.goto(`${BASE}/login`);
   await page.waitForLoadState('networkidle');
-  await page.locator('input[type="email"]').fill(EMAIL);
-  await page.locator('input[type="password"]').fill(PASS);
+  await page.locator('input[type="email"]').fill(getTestEmail());
+  await page.locator('input[type="password"]').fill(getTestPassword());
   await page.locator('button[type="submit"]').click();
-  await page.waitForURL(/dashboard|pos|configuracion|proveedores/, { timeout: 20000 });
+  await page.waitForURL(/dashboard|pos|configuracion|proveedores/, { timeout: 30_000 });
 }
 
 async function shot(page: Page, name: string) {
   if (!fs.existsSync(SHOTS)) fs.mkdirSync(SHOTS, { recursive: true });
   await page.screenshot({ path: path.join(SHOTS, `${name}.png`), fullPage: false });
-  console.log(`    📸 ${name}.png`);
 }
 
-test('PROD-1: Proveedores — modal layout (Nombre comercial visible)', async ({ page }) => {
-  test.setTimeout(60000);
-  await login(page);
+/** Una página se considera sana si responde y no muestra un error de la app. */
+async function expectPageHealthy(page: Page, url: string, name: string) {
+  const response = await page.goto(`${BASE}${url}`, { waitUntil: 'networkidle' });
 
-  await page.goto(`${BASE}/proveedores`);
-  await page.waitForLoadState('networkidle');
-
-  await page.locator('button', { hasText: /nuevo proveedor/i }).first().click();
-  await page.waitForTimeout(800);
-
-  // El primer label visible debe ser "Nombre comercial"
-  const labels = await page.locator('form label').allTextContents();
-  console.log('  Labels en DOM:', labels);
-  console.log('  ¿Primer label es "Nombre comercial *"?', labels[0]?.trim() === 'Nombre comercial *');
-
-  // Verificar que el header "Nuevo proveedor" es visible
-  const header = page.locator('h2:has-text("Nuevo proveedor"), h2:has-text("Editar proveedor")').first();
-  const headerVisible = await header.isVisible().catch(() => false);
-  console.log('  ¿Header "Nuevo proveedor" visible?', headerVisible);
-
-  await shot(page, 'v3-1a-modal-inicial');
-
-  // Guardar con datos mínimos
-  const nameInput = page.locator('input[name="name"]').first();
-  await nameInput.scrollIntoViewIfNeeded();
-  await nameInput.fill('Prov Test v3');
-  await page.locator('button[type="submit"]').click();
-  await page.waitForTimeout(2500);
-  await shot(page, 'v3-1b-resultado-save');
-
-  const hasError = await page.locator('text=/error al procesar/i').first().isVisible().catch(() => false);
-  const hasSuccess = await page.locator('text=/proveedor.*creado|creado.*éxito/i').first().isVisible().catch(() => false);
-  console.log('  ❌ Error al guardar:', hasError);
-  console.log('  ✅ Guardado con éxito:', hasSuccess);
-});
-
-test('PROD-2: POS — agregar producto y cobrar', async ({ page }) => {
-  test.setTimeout(90000);
-  await login(page);
-
-  await page.goto(`${BASE}/pos`);
-  await page.waitForLoadState('networkidle');
-  await shot(page, 'v3-2a-pos');
-
-  // Limpiar búsqueda para ver todos los productos
-  const search = page.locator('input[placeholder*="buscar" i], input[placeholder*="Buscar" i]').first();
-  await search.waitFor({ timeout: 10000 });
-  await search.fill('');
-  await page.waitForTimeout(1500);
-  await shot(page, 'v3-2b-busqueda');
-
-  // Los productos son <button> que contienen un span con "disponibles" (stock disponible)
-  // Esperar a que al menos uno cargue (no skeletons)
-  const productBtn = page.locator('button:has(span:has-text("disponibles"))').first();
-  let productAdded = false;
-
-  if (await productBtn.waitFor({ timeout: 10000, state: 'visible' }).then(() => true).catch(() => false)) {
-    const allProductBtns = page.locator('button:has(span:has-text("disponibles"))');
-    const count = await allProductBtns.count();
-    console.log(`  Productos con stock visible: ${count}`);
-    await allProductBtns.first().click();
-    await page.waitForTimeout(800);
-    productAdded = true;
-    console.log('  Clicked primer producto real');
+  if (response) {
+    expect(response.status(), `${url} devolvió ${response.status()}`).toBeLessThan(400);
   }
 
-  if (!productAdded) {
-    console.log('  ⚠️ No se encontraron productos con "disponibles" — verificar inventario');
-  }
+  // No debe verse la pantalla de error global ni un 404 de la aplicación.
+  const crashed = await page
+    .locator('text=/Application error|Internal Server Error|Something went wrong/i')
+    .first()
+    .isVisible()
+    .catch(() => false);
+  expect(crashed, `${url} mostró una pantalla de error`).toBe(false);
 
-  await page.waitForTimeout(800);
-  await shot(page, 'v3-2c-carrito');
+  await shot(page, name);
+}
 
-  // Verificar carrito no vacío
-  const cartTotal = await page.locator('[class*="Total"], text=/Total/i').first().textContent().catch(() => '');
-  console.log('  Cart total text:', cartTotal?.trim().slice(0, 50));
+test.describe('Verificación de despliegue (solo lectura)', () => {
+  test('SMOKE-1: la página de login carga y permite autenticarse', async ({ page }) => {
+    test.setTimeout(60_000);
+    await login(page);
+    await shot(page, 'smoke-1-login');
 
-  // Intentar cobrar
-  const cobrarBtn = page.locator('button:has-text("Cobrar"), button:has-text("cobrar")').first();
-  const cobrarVisible = await cobrarBtn.isVisible({ timeout: 5000 }).catch(() => false);
-  console.log('  Botón Cobrar visible:', cobrarVisible);
+    // Tras autenticarse debe existir la navegación principal.
+    await expect(page.locator('nav, aside, [role="navigation"]').first()).toBeVisible({
+      timeout: 15_000,
+    });
+  });
 
-  if (cobrarVisible) {
-    await cobrarBtn.click();
-    await page.waitForTimeout(1500);
-    await shot(page, 'v3-2d-cobrar-modal');
+  test('SMOKE-2: las pantallas principales cargan sin error', async ({ page }) => {
+    test.setTimeout(120_000);
+    await login(page);
 
-    // Si abrió modal de cobro, confirmar
-    const confirmarBtn = page.locator('button:has-text("Confirmar"), button:has-text("Procesar"), button:has-text("Registrar venta")').first();
-    if (await confirmarBtn.isVisible({ timeout: 4000 }).catch(() => false)) {
-      await confirmarBtn.click();
-      await page.waitForTimeout(2500);
-      await shot(page, 'v3-2e-resultado-venta');
+    const paginas: Array<[string, string]> = [
+      ['/dashboard', 'smoke-2a-dashboard'],
+      ['/pos', 'smoke-2b-pos'],
+      ['/inventario', 'smoke-2c-inventario'],
+      ['/ventas', 'smoke-2d-ventas'],
+      ['/clientes', 'smoke-2e-clientes'],
+      ['/proveedores', 'smoke-2f-proveedores'],
+      ['/gastos', 'smoke-2g-gastos'],
+      ['/compras', 'smoke-2h-compras'],
+    ];
+
+    for (const [url, nombre] of paginas) {
+      await expectPageHealthy(page, url, nombre);
     }
+  });
 
-    const hasError = await page.locator('[class*="toast"] text=/error|no se pudo/i, [class*="alert"] text=/error/i').first().isVisible().catch(() => false);
-    const hasSuccess = await page.locator('text=/venta registrada|registrada con éxito|factura generada/i').first().isVisible().catch(() => false);
-    // También verificar si el carrito se limpió (indica venta exitosa)
-    const cartCleared = await page.locator('text=/Busca y agrega productos/i').first().isVisible().catch(() => false);
-    console.log('  ❌ Error en venta:', hasError);
-    console.log('  ✅ Venta exitosa (toast):', hasSuccess);
-    console.log('  ✅ Carrito vaciado (indica éxito):', cartCleared);
-  }
-});
+  test('SMOKE-3: el POS muestra el catálogo de productos', async ({ page }) => {
+    test.setTimeout(60_000);
+    await login(page);
+    await page.goto(`${BASE}/pos`, { waitUntil: 'networkidle' });
 
-test('PROD-3: Gastos — crear gasto con destinatario', async ({ page }) => {
-  test.setTimeout(60000);
-  await login(page);
+    // Solo se comprueba que el buscador exista y que la vista responda: no se
+    // agrega nada al carrito ni se registra ninguna venta.
+    const search = page
+      .locator('input[placeholder*="buscar" i], input[placeholder*="Buscar" i]')
+      .first();
+    await expect(search).toBeVisible({ timeout: 20_000 });
 
-  await page.goto(`${BASE}/gastos`);
-  await page.waitForLoadState('networkidle');
+    await shot(page, 'smoke-3-pos-catalogo');
+  });
 
-  const btn = page.locator('button:has-text("Registrar gasto"), button:has-text("Nuevo gasto")').first();
-  await btn.waitFor({ timeout: 8000 });
-  await btn.click();
-  await page.waitForTimeout(800);
-  await shot(page, 'v3-3a-modal-inicial');
+  test('SMOKE-4: el API responde en /health', async ({ request }) => {
+    const apiBase = process.env.E2E_API_URL;
+    test.skip(!apiBase, 'Define E2E_API_URL para verificar el API');
 
-  const labels = await page.locator('form label').allTextContents();
-  console.log('  Labels form:', labels.slice(0, 4));
-  const headerText = await page.locator('h2').first().textContent().catch(() => '?');
-  console.log('  Header modal:', headerText);
+    const res = await request.get(`${apiBase}/health`);
+    expect(res.status()).toBe(200);
 
-  // Scroll al inicio del form y llenar descripción
-  const descInput = page.locator('input[name="description"]').first();
-  await descInput.scrollIntoViewIfNeeded().catch(() => {});
-  await page.waitForTimeout(300);
-  await descInput.fill('Gasto PW v3');
-  await page.waitForTimeout(200);
-
-  // Verificar que se llenó
-  const descVal = await descInput.inputValue().catch(() => '');
-  console.log('  Descripción llenada:', descVal);
-
-  // Monto — buscar el PriceInput (type="text", inputMode="numeric")
-  const amountInput = page.locator('input[inputmode="numeric"], input[placeholder="0"]').first();
-  await amountInput.scrollIntoViewIfNeeded().catch(() => {});
-  await amountInput.fill('15000');
-  await page.waitForTimeout(300);
-
-  // Destinatario
-  const recipientInput = page.locator('input[name="recipientName"]').first();
-  await recipientInput.scrollIntoViewIfNeeded().catch(() => {});
-  await recipientInput.fill('Test Playwright v3');
-
-  await shot(page, 'v3-3b-form-lleno');
-
-  await page.locator('button[type="submit"]').click();
-  await page.waitForTimeout(2500);
-  await shot(page, 'v3-3c-resultado');
-
-  const hasError422 = await page.locator('text=/datos inválidos/i').first().isVisible().catch(() => false);
-  const hasErrorGeneral = await page.locator('text=/error al procesar/i').first().isVisible().catch(() => false);
-  const hasSuccess = await page.locator('text=/gasto.*registrado|registrado.*éxito/i').first().isVisible().catch(() => false);
-  console.log('  ❌ Datos inválidos (422):', hasError422);
-  console.log('  ❌ Error general:', hasErrorGeneral);
-  console.log('  ✅ Guardado con éxito:', hasSuccess);
-});
-
-test('PROD-4: Compras — crear proveedor inline desde dropdown', async ({ page }) => {
-  test.setTimeout(60000);
-  await login(page);
-
-  await page.goto(`${BASE}/compras`);
-  await page.waitForLoadState('networkidle');
-
-  const btn = page.locator('button:has-text("Registrar compra"), button:has-text("Nueva compra")').first();
-  await btn.waitFor({ timeout: 8000 });
-  await btn.click();
-  await page.waitForTimeout(800);
-  await shot(page, 'v3-4a-compras-form');
-
-  // Buscar el campo de proveedor
-  const supInput = page.locator('input[placeholder*="proveedor" i], input[placeholder*="Buscar proveedor" i], input[placeholder*="buscar" i]').first();
-  const supVisible = await supInput.isVisible({ timeout: 5000 }).catch(() => false);
-  console.log('  Input proveedor visible:', supVisible);
-
-  if (supVisible) {
-    await supInput.fill('ZZZNUEVO');
-    await page.waitForTimeout(800);
-    await shot(page, 'v3-4b-busqueda-proveedor');
-
-    // Ver contenido del dropdown
-    const dropdowns = await page.locator('[class*="absolute"][class*="z-"], [class*="dropdown"]').all();
-    for (const dd of dropdowns) {
-      const text = await dd.textContent().catch(() => '');
-      if (text && text.length > 5) {
-        console.log('  Dropdown contenido:', text.trim().slice(0, 150));
-      }
-    }
-
-    // Buscar botón "Crear nuevo" o similar
-    const createBtn = page.locator('button:has-text("Crear"), button:has-text("Nuevo"), [class*="create"]').first();
-    const createVisible = await createBtn.isVisible({ timeout: 3000 }).catch(() => false);
-    console.log('  Botón crear proveedor visible:', createVisible);
-    if (createVisible) {
-      await createBtn.click();
-      await page.waitForTimeout(800);
-      await shot(page, 'v3-4c-form-proveedor-inline');
-    }
-  }
+    const body = await res.json();
+    expect(body.status).toBe('ok');
+  });
 });

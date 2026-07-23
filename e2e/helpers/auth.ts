@@ -1,7 +1,11 @@
 import { Page } from '@playwright/test';
+import { getTestEmail, getTestPassword } from './credentials';
 
-export const TEST_EMAIL = 'admin@komercio.app';
-export const TEST_PASSWORD = 'Admin123!';
+// Se exponen como funciones, no como constantes: si fueran constantes, el error
+// por variable de entorno faltante saltaría al importar el módulo (rompiendo
+// incluso pruebas que no necesitan credenciales) en lugar de al usarlas.
+export const TEST_EMAIL = getTestEmail;
+export const TEST_PASSWORD = getTestPassword;
 
 export async function login(page: Page) {
   await page.goto('/login');
@@ -15,8 +19,8 @@ export async function login(page: Page) {
   // Fall back to filling the form (fresh context or expired cookie)
   const emailInput = page.locator('input[name="email"], input[type="email"]').first();
   await emailInput.waitFor({ state: 'visible', timeout: 15_000 });
-  await emailInput.fill(TEST_EMAIL);
-  await page.locator('input[name="password"], input[type="password"]').first().fill(TEST_PASSWORD);
+  await emailInput.fill(getTestEmail());
+  await page.locator('input[name="password"], input[type="password"]').first().fill(getTestPassword());
   await page.locator('button[type="submit"]').first().click();
 
   try {
