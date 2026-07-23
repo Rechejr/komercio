@@ -46,6 +46,17 @@ Thumbs.db
 ehthumbs.db
 Desktop.ini
 
+# ─── ARCHIVOS TEMPORALES DE OFFICE ───────────────────────────────────────────
+# Word/Excel crean estos bloqueos mientras el documento está abierto
+~$*
+*.tmp
+
+# ─── HERRAMIENTAS LOCALES ────────────────────────────────────────────────────
+# Configuración y worktrees de Claude Code: son artefactos de la máquina de
+# cada quien, no del proyecto
+.claude/settings.local.json
+.claude/worktrees/
+
 # ─── UPLOADS DE USUARIO ──────────────────────────────────────────────────────
 uploads/
 public/uploads/

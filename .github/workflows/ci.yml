@@ -6,6 +6,12 @@ on:
   pull_request:
     branches: [main]
 
+# Si se empujan dos commits seguidos a la misma rama, cancela la corrida
+# anterior en vez de gastar minutos validando código ya reemplazado.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   backend-build:
     name: Backend Build
@@ -24,23 +30,35 @@ jobs:
         ports: ['6379:6379']
         options: --health-cmd "redis-cli ping" --health-interval 10s
 
+    env:
+      DATABASE_URL: postgresql://test:test@localhost:5432/ventrix_test
+
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: '22', cache: 'npm', cache-dependency-path: backend/package-lock.json }
-      - run: cd backend && npm install
-      - run: cd backend && npx prisma generate
+
+      # npm ci (no npm install): instala exactamente lo que dice el lock file y
+      # falla ruidosamente si package.json y package-lock.json están
+      # desincronizados, en vez de "arreglarlo" en silencio como hace install.
+      - name: Instalar dependencias
+        run: cd backend && npm ci
+
+      - name: Generar cliente Prisma
+        run: cd backend && npx prisma generate
+
+      - name: Lint
+        run: cd backend && npm run lint
+
+      - name: Aplicar migraciones
+        run: cd backend && npx prisma migrate deploy
+
+      - name: Compilar
+        run: cd backend && npm run build
+
+      - name: Tests
+        run: cd backend && npm test
         env:
-          DATABASE_URL: postgresql://test:test@localhost:5432/ventrix_test
-      - run: cd backend && npx prisma migrate deploy
-        env:
-          DATABASE_URL: postgresql://test:test@localhost:5432/ventrix_test
-      - run: cd backend && npm run build
-        env:
-          DATABASE_URL: postgresql://test:test@localhost:5432/ventrix_test
-      - run: cd backend && npm test -- --passWithNoTests
-        env:
-          DATABASE_URL: postgresql://test:test@localhost:5432/ventrix_test
           JWT_SECRET: test-secret-ci-at-least-32-characters-long
           JWT_REFRESH_SECRET: test-refresh-secret-ci-at-least-32-characters-long
           NODE_ENV: test
@@ -48,12 +66,26 @@ jobs:
   frontend-build:
     name: Frontend Build
     runs-on: ubuntu-latest
+
+    env:
+      NEXT_PUBLIC_API_URL: http://localhost:4000/api/v1
+      NEXT_PUBLIC_SOCKET_URL: http://localhost:4000
+
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: '22', cache: 'npm', cache-dependency-path: frontend/package-lock.json }
-      - run: cd frontend && npm install
-      - run: cd frontend && npm run build
-        env:
-          NEXT_PUBLIC_API_URL: http://localhost:4000/api/v1
-          NEXT_PUBLIC_SOCKET_URL: http://localhost:4000
+
+      - name: Instalar dependencias
+        run: cd frontend && npm ci
+
+      - name: Lint
+        run: cd frontend && npm run lint
+
+      # tsc --noEmit da el error de tipos directo y en segundos; next build lo
+      # detectaría igual, pero tarda mucho más en decírtelo.
+      - name: Verificar tipos
+        run: cd frontend && npx tsc --noEmit
+
+      - name: Compilar
+        run: cd frontend && npm run build
