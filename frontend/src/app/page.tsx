@@ -410,6 +410,8 @@ export default function LandingPage() {
           <nav className="lp-foot-links">
             <Link href="/register">Crear cuenta</Link>
             <Link href="/login">Iniciar sesión</Link>
+            <Link href="/terminos">Términos</Link>
+            <Link href="/privacidad">Privacidad</Link>
           </nav>
           <span>© 2026 Ventrix · Punto de venta</span>
         </div>
