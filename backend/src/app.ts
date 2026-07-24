@@ -49,6 +49,7 @@ import exportRoutes from './routes/export.routes';
 import superadminRoutes from './routes/superadmin.routes';
 import uploadRoutes from './routes/upload.routes';
 import paymentRoutes from './routes/payment.routes';
+import contableRoutes from './routes/contable.routes';
 import publicRoutes from './routes/public.routes';
 import searchRoutes from './routes/search.routes';
 
@@ -200,6 +201,9 @@ app.use(`${apiPrefix}/dashboard`, dashboardRoutes);
 app.use(`${apiPrefix}/exports`, exportRoutes);
 app.use(`${apiPrefix}/superadmin`, superadminRoutes);
 app.use(`${apiPrefix}/uploads`, uploadRoutes);
+// Ventrix Contable — agenda tributaria. Todo el router exige cuenta type
+// "contable" (ver requireContable), así que no interfiere con el POS.
+app.use(`${apiPrefix}/contable`, contableRoutes);
 app.use(`${apiPrefix}/payments`, paymentRoutes);
 app.use(`${apiPrefix}/public`, publicCatalogLimiter, publicRoutes);
 app.use(`${apiPrefix}/search`, searchRoutes);
