@@ -12,6 +12,10 @@ export const authController = {
   async register(req: Request, res: Response, next: NextFunction) {
     try {
       const { name, email, password, businessName, businessCategory } = req.body;
+      // Producto que se está creando. Solo "contable" activa la Agenda; cualquier
+      // otro valor (o su ausencia) cae en "pos", que es el comportamiento de
+      // siempre — así una petición vieja del registro del POS sigue funcionando.
+      const businessType = req.body.businessType === 'contable' ? 'contable' : 'pos';
 
       const existing = await prisma.user.findUnique({ where: { email } });
       if (existing) throw new AppError('El email ya está registrado', 409);
@@ -42,8 +46,12 @@ export const authController = {
           const business = await tx.business.create({
             data: {
               name: businessName,
+              type: businessType,
               category: businessCategory || null,
               ownerId: newUser.id,
+              // La sucursal existe en ambos productos porque toda la cadena de
+              // identidad (businessId) cuelga de user.branch. En una cuenta
+              // contable es solo un ancla técnica: nunca se muestra en su UI.
               branches: { create: { name: 'Bodega Principal', createdById: newUser.id } },
             },
             include: { branches: true },
@@ -53,14 +61,16 @@ export const authController = {
             where: { id: newUser.id },
             data: { branchId: business.branches[0].id },
           });
-          // Seed default expense categories for the new business
-          const defaultCategories = [
-            'Arriendo', 'Servicios públicos', 'Nómina', 'Transporte',
-            'Publicidad', 'Insumos', 'Mantenimiento', 'Otros',
-          ];
-          await tx.expenseCategory.createMany({
-            data: defaultCategories.map((name) => ({ name, businessId: business.id })),
-          });
+          // Las categorías de gasto son del POS; una cuenta contable no las usa.
+          if (businessType !== 'contable') {
+            const defaultCategories = [
+              'Arriendo', 'Servicios públicos', 'Nómina', 'Transporte',
+              'Publicidad', 'Insumos', 'Mantenimiento', 'Otros',
+            ];
+            await tx.expenseCategory.createMany({
+              data: defaultCategories.map((name) => ({ name, businessId: business.id })),
+            });
+          }
         }
 
         return newUser;
@@ -130,7 +140,7 @@ export const authController = {
       const user = await prisma.user.findUnique({
         where: { email, deletedAt: null },
         include: {
-          branch: { select: { id: true, businessId: true, business: { select: { id: true, name: true, plan: true } } } },
+          branch: { select: { id: true, businessId: true, business: { select: { id: true, name: true, plan: true, type: true } } } },
         },
       });
 
@@ -192,6 +202,9 @@ export const authController = {
           businessName: user.branch?.business?.name ?? undefined,
           isEmailVerified: user.isEmailVerified,
           plan: user.branch?.business?.plan || 'free',
+          // Producto de la cuenta: "pos" o "contable". El frontend decide con
+          // esto a qué tablero redirigir tras el login.
+          businessType: user.branch?.business?.type || 'pos',
         },
       }, 'Sesión iniciada');
     } catch (err) {
@@ -342,7 +355,7 @@ export const authController = {
           branch: {
             select: {
               id: true, name: true,
-              business: { select: { id: true, name: true, currency: true, logo: true, plan: true } },
+              business: { select: { id: true, name: true, currency: true, logo: true, plan: true, type: true } },
             },
           },
         },

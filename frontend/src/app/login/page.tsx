@@ -173,8 +173,13 @@ function LoginForm() {
   const handleAuthSuccess = (user: any, accessToken: string) => {
     login(user, accessToken, rememberMe);
     toast.success(`¡Bienvenido, ${user.name}!`);
-    const raw = searchParams.get('redirect') || '/dashboard';
-    const safeRedirect = raw.startsWith('/') && !raw.startsWith('//') ? raw : '/dashboard';
+    // El tablero por defecto depende del producto de la cuenta. Un contador va a
+    // /contable; un comercio a /dashboard, como siempre. Si venía de una ruta
+    // protegida (?redirect=), se respeta — las guardas de cada grupo rebotan si
+    // el destino no corresponde a su tipo de cuenta.
+    const home = user.businessType === 'contable' ? '/contable' : '/dashboard';
+    const raw = searchParams.get('redirect') || home;
+    const safeRedirect = raw.startsWith('/') && !raw.startsWith('//') ? raw : home;
     const dest = user.role === 'SUPER_ADMIN' ? '/superadmin' : safeRedirect;
     router.replace(dest);
   };

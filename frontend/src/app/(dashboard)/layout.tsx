@@ -50,6 +50,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             businessId: userData.branch?.business?.id,
             businessName: userData.branch?.business?.name,
             plan: userData.branch?.business?.plan || 'free',
+            businessType: userData.branch?.business?.type || 'pos',
           }, newToken);
         }
       })

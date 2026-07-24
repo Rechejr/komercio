@@ -71,3 +71,5 @@ backups/
 # ─── PRISMA ──────────────────────────────────────────────────────────────────
 # Las migraciones SÍ deben estar en el repo; solo ignorar lock local
 prisma/migrations/migration_lock.toml
+# Archivos comprimidos sueltos (no versionar)
+*.tar.gz

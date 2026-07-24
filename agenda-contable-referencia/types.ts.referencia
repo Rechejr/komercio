@@ -1,0 +1,113 @@
+/** Calidades tributarias que se marcan por cliente. La ausencia de
+ *  `responsable_iva` significa "no responsable de IVA": no existe un código
+ *  aparte para eso, así no se puede quedar marcado como ambas cosas. */
+export type CodigoResponsabilidad =
+  | "responsable_iva"
+  | "declarante_renta"
+  | "agente_retenedor"
+  | "impoconsumo"
+  | "rst";
+
+export interface Responsabilidad {
+  id: number;
+  codigo: CodigoResponsabilidad;
+  nombre: string;
+}
+
+/** Quien tributa por el Régimen Simple no declara renta por el régimen
+ *  ordinario ni actúa como agente retenedor: son calidades excluyentes.
+ *  Entre sí, declarante de renta y agente retenedor sí van juntas. */
+export const INCOMPATIBLES_CON_RST: CodigoResponsabilidad[] = [
+  "declarante_renta",
+  "agente_retenedor",
+];
+
+/** Quita las combinaciones que la ley no permite. Lo aplica tanto el
+ *  formulario como el guardado, para que no dependa de la interfaz. */
+export function normalizarResponsabilidades(
+  codigos: CodigoResponsabilidad[],
+): CodigoResponsabilidad[] {
+  if (!codigos.includes("rst")) return codigos;
+  return codigos.filter((c) => !INCOMPATIBLES_CON_RST.includes(c));
+}
+
+/** Si esta calidad no se puede marcar dado lo que ya está seleccionado. */
+export function calidadBloqueada(
+  codigo: CodigoResponsabilidad,
+  seleccionadas: CodigoResponsabilidad[],
+): boolean {
+  if (codigo === "rst") {
+    return seleccionadas.some((c) => INCOMPATIBLES_CON_RST.includes(c));
+  }
+  if (INCOMPATIBLES_CON_RST.includes(codigo)) return seleccionadas.includes("rst");
+  return false;
+}
+
+export interface Cliente {
+  id: number;
+  razon_social: string;
+  nit: string;
+  dv: number;
+  celular: string | null;
+  direccion: string | null;
+  tipo_persona: "natural" | "juridica";
+  /** Solo aplica si es responsable de IVA; NULL en caso contrario. La define
+   *  el contador según los ingresos, no se deduce de las calidades. */
+  iva_periodicidad: "bimestral" | "cuatrimestral" | null;
+  /** Columna heredada. Se deriva de las responsabilidades al guardar; no la
+   *  uses como fuente de verdad — ver derivarRegimen() en db.ts. */
+  regimen: "comun" | "simple" | "no_responsable";
+  gran_contribuyente: 0 | 1;
+  activo: 0 | 1;
+  creado_en: string;
+  actualizado_en: string;
+}
+
+export interface Vencimiento {
+  id: number;
+  cliente_id: number;
+  obligacion_id: number;
+  periodo: string;
+  fecha: string;
+  estado: "pendiente" | "en_proceso" | "presentada" | "pagada" | "vencida";
+  monto: number | null;
+  notas: string | null;
+}
+
+export interface ResolucionDian {
+  id: number;
+  cliente_id: number;
+  tipo: "facturacion_numeracion" | "habilitacion_electronica" | "otra";
+  numero: string;
+  fecha_expedicion: string;
+  prefijo: string | null;
+  rango_desde: number | null;
+  rango_hasta: number | null;
+  consecutivo_actual: number;
+  modalidad: "pos" | "electronica" | "contingencia" | null;
+  fecha_vigencia: string;
+  estado: "vigente" | "por_vencer" | "vencida" | "agotada";
+}
+
+export interface Plataforma {
+  id: number;
+  nombre: string;
+  url: string | null;
+  categoria:
+    | "dian"
+    | "software_contable"
+    | "banco"
+    | "camara_comercio"
+    | "seguridad_social"
+    | "otro";
+}
+
+/** Registro guardado en la bóveda de Stronghold (no en SQLite). */
+export interface Credencial {
+  clienteId: number;
+  plataformaId: number;
+  usuario: string;
+  password: string;
+  notas?: string;
+  actualizadoEn: string;
+}

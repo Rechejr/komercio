@@ -1,0 +1,383 @@
+import Database from "@tauri-apps/plugin-sql";
+import { normalizarResponsabilidades } from "./types";
+import type {
+  Cliente,
+  CodigoResponsabilidad,
+  Plataforma,
+  Responsabilidad,
+  ResolucionDian,
+  Vencimiento,
+} from "./types";
+
+export interface Obligacion {
+  id: number;
+  tipo: string;
+  periodicidad: string;
+}
+
+let db: Database | null = null;
+
+async function getDb(): Promise<Database> {
+  if (!db) {
+    db = await Database.load("sqlite:agenda.db");
+  }
+  return db;
+}
+
+export async function listClientes(): Promise<Cliente[]> {
+  const conn = await getDb();
+  return conn.select<Cliente[]>(
+    "SELECT * FROM cliente WHERE activo = 1 ORDER BY razon_social",
+  );
+}
+
+export interface DatosCliente {
+  razonSocial: string;
+  nit: string;
+  dv: number;
+  celular: string;
+  direccion: string;
+  tipoPersona: Cliente["tipo_persona"];
+  responsabilidades: CodigoResponsabilidad[];
+  ivaPeriodicidad: Cliente["iva_periodicidad"];
+}
+
+/** El IVA solo tiene periodicidad si el cliente es responsable de IVA;
+ *  cualquier otro caso se guarda como NULL para no dejar un dato colgado. */
+function periodicidadIva(input: DatosCliente): Cliente["iva_periodicidad"] {
+  return input.responsabilidades.includes("responsable_iva") ? input.ivaPeriodicidad : null;
+}
+
+/** `cliente.regimen` es NOT NULL y quedó de la versión vieja del modelo, que
+ *  mezclaba el IVA con el Régimen Simple como si fueran alternativas. Se sigue
+ *  escribiendo un valor coherente para no romper esa columna, pero la fuente de
+ *  verdad son las responsabilidades. */
+function derivarRegimen(responsabilidades: CodigoResponsabilidad[]): Cliente["regimen"] {
+  if (responsabilidades.includes("rst")) return "simple";
+  if (responsabilidades.includes("responsable_iva")) return "comun";
+  return "no_responsable";
+}
+
+/** Texto vacío se guarda como NULL: "sin celular" y "celular en blanco" son
+ *  lo mismo, y así las consultas no tienen que contemplar los dos casos. */
+function oNulo(valor: string): string | null {
+  const limpio = valor.trim();
+  return limpio.length > 0 ? limpio : null;
+}
+
+export async function listResponsabilidades(): Promise<Responsabilidad[]> {
+  const conn = await getDb();
+  return conn.select<Responsabilidad[]>("SELECT * FROM responsabilidad ORDER BY id");
+}
+
+/** Todas las responsabilidades de todos los clientes, agrupadas por cliente.
+ *  Una sola consulta en vez de una por fila de la tabla. */
+export async function responsabilidadesPorCliente(): Promise<Map<number, CodigoResponsabilidad[]>> {
+  const conn = await getDb();
+  const filas = await conn.select<{ cliente_id: number; codigo: CodigoResponsabilidad }[]>(
+    `SELECT cr.cliente_id, r.codigo
+     FROM cliente_responsabilidad cr
+     JOIN responsabilidad r ON r.id = cr.responsabilidad_id`,
+  );
+  const mapa = new Map<number, CodigoResponsabilidad[]>();
+  for (const fila of filas) {
+    const actuales = mapa.get(fila.cliente_id) ?? [];
+    actuales.push(fila.codigo);
+    mapa.set(fila.cliente_id, actuales);
+  }
+  return mapa;
+}
+
+async function guardarResponsabilidades(
+  clienteId: number,
+  seleccionadas: CodigoResponsabilidad[],
+): Promise<void> {
+  // Última línea de defensa: aunque la interfaz ya bloquea las combinaciones
+  // imposibles, la regla se aplica también aquí para que ningún otro camino
+  // guarde un cliente en Régimen Simple marcado como declarante o retenedor.
+  const codigos = normalizarResponsabilidades(seleccionadas);
+  const conn = await getDb();
+  await conn.execute("DELETE FROM cliente_responsabilidad WHERE cliente_id = $1", [clienteId]);
+  for (const codigo of codigos) {
+    await conn.execute(
+      `INSERT INTO cliente_responsabilidad (cliente_id, responsabilidad_id)
+       SELECT $1, id FROM responsabilidad WHERE codigo = $2`,
+      [clienteId, codigo],
+    );
+  }
+}
+
+export async function crearCliente(input: DatosCliente): Promise<number> {
+  const conn = await getDb();
+  const result = await conn.execute(
+    `INSERT INTO cliente (razon_social, nit, dv, celular, direccion, tipo_persona, regimen, iva_periodicidad)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+    [
+      input.razonSocial.trim(),
+      input.nit.replace(/\D/g, ""),
+      input.dv,
+      oNulo(input.celular),
+      oNulo(input.direccion),
+      input.tipoPersona,
+      derivarRegimen(input.responsabilidades),
+      periodicidadIva(input),
+    ],
+  );
+  const id = result.lastInsertId ?? 0;
+  await guardarResponsabilidades(id, input.responsabilidades);
+  return id;
+}
+
+export async function actualizarCliente(id: number, input: DatosCliente): Promise<void> {
+  const conn = await getDb();
+  await conn.execute(
+    `UPDATE cliente SET razon_social = $1, nit = $2, dv = $3, celular = $4,
+            direccion = $5, tipo_persona = $6, regimen = $7, iva_periodicidad = $8
+     WHERE id = $9`,
+    [
+      input.razonSocial.trim(),
+      input.nit.replace(/\D/g, ""),
+      input.dv,
+      oNulo(input.celular),
+      oNulo(input.direccion),
+      input.tipoPersona,
+      derivarRegimen(input.responsabilidades),
+      periodicidadIva(input),
+      id,
+    ],
+  );
+  await guardarResponsabilidades(id, input.responsabilidades);
+}
+
+/** Borrado real (no solo "activo = 0") — arrastra vencimientos, resoluciones
+ * y documentos por la cascada de llaves foráneas. Las credenciales viven
+ * en Stronghold, aparte, así que hay que borrarlas por su cuenta antes de
+ * llamar esto (ver eliminarClienteCompleto en vault.ts/App.tsx). */
+export async function eliminarCliente(id: number): Promise<void> {
+  const conn = await getDb();
+  // Las llaves foráneas vienen apagadas en esta conexión (PRAGMA foreign_keys = 0),
+  // así que la cascada declarada en el esquema no se dispara: hay que barrer las
+  // calidades a mano o quedan apuntando a un cliente que ya no existe.
+  await conn.execute("DELETE FROM cliente_responsabilidad WHERE cliente_id = $1", [id]);
+  await conn.execute("DELETE FROM cliente WHERE id = $1", [id]);
+}
+
+export async function listObligaciones(): Promise<Obligacion[]> {
+  const conn = await getDb();
+  return conn.select<Obligacion[]>("SELECT * FROM obligacion ORDER BY tipo");
+}
+
+export async function listPlataformas(): Promise<Plataforma[]> {
+  const conn = await getDb();
+  return conn.select<Plataforma[]>("SELECT * FROM plataforma ORDER BY nombre");
+}
+
+export async function crearPlataforma(input: {
+  nombre: string;
+  url: string;
+  categoria: Plataforma["categoria"];
+}): Promise<number> {
+  const conn = await getDb();
+  const result = await conn.execute(
+    "INSERT INTO plataforma (nombre, url, categoria) VALUES ($1, $2, $3)",
+    [input.nombre, input.url || null, input.categoria],
+  );
+  return result.lastInsertId ?? 0;
+}
+
+export async function crearVencimiento(input: {
+  clienteId: number;
+  obligacionId: number;
+  periodo: string;
+  fecha: string;
+}): Promise<number> {
+  const conn = await getDb();
+  const result = await conn.execute(
+    `INSERT INTO vencimiento (cliente_id, obligacion_id, periodo, fecha)
+     VALUES ($1, $2, $3, $4)`,
+    [input.clienteId, input.obligacionId, input.periodo, input.fecha],
+  );
+  return result.lastInsertId ?? 0;
+}
+
+export interface PeriodoCalendario {
+  periodo: string;
+  /** Fecha de vencimiento ya resuelta para el NIT del cliente consultado. */
+  fecha: string;
+}
+
+function ultimoDigito(nit: string): number {
+  return Number(nit.replace(/\D/g, "").slice(-1) || "0");
+}
+
+function dosUltimosDigitos(nit: string): number {
+  const limpio = nit.replace(/\D/g, "");
+  return Number(limpio.slice(-2).padStart(2, "0") || "0");
+}
+
+/** Periodos del calendario DIAN para una obligación y cliente, con la fecha ya
+ *  resuelta según su NIT. Maneja por dentro los dos mecanismos: por último
+ *  dígito (la mayoría) y por los dos últimos (renta de personas naturales).
+ *  Devuelve [] si esa obligación/variante aún no está sembrada. */
+export async function periodosCalendario(
+  obligacion: string,
+  variante: string | null,
+  nit: string,
+): Promise<PeriodoCalendario[]> {
+  const conn = await getDb();
+
+  // Renta de personas naturales: clave = dos últimos dígitos, una sola fecha.
+  if (obligacion === "renta" && variante === "natural") {
+    const filas = await conn.select<{ fecha: string }[]>(
+      "SELECT fecha FROM calendario_renta_natural WHERE dos_digitos = $1",
+      [dosUltimosDigitos(nit)],
+    );
+    return filas[0] ? [{ periodo: "Año 2025", fecha: filas[0].fecha }] : [];
+  }
+
+  const digito = ultimoDigito(nit);
+  // IS $2 no funciona con el binding del plugin cuando el valor es NULL, así
+  // que se resuelve la rama NULL con una consulta aparte.
+  const filas =
+    variante === null
+      ? await conn.select<{ periodo: string; fecha: string }[]>(
+          `SELECT periodo, fecha FROM calendario_dian
+           WHERE obligacion = $1 AND variante IS NULL AND digito = $2
+           ORDER BY periodo_orden`,
+          [obligacion, digito],
+        )
+      : await conn.select<{ periodo: string; fecha: string }[]>(
+          `SELECT periodo, fecha FROM calendario_dian
+           WHERE obligacion = $1 AND variante = $2 AND digito = $3
+           ORDER BY periodo_orden`,
+          [obligacion, variante, digito],
+        );
+  return filas.map((f) => ({ periodo: f.periodo, fecha: f.fecha }));
+}
+
+export async function actualizarEstadoVencimiento(
+  id: number,
+  estado: Vencimiento["estado"],
+): Promise<void> {
+  const conn = await getDb();
+  await conn.execute("UPDATE vencimiento SET estado = $1 WHERE id = $2", [estado, id]);
+}
+
+export async function eliminarVencimiento(id: number): Promise<void> {
+  const conn = await getDb();
+  await conn.execute("DELETE FROM vencimiento WHERE id = $1", [id]);
+}
+
+export async function crearResolucion(input: {
+  clienteId: number;
+  tipo: ResolucionDian["tipo"];
+  numero: string;
+  fechaExpedicion: string;
+  fechaVigencia: string;
+}): Promise<number> {
+  const conn = await getDb();
+  const result = await conn.execute(
+    `INSERT INTO resolucion_dian (cliente_id, tipo, numero, fecha_expedicion, fecha_vigencia)
+     VALUES ($1, $2, $3, $4, $5)`,
+    [input.clienteId, input.tipo, input.numero, input.fechaExpedicion, input.fechaVigencia],
+  );
+  return result.lastInsertId ?? 0;
+}
+
+export async function eliminarResolucion(id: number): Promise<void> {
+  const conn = await getDb();
+  await conn.execute("DELETE FROM resolucion_dian WHERE id = $1", [id]);
+}
+
+export async function proximosVencimientos(
+  diasHaciaAdelante = 15,
+): Promise<(Vencimiento & { razon_social: string; tipo: string })[]> {
+  const conn = await getDb();
+  return conn.select(
+    `SELECT v.*, c.razon_social, o.tipo
+     FROM vencimiento v
+     JOIN cliente c ON c.id = v.cliente_id
+     JOIN obligacion o ON o.id = v.obligacion_id
+     WHERE v.estado NOT IN ('presentada', 'pagada')
+       AND date(v.fecha) <= date('now', '+' || $1 || ' days')
+     ORDER BY v.fecha`,
+    [diasHaciaAdelante],
+  );
+}
+
+/** A diferencia de proximosVencimientos, incluye también lo ya presentado
+ * o pagado — esta es la tabla de gestión completa, no el vistazo rápido. */
+export async function listarTodosVencimientos(): Promise<
+  (Vencimiento & { razon_social: string; nit: string; dv: number; tipo: string })[]
+> {
+  const conn = await getDb();
+  // Trae nit y dv para que el buscador de la pestaña pueda filtrar por
+  // identificación además de por nombre.
+  return conn.select(
+    `SELECT v.*, c.razon_social, c.nit, c.dv, o.tipo
+     FROM vencimiento v
+     JOIN cliente c ON c.id = v.cliente_id
+     JOIN obligacion o ON o.id = v.obligacion_id
+     ORDER BY v.fecha DESC`,
+  );
+}
+
+export async function resolucionesPorVencer(
+  diasHaciaAdelante = 30,
+): Promise<(ResolucionDian & { razon_social: string })[]> {
+  const conn = await getDb();
+  return conn.select(
+    `SELECT r.*, c.razon_social
+     FROM resolucion_dian r
+     JOIN cliente c ON c.id = r.cliente_id
+     WHERE r.estado != 'vencida'
+       AND date(r.fecha_vigencia) <= date('now', '+' || $1 || ' days')
+     ORDER BY r.fecha_vigencia`,
+    [diasHaciaAdelante],
+  );
+}
+
+export async function getConfig(clave: string): Promise<string | null> {
+  const conn = await getDb();
+  const filas = await conn.select<{ valor: string }[]>(
+    "SELECT valor FROM config WHERE clave = $1",
+    [clave],
+  );
+  return filas[0]?.valor ?? null;
+}
+
+export async function setConfig(clave: string, valor: string): Promise<void> {
+  const conn = await getDb();
+  await conn.execute(
+    `INSERT INTO config (clave, valor) VALUES ($1, $2)
+     ON CONFLICT(clave) DO UPDATE SET valor = excluded.valor`,
+    [clave, valor],
+  );
+}
+
+export type OrigenRecordatorio = "vencimiento" | "resolucion";
+
+export async function umbralesYaEnviados(
+  origenTipo: OrigenRecordatorio,
+  origenId: number,
+): Promise<number[]> {
+  const conn = await getDb();
+  const filas = await conn.select<{ dias_antes: number }[]>(
+    `SELECT dias_antes FROM recordatorio WHERE origen_tipo = $1 AND origen_id = $2 AND enviado = 1`,
+    [origenTipo, origenId],
+  );
+  return filas.map((f) => f.dias_antes);
+}
+
+export async function marcarUmbralEnviado(
+  origenTipo: OrigenRecordatorio,
+  origenId: number,
+  diasAntes: number,
+): Promise<void> {
+  const conn = await getDb();
+  await conn.execute(
+    `INSERT INTO recordatorio (origen_tipo, origen_id, dias_antes, canal, enviado)
+     VALUES ($1, $2, $3, 'notificacion_nativa', 1)`,
+    [origenTipo, origenId, diasAntes],
+  );
+}

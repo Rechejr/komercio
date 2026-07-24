@@ -11,6 +11,9 @@ interface User {
   businessId?: string;
   businessName?: string;
   plan?: string;
+  // Producto de la cuenta: "pos" (comercio) o "contable". Decide a qué tablero
+  // va el usuario tras el login y qué grupo de rutas puede ver.
+  businessType?: string;
   isEmailVerified?: boolean;
 }
 

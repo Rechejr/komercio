@@ -15,6 +15,10 @@ enum UserRole {
   CASHIER
   SELLER
   WAREHOUSE
+  // Ayudante del contador en Ventrix Contable: permisos limitados (ve clientes y
+  // gestiona vencimientos, pero no borra clientes ni toca la cuenta ni el cobro).
+  // Es el único rol nuevo del módulo contable; el dueño sigue siendo ADMIN.
+  AUXILIAR
 }
 
 // ─── ESTADOS GENERALES ────────────────────────────────────────────────────────
@@ -109,6 +113,10 @@ model RefreshToken {
 model Business {
   id                String            @id @default(uuid())
   name              String
+  // Discriminador de producto: "pos" (comercio, el POS de siempre) o "contable"
+  // (agenda tributaria para contadores). Los negocios existentes quedan "pos"
+  // por el default, así que su comportamiento no cambia en nada.
+  type              String            @default("pos")
   category          String?
   legalName         String?
   nit               String?
