@@ -11,8 +11,15 @@ export default function robots(): MetadataRoute.Robots {
   return {
     rules: {
       userAgent: '*',
-      allow: ['/', '/login', '/register', ...(LEGAL_READY ? ['/terminos', '/privacidad'] : [])],
+      // /contable es el landing público del segundo producto (marketing). Sus
+      // subrutas (/contable/panel, /contable/clientes…) son el tablero
+      // autenticado y quedan en disallow más abajo.
+      allow: ['/', '/login', '/register', '/contable', ...(LEGAL_READY ? ['/terminos', '/privacidad'] : [])],
       disallow: [
+        '/contable/panel',
+        '/contable/clientes',
+        '/contable/vencimientos',
+        '/contable/resoluciones',
         // Mientras los documentos legales sean un borrador, se bloquean.
         ...(LEGAL_READY ? [] : ['/terminos', '/privacidad']),
         '/dashboard',

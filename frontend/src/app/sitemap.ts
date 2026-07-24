@@ -15,6 +15,13 @@ export default function sitemap(): MetadataRoute.Sitemap {
       changeFrequency: 'monthly',
       priority: 0.8,
     },
+    // Landing del segundo producto (agenda tributaria para contadores). Es una
+    // página pública de marketing con su propio SEO, así que se indexa.
+    {
+      url: `${BASE_URL}/contable`,
+      changeFrequency: 'weekly',
+      priority: 0.9,
+    },
     {
       url: `${BASE_URL}/login`,
       changeFrequency: 'monthly',

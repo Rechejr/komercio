@@ -169,6 +169,7 @@ export default function LandingPage() {
             <span className="lp-logo-mark">V</span> Ventrix
           </Link>
           <nav className="lp-nav-actions">
+            <Link href="/contable" className="lp-nav-login">Para contadores</Link>
             <Link href="/login" className="lp-nav-login">Ya tengo cuenta</Link>
             <Link href="/register" className="lp-btn lp-btn-primary">Crear cuenta gratis</Link>
           </nav>
