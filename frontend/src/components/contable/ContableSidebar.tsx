@@ -9,7 +9,7 @@ import { useAuthStore } from '@/store/auth.store';
 import { Tooltip } from '@/components/ui/Tooltip';
 import {
   LayoutDashboard, Users, CalendarClock, FileText,
-  ChevronLeft, ChevronRight, LogOut, X, Zap,
+  ChevronLeft, ChevronRight, LogOut, X,
 } from 'lucide-react';
 
 // Navegación de Ventrix Contable. Solo dos roles la ven: ADMIN (el contador,
@@ -144,20 +144,9 @@ export function ContableSidebar({ mobileOpen, onMobileClose }: ContableSidebarPr
           })}
         </nav>
 
-        {/* Acciones inferiores */}
+        {/* Acciones inferiores. El estado de la prueba/suscripción se muestra en
+            el Panel, no aquí, para no repetir con lenguaje del POS. */}
         <div className="sidebar-bottom-border flex-shrink-0 px-2 pb-2 pt-1 space-y-[2px]">
-          {!collapsed && (
-            <div className="px-2 py-1.5">
-              <span className={cn(
-                'inline-flex items-center gap-1.5 text-[11px] font-semibold px-2 py-1 rounded-md',
-                user?.plan === 'pro' ? 'text-emerald-400 sidebar-plan-indicator-pro' : 'text-slate-600 sidebar-plan-indicator-free',
-              )}>
-                <Zap size={10} className={user?.plan === 'pro' ? 'fill-emerald-400' : 'fill-slate-600'} />
-                {user?.plan === 'pro' ? 'Plan Pro' : 'Plan Gratuito'}
-              </span>
-            </div>
-          )}
-
           <Tooltip content={collapsed ? 'Cerrar sesión' : ''} side="right">
             <button
               type="button"

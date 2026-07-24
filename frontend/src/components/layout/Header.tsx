@@ -26,6 +26,11 @@ const PAGE_LABELS: Record<string, string> = {
   '/caja':         'Caja',
   '/reportes':     'Reportes',
   '/configuracion':'Configuración',
+  // Ventrix Contable
+  '/contable/panel':        'Panel',
+  '/contable/clientes':     'Clientes',
+  '/contable/vencimientos': 'Vencimientos',
+  '/contable/resoluciones': 'Resoluciones DIAN',
 };
 
 interface HeaderProps {
@@ -38,13 +43,19 @@ export function Header({ onMenuClick }: HeaderProps) {
   const { user }    = useAuthStore();
   const openUpgrade = useUpgradeStore((s) => s.open);
   const isFree      = !user?.plan || user.plan === 'free';
+  // El banner de Plan Pro, la búsqueda global y el modal de upgrade son del POS
+  // (hablan de productos/ventas/inventario y usan la búsqueda de esas entidades).
+  // En una cuenta contable no aplican: el estado de la prueba/suscripción se
+  // muestra en el Panel contable.
+  const esContable  = user?.businessType === 'contable';
   const [notifOpen, setNotifOpen] = useState(false);
   const bellRef = useRef<HTMLButtonElement>(null);
   const [notifAnchor, setNotifAnchor] = useState<DOMRect | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
 
-  // Ctrl+K / Cmd+K global shortcut
+  // Ctrl+K / Cmd+K abre la búsqueda global (solo POS).
   useEffect(() => {
+    if (esContable) return;
     function onKey(e: KeyboardEvent) {
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
         e.preventDefault();
@@ -53,7 +64,7 @@ export function Header({ onMenuClick }: HeaderProps) {
     }
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, []);
+  }, [esContable]);
 
   const { data: unreadData } = useQuery({
     queryKey: ['notifications-unread-count'],
@@ -69,8 +80,8 @@ export function Header({ onMenuClick }: HeaderProps) {
 
   return (
     <div className="flex flex-col flex-shrink-0">
-      {/* ── Upgrade banner ──────────────────────────────────────────────────── */}
-      {isFree && (
+      {/* ── Upgrade banner (solo POS) ───────────────────────────────────────── */}
+      {isFree && !esContable && (
         <div className="relative overflow-hidden px-4 md:px-6 py-2.5 flex items-center justify-between gap-4 bg-gradient-to-r from-emerald-600 via-emerald-700 to-emerald-700">
           {/* subtle texture */}
           <div className="upgrade-banner-texture absolute inset-0 opacity-10" />
@@ -111,20 +122,22 @@ export function Header({ onMenuClick }: HeaderProps) {
           {title}
         </h1>
 
-        {/* Search button */}
-        <Tooltip content="Buscar (Ctrl+K)" side="bottom">
-          <button
-            type="button"
-            onClick={() => setSearchOpen(true)}
-            className="flex items-center gap-2 px-2 sm:px-3 h-8 rounded-lg bg-slate-100 dark:bg-white/[0.06] text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-200 dark:hover:bg-white/[0.10] transition-colors text-[12px]"
-          >
-            <Search size={14} />
-            <span className="hidden md:inline">Buscar</span>
-            <kbd className="hidden md:inline-flex items-center gap-0.5 px-1 py-0.5 rounded text-[10px] font-mono bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-400">
-              Ctrl K
-            </kbd>
-          </button>
-        </Tooltip>
+        {/* Search button (búsqueda global del POS — oculta en contable) */}
+        {!esContable && (
+          <Tooltip content="Buscar (Ctrl+K)" side="bottom">
+            <button
+              type="button"
+              onClick={() => setSearchOpen(true)}
+              className="flex items-center gap-2 px-2 sm:px-3 h-8 rounded-lg bg-slate-100 dark:bg-white/[0.06] text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-200 dark:hover:bg-white/[0.10] transition-colors text-[12px]"
+            >
+              <Search size={14} />
+              <span className="hidden md:inline">Buscar</span>
+              <kbd className="hidden md:inline-flex items-center gap-0.5 px-1 py-0.5 rounded text-[10px] font-mono bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-400">
+                Ctrl K
+              </kbd>
+            </button>
+          </Tooltip>
+        )}
 
         {/* Right actions */}
         <div className="flex items-center gap-0.5">
@@ -179,7 +192,7 @@ export function Header({ onMenuClick }: HeaderProps) {
           </Tooltip>
         </div>
       </header>
-      <GlobalSearch open={searchOpen} onClose={() => setSearchOpen(false)} />
+      {!esContable && <GlobalSearch open={searchOpen} onClose={() => setSearchOpen(false)} />}
     </div>
   );
 }
