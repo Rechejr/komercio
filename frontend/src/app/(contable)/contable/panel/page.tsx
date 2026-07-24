@@ -7,6 +7,7 @@ import { useAuthStore } from '@/store/auth.store';
 import { cn } from '@/lib/utils';
 import { OBLIGACION_LABEL, ESTADO_COLOR, formatNit, formatFecha, type EstadoVencimiento, type Obligacion } from '@/lib/contable';
 import { CalendarClock, FileText, Users, AlertTriangle, Clock, ArrowRight } from 'lucide-react';
+import { ActivarPlanButton } from '@/components/contable/ActivarPlanButton';
 
 interface PanelData {
   proximosVencimientos: Array<{
@@ -50,23 +51,25 @@ export default function ContablePanelPage() {
 
       {/* Aviso de suscripción / prueba */}
       {sus && !sus.activa && (
-        <div className="rounded-xl border border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-900/20 px-4 py-3 flex items-start gap-3">
+        <div className="rounded-xl border border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-900/20 px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3">
           <AlertTriangle size={18} className="text-red-500 flex-shrink-0 mt-0.5" />
-          <div>
+          <div className="flex-1">
             <p className="text-sm font-semibold text-red-800 dark:text-red-300">Tu acceso está en solo lectura</p>
             <p className="text-sm text-red-700/90 dark:text-red-400/90">
-              Tu prueba o plan venció. Puedes consultar tus datos, pero para crear o editar necesitas renovar tu plan.
+              Tu prueba o plan venció. Puedes consultar tus datos, pero para crear o editar necesitas activar tu plan.
             </p>
           </div>
+          <ActivarPlanButton />
         </div>
       )}
       {enPrueba && (
-        <div className="rounded-xl border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-4 py-3 flex items-center gap-3">
+        <div className="rounded-xl border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3">
           <Clock size={18} className="text-amber-500 flex-shrink-0" />
-          <p className="text-sm text-amber-800 dark:text-amber-300">
+          <p className="text-sm text-amber-800 dark:text-amber-300 flex-1">
             Te {sus!.diasRestantes === 1 ? 'queda' : 'quedan'}{' '}
             <strong>{sus!.diasRestantes} {sus!.diasRestantes === 1 ? 'día' : 'días'}</strong> de prueba gratis.
           </p>
+          <ActivarPlanButton variant="soft" />
         </div>
       )}
 

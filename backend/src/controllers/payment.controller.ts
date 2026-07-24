@@ -32,6 +32,11 @@ const PERIOD_LABELS: Record<string, string> = {
   annual:    'Anual',
 };
 
+// Ventrix Contable: plan anual por oficina (contador + hasta 3 auxiliares).
+// Debe coincidir con PRECIO_ANUAL del landing (frontend app/contable/page.tsx).
+const CONTABLE_ANNUAL_PRICE = 199900;
+const CONTABLE_ANNUAL_MONTHS = 12;
+
 function wompiPost(path: string, body: unknown): Promise<{ ok: boolean; status: number; data: any }> {
   return new Promise((resolve, reject) => {
     const payload = JSON.stringify(body);
@@ -67,23 +72,48 @@ export const paymentController = {
     try {
       const { period = 'monthly' } = req.body;
       const businessId = req.user!.businessId;
-
-      logger.info(`Wompi createLink: keyConfigured=${!!process.env.WOMPI_PRIVATE_KEY} testMode=${isTestMode} host=${WOMPI_BASE} period=${period}`);
       if (!businessId) throw new AppError('No tienes un negocio registrado', 400);
-      if (!['monthly', 'quarterly', 'annual'].includes(period)) {
-        throw new AppError('Período no válido', 400);
+
+      // El producto define el precio. Una cuenta contable tiene un único plan
+      // (anual $199.900); una cuenta POS elige mensual/trimestral/anual.
+      const business = await prisma.business.findUnique({
+        where: { id: businessId },
+        select: { type: true },
+      });
+      const esContable = business?.type === 'contable';
+
+      logger.info(`Wompi createLink: type=${business?.type} testMode=${isTestMode} host=${WOMPI_BASE} period=${period}`);
+
+      let amountCOP: number;
+      let months: number;
+      let planName: string;
+      let planDesc: string;
+      let storedPeriod: string;
+
+      if (esContable) {
+        amountCOP = CONTABLE_ANNUAL_PRICE;
+        months = CONTABLE_ANNUAL_MONTHS;
+        storedPeriod = 'annual';
+        planName = 'Ventrix Contable — Plan anual';
+        planDesc = 'Agenda tributaria por 12 meses';
+      } else {
+        if (!['monthly', 'quarterly', 'annual'].includes(period)) {
+          throw new AppError('Período no válido', 400);
+        }
+        amountCOP = PLAN_PRICES[period];
+        months = PLAN_MONTHS[period];
+        storedPeriod = period;
+        planName = `Plan Pro Ventrix — ${PERIOD_LABELS[period]}`;
+        planDesc = `Ventrix ilimitado por ${months} mes${months > 1 ? 'es' : ''}`;
       }
 
-      const amountCOP = PLAN_PRICES[period];
-      const months    = PLAN_MONTHS[period];
-      const label     = PERIOD_LABELS[period];
       const frontendUrl = (process.env.FRONTEND_URL || 'https://ventrix.lat').trim().replace(/\/+$/, '');
       const redirectUrl = `${frontendUrl}/payment-result`;
       logger.info(`Wompi redirect_url: ${redirectUrl}`);
 
       const wompiRes = await wompiPost('/v1/payment_links', {
-        name: `Plan Pro Ventrix — ${label}`,
-        description: `Ventrix ilimitado por ${months} mes${months > 1 ? 'es' : ''}`,
+        name: planName,
+        description: planDesc,
         single_use: true,
         collect_shipping: false,
         currency: 'COP',
@@ -104,7 +134,7 @@ export const paymentController = {
       // usuario reintenta el checkout y genera un segundo link, el webhook del
       // primero (si llega tarde) todavía puede encontrar a qué negocio pertenece.
       await prisma.paymentLink.create({
-        data: { id: linkData.id, businessId, period, months },
+        data: { id: linkData.id, businessId, period: storedPeriod, months },
       });
 
       return success(res, { url: paymentUrl });

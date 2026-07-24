@@ -15,6 +15,12 @@ function PaymentResultContent() {
   const status = searchParams.get('status') ?? '';
   const approved = status === 'APPROVED';
 
+  // Destino según el producto de la cuenta: un contador vuelve a su agenda, un
+  // comercio a su dashboard. Se lee del store al momento de redirigir (el plan y
+  // el tipo se refrescan async tras el pago).
+  const homeFor = () =>
+    useAuthStore.getState().user?.businessType === 'contable' ? '/contable/panel' : '/dashboard';
+
   // Wompi llega aquí con una navegación de página completa desde afuera del
   // dominio, así que el accessToken en memoria se perdió — hay que restaurarlo
   // antes de poder llamar /auth/me. El webhook que activa el plan en el backend
@@ -43,6 +49,7 @@ function PaymentResultContent() {
           businessId: userData.branch?.business?.id ?? current?.businessId,
           businessName: userData.branch?.business?.name ?? current?.businessName,
           plan: userData.branch?.business?.plan || current?.plan || 'free',
+          businessType: userData.branch?.business?.type ?? current?.businessType ?? 'pos',
         });
       } catch {
         // se reintenta en el siguiente tick; si nunca se logra, el próximo login lo corrige
@@ -60,7 +67,7 @@ function PaymentResultContent() {
       setSeconds((s) => {
         if (s <= 1) {
           clearInterval(timer);
-          router.push('/dashboard');
+          router.push(homeFor());
           return 0;
         }
         return s - 1;
@@ -77,7 +84,7 @@ function PaymentResultContent() {
             <CheckCircle size={56} className="text-green-500 mx-auto mb-4" strokeWidth={1.5} />
             <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">¡Pago exitoso!</h1>
             <p className="text-slate-500 dark:text-slate-400 text-sm mb-6">
-              Tu Plan Pro está siendo activado. En unos segundos verás todos los beneficios desbloqueados.
+              Tu plan está siendo activado. En unos segundos verás tu cuenta al día.
             </p>
           </>
         ) : (
@@ -99,7 +106,7 @@ function PaymentResultContent() {
 
         <button
           type="button"
-          onClick={() => router.push('/dashboard')}
+          onClick={() => router.push(homeFor())}
           className="mt-4 w-full py-2.5 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-sm font-semibold hover:bg-slate-700 dark:hover:bg-slate-100 transition-colors"
         >
           Ir al inicio ahora
