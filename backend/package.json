@@ -15,6 +15,7 @@
     "db:seed": "ts-node prisma/seed.ts",
     "db:backfill-product-stock": "ts-node prisma/backfillProductStock.ts",
     "db:backup": "ts-node scripts/backup.ts",
+    "db:seed-calendario": "ts-node prisma/seedCalendario.ts",
     "db:studio": "prisma studio",
     "db:push": "prisma db push",
     "test": "jest",
