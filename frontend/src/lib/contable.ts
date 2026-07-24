@@ -92,6 +92,19 @@ export function formatNit(nit: string, dv: number): string {
   return `${nit}-${dv}`;
 }
 
+/**
+ * Formatea una fecha DIAN (columna @db.Date, serializada como medianoche UTC)
+ * SIN correrla por zona horaria. formatDate() de utils la convierte a hora local
+ * (Colombia UTC-5) y muestra el día anterior — inaceptable para un vencimiento
+ * tributario. Aquí se fuerza timeZone UTC para mostrar el día de calendario real.
+ */
+export function formatFecha(iso: string | null | undefined): string {
+  if (!iso) return '-';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '-';
+  return new Intl.DateTimeFormat('es-CO', { dateStyle: 'medium', timeZone: 'UTC' }).format(d);
+}
+
 /** Resumen corto de calidades para la tabla: "IVA (bim.) · Renta". */
 export function resumenCalidades(c: TaxClient): string {
   const partes = CALIDADES

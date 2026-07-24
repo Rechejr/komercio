@@ -4,8 +4,8 @@ import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth.store';
-import { formatDate, cn } from '@/lib/utils';
-import { OBLIGACION_LABEL, ESTADO_COLOR, formatNit, type EstadoVencimiento, type Obligacion } from '@/lib/contable';
+import { cn } from '@/lib/utils';
+import { OBLIGACION_LABEL, ESTADO_COLOR, formatNit, formatFecha, type EstadoVencimiento, type Obligacion } from '@/lib/contable';
 import { CalendarClock, FileText, Users, AlertTriangle, Clock, ArrowRight } from 'lucide-react';
 
 interface PanelData {
@@ -110,7 +110,7 @@ export default function ContablePanelPage() {
                   </div>
                   <div className="text-right flex-shrink-0">
                     <p className={cn('text-sm font-semibold', urgente ? 'text-red-600 dark:text-red-400' : 'text-slate-700 dark:text-slate-300')}>
-                      {formatDate(v.fecha)}
+                      {formatFecha(v.fecha)}
                     </p>
                     <p className="text-xs text-slate-400">
                       {dias < 0 ? `hace ${-dias} d` : dias === 0 ? 'hoy' : `en ${dias} d`}
@@ -139,7 +139,7 @@ export default function ContablePanelPage() {
                   <p className="text-sm font-medium text-slate-900 dark:text-white truncate">{r.taxClient.razonSocial}</p>
                   <p className="text-xs text-slate-500 dark:text-slate-400">Resolución {r.numero}</p>
                 </div>
-                <p className="text-sm text-slate-700 dark:text-slate-300 flex-shrink-0">{formatDate(r.fechaVigencia)}</p>
+                <p className="text-sm text-slate-700 dark:text-slate-300 flex-shrink-0">{formatFecha(r.fechaVigencia)}</p>
               </div>
             ))}
           </div>
