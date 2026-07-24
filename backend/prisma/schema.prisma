@@ -145,6 +145,9 @@ model Business {
   settings          Json?
   paymentLinks      PaymentLink[]
   aiWeeklySummaries AiWeeklySummary[]
+  // Ventrix Contable: los clientes tributarios de una oficina contable. Solo se
+  // usan cuando type == "contable"; en una cuenta POS la relación queda vacía.
+  taxClients        TaxClient[]
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
   deletedAt         DateTime?
@@ -737,4 +740,198 @@ model SaleNumberCounter {
 
   @@id([branchId, dayPrefix])
   @@map("sale_number_counters")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// VENTRIX CONTABLE — dominio de la agenda tributaria para contadores.
+//
+// Todo lo "por cliente" cuelga de Business (multi-tenant estricto, igual que el
+// POS). Los catálogos y calendarios son GLOBALES (iguales para todas las
+// oficinas). El cliente del contador es TaxClient — NO se reusa Customer, que
+// son los compradores de la tienda en el POS.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// Calidades tributarias del RUT. La ausencia de `responsable_iva` significa
+// "no responsable de IVA": no hay código para eso, así se evitan estados
+// imposibles (ver reglas de exclusión RST en la lógica de dominio).
+enum Calidad {
+  responsable_iva
+  declarante_renta
+  agente_retenedor
+  impoconsumo
+  rst
+
+  @@map("calidad")
+}
+
+// Obligaciones que un contador vigila. `impoconsumo` existe como calidad y como
+// obligación (son enums distintos, no colisionan).
+enum Obligacion {
+  renta
+  iva
+  retefuente
+  ica
+  exogena
+  pila
+  impoconsumo
+  simple
+
+  @@map("obligacion")
+}
+
+enum TipoPersona {
+  natural
+  juridica
+
+  @@map("tipo_persona")
+}
+
+enum IvaPeriodicidad {
+  bimestral
+  cuatrimestral
+
+  @@map("iva_periodicidad")
+}
+
+enum EstadoVencimiento {
+  pendiente
+  en_proceso
+  presentada
+  pagada
+  vencida
+
+  @@map("estado_vencimiento")
+}
+
+enum TipoResolucion {
+  facturacion_numeracion
+  habilitacion_electronica
+  otra
+
+  @@map("tipo_resolucion")
+}
+
+enum ModalidadResolucion {
+  pos
+  electronica
+  contingencia
+
+  @@map("modalidad_resolucion")
+}
+
+enum EstadoResolucion {
+  vigente
+  por_vencer
+  vencida
+  agotada
+
+  @@map("estado_resolucion")
+}
+
+// ─── Cliente del contador (multi-tenant) ───────────────────────────────────────
+model TaxClient {
+  id                String            @id @default(uuid())
+  businessId        String
+  business          Business          @relation(fields: [businessId], references: [id])
+  razonSocial       String
+  nit               String
+  // Dígito de verificación: se calcula solo con la fórmula oficial DIAN al
+  // guardar (no lo digita el usuario).
+  dv                Int
+  celular           String?
+  direccion         String?
+  tipoPersona       TipoPersona
+  // Array de enum de Postgres (más simple que una tabla puente a esta escala).
+  responsabilidades Calidad[]
+  // Solo aplica si es responsable de IVA; null en caso contrario. La define el
+  // contador según los ingresos, no se deduce de las calidades.
+  ivaPeriodicidad   IvaPeriodicidad?
+  activo            Boolean           @default(true)
+  vencimientos      Vencimiento[]
+  resoluciones      ResolucionDian[]
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  // No repetir un cliente por NIT dentro de la misma oficina.
+  @@unique([businessId, nit, dv])
+  @@index([businessId])
+  @@map("tax_clients")
+}
+
+// ─── Vencimiento de una obligación (scoped vía TaxClient) ──────────────────────
+model Vencimiento {
+  id           String            @id @default(uuid())
+  taxClientId  String
+  taxClient    TaxClient         @relation(fields: [taxClientId], references: [id], onDelete: Cascade)
+  obligacion   Obligacion
+  periodo      String
+  // Se propone desde el calendario (por dígito del NIT) pero es editable.
+  fecha        DateTime          @db.Date
+  estado       EstadoVencimiento @default(pendiente)
+  monto        Decimal?
+  notas        String?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  @@unique([taxClientId, obligacion, periodo])
+  @@index([taxClientId])
+  @@index([fecha])
+  @@map("vencimientos")
+}
+
+// ─── Resolución DIAN de facturación (scoped vía TaxClient) ─────────────────────
+model ResolucionDian {
+  id                String               @id @default(uuid())
+  taxClientId       String
+  taxClient         TaxClient            @relation(fields: [taxClientId], references: [id], onDelete: Cascade)
+  tipo              TipoResolucion
+  numero            String
+  fechaExpedicion   DateTime             @db.Date
+  prefijo           String?
+  rangoDesde        Int?
+  rangoHasta        Int?
+  consecutivoActual Int                  @default(0)
+  modalidad         ModalidadResolucion?
+  fechaVigencia     DateTime             @db.Date
+  estado            EstadoResolucion     @default(vigente)
+  notas             String?
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+
+  @@index([taxClientId])
+  @@index([fechaVigencia])
+  @@map("resoluciones_dian")
+}
+
+// ─── Calendario DIAN (GLOBAL, no por Business) ─────────────────────────────────
+// Fecha de vencimiento por obligación/variante/periodo y último dígito del NIT.
+// Semilla 2026 verificada contra el PDF oficial (ver migración de seed).
+model CalendarioDian {
+  id           Int      @id @default(autoincrement())
+  anio         Int
+  // Coincide con los códigos de Obligacion, pero se guarda como String porque es
+  // data de referencia sembrada por SQL; no se enum-castea en cada inserción.
+  obligacion   String
+  // bimestral|cuatrimestral (IVA); juridica|natural (renta); null si no aplica.
+  variante     String?
+  periodo      String
+  periodoOrden Int
+  digito       Int
+  fecha        DateTime @db.Date
+
+  @@index([anio, obligacion, variante, digito])
+  @@map("calendario_dian")
+}
+
+// ─── Calendario renta personas naturales (GLOBAL) ──────────────────────────────
+// Su clave son los DOS últimos dígitos del NIT/cédula (00–99), no uno solo.
+// Una sola declaración anual escalonada ago–oct.
+model CalendarioRentaNatural {
+  id         Int      @id @default(autoincrement())
+  anio       Int
+  dosDigitos Int
+  fecha      DateTime @db.Date
+
+  @@unique([anio, dosDigitos])
+  @@map("calendario_renta_natural")
 }
