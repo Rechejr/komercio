@@ -365,6 +365,13 @@ export const contableController = {
   async panel(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const businessId = req.user!.businessId!;
+      // requireContable ya cargó planExpiresAt en el request.
+      const planExpiresAt = (req as AuthRequest & { planExpiresAt?: Date | null }).planExpiresAt ?? null;
+      const activa = planExpiresAt != null && new Date(planExpiresAt) > new Date();
+      const diasRestantes = planExpiresAt
+        ? Math.ceil((new Date(planExpiresAt).getTime() - Date.now()) / (24 * 60 * 60 * 1000))
+        : 0;
+
       const [proximosVencimientos, resolucionesPorVencer, totalClientes] = await Promise.all([
         prisma.vencimiento.findMany({
           where: {
@@ -388,7 +395,12 @@ export const contableController = {
         }),
         prisma.taxClient.count({ where: { businessId, activo: true } }),
       ]);
-      return success(res, { proximosVencimientos, resolucionesPorVencer, totalClientes });
+      return success(res, {
+        proximosVencimientos,
+        resolucionesPorVencer,
+        totalClientes,
+        suscripcion: { activa, diasRestantes, planExpiresAt },
+      });
     } catch (err) { next(err); }
   },
 };

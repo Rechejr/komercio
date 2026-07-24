@@ -8,6 +8,11 @@ import { AppError, success, created } from '../utils/response';
 import { AuthRequest } from '../middlewares/auth';
 import { emailService } from '../config/email';
 
+// Días de prueba gratis al crear una cuenta de Ventrix Contable. Al vencer, la
+// agenda queda en solo-lectura hasta que el contador pague el plan (Wompi
+// extiende planExpiresAt como en el POS). Cambiar aquí ajusta la prueba.
+const DIAS_PRUEBA_CONTABLE = 7;
+
 export const authController = {
   async register(req: Request, res: Response, next: NextFunction) {
     try {
@@ -43,11 +48,19 @@ export const authController = {
         });
 
         if (businessName) {
+          // Una cuenta contable arranca con la prueba gratis: planExpiresAt en el
+          // futuro habilita la escritura; al pasar, la agenda pasa a solo-lectura.
+          // El POS no usa esto (queda null, comportamiento de siempre).
+          const trialExpiresAt = businessType === 'contable'
+            ? new Date(Date.now() + DIAS_PRUEBA_CONTABLE * 24 * 60 * 60 * 1000)
+            : null;
+
           const business = await tx.business.create({
             data: {
               name: businessName,
               type: businessType,
               category: businessCategory || null,
+              planExpiresAt: trialExpiresAt,
               ownerId: newUser.id,
               // La sucursal existe en ambos productos porque toda la cadena de
               // identidad (businessId) cuelga de user.branch. En una cuenta
