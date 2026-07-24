@@ -177,7 +177,7 @@ function LoginForm() {
     // /contable; un comercio a /dashboard, como siempre. Si venía de una ruta
     // protegida (?redirect=), se respeta — las guardas de cada grupo rebotan si
     // el destino no corresponde a su tipo de cuenta.
-    const home = user.businessType === 'contable' ? '/contable' : '/dashboard';
+    const home = user.businessType === 'contable' ? '/contable/panel' : '/dashboard';
     const raw = searchParams.get('redirect') || home;
     const safeRedirect = raw.startsWith('/') && !raw.startsWith('//') ? raw : home;
     const dest = user.role === 'SUPER_ADMIN' ? '/superadmin' : safeRedirect;

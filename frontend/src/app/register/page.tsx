@@ -1,12 +1,12 @@
 ﻿'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { Suspense, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import toast from 'react-hot-toast';
 import Link from 'next/link';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
-import { Loader2, Eye, EyeOff, Check, X, ArrowRight, ChevronDown, ArrowLeft } from 'lucide-react';
+import { Loader2, Eye, EyeOff, Check, X, ArrowRight, ChevronDown, ArrowLeft, Store, Calculator } from 'lucide-react';
 import '../auth.css';
 
 // ── Business categories ───────────────────────────────────────────────────────
@@ -145,8 +145,9 @@ const btnPrimary = [
 ].join(' ');
 
 // ── Page ──────────────────────────────────────────────────────────────────────
-export default function RegisterPage() {
+function RegisterForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [step, setStep] = useState(0);
 
   // Step 0
@@ -155,7 +156,12 @@ export default function RegisterPage() {
   const [password, setPassword] = useState('');
   const [showPwd, setShowPwd]   = useState(false);
 
-  // Step 1
+  // Step 1 — producto de la cuenta. Llega preseleccionado desde el landing:
+  // /register?tipo=contable (botón "Crear cuenta" de la página para contadores).
+  const [businessType, setBusinessType] = useState<'pos' | 'contable'>(
+    searchParams.get('tipo') === 'contable' ? 'contable' : 'pos',
+  );
+  const esContable = businessType === 'contable';
   const [businessName, setBusinessName]           = useState('');
   const [businessCategory, setBusinessCategory]   = useState('');
   const [showCategoryModal, setShowCategoryModal] = useState(false);
@@ -180,12 +186,16 @@ export default function RegisterPage() {
     e.preventDefault();
     const errs: Record<string, string> = {};
     if (!businessName.trim() || businessName.trim().length < 2) errs.businessName = 'Mínimo 2 caracteres';
-    if (!businessCategory) errs.businessCategory = 'Debes elegir una categoría';
+    // La categoría (tienda, restaurante…) es del POS: un contador no la elige.
+    if (!esContable && !businessCategory) errs.businessCategory = 'Debes elegir una categoría';
     if (Object.keys(errs).length > 0) { setErrors(errs); return; }
 
     setLoading(true);
     try {
-      await api.post('/auth/register', { name, email, password, businessName, businessCategory });
+      await api.post('/auth/register', {
+        name, email, password, businessName, businessType,
+        businessCategory: esContable ? undefined : businessCategory,
+      });
       toast.success('¡Cuenta creada! Revisa tu correo para verificarla.');
       router.push('/login');
     } catch (err: any) {
@@ -358,55 +368,90 @@ export default function RegisterPage() {
 
                 <div className="mb-7">
                   <h1 className="text-[24px] font-bold text-slate-900 dark:text-white tracking-tight mb-1">
-                    Datos de tu negocio
+                    {esContable ? 'Datos de tu oficina' : 'Datos de tu negocio'}
                   </h1>
                   <p className="text-[14px] text-slate-500 dark:text-slate-400">
-                    Cuéntanos sobre tu negocio
+                    {esContable ? 'Cuéntanos sobre tu despacho contable' : 'Cuéntanos sobre tu negocio'}
                   </p>
                 </div>
 
                 <div className="space-y-4">
+                  {/* ¿Comercio o Contador? — define el producto (business.type). */}
                   <div className="space-y-1.5">
                     <label className="block text-[13px] font-medium text-slate-700 dark:text-slate-300">
-                      ¿Cuál es el nombre de tu negocio?
+                      ¿Qué vas a usar?
+                    </label>
+                    <div className="grid grid-cols-2 gap-2.5">
+                      {([
+                        { value: 'pos' as const, icon: Store, title: 'Comercio', desc: 'Punto de venta e inventario' },
+                        { value: 'contable' as const, icon: Calculator, title: 'Contador', desc: 'Agenda tributaria y DIAN' },
+                      ]).map(({ value, icon: Icon, title, desc }) => {
+                        const active = businessType === value;
+                        return (
+                          <button
+                            key={value}
+                            type="button"
+                            onClick={() => setBusinessType(value)}
+                            className={cn(
+                              'flex flex-col items-start gap-1 p-3 rounded-xl border text-left transition-all duration-150',
+                              active
+                                ? 'border-[#0DA06A] bg-[#0DA06A]/[0.06] dark:bg-[#0DA06A]/10 ring-2 ring-[#0DA06A]/20'
+                                : 'border-slate-200 dark:border-slate-700/60 hover:border-slate-300 dark:hover:border-slate-600',
+                            )}
+                          >
+                            <Icon size={18} className={active ? 'text-[#0DA06A]' : 'text-slate-400'} />
+                            <span className="text-[13px] font-semibold text-slate-900 dark:text-white">{title}</span>
+                            <span className="text-[11px] text-slate-500 dark:text-slate-400 leading-tight">{desc}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="block text-[13px] font-medium text-slate-700 dark:text-slate-300">
+                      {esContable ? '¿Cómo se llama tu oficina o despacho?' : '¿Cuál es el nombre de tu negocio?'}
                     </label>
                     <input
                       type="text"
                       value={businessName}
                       onChange={(e) => { setBusinessName(e.target.value); setErrors((p) => ({ ...p, businessName: '' })); }}
-                      placeholder="Tienda El Sol"
+                      placeholder={esContable ? 'Contabilidad Pérez & Asociados' : 'Tienda El Sol'}
                       className={inputCls(!!errors.businessName)}
                     />
                     {errors.businessName && <p className="text-red-500 dark:text-red-400 text-[12px]">{errors.businessName}</p>}
                   </div>
 
-                  <div className="space-y-1.5">
-                    <label className="block text-[13px] font-medium text-slate-700 dark:text-slate-300">
-                      ¿A qué categoría pertenece?
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => setShowCategoryModal(true)}
-                      className={cn(
-                        'w-full px-3.5 py-2.5 rounded-xl border text-[14px] text-left flex items-center justify-between transition-all duration-150',
-                        'bg-slate-50 dark:bg-slate-800/60',
-                        'focus:outline-none focus:ring-2',
-                        errors.businessCategory
-                          ? 'border-red-400 dark:border-red-500/60 focus:ring-red-500/30'
-                          : 'border-slate-200 dark:border-slate-700/60 focus:ring-[#0DA06A]/25 focus:border-[#0DA06A]',
-                        cat ? 'text-slate-900 dark:text-slate-100' : 'text-slate-400 dark:text-slate-500',
+                  {/* La categoría es del POS (tienda, restaurante…); no aplica al contador. */}
+                  {!esContable && (
+                    <div className="space-y-1.5">
+                      <label className="block text-[13px] font-medium text-slate-700 dark:text-slate-300">
+                        ¿A qué categoría pertenece?
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setShowCategoryModal(true)}
+                        className={cn(
+                          'w-full px-3.5 py-2.5 rounded-xl border text-[14px] text-left flex items-center justify-between transition-all duration-150',
+                          'bg-slate-50 dark:bg-slate-800/60',
+                          'focus:outline-none focus:ring-2',
+                          errors.businessCategory
+                            ? 'border-red-400 dark:border-red-500/60 focus:ring-red-500/30'
+                            : 'border-slate-200 dark:border-slate-700/60 focus:ring-[#0DA06A]/25 focus:border-[#0DA06A]',
+                          cat ? 'text-slate-900 dark:text-slate-100' : 'text-slate-400 dark:text-slate-500',
+                        )}
+                      >
+                        <span className="flex items-center gap-2">
+                          {cat && <span className="text-base">{cat.emoji}</span>}
+                          {cat ? cat.label : 'Elige una categoría'}
+                        </span>
+                        <ChevronDown size={15} className="text-slate-400 flex-shrink-0" />
+                      </button>
+                      {errors.businessCategory && (
+                        <p className="text-red-500 dark:text-red-400 text-[12px]">{errors.businessCategory}</p>
                       )}
-                    >
-                      <span className="flex items-center gap-2">
-                        {cat && <span className="text-base">{cat.emoji}</span>}
-                        {cat ? cat.label : 'Elige una categoría'}
-                      </span>
-                      <ChevronDown size={15} className="text-slate-400 flex-shrink-0" />
-                    </button>
-                    {errors.businessCategory && (
-                      <p className="text-red-500 dark:text-red-400 text-[12px]">{errors.businessCategory}</p>
-                    )}
-                  </div>
+                    </div>
+                  )}
 
                   <button type="submit" disabled={loading} className={btnPrimary}>
                     {loading
@@ -431,5 +476,19 @@ export default function RegisterPage() {
         />
       )}
     </>
+  );
+}
+
+// useSearchParams (para leer ?tipo=contable) obliga a un límite de Suspense en
+// Next.js al prerenderizar. Mismo patrón que la página de login.
+export default function RegisterPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 size={22} className="animate-spin text-[#0DA06A]" />
+      </div>
+    }>
+      <RegisterForm />
+    </Suspense>
   );
 }

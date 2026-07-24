@@ -34,5 +34,9 @@ export const config = {
     '/reportes/:path*',
     '/configuracion/:path*',
     '/superadmin/:path*',
+    // Tablero de Ventrix Contable. :path+ (uno o más segmentos) protege
+    // /contable/panel, /contable/clientes, etc., pero deja PÚBLICO el landing
+    // /contable exacto, que es la página de marketing para contadores.
+    '/contable/:path+',
   ],
 };

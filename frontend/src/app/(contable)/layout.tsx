@@ -1,47 +1,46 @@
-﻿'use client';
+'use client';
 
 import { useEffect, useRef, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { useAuthStore } from '@/store/auth.store';
 import { api } from '@/lib/api';
-import { useSocket } from '@/hooks/useSocket';
-import { Sidebar } from '@/components/layout/Sidebar';
+import { ContableSidebar } from '@/components/contable/ContableSidebar';
 import { Header } from '@/components/layout/Header';
-import { UpgradeModal } from '@/components/ui/UpgradeModal';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+/**
+ * Layout del tablero de Ventrix Contable.
+ *
+ * Restaura la sesión igual que el layout del POS (mismo auth, misma cookie de
+ * refresh), pero es exclusivo de las cuentas `contable`: una cuenta POS que
+ * llegue aquí se rebota a /dashboard. Es la guarda espejo de la del POS.
+ */
+export default function ContableLayout({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, accessToken, setAccessToken, restoreSession, logout } = useAuthStore();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  // Always start in "restoring" state — the effect decides immediately if restore is needed
   const [isRestoring, setIsRestoring] = useState(true);
   const didRestore = useRef(false);
-  useSocket();
 
   useEffect(() => {
     if (didRestore.current) return;
     didRestore.current = true;
 
-    // Token already in memory (e.g. navigating within the app) — nothing to restore
     if (accessToken) {
       setIsRestoring(false);
       return;
     }
 
-    // Safety net: if restore takes > 10s something is wrong — redirect to login
     const safetyTimer = setTimeout(() => {
       setIsRestoring(false);
       logout();
     }, 10000);
 
-    // No token in memory — try to recover the session via the httpOnly refresh cookie
     api
       .post('/auth/refresh-token')
       .then(async ({ data }) => {
         const newToken = data.data.accessToken;
         setAccessToken(newToken);
 
-        // User data may be missing when Zustand state was lost (new tab, cleared storage)
         if (!isAuthenticated) {
           const me = await api.get('/auth/me');
           const userData = me.data.data;
@@ -76,17 +75,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     if (typeof window !== 'undefined') window.location.replace('/superadmin');
     return null;
   }
-  // Guarda de producto: este tablero es solo del POS. Una cuenta contable que
-  // llegue aquí (link viejo, URL escrita a mano) se rebota a su propio tablero.
-  if (currentUser?.businessType === 'contable') {
-    if (typeof window !== 'undefined') window.location.replace('/contable/panel');
+  // Guarda de producto espejo: este tablero es solo de cuentas contables. Una
+  // cuenta de comercio que llegue aquí vuelve a su POS.
+  if (currentUser?.businessType !== 'contable') {
+    if (typeof window !== 'undefined') window.location.replace('/dashboard');
     return null;
   }
 
   return (
     <div className="flex h-screen bg-slate-50 dark:bg-slate-900 overflow-hidden">
       <div className="print-hide">
-        <Sidebar mobileOpen={mobileMenuOpen} onMobileClose={() => setMobileMenuOpen(false)} />
+        <ContableSidebar mobileOpen={mobileMenuOpen} onMobileClose={() => setMobileMenuOpen(false)} />
       </div>
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
         <div className="print-hide">
@@ -98,7 +97,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </ErrorBoundary>
         </main>
       </div>
-      <UpgradeModal />
     </div>
   );
 }
