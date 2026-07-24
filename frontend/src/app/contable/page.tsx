@@ -22,11 +22,11 @@ export const metadata: Metadata = {
   },
 };
 
-// Precio anual PROPUESTO (por asiento). Cristian: confirmar antes de publicar.
-// Como referencia de consultor: el valor evita sanciones por extemporaneidad
-// (cientos de miles de pesos por declaración) y horas de Excel; $249.900/año se
-// paga solo con no pasar por alto un vencimiento.
-const PRECIO_ANUAL = 249900;
+// Precio anual por oficina (contador + hasta 3 auxiliares incluidos). Decidido
+// como precio de lanzamiento: debajo de la barrera de $200k, un "no-brainer"
+// frente a una sanción por extemporaneidad (~$520k) y horas de Excel. Con
+// espacio para subir con grandfathering cuando haya tracción.
+const PRECIO_ANUAL = 199900;
 const precioFmt = `$${PRECIO_ANUAL.toLocaleString('es-CO')}`;
 
 const BENEFITS = [
@@ -62,7 +62,7 @@ const STEPS = [
 
 const PLAN_FTS = [
   'Clientes ilimitados', 'Calendario DIAN 2026 automático',
-  'Vencimientos y resoluciones', 'Usuarios auxiliares', 'Soporte por WhatsApp',
+  'Vencimientos y resoluciones', 'Hasta 3 usuarios auxiliares', 'Soporte por WhatsApp',
 ];
 
 const FAQ = [
