@@ -100,10 +100,11 @@ export function diasHastaVencimiento(iso: string): number {
 
 export interface Urgencia { label: string; className: string; vencido: boolean; }
 
-/** Situación automática de un vencimiento según su fecha y su estado manual.
- *  Si ya está presentada o pagada, está resuelto → no hay urgencia (null). */
-export function urgenciaVencimiento(iso: string, estado: EstadoVencimiento): Urgencia | null {
-  if (estado === 'presentada' || estado === 'pagada') return null;
+/** Situación automática por fecha: "Vencido hace N días" / "Vence hoy/mañana" /
+ *  "Faltan N días". Si `resuelto` es true (ya cumplido) devuelve null (—). Base
+ *  compartida por vencimientos, exógena/otras y resoluciones. */
+export function situacionPorFecha(iso: string, resuelto: boolean): Urgencia | null {
+  if (resuelto) return null;
   const dias = diasHastaVencimiento(iso);
   const rojo  = 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300';
   const ambar = 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300';
@@ -116,6 +117,11 @@ export function urgenciaVencimiento(iso: string, estado: EstadoVencimiento): Urg
   if (dias === 1) return { label: 'Vence mañana', className: ambar, vencido: false };
   if (dias <= 7)  return { label: `Faltan ${dias} días`, className: ambar, vencido: false };
   return { label: `Faltan ${dias} días`, className: gris, vencido: false };
+}
+
+/** Situación de un vencimiento: resuelto si está presentada o pagada. */
+export function urgenciaVencimiento(iso: string, estado: EstadoVencimiento): Urgencia | null {
+  return situacionPorFecha(iso, estado === 'presentada' || estado === 'pagada');
 }
 
 // ─── DV (idéntico al backend utils/nit.ts) ──────────────────────────────────────

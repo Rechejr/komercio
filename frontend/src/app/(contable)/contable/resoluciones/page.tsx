@@ -6,7 +6,7 @@ import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { formatNit, formatFecha } from '@/lib/contable';
+import { formatNit, formatFecha, situacionPorFecha } from '@/lib/contable';
 import { Plus, Trash2, X, Loader2, FileText } from 'lucide-react';
 
 const inputCls =
@@ -25,16 +25,9 @@ const CLASES = [
 ];
 const CLASE_LABEL: Record<string, string> = Object.fromEntries(CLASES.map((c) => [c.codigo, c.label]));
 
-const ESTADO_COLOR: Record<string, string> = {
-  vigente:   'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300',
-  por_vencer:'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
-  vencida:   'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300',
-  agotada:   'bg-slate-100 text-slate-600 dark:bg-slate-700/40 dark:text-slate-300',
-};
-
 interface Resolucion {
   id: string; tipo: string; clase: string | null; numero: string; fechaExpedicion: string; fechaVigencia: string;
-  prefijo: string | null; estado: string;
+  prefijo: string | null;
   taxClient: { id: string; razonSocial: string };
 }
 
@@ -61,7 +54,10 @@ export default function ResolucionesPage() {
 
   return (
     <div className="space-y-4 animate-fade-up">
-      <div className="flex justify-end">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50/60 dark:bg-amber-900/15 px-4 py-2.5 text-[12px] text-amber-700 dark:text-amber-300">
+          Las resoluciones vencidas se borran automáticamente 2 meses después de expirar su vigencia.
+        </div>
         <button onClick={() => setModalOpen(true)} className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2.5 rounded-xl text-sm transition-colors">
           <Plus size={16} /> Nueva resolución
         </button>
@@ -76,7 +72,7 @@ export default function ResolucionesPage() {
                 <th className="px-4 py-3 font-semibold">Tipo</th>
                 <th className="px-4 py-3 font-semibold">Número</th>
                 <th className="px-4 py-3 font-semibold">Vigencia</th>
-                <th className="px-4 py-3 font-semibold">Estado</th>
+                <th className="px-4 py-3 font-semibold">Situación</th>
                 <th className="px-4 py-3 font-semibold text-right">Acciones</th>
               </tr>
             </thead>
@@ -105,9 +101,12 @@ export default function ResolucionesPage() {
                     </td>
                     <td className="px-4 py-3 text-slate-700 dark:text-slate-200 tabular">{formatFecha(r.fechaVigencia)}</td>
                     <td className="px-4 py-3">
-                      <span className={cn('text-[11px] font-medium px-2 py-0.5 rounded-full capitalize', ESTADO_COLOR[r.estado] ?? ESTADO_COLOR.agotada)}>
-                        {r.estado.replace('_', ' ')}
-                      </span>
+                      {(() => {
+                        const u = situacionPorFecha(r.fechaVigencia, false);
+                        return u
+                          ? <span className={cn('inline-block text-xs font-semibold px-2 py-1 rounded-lg whitespace-nowrap', u.className)}>{u.label}</span>
+                          : <span className="text-xs text-slate-300 dark:text-slate-600">—</span>;
+                      })()}
                     </td>
                     <td className="px-4 py-3 text-right">
                       <button onClick={() => setDelTarget(r)} className="p-1.5 text-slate-400 hover:text-red-600 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20" aria-label="Eliminar">

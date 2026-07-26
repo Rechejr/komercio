@@ -405,6 +405,16 @@ export const contableController = {
       const obligacion = req.query.obligacion as Obligacion | undefined;
       const search = (req.query.search as string)?.trim();
 
+      // Auto-borrado: los ya cumplidos (presentada/pagada) se borran 2 meses
+      // después de su fecha, para no saturar. Lo pendiente/vencido se conserva.
+      {
+        const corte = new Date();
+        corte.setMonth(corte.getMonth() - 2);
+        await prisma.vencimiento.deleteMany({
+          where: { taxClient: { businessId }, estado: { in: ['presentada', 'pagada'] }, fecha: { lt: corte } },
+        });
+      }
+
       const where: Prisma.VencimientoWhereInput = { taxClient: { businessId } };
       if (obligacion) where.obligacion = obligacion;
       if (search) {
@@ -544,6 +554,17 @@ export const contableController = {
   async listResoluciones(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const businessId = req.user!.businessId!;
+
+      // Auto-borrado: las resoluciones vencidas se borran 2 meses después de que
+      // expiró su vigencia (ya no sirven). Purga perezosa al consultar.
+      {
+        const corte = new Date();
+        corte.setMonth(corte.getMonth() - 2);
+        await prisma.resolucionDian.deleteMany({
+          where: { taxClient: { businessId }, fechaVigencia: { lt: corte } },
+        });
+      }
+
       const where: Prisma.ResolucionDianWhereInput = { taxClient: { businessId } };
       if (req.query.taxClientId) {
         await getClientOfBusiness(req.query.taxClientId as string, businessId);
@@ -609,13 +630,14 @@ export const contableController = {
       const tipo = req.query.tipo as TipoRespManual;
       if (tipo !== 'exogena' && tipo !== 'otra') throw new AppError('Tipo inválido', 400);
 
-      // "Otras responsabilidades": se borran solas 2 meses después de la fecha de
-      // vencimiento, para no saturar. Purga perezosa (sin cron) al consultar.
-      if (tipo === 'otra') {
+      // Auto-borrado: un registro se borra 2 meses después de su fecha SI ya está
+      // "presentado" (cumplido). Lo pendiente/vencido se conserva. Purga perezosa
+      // (sin cron) al consultar. Aplica igual a exógena y a otras.
+      {
         const corte = new Date();
         corte.setMonth(corte.getMonth() - 2);
         await prisma.responsabilidadManual.deleteMany({
-          where: { tipo: 'otra', fecha: { lt: corte }, taxClient: { businessId } },
+          where: { tipo, estado: 'presentado', fecha: { lt: corte }, taxClient: { businessId } },
         });
       }
 

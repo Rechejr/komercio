@@ -9,7 +9,7 @@ export default function OtrasResponsabilidadesPage() {
       conceptoLabel="Actividad"
       conceptoPlaceholder="Ej. Impuesto de rodamiento, renovación cámara de comercio..."
       emptyHint="Aún no hay otras responsabilidades. Agrega la primera."
-      nota="Los registros de esta sección se borran automáticamente 2 meses después de su fecha de vencimiento, para no saturar la lista."
+      nota="Los registros marcados como Presentado se borran automáticamente 2 meses después de su fecha de vencimiento. Los pendientes se conservan."
     />
   );
 }

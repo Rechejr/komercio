@@ -6,7 +6,7 @@ import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { formatNit, formatFecha } from '@/lib/contable';
+import { formatNit, formatFecha, situacionPorFecha } from '@/lib/contable';
 import { Plus, Search, Edit, Trash2, X, Loader2, ClipboardList } from 'lucide-react';
 
 const inputCls =
@@ -152,6 +152,7 @@ export function ResponsabilidadesManuales({ tipo, conceptoLabel, conceptoPlaceho
                 <th className="px-4 py-3 font-semibold">Cliente</th>
                 <th className="px-4 py-3 font-semibold">{conceptoLabel}</th>
                 <th className="px-4 py-3 font-semibold">Fecha de vencimiento</th>
+                <th className="px-4 py-3 font-semibold">Situación</th>
                 <th className="px-4 py-3 font-semibold">Estado</th>
                 <th className="px-4 py-3 font-semibold text-right">Acciones</th>
               </tr>
@@ -159,17 +160,17 @@ export function ResponsabilidadesManuales({ tipo, conceptoLabel, conceptoPlaceho
             <tbody className="divide-y divide-slate-100 dark:divide-white/[0.06]">
               {isLoading ? (
                 [...Array(5)].map((_, i) => (
-                  <tr key={i}>{[...Array(5)].map((_, j) => (
+                  <tr key={i}>{[...Array(6)].map((_, j) => (
                     <td key={j} className="px-4 py-3"><div className="h-4 bg-slate-100 dark:bg-slate-800 rounded animate-pulse" /></td>
                   ))}</tr>
                 ))
               ) : isError ? (
-                <tr><td colSpan={5} className="px-4 py-8 text-center">
+                <tr><td colSpan={6} className="px-4 py-8 text-center">
                   <p className="text-sm text-red-600 dark:text-red-400 mb-2">{(error as any)?.response?.data?.error || 'No pudimos cargar los registros'}</p>
                   <button onClick={() => refetch()} className="text-sm text-emerald-600 hover:underline">Reintentar</button>
                 </td></tr>
               ) : visibles.length === 0 ? (
-                <tr><td colSpan={5} className="px-4 py-12 text-center text-slate-400 dark:text-slate-500">
+                <tr><td colSpan={6} className="px-4 py-12 text-center text-slate-400 dark:text-slate-500">
                   <ClipboardList size={30} className="mx-auto mb-2" strokeWidth={1.5} />
                   <p className="text-sm">{search ? `Sin resultados para "${search}"` : emptyHint}</p>
                 </td></tr>
@@ -182,6 +183,14 @@ export function ResponsabilidadesManuales({ tipo, conceptoLabel, conceptoPlaceho
                     </td>
                     <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{r.concepto}</td>
                     <td className="px-4 py-3 text-slate-700 dark:text-slate-200 tabular">{formatFecha(r.fecha)}</td>
+                    <td className="px-4 py-3">
+                      {(() => {
+                        const u = situacionPorFecha(r.fecha, r.estado === 'presentado');
+                        return u
+                          ? <span className={cn('inline-block text-xs font-semibold px-2 py-1 rounded-lg whitespace-nowrap', u.className)}>{u.label}</span>
+                          : <span className="text-xs text-slate-300 dark:text-slate-600">—</span>;
+                      })()}
+                    </td>
                     <td className="px-4 py-3">
                       <select
                         value={r.estado}
