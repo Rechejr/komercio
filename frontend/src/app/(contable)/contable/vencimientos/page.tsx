@@ -8,10 +8,15 @@ import toast from 'react-hot-toast';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import {
   OBLIGACIONES, OBLIGACION_LABEL, ESTADOS_MANUALES, ESTADO_COLOR, estadoManual,
-  urgenciaVencimiento, formatNit, formatFecha,
+  urgenciaVencimiento, diasHastaVencimiento, formatNit, formatFecha,
   type Obligacion, type EstadoVencimiento,
 } from '@/lib/contable';
-import { Plus, Search, Trash2, X, Loader2, CalendarClock, Sparkles } from 'lucide-react';
+import { Plus, Search, Trash2, X, Loader2, CalendarClock, Sparkles, ArrowUp, ArrowDown, ChevronsUpDown } from 'lucide-react';
+
+type SortKey = 'cliente' | 'obligacion' | 'periodo' | 'fecha' | 'situacion' | 'estado';
+const ESTADO_ORDEN: Record<EstadoVencimiento, number> = {
+  pendiente: 0, en_proceso: 1, presentada: 2, pagada: 3, vencida: 0,
+};
 
 const inputCls =
   'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[16px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition';
@@ -29,6 +34,16 @@ export default function VencimientosPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [delTarget, setDelTarget] = useState<Vencimiento | null>(null);
   const [clienteInicial, setClienteInicial] = useState<{ id: string; razonSocial: string; nit: string; dv: number } | null>(null);
+  // Orden y filtros de la tabla (todo sobre los datos ya cargados).
+  const [sortBy, setSortBy] = useState<SortKey>('fecha');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const [filtroEstado, setFiltroEstado] = useState<'todos' | EstadoVencimiento>('todos');
+  const [filtroSituacion, setFiltroSituacion] = useState<'todas' | 'vencidos' | 'por_vencer' | 'resueltos'>('todas');
+
+  function toggleSort(key: SortKey) {
+    if (sortBy === key) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    else { setSortBy(key); setSortDir('asc'); }
+  }
 
   // Al llegar desde "crear cliente" (?cliente=&nombre=), abrir el modal con ese
   // cliente ya seleccionado y filtrar la lista por él. Se limpia la URL para que
@@ -57,8 +72,46 @@ export default function VencimientosPage() {
     return c;
   }, [vencimientos]);
 
-  const visibles = tab === 'todas' ? vencimientos : vencimientos.filter((v) => v.obligacion === tab);
   const obligacionesConDatos = OBLIGACIONES.filter((o) => conteos[o.codigo]);
+
+  // Filtrado (obligación por pestaña + estado + situación) y ordenamiento por la
+  // columna elegida. Todo en memoria sobre la lista ya cargada.
+  const visibles = useMemo(() => {
+    const resuelto = (v: Vencimiento) => estadoManual(v.estado) === 'presentada' || estadoManual(v.estado) === 'pagada';
+
+    let arr = tab === 'todas' ? vencimientos : vencimientos.filter((v) => v.obligacion === tab);
+
+    if (filtroEstado !== 'todos') arr = arr.filter((v) => estadoManual(v.estado) === filtroEstado);
+
+    if (filtroSituacion !== 'todas') {
+      arr = arr.filter((v) => {
+        if (filtroSituacion === 'resueltos') return resuelto(v);
+        if (resuelto(v)) return false;
+        const dias = diasHastaVencimiento(v.fecha);
+        return filtroSituacion === 'vencidos' ? dias <= 0 : dias > 0;
+      });
+    }
+
+    const val = (v: Vencimiento): string | number => {
+      switch (sortBy) {
+        case 'cliente':    return v.taxClient.razonSocial.toLowerCase();
+        case 'obligacion': return OBLIGACION_LABEL[v.obligacion].toLowerCase();
+        case 'periodo':    return v.periodo.toLowerCase();
+        case 'fecha':      return v.fecha;
+        // Situación: los resueltos van al final; el resto por días a vencer.
+        case 'situacion':  return resuelto(v) ? Number.MAX_SAFE_INTEGER : diasHastaVencimiento(v.fecha);
+        case 'estado':     return ESTADO_ORDEN[estadoManual(v.estado)];
+      }
+    };
+
+    return [...arr].sort((a, b) => {
+      const va = val(a), vb = val(b);
+      const cmp = typeof va === 'number' && typeof vb === 'number'
+        ? va - vb
+        : String(va).localeCompare(String(vb), 'es');
+      return sortDir === 'asc' ? cmp : -cmp;
+    });
+  }, [vencimientos, tab, filtroEstado, filtroSituacion, sortBy, sortDir]);
 
   const estadoMut = useMutation({
     mutationFn: ({ id, estado }: { id: string; estado: string }) =>
@@ -101,17 +154,43 @@ export default function VencimientosPage() {
         ))}
       </div>
 
+      {/* Filtros por estado y situación (la obligación se filtra con las pestañas) */}
+      <div className="flex flex-wrap items-center gap-2 text-sm">
+        <select
+          value={filtroEstado}
+          onChange={(e) => setFiltroEstado(e.target.value as any)}
+          className="px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+        >
+          <option value="todos">Estado: todos</option>
+          {ESTADOS_MANUALES.map((s) => <option key={s.codigo} value={s.codigo}>{s.label}</option>)}
+        </select>
+        <select
+          value={filtroSituacion}
+          onChange={(e) => setFiltroSituacion(e.target.value as any)}
+          className="px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+        >
+          <option value="todas">Situación: todas</option>
+          <option value="vencidos">Vencidos / vence hoy</option>
+          <option value="por_vencer">Por vencer</option>
+          <option value="resueltos">Resueltos (presentada/pagada)</option>
+        </select>
+        {(filtroEstado !== 'todos' || filtroSituacion !== 'todas') && (
+          <button onClick={() => { setFiltroEstado('todos'); setFiltroSituacion('todas'); }} className="text-xs text-emerald-600 hover:underline">Limpiar filtros</button>
+        )}
+        <span className="text-xs text-slate-400 ml-auto">{visibles.length} resultado{visibles.length !== 1 ? 's' : ''}</span>
+      </div>
+
       <div className="card overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 dark:bg-slate-800/50 text-left">
               <tr className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                <th className="px-4 py-3 font-semibold">Cliente</th>
-                <th className="px-4 py-3 font-semibold">Obligación</th>
-                <th className="px-4 py-3 font-semibold">Periodo</th>
-                <th className="px-4 py-3 font-semibold">Vence</th>
-                <th className="px-4 py-3 font-semibold">Situación</th>
-                <th className="px-4 py-3 font-semibold">Estado</th>
+                <Th label="Cliente"    sortKey="cliente"    sortBy={sortBy} sortDir={sortDir} onSort={toggleSort} />
+                <Th label="Obligación" sortKey="obligacion" sortBy={sortBy} sortDir={sortDir} onSort={toggleSort} />
+                <Th label="Periodo"    sortKey="periodo"    sortBy={sortBy} sortDir={sortDir} onSort={toggleSort} />
+                <Th label="Vence"      sortKey="fecha"      sortBy={sortBy} sortDir={sortDir} onSort={toggleSort} />
+                <Th label="Situación"  sortKey="situacion"  sortBy={sortBy} sortDir={sortDir} onSort={toggleSort} />
+                <Th label="Estado"     sortKey="estado"     sortBy={sortBy} sortDir={sortDir} onSort={toggleSort} />
                 <th className="px-4 py-3 font-semibold text-right">Acciones</th>
               </tr>
             </thead>
@@ -125,7 +204,11 @@ export default function VencimientosPage() {
               ) : visibles.length === 0 ? (
                 <tr><td colSpan={7} className="px-4 py-12 text-center text-slate-400 dark:text-slate-500">
                   <CalendarClock size={30} className="mx-auto mb-2" strokeWidth={1.5} />
-                  <p className="text-sm">No hay vencimientos {tab !== 'todas' ? `de ${OBLIGACION_LABEL[tab as Obligacion]}` : 'registrados'}.</p>
+                  <p className="text-sm">
+                    {tab !== 'todas' || filtroEstado !== 'todos' || filtroSituacion !== 'todas'
+                      ? 'No hay vencimientos que coincidan con los filtros.'
+                      : 'No hay vencimientos registrados.'}
+                  </p>
                 </td></tr>
               ) : (
                 visibles.map((v) => (
@@ -197,6 +280,26 @@ function TabBtn({ active, onClick, label, count }: { active: boolean; onClick: (
       {label}
       <span className={cn('text-[11px] px-1.5 rounded-full', active ? 'bg-white/25' : 'bg-slate-200 dark:bg-slate-700')}>{count}</span>
     </button>
+  );
+}
+
+// Encabezado de columna ordenable: clic para ordenar, la flecha indica el sentido.
+function Th({ label, sortKey, sortBy, sortDir, onSort }: {
+  label: string; sortKey: SortKey; sortBy: SortKey; sortDir: 'asc' | 'desc'; onSort: (k: SortKey) => void;
+}) {
+  const active = sortBy === sortKey;
+  return (
+    <th className="px-4 py-3 font-semibold">
+      <button
+        onClick={() => onSort(sortKey)}
+        className={cn('inline-flex items-center gap-1 uppercase tracking-wide transition-colors', active ? 'text-slate-700 dark:text-slate-200' : 'hover:text-slate-700 dark:hover:text-slate-200')}
+      >
+        {label}
+        {active
+          ? (sortDir === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)
+          : <ChevronsUpDown size={12} className="opacity-30" />}
+      </button>
+    </th>
   );
 }
 
