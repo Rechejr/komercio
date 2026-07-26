@@ -94,6 +94,8 @@ router.get('/calendario/periodos', VER_Y_GESTIONAR, contableController.periodos)
 // ─── Vencimientos ───────────────────────────────────────────────────────────
 router.get('/vencimientos', VER_Y_GESTIONAR, contableController.listVencimientos);
 router.post('/vencimientos', ...ESCRIBIR, contableController.createVencimiento);
+// Generación en lote (agenda completa del cliente o todos los periodos de una obligación).
+router.post('/vencimientos/generar', ...ESCRIBIR, contableController.generarVencimientos);
 router.patch('/vencimientos/:id/estado', ...ESCRIBIR, contableController.updateEstadoVencimiento);
 router.delete('/vencimientos/:id', ...ESCRIBIR, contableController.deleteVencimiento);
 

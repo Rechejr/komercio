@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
@@ -28,6 +28,22 @@ export default function VencimientosPage() {
   const [search, setSearch] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [delTarget, setDelTarget] = useState<Vencimiento | null>(null);
+  const [clienteInicial, setClienteInicial] = useState<{ id: string; razonSocial: string; nit: string; dv: number } | null>(null);
+
+  // Al llegar desde "crear cliente" (?cliente=&nombre=), abrir el modal con ese
+  // cliente ya seleccionado y filtrar la lista por él. Se limpia la URL para que
+  // un refresh no vuelva a abrir el modal.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const id = params.get('cliente');
+    const nombre = params.get('nombre');
+    if (id && nombre) {
+      setClienteInicial({ id, razonSocial: nombre, nit: '', dv: 0 });
+      setSearch(nombre);
+      setModalOpen(true);
+      window.history.replaceState({}, '', '/contable/vencimientos');
+    }
+  }, []);
 
   const { data: vencimientos = [], isLoading } = useQuery<Vencimiento[]>({
     queryKey: ['contable-vencimientos', search],
@@ -151,7 +167,12 @@ export default function VencimientosPage() {
         </div>
       </div>
 
-      {modalOpen && <NuevoVencimientoModal onClose={() => setModalOpen(false)} />}
+      {modalOpen && (
+        <NuevoVencimientoModal
+          clienteInicial={clienteInicial}
+          onClose={() => { setModalOpen(false); setClienteInicial(null); }}
+        />
+      )}
 
       <ConfirmDialog
         open={!!delTarget}
@@ -180,10 +201,11 @@ function TabBtn({ active, onClick, label, count }: { active: boolean; onClick: (
 }
 
 // ─── Modal: nuevo vencimiento con fecha automática por NIT ─────────────────────
-function NuevoVencimientoModal({ onClose }: { onClose: () => void }) {
+type ClientePicker = { id: string; razonSocial: string; nit: string; dv: number };
+function NuevoVencimientoModal({ onClose, clienteInicial }: { onClose: () => void; clienteInicial?: ClientePicker | null }) {
   const qc = useQueryClient();
   const [clienteSearch, setClienteSearch] = useState('');
-  const [cliente, setCliente] = useState<{ id: string; razonSocial: string; nit: string; dv: number } | null>(null);
+  const [cliente, setCliente] = useState<ClientePicker | null>(clienteInicial ?? null);
   const [obligacion, setObligacion] = useState<Obligacion | ''>('');
   const [periodo, setPeriodo] = useState('');
   const [fecha, setFecha] = useState('');
@@ -203,12 +225,10 @@ function NuevoVencimientoModal({ onClose }: { onClose: () => void }) {
     enabled: !!cliente && !!obligacion,
   });
   const sinCalendario = !!cliente && !!obligacion && !cargandoPeriodos && periodos.length === 0;
+  const conCalendario = !!cliente && !!obligacion && periodos.length > 0;
 
-  function elegirPeriodo(p: { periodo: string; fecha: string }) {
-    setPeriodo(p.periodo);
-    setFecha(p.fecha.slice(0, 10));
-  }
-
+  // Registro manual de UN vencimiento (para ICA/PILA/exógena que no están en el
+  // calendario). Las obligaciones con calendario se generan en lote.
   const saveMut = useMutation({
     mutationFn: () => api.post('/contable/vencimientos', { taxClientId: cliente!.id, obligacion, periodo, fecha }),
     onSuccess: () => {
@@ -220,7 +240,23 @@ function NuevoVencimientoModal({ onClose }: { onClose: () => void }) {
     onError: (e: any) => toast.error(e.response?.data?.error || 'No se pudo registrar'),
   });
 
-  function submit() {
+  // Generación en lote: agenda completa (sin obligación) o todos los periodos de
+  // una obligación con calendario.
+  const generarMut = useMutation({
+    mutationFn: (body: { taxClientId: string; obligacion?: Obligacion }) =>
+      api.post('/contable/vencimientos/generar', body).then((r) => r.data),
+    onSuccess: (res: any) => {
+      qc.invalidateQueries({ queryKey: ['contable-vencimientos'] });
+      qc.invalidateQueries({ queryKey: ['contable-panel'] });
+      toast.success(res?.message || 'Agenda generada');
+      onClose();
+    },
+    onError: (e: any) => toast.error(e.response?.data?.error || 'No se pudo generar la agenda'),
+  });
+
+  const trabajando = saveMut.isPending || generarMut.isPending;
+
+  function submitManual() {
     if (!cliente) return toast.error('Elige un cliente');
     if (!obligacion) return toast.error('Elige la obligación');
     if (!periodo.trim()) return toast.error('Indica el periodo');
@@ -270,62 +306,75 @@ function NuevoVencimientoModal({ onClose }: { onClose: () => void }) {
             <div>
               <label className="block text-[13px] font-medium text-slate-700 dark:text-slate-300 mb-1.5">Obligación</label>
               <select value={obligacion} onChange={(e) => { setObligacion(e.target.value as Obligacion); setPeriodo(''); setFecha(''); }} className={inputCls}>
-                <option value="">Elegir…</option>
+                <option value="">Todas — agenda completa del cliente</option>
                 {OBLIGACIONES.map((o) => <option key={o.codigo} value={o.codigo}>{o.label}</option>)}
               </select>
             </div>
           )}
 
-          {/* Periodo — con fecha automática */}
-          {cliente && obligacion && (
-            <div>
-              <label className="block text-[13px] font-medium text-slate-700 dark:text-slate-300 mb-1.5">Periodo</label>
-              {cargandoPeriodos ? (
-                <div className="flex items-center gap-2 text-sm text-slate-400 py-2"><Loader2 size={14} className="animate-spin" /> Calculando fechas…</div>
-              ) : periodos.length > 0 ? (
-                <>
-                  <div className="flex items-center gap-1.5 text-[11px] text-emerald-600 dark:text-emerald-400 mb-1.5">
-                    <Sparkles size={11} /> Fecha propuesta automáticamente según el NIT
-                  </div>
-                  <div className="grid grid-cols-1 gap-1.5">
-                    {periodos.map((p) => (
-                      <button
-                        key={p.periodo}
-                        onClick={() => elegirPeriodo(p)}
-                        className={cn(
-                          'flex items-center justify-between px-3 py-2 rounded-lg border text-sm transition-colors',
-                          periodo === p.periodo ? 'border-emerald-400 bg-emerald-50/60 dark:bg-emerald-900/15' : 'border-slate-200 dark:border-slate-700 hover:border-slate-300',
-                        )}
-                      >
-                        <span className="text-slate-700 dark:text-slate-200">{p.periodo}</span>
-                        <span className="text-slate-500 dark:text-slate-400 tabular">{formatFecha(p.fecha)}</span>
-                      </button>
-                    ))}
-                  </div>
-                </>
-              ) : sinCalendario ? (
-                // ICA, PILA, exógena: no están en el calendario → periodo y fecha manual.
-                <input value={periodo} onChange={(e) => setPeriodo(e.target.value)} placeholder="Ej. Enero, 2026-05, Año 2025..." className={inputCls} />
-              ) : null}
+          {/* Agenda completa: no se eligió obligación → se generan todas según calidades */}
+          {cliente && !obligacion && (
+            <div className="rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50/60 dark:bg-emerald-900/15 p-4">
+              <div className="flex items-center gap-1.5 text-[13px] font-semibold text-emerald-700 dark:text-emerald-400 mb-1">
+                <Sparkles size={14} /> Generar agenda completa
+              </div>
+              <p className="text-[12px] text-slate-600 dark:text-slate-400">
+                Crea de una vez todos los vencimientos del cliente (todas las obligaciones de sus calidades × todos los periodos del año), con la fecha ya calculada según el NIT.
+              </p>
+              <p className="text-[11px] text-slate-400 mt-1.5">ICA, PILA e información exógena se agregan aparte (dependen del municipio/empleados).</p>
             </div>
           )}
 
-          {/* Fecha (editable siempre) */}
-          {cliente && obligacion && (periodo || sinCalendario) && (
-            <div>
-              <label className="block text-[13px] font-medium text-slate-700 dark:text-slate-300 mb-1.5">
-                Fecha de vencimiento {periodos.length > 0 && <span className="text-slate-400 font-normal">(editable)</span>}
-              </label>
-              <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} className={inputCls} />
-            </div>
+          {/* Obligación con calendario → se listan TODOS los periodos y se registran en lote */}
+          {cliente && obligacion && (
+            cargandoPeriodos ? (
+              <div className="flex items-center gap-2 text-sm text-slate-400 py-2"><Loader2 size={14} className="animate-spin" /> Calculando fechas…</div>
+            ) : conCalendario ? (
+              <div>
+                <div className="flex items-center gap-1.5 text-[11px] text-emerald-600 dark:text-emerald-400 mb-1.5">
+                  <Sparkles size={11} /> Se registrarán estos {periodos.length} periodos (fecha automática según el NIT)
+                </div>
+                <div className="grid grid-cols-1 gap-1.5">
+                  {periodos.map((p) => (
+                    <div key={p.periodo} className="flex items-center justify-between px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-sm">
+                      <span className="text-slate-700 dark:text-slate-200">{p.periodo}</span>
+                      <span className="text-slate-500 dark:text-slate-400 tabular">{formatFecha(p.fecha)}</span>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-[11px] text-slate-400 mt-1.5">Los que ya existan no se duplican.</p>
+              </div>
+            ) : sinCalendario ? (
+              // ICA, PILA, exógena: no están en el calendario → periodo y fecha manual.
+              <>
+                <div>
+                  <label className="block text-[13px] font-medium text-slate-700 dark:text-slate-300 mb-1.5">Periodo</label>
+                  <input value={periodo} onChange={(e) => setPeriodo(e.target.value)} placeholder="Ej. Enero, 2026-05, Año 2025..." className={inputCls} />
+                </div>
+                <div>
+                  <label className="block text-[13px] font-medium text-slate-700 dark:text-slate-300 mb-1.5">Fecha de vencimiento</label>
+                  <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} className={inputCls} />
+                </div>
+              </>
+            ) : null
           )}
         </div>
 
         <div className="px-6 py-4 border-t border-slate-100 dark:border-white/[0.06] flex gap-2">
           <button onClick={onClose} className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-sm font-medium text-slate-600 dark:text-slate-300">Cancelar</button>
-          <button onClick={submit} disabled={saveMut.isPending} className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-60">
-            {saveMut.isPending ? <Loader2 size={15} className="animate-spin" /> : null} Registrar
-          </button>
+          {sinCalendario ? (
+            <button onClick={submitManual} disabled={trabajando} className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-60">
+              {saveMut.isPending ? <Loader2 size={15} className="animate-spin" /> : null} Registrar
+            </button>
+          ) : conCalendario ? (
+            <button onClick={() => generarMut.mutate({ taxClientId: cliente!.id, obligacion: obligacion as Obligacion })} disabled={trabajando} className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-60">
+              {generarMut.isPending ? <Loader2 size={15} className="animate-spin" /> : null} Registrar {periodos.length} periodos
+            </button>
+          ) : (
+            <button onClick={() => cliente && generarMut.mutate({ taxClientId: cliente.id })} disabled={!cliente || trabajando} className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-60">
+              {generarMut.isPending ? <Loader2 size={15} className="animate-spin" /> : <Sparkles size={15} />} Generar agenda completa
+            </button>
+          )}
         </div>
       </div>
     </div>

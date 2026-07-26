@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
@@ -47,6 +48,7 @@ const FORM_VACIO: FormState = {
 
 export default function ClientesPage() {
   const qc = useQueryClient();
+  const router = useRouter();
   const role = useAuthStore((s) => s.user?.role);
   const puedeEliminar = role === 'ADMIN'; // el AUXILIAR no elimina clientes
   const [search, setSearch] = useState('');
@@ -76,11 +78,21 @@ export default function ClientesPage() {
       editing
         ? api.put(`/contable/clients/${editing.id}`, payload)
         : api.post('/contable/clients', payload),
-    onSuccess: () => {
+    onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ['contable-clients'] });
       qc.invalidateQueries({ queryKey: ['contable-panel'] });
-      toast.success(editing ? 'Cliente actualizado' : 'Cliente creado');
       setModalOpen(false);
+      if (editing) {
+        toast.success('Cliente actualizado');
+        return;
+      }
+      // Cliente NUEVO → llevarlo directo a Vencimientos con el cliente listo para
+      // generar su agenda (sin tener que buscarlo de nuevo).
+      toast.success('Cliente creado');
+      const nuevo = res.data?.data;
+      if (nuevo?.id) {
+        router.push(`/contable/vencimientos?cliente=${nuevo.id}&nombre=${encodeURIComponent(nuevo.razonSocial)}`);
+      }
     },
     onError: (err: any) => toast.error(err.response?.data?.error || 'No se pudo guardar'),
   });

@@ -421,7 +421,8 @@ export const contableController = {
       const items = await prisma.vencimiento.findMany({
         where,
         include: { taxClient: { select: { id: true, razonSocial: true, nit: true, dv: true } } },
-        orderBy: { fecha: 'desc' },
+        // Ascendente: lo más próximo a vencer (y lo ya vencido) queda arriba.
+        orderBy: { fecha: 'asc' },
       });
       return success(res, items);
     } catch (err) { next(err); }
@@ -455,6 +456,52 @@ export const contableController = {
         }
         throw e;
       }
+    } catch (err) { next(err); }
+  },
+
+  /** Genera vencimientos en lote desde el calendario, para no registrarlos periodo
+   *  por periodo. Sin `obligacion` → genera TODA la agenda del cliente según sus
+   *  calidades (agenda completa). Con `obligacion` → genera todos los periodos de
+   *  esa obligación. Idempotente: los que ya existen se saltan (no duplica). Las
+   *  obligaciones sin calendario (ICA, PILA, exógena) se reportan aparte. */
+  async generarVencimientos(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const businessId = req.user!.businessId!;
+      const { taxClientId, obligacion } = req.body as { taxClientId?: string; obligacion?: Obligacion };
+      if (!taxClientId) throw new AppError('Falta el cliente', 400);
+      const client = await getClientOfBusiness(taxClientId, businessId);
+
+      const obligaciones: Obligacion[] = obligacion
+        ? [obligacion]
+        : obligacionesSugeridas(client.responsabilidades as Calidad[], []);
+
+      let creados = 0;
+      let existentes = 0;
+      const sinCalendario: Obligacion[] = [];
+
+      for (const obl of obligaciones) {
+        const variante = varianteDe(obl, client.tipoPersona, client.ivaPeriodicidad);
+        const periodos = await periodosCalendario(obl, variante, client.nit);
+        if (periodos.length === 0) { sinCalendario.push(obl); continue; }
+        for (const p of periodos) {
+          try {
+            await prisma.vencimiento.create({
+              data: { taxClientId: client.id, obligacion: obl, periodo: p.periodo, fecha: p.fecha },
+            });
+            creados++;
+          } catch (e) {
+            if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') existentes++;
+            else throw e;
+          }
+        }
+      }
+
+      const msg = creados > 0
+        ? `Se generaron ${creados} vencimiento${creados === 1 ? '' : 's'}${existentes ? ` (${existentes} ya existían)` : ''}`
+        : existentes > 0
+          ? 'Todos los vencimientos ya estaban registrados'
+          : 'Este cliente no tiene obligaciones de calendario para generar';
+      return success(res, { creados, existentes, sinCalendario }, msg);
     } catch (err) { next(err); }
   },
 
