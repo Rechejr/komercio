@@ -8,9 +8,15 @@ export const TAX_CLIENT_COL_DEFS: Record<string, string[]> = {
   razonSocial: ['razon social', 'razon', 'nombre', 'nombres', 'cliente', 'nombre completo',
                  'denominacion', 'empresa', 'contribuyente', 'nombre o razon social',
                  'nombres y apellidos', 'name'],
-  nit:         ['nit', 'documento', 'identificacion', 'cedula', 'cc', 'id', 'rut',
-                 'num documento', 'numero documento', 'num. documento', 'doc',
-                 'nit / cedula', 'nit/cedula', 'identificación'],
+  // OJO con el orden: los específicos del NÚMERO van primero para que ganen sobre
+  // "tipo identificacion" (que es el TIPO, no el número). Si no, el detector
+  // agarraría la columna del tipo y todas las filas saldrían "sin NIT".
+  nit:         ['numero identificacion', 'numero de identificacion', 'nro identificacion',
+                 'nro. identificacion', 'no identificacion', 'no. identificacion',
+                 'num identificacion', 'numero documento', 'numero de documento',
+                 'num documento', 'num. documento', 'numero cedula', 'numero nit',
+                 'nit', 'documento', 'identificacion', 'cedula', 'cc', 'rut', 'doc',
+                 'nit / cedula', 'nit/cedula', 'id'],
   tipoPersona: ['tipo persona', 'tipo de persona', 'persona', 'tipo', 'naturaleza',
                  'tipo contribuyente', 'clase'],
   celular:     ['celular', 'telefono', 'tel', 'cel', 'movil', 'whatsapp', 'contacto',
