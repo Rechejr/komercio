@@ -849,6 +849,7 @@ model TaxClient {
   activo            Boolean           @default(true)
   vencimientos      Vencimiento[]
   resoluciones      ResolucionDian[]
+  respManuales      ResponsabilidadManual[]
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
 
@@ -856,6 +857,41 @@ model TaxClient {
   @@unique([businessId, nit, dv])
   @@index([businessId])
   @@map("tax_clients")
+}
+
+// Estas dos son mini-agendas MANUALES para lo que NO está en el calendario DIAN:
+//  - exogena: información exógena (anual) — se conserva.
+//  - otra:    "otras responsabilidades" — se auto-borran 2 meses después de la
+//             fecha, para no saturar la lista (purga perezosa al consultar).
+enum TipoRespManual {
+  exogena
+  otra
+
+  @@map("tipo_resp_manual")
+}
+
+enum EstadoRespManual {
+  pendiente
+  presentado
+
+  @@map("estado_resp_manual")
+}
+
+model ResponsabilidadManual {
+  id          String           @id @default(uuid())
+  taxClientId String
+  taxClient   TaxClient        @relation(fields: [taxClientId], references: [id], onDelete: Cascade)
+  tipo        TipoRespManual
+  // "actividad" (otras responsabilidades) o "concepto/formato" (exógena).
+  concepto    String
+  fecha       DateTime         @db.Date
+  estado      EstadoRespManual @default(pendiente)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@index([taxClientId])
+  @@index([tipo, fecha])
+  @@map("responsabilidades_manuales")
 }
 
 // ─── Vencimiento de una obligación (scoped vía TaxClient) ──────────────────────

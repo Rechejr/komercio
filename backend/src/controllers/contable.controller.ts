@@ -1,5 +1,5 @@
 import { Response, NextFunction } from 'express';
-import { Prisma, Calidad, Obligacion } from '@prisma/client';
+import { Prisma, Calidad, Obligacion, TipoRespManual, EstadoRespManual } from '@prisma/client';
 import { prisma } from '../config/database';
 import { AuthRequest } from '../middlewares/auth';
 import { success, created, paginated, AppError } from '../utils/response';
@@ -596,6 +596,94 @@ export const contableController = {
       if (!reso) throw new AppError('Resolución no encontrada', 404);
       await prisma.resolucionDian.delete({ where: { id: req.params.id } });
       return success(res, null, 'Resolución eliminada');
+    } catch (err) { next(err); }
+  },
+
+  // ─── RESPONSABILIDADES MANUALES (exógena / otras) ───────────────────────────────
+  // Mini-agendas para lo que NO está en el calendario DIAN. "exogena" se conserva;
+  // "otra" se auto-limpia 2 meses después de la fecha (purga perezosa al listar).
+  async listResponsabilidades(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const businessId = req.user!.businessId!;
+      const tipo = req.query.tipo as TipoRespManual;
+      if (tipo !== 'exogena' && tipo !== 'otra') throw new AppError('Tipo inválido', 400);
+
+      // "Otras responsabilidades": se borran solas 2 meses después de la fecha de
+      // vencimiento, para no saturar. Purga perezosa (sin cron) al consultar.
+      if (tipo === 'otra') {
+        const corte = new Date();
+        corte.setMonth(corte.getMonth() - 2);
+        await prisma.responsabilidadManual.deleteMany({
+          where: { tipo: 'otra', fecha: { lt: corte }, taxClient: { businessId } },
+        });
+      }
+
+      const items = await prisma.responsabilidadManual.findMany({
+        where: { tipo, taxClient: { businessId } },
+        include: { taxClient: { select: { id: true, razonSocial: true, nit: true, dv: true } } },
+        orderBy: { fecha: 'asc' },
+      });
+      return success(res, items);
+    } catch (err) { next(err); }
+  },
+
+  async createResponsabilidad(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const businessId = req.user!.businessId!;
+      const { taxClientId, tipo, concepto, fecha, estado } = req.body;
+      await getClientOfBusiness(taxClientId, businessId);
+      if (tipo !== 'exogena' && tipo !== 'otra') throw new AppError('Tipo inválido', 400);
+      if (!concepto?.trim()) throw new AppError('El concepto es requerido', 400);
+      if (!fecha) throw new AppError('La fecha es requerida', 400);
+      const est: EstadoRespManual = estado === 'presentado' ? 'presentado' : 'pendiente';
+
+      const item = await prisma.responsabilidadManual.create({
+        data: {
+          taxClientId,
+          tipo,
+          concepto: concepto.trim(),
+          fecha: new Date(`${fecha}T00:00:00Z`),
+          estado: est,
+        },
+      });
+      return created(res, item, 'Registro creado');
+    } catch (err) { next(err); }
+  },
+
+  async updateResponsabilidad(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const businessId = req.user!.businessId!;
+      const item = await prisma.responsabilidadManual.findFirst({
+        where: { id: req.params.id, taxClient: { businessId } },
+      });
+      if (!item) throw new AppError('Registro no encontrado', 404);
+
+      const { concepto, fecha, estado } = req.body;
+      const data: Prisma.ResponsabilidadManualUpdateInput = {};
+      if (concepto !== undefined) {
+        if (!concepto?.trim()) throw new AppError('El concepto no puede estar vacío', 400);
+        data.concepto = concepto.trim();
+      }
+      if (fecha !== undefined && fecha) data.fecha = new Date(`${fecha}T00:00:00Z`);
+      if (estado !== undefined) {
+        if (estado !== 'pendiente' && estado !== 'presentado') throw new AppError('Estado inválido', 400);
+        data.estado = estado;
+      }
+
+      const updated = await prisma.responsabilidadManual.update({ where: { id: item.id }, data });
+      return success(res, updated, 'Registro actualizado');
+    } catch (err) { next(err); }
+  },
+
+  async deleteResponsabilidad(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const businessId = req.user!.businessId!;
+      const item = await prisma.responsabilidadManual.findFirst({
+        where: { id: req.params.id, taxClient: { businessId } },
+      });
+      if (!item) throw new AppError('Registro no encontrado', 404);
+      await prisma.responsabilidadManual.delete({ where: { id: item.id } });
+      return success(res, null, 'Registro eliminado');
     } catch (err) { next(err); }
   },
 

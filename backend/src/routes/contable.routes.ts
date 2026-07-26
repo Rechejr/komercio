@@ -104,4 +104,10 @@ router.get('/resoluciones', VER_Y_GESTIONAR, contableController.listResoluciones
 router.post('/resoluciones', ...ESCRIBIR, contableController.createResolucion);
 router.delete('/resoluciones/:id', ...ESCRIBIR, contableController.deleteResolucion);
 
+// ─── Responsabilidades manuales (Información Exógena / Otras Responsabilidades) ─
+router.get('/responsabilidades', VER_Y_GESTIONAR, contableController.listResponsabilidades);
+router.post('/responsabilidades', ...ESCRIBIR, contableController.createResponsabilidad);
+router.patch('/responsabilidades/:id', ...ESCRIBIR, contableController.updateResponsabilidad);
+router.delete('/responsabilidades/:id', ...ESCRIBIR, contableController.deleteResponsabilidad);
+
 export default router;

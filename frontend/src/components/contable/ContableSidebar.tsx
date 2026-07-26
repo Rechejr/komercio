@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth.store';
 import { Tooltip } from '@/components/ui/Tooltip';
 import {
-  LayoutDashboard, Users, CalendarClock, FileText,
+  LayoutDashboard, Users, CalendarClock, FileText, FileSpreadsheet, ClipboardList,
   ChevronLeft, ChevronRight, LogOut, X,
 } from 'lucide-react';
 
@@ -19,6 +19,8 @@ const NAV_ITEMS = [
   { href: '/contable/clientes',     icon: Users,           label: 'Clientes',         roles: ['ADMIN', 'AUXILIAR'] },
   { href: '/contable/vencimientos', icon: CalendarClock,   label: 'Vencimientos',     roles: ['ADMIN', 'AUXILIAR'] },
   { href: '/contable/resoluciones', icon: FileText,        label: 'Resoluciones DIAN', roles: ['ADMIN', 'AUXILIAR'] },
+  { href: '/contable/exogena',      icon: FileSpreadsheet, label: 'Información Exógena', roles: ['ADMIN', 'AUXILIAR'] },
+  { href: '/contable/otras-responsabilidades', icon: ClipboardList, label: 'Otras Responsabilidades', roles: ['ADMIN', 'AUXILIAR'] },
 ] as const;
 
 interface ContableSidebarProps {

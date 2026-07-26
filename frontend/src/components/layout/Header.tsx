@@ -31,6 +31,8 @@ const PAGE_LABELS: Record<string, string> = {
   '/contable/clientes':     'Clientes',
   '/contable/vencimientos': 'Vencimientos',
   '/contable/resoluciones': 'Resoluciones DIAN',
+  '/contable/exogena':      'Información Exógena',
+  '/contable/otras-responsabilidades': 'Otras Responsabilidades',
 };
 
 interface HeaderProps {
