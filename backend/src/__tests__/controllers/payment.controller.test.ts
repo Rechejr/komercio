@@ -128,28 +128,56 @@ describe('paymentController.webhook', () => {
     return {
       headers: {},
       body: {},
-      rawBody: '',
       ...overrides,
     } as unknown as Request;
   }
 
-  function signedBody(txBody: any) {
+  // Firma un evento igual que Wompi: checksum = SHA256(valores de
+  // signature.properties concatenados + timestamp + secreto) en hex MAYÚSCULAS,
+  // dentro de signature.checksum. (NO es un HMAC del cuerpo.)
+  function signEvent(event: any) {
     const crypto = require('crypto');
-    const rawBody = JSON.stringify(txBody);
-    const sig = `sha256=${crypto.createHmac('sha256', EVENTS_SECRET).update(rawBody).digest('hex')}`;
-    return { rawBody, sig };
+    const concat =
+      (event.signature.properties as string[])
+        .map((p) => String(p.split('.').reduce((a: any, k: string) => (a == null ? a : a[k]), event.data)))
+        .join('') +
+      String(event.timestamp) +
+      EVENTS_SECRET;
+    const checksum = crypto.createHash('sha256').update(concat).digest('hex').toUpperCase();
+    return { ...event, signature: { ...event.signature, checksum } };
   }
 
-  it('retorna 401 cuando falta la firma x-event-signature', async () => {
+  // Evento transaction.updated APPROVED, firmado, para un payment link dado.
+  function approvedEvent(linkId: string, extra: any = {}) {
+    return signEvent({
+      event: 'transaction.updated',
+      timestamp: 1700000000,
+      environment: 'test',
+      data: {
+        transaction: {
+          id: 'tx-1',
+          status: 'APPROVED',
+          amount_in_cents: 2990000,
+          payment_link_id: linkId,
+          ...extra,
+        },
+      },
+      signature: { properties: ['transaction.id', 'transaction.status', 'transaction.amount_in_cents'] },
+    });
+  }
+
+  it('retorna 401 cuando falta signature.checksum', async () => {
     const { res, status } = makeRes();
     await paymentController.webhook(makeWebhookReq(), res, next);
     expect(status).toHaveBeenCalledWith(401);
   });
 
-  it('retorna 401 cuando la firma es inválida', async () => {
+  it('retorna 401 cuando el checksum es inválido', async () => {
+    const bad = approvedEvent('link-x');
+    bad.signature.checksum = 'DEADBEEF'; // firma que no corresponde
     const { res, status } = makeRes();
     await paymentController.webhook(
-      makeWebhookReq({ headers: { 'x-event-signature': 'sha256=invalid' }, rawBody: '{}' } as any),
+      makeWebhookReq({ body: bad } as any),
       res,
       next,
     );
@@ -157,12 +185,16 @@ describe('paymentController.webhook', () => {
   });
 
   it('responde con received:true sin procesar si el evento no es transaction.updated', async () => {
-    const txBody = { event: 'other.event' };
-    const { rawBody, sig } = signedBody(txBody);
+    const event = signEvent({
+      event: 'other.event',
+      timestamp: 1700000000,
+      data: { transaction: { id: 'tx-1', status: 'APPROVED', amount_in_cents: 2990000 } },
+      signature: { properties: ['transaction.id', 'transaction.status', 'transaction.amount_in_cents'] },
+    });
 
     const { res, json } = makeRes();
     await paymentController.webhook(
-      makeWebhookReq({ headers: { 'x-event-signature': sig }, body: txBody, rawBody } as any),
+      makeWebhookReq({ body: event } as any),
       res,
       next,
     );
@@ -172,14 +204,13 @@ describe('paymentController.webhook', () => {
 
   it('responde received:true sin activar nada si el link no existe', async () => {
     const linkId = 'link-unknown';
-    const txBody = { event: 'transaction.updated', data: { transaction: { status: 'APPROVED', payment_link_id: linkId } } };
-    const { rawBody, sig } = signedBody(txBody);
+    const event = approvedEvent(linkId);
 
     (mockPrisma.paymentLink.findUnique as jest.Mock).mockResolvedValue(null);
 
     const { res, json } = makeRes();
     await paymentController.webhook(
-      makeWebhookReq({ headers: { 'x-event-signature': sig }, body: txBody, rawBody } as any),
+      makeWebhookReq({ body: event } as any),
       res,
       next,
     );
@@ -190,8 +221,7 @@ describe('paymentController.webhook', () => {
 
   it('activa el plan Pro y marca el link como consumido cuando llega una transacción APPROVED', async () => {
     const linkId = 'link-xyz';
-    const txBody = { event: 'transaction.updated', data: { transaction: { status: 'APPROVED', payment_link_id: linkId } } };
-    const { rawBody, sig } = signedBody(txBody);
+    const event = approvedEvent(linkId);
 
     (mockPrisma.paymentLink.findUnique as jest.Mock).mockResolvedValue({
       id: linkId, businessId: 'biz-1', period: 'monthly', months: 1, consumedAt: null,
@@ -200,7 +230,7 @@ describe('paymentController.webhook', () => {
 
     const { res, json } = makeRes();
     await paymentController.webhook(
-      makeWebhookReq({ headers: { 'x-event-signature': sig }, body: txBody, rawBody } as any),
+      makeWebhookReq({ body: event } as any),
       res,
       next,
     );
@@ -216,8 +246,7 @@ describe('paymentController.webhook', () => {
 
   it('ignora un webhook duplicado si el link ya fue consumido antes', async () => {
     const linkId = 'link-already-done';
-    const txBody = { event: 'transaction.updated', data: { transaction: { status: 'APPROVED', payment_link_id: linkId } } };
-    const { rawBody, sig } = signedBody(txBody);
+    const event = approvedEvent(linkId);
 
     (mockPrisma.paymentLink.findUnique as jest.Mock).mockResolvedValue({
       id: linkId, businessId: 'biz-1', period: 'monthly', months: 1, consumedAt: new Date(),
@@ -225,7 +254,7 @@ describe('paymentController.webhook', () => {
 
     const { res, json } = makeRes();
     await paymentController.webhook(
-      makeWebhookReq({ headers: { 'x-event-signature': sig }, body: txBody, rawBody } as any),
+      makeWebhookReq({ body: event } as any),
       res,
       next,
     );
@@ -236,8 +265,7 @@ describe('paymentController.webhook', () => {
 
   it('al renovar con tiempo vigente, extiende desde el vencimiento actual en vez de resetear desde hoy', async () => {
     const linkId = 'link-renewal';
-    const txBody = { event: 'transaction.updated', data: { transaction: { status: 'APPROVED', payment_link_id: linkId } } };
-    const { rawBody, sig } = signedBody(txBody);
+    const event = approvedEvent(linkId);
 
     const futureExpiry = new Date();
     futureExpiry.setDate(futureExpiry.getDate() + 20); // 20 días vigentes todavía
@@ -249,7 +277,7 @@ describe('paymentController.webhook', () => {
 
     const { res } = makeRes();
     await paymentController.webhook(
-      makeWebhookReq({ headers: { 'x-event-signature': sig }, body: txBody, rawBody } as any),
+      makeWebhookReq({ body: event } as any),
       res,
       next,
     );
@@ -264,8 +292,7 @@ describe('paymentController.webhook', () => {
 
   it('bloquea la fila del negocio con FOR UPDATE antes de leer planExpiresAt (evita el lost-update entre webhooks concurrentes)', async () => {
     const linkId = 'link-lock-test';
-    const txBody = { event: 'transaction.updated', data: { transaction: { status: 'APPROVED', payment_link_id: linkId } } };
-    const { rawBody, sig } = signedBody(txBody);
+    const event = approvedEvent(linkId);
 
     (mockPrisma.paymentLink.findUnique as jest.Mock).mockResolvedValue({
       id: linkId, businessId: 'biz-1', period: 'monthly', months: 1, consumedAt: null,
@@ -273,7 +300,7 @@ describe('paymentController.webhook', () => {
     (mockPrisma.$queryRawUnsafe as jest.Mock).mockResolvedValue([{ planExpiresAt: null }]);
 
     await paymentController.webhook(
-      makeWebhookReq({ headers: { 'x-event-signature': sig }, body: txBody, rawBody } as any),
+      makeWebhookReq({ body: event } as any),
       makeRes().res,
       next,
     );
@@ -286,8 +313,7 @@ describe('paymentController.webhook', () => {
 
   it('no activa el plan si otro webhook concurrente ya consumió el link dentro del lock (re-chequeo tras el FOR UPDATE)', async () => {
     const linkId = 'link-race';
-    const txBody = { event: 'transaction.updated', data: { transaction: { status: 'APPROVED', payment_link_id: linkId } } };
-    const { rawBody, sig } = signedBody(txBody);
+    const event = approvedEvent(linkId);
 
     // El chequeo de fuera de la transacción ve consumedAt: null (llegó primero),
     // pero para cuando entra al lock, otro webhook ya lo marcó consumido.
@@ -298,7 +324,7 @@ describe('paymentController.webhook', () => {
 
     const { res, json } = makeRes();
     await paymentController.webhook(
-      makeWebhookReq({ headers: { 'x-event-signature': sig }, body: txBody, rawBody } as any),
+      makeWebhookReq({ body: event } as any),
       res,
       next,
     );

@@ -67,6 +67,34 @@ function wompiPost(path: string, body: unknown): Promise<{ ok: boolean; status: 
   });
 }
 
+// Resuelve una ruta "a.b.c" dentro de un objeto (para las signature.properties
+// de Wompi, que son rutas relativas al objeto `data` del evento).
+function resolvePath(obj: any, path: string): any {
+  return path.split('.').reduce((acc, key) => (acc == null ? acc : acc[key]), obj);
+}
+
+// Calcula el checksum de un evento de Wompi según su esquema oficial:
+//   SHA256( <valores de signature.properties, en orden> + timestamp + EVENTS_SECRET )
+// en hex MAYÚSCULAS. Las properties son rutas relativas a `event.data`
+// (p.ej. "transaction.id" -> event.data.transaction.id). NO es un HMAC del cuerpo.
+// Devuelve null si el evento no trae la estructura firmable esperada.
+// Ref: https://docs.wompi.co/docs/colombia/eventos/
+export function wompiEventChecksum(event: any, secret: string): string | null {
+  const props: unknown = event?.signature?.properties;
+  const timestamp = event?.timestamp;
+  if (!Array.isArray(props) || props.length === 0 || timestamp == null || !event?.data) {
+    return null;
+  }
+  let concatenated = '';
+  for (const p of props) {
+    const val = resolvePath(event.data, String(p));
+    if (val == null) return null; // una propiedad firmada ausente -> no se puede validar
+    concatenated += String(val);
+  }
+  concatenated += String(timestamp) + secret;
+  return crypto.createHash('sha256').update(concatenated).digest('hex').toUpperCase();
+}
+
 export const paymentController = {
   async createLink(req: AuthRequest, res: Response, next: NextFunction) {
     try {
@@ -145,30 +173,39 @@ export const paymentController = {
 
   async webhook(req: Request, res: Response, next: NextFunction) {
     try {
-      const signature    = req.headers['x-event-signature'] as string | undefined;
       const eventsSecret = process.env.WOMPI_EVENTS_SECRET;
-
       if (!eventsSecret) {
         logger.error('WOMPI_EVENTS_SECRET no configurado — rechazando webhook');
         return res.status(500).json({ error: 'Webhook no configurado' });
       }
-      if (!signature) {
-        logger.warn('Wompi webhook: cabecera x-event-signature ausente');
+
+      const event = req.body as any;
+
+      // Wompi firma el evento con un checksum SHA256 (NO un HMAC del cuerpo) que
+      // llega en el body como signature.checksum (y también en el header
+      // X-Event-Checksum). Se recalcula a partir de signature.properties + timestamp
+      // + el secreto de eventos y se compara en tiempo constante.
+      const provided = event?.signature?.checksum as string | undefined;
+      if (!provided) {
+        logger.warn('Wompi webhook: falta signature.checksum');
         return res.status(401).json({ error: 'Firma requerida' });
       }
-      const rawBody = (req as any).rawBody as string || '';
-      const expectedHex = crypto.createHmac('sha256', eventsSecret).update(rawBody).digest('hex');
-      const expected = `sha256=${expectedHex}`;
-      // Comparación en tiempo constante — este endpoint otorga acceso pago, así que
-      // no debe filtrar por temporización cuánto de la firma coincidió.
-      const signatureValid = signature.length === expected.length &&
-        crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
+      const expected = wompiEventChecksum(event, eventsSecret);
+      if (!expected) {
+        logger.warn('Wompi webhook: no se pudo calcular la firma (estructura inesperada)');
+        return res.status(401).json({ error: 'Firma inválida' });
+      }
+      // Comparación en tiempo constante (Wompi entrega el hex en mayúsculas; se
+      // normaliza por si acaso). Este endpoint otorga acceso pago, así que no debe
+      // filtrar por temporización cuánto de la firma coincidió.
+      const providedBuf = Buffer.from(provided.toUpperCase());
+      const expectedBuf = Buffer.from(expected);
+      const signatureValid = providedBuf.length === expectedBuf.length &&
+        crypto.timingSafeEqual(providedBuf, expectedBuf);
       if (!signatureValid) {
         logger.warn('Wompi webhook: firma inválida');
         return res.status(401).json({ error: 'Firma inválida' });
       }
-
-      const event = req.body as any;
       if (event?.event !== 'transaction.updated') return res.json({ received: true });
 
       const tx = event?.data?.transaction;
