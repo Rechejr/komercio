@@ -688,6 +688,25 @@ export const contableController = {
     } catch (err) { next(err); }
   },
 
+  /** Vencimientos prioritarios para los avisos al abrir la agenda: pendientes
+   *  (no presentada/pagada) que ya vencieron o vencen dentro de 7 días. */
+  async prioritarios(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const businessId = req.user!.businessId!;
+      const items = await prisma.vencimiento.findMany({
+        where: {
+          taxClient: { businessId },
+          estado: { notIn: ['presentada', 'pagada'] },
+          fecha: { lte: diasDesdeHoy(7) },
+        },
+        include: { taxClient: { select: { id: true, razonSocial: true, nit: true, dv: true } } },
+        orderBy: { fecha: 'asc' },
+        take: 100,
+      });
+      return success(res, items);
+    } catch (err) { next(err); }
+  },
+
   // ─── PANEL ─────────────────────────────────────────────────────────────────────
   async panel(req: AuthRequest, res: Response, next: NextFunction) {
     try {

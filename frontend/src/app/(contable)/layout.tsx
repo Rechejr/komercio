@@ -5,6 +5,7 @@ import { Loader2 } from 'lucide-react';
 import { useAuthStore } from '@/store/auth.store';
 import { api } from '@/lib/api';
 import { ContableSidebar } from '@/components/contable/ContableSidebar';
+import { AgendaAlertas } from '@/components/contable/AgendaAlertas';
 import { Header } from '@/components/layout/Header';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 
@@ -93,6 +94,7 @@ export default function ContableLayout({ children }: { children: React.ReactNode
         </div>
         <main className="flex-1 overflow-auto p-4 md:p-6 animate-fade-in">
           <ErrorBoundary>
+            <AgendaAlertas />
             {children}
           </ErrorBoundary>
         </main>

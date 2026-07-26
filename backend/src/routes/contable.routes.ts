@@ -77,6 +77,8 @@ const ESCRIBIR = [authorize('ADMIN', 'AUXILIAR'), requireActiveContable];
 
 // ─── Panel ──────────────────────────────────────────────────────────────────
 router.get('/panel', VER_Y_GESTIONAR, contableController.panel);
+// Avisos al abrir la agenda (vencidos + vence en ≤7 días, pendientes).
+router.get('/prioritarios', VER_Y_GESTIONAR, contableController.prioritarios);
 
 // ─── Clientes ───────────────────────────────────────────────────────────────
 router.get('/clients', VER_Y_GESTIONAR, contableController.listClients);
