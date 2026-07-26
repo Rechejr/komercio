@@ -197,7 +197,8 @@ function RegisterForm() {
         businessCategory: esContable ? undefined : businessCategory,
       });
       toast.success('¡Cuenta creada! Revisa tu correo para verificarla.');
-      router.push('/login');
+      // Un contador vuelve al login con la cara de la agenda (no la del POS).
+      router.push(esContable ? '/login?tipo=contable' : '/login');
     } catch (err: any) {
       toast.error(err.response?.data?.error || 'Error al crear la cuenta');
     } finally {

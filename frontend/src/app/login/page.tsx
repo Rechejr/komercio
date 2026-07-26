@@ -158,6 +158,39 @@ function MiniReceipt() {
   );
 }
 
+// Versión contable del mock del panel izquierdo: en vez del recibo del POS,
+// muestra "próximos vencimientos" para que un contador que va a entrar reconozca
+// su producto (y no crea que lo mandaron al comercio).
+const AGENDA_ITEMS = [
+  { c: 'Comercializadora El Sol', o: 'IVA · Ene-Feb', f: '17 mar' },
+  { c: 'Distribuciones Andes',    o: 'Retención · Feb', f: '19 mar' },
+  { c: 'Juan Pérez',              o: 'Renta natural', f: '12 ago' },
+];
+
+function MiniAgenda() {
+  return (
+    <div className="auth-receipt">
+      <div className="auth-r-head">
+        <div className="auth-r-brand">PRÓXIMOS VENCIMIENTOS</div>
+        <div className="auth-r-sub">Contabilidad Pérez · DIAN 2026</div>
+      </div>
+      <div className="auth-r-rule" />
+      {AGENDA_ITEMS.map((v) => (
+        // opacity:1 explícito: auth-r-line arranca invisible esperando la
+        // animación del recibo POS, que aquí no corre.
+        <div key={v.c} className="auth-r-line" style={{ opacity: 1, transform: 'none' }}>
+          <span>{v.c}<br /><small style={{ opacity: 0.55 }}>{v.o}</small></span>
+          <span>{v.f}</span>
+        </div>
+      ))}
+      <div className="auth-r-rule" />
+      <div style={{ textAlign: 'center', fontSize: 11, opacity: 0.6, marginTop: 8 }}>
+        Calculado automáticamente por el NIT
+      </div>
+    </div>
+  );
+}
+
 // ── Form ──────────────────────────────────────────────────────────────────────
 function LoginForm() {
   const router       = useRouter();
@@ -309,7 +342,13 @@ function LoginForm() {
 }
 
 // ── Page ──────────────────────────────────────────────────────────────────────
-export default function LoginPage() {
+function LoginContent() {
+  const searchParams = useSearchParams();
+  // Producto desde el que se llega al login (lo pasa el landing/registro contable
+  // como ?tipo=contable). Solo cambia la CARA del panel izquierdo; el login es
+  // el mismo y el destino tras entrar lo decide el businessType de la cuenta.
+  const esContable = searchParams.get('tipo') === 'contable';
+
   return (
     <div className="min-h-screen flex flex-col lg:flex-row">
 
@@ -322,14 +361,14 @@ export default function LoginPage() {
         {/* Logo */}
         <div className="relative z-10 flex items-center gap-3">
           <div className="auth-logo-mark"><span>V</span></div>
-          <span className="auth-brand-name">Ventrix</span>
+          <span className="auth-brand-name">Ventrix{esContable ? ' Contable' : ''}</span>
         </div>
 
         {/* Hero content */}
         <div className="relative z-10 my-auto">
           <div className="auth-panel-badge">
             <span className="auth-badge-dot" />
-            Sistema POS · Versión 2026
+            {esContable ? 'Agenda tributaria · DIAN 2026' : 'Sistema POS · Versión 2026'}
           </div>
 
           <h2 className="auth-panel-headline">
@@ -338,10 +377,12 @@ export default function LoginPage() {
           </h2>
 
           <p className="auth-panel-sub">
-            Tu negocio te espera. Cada venta, cada cliente,<br />cada peso — todo aquí.
+            {esContable
+              ? <>Tus clientes y sus vencimientos DIAN<br />te esperan al día.</>
+              : <>Tu negocio te espera. Cada venta, cada cliente,<br />cada peso — todo aquí.</>}
           </p>
 
-          <MiniReceipt />
+          {esContable ? <MiniAgenda /> : <MiniReceipt />}
         </div>
 
         <p className="relative z-10 auth-panel-footer">
@@ -369,17 +410,11 @@ export default function LoginPage() {
             </p>
           </div>
 
-          <Suspense fallback={
-            <div className="flex items-center justify-center py-12">
-              <Loader2 size={22} className="animate-spin text-[#0DA06A]" />
-            </div>
-          }>
-            <LoginForm />
-          </Suspense>
+          <LoginForm />
 
           <p className="text-center text-[13px] text-slate-500 dark:text-slate-400 mt-6">
             ¿No tienes cuenta?{' '}
-            <Link href="/register" className="text-[#0DA06A] font-semibold hover:underline">
+            <Link href={esContable ? '/register?tipo=contable' : '/register'} className="text-[#0DA06A] font-semibold hover:underline">
               Regístrate gratis
             </Link>
           </p>
@@ -387,5 +422,17 @@ export default function LoginPage() {
       </div>
 
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-white dark:bg-[#064e3b]">
+        <Loader2 size={22} className="animate-spin text-[#0DA06A]" />
+      </div>
+    }>
+      <LoginContent />
+    </Suspense>
   );
 }

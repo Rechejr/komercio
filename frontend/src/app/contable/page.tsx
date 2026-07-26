@@ -96,7 +96,7 @@ export default function ContableLanding() {
           </Link>
           <nav className="lp-nav-actions">
             <Link href="/" className="lp-nav-login">Para comercios</Link>
-            <Link href="/login" className="lp-nav-login">Ya tengo cuenta</Link>
+            <Link href="/login?tipo=contable" className="lp-nav-login">Ya tengo cuenta</Link>
             <Link href="/register?tipo=contable" className="lp-btn lp-btn-primary">Empieza gratis</Link>
           </nav>
         </div>
@@ -128,7 +128,7 @@ export default function ContableLanding() {
               </span>
             </div>
             <p className="lp-hero-login">
-              ¿Ya tienes cuenta? <Link href="/login">Iniciar sesión</Link>
+              ¿Ya tienes cuenta? <Link href="/login?tipo=contable">Iniciar sesión</Link>
             </p>
           </div>
 
@@ -301,7 +301,7 @@ export default function ContableLanding() {
           <nav className="lp-foot-links">
             <Link href="/">Para comercios</Link>
             <Link href="/register?tipo=contable">Crear cuenta</Link>
-            <Link href="/login">Iniciar sesión</Link>
+            <Link href="/login?tipo=contable">Iniciar sesión</Link>
             {LEGAL_READY && (
               <>
                 <Link href="/terminos">Términos</Link>
