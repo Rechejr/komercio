@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
@@ -11,7 +11,21 @@ import {
   CALIDADES, calcularDV, calidadBloqueada, formatNit, resumenCalidades,
   type TaxClient, type Calidad,
 } from '@/lib/contable';
-import { Plus, Search, Edit, Trash2, X, Loader2, Users } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, X, Loader2, Users, FileUp, FileDown, CheckCircle2, ArrowRight } from 'lucide-react';
+
+interface PreviewData {
+  total: number;
+  valid: number;
+  toCreate: number;
+  toUpdate: number;
+  issues: { row: number; name: string; message: string; type: 'error' | 'warning' }[];
+  detectedColumns: { field: string; header: string }[];
+}
+interface ImportResult {
+  imported: number;
+  updated: number;
+  errors: { row: number; message: string }[];
+}
 
 const inputCls =
   'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[16px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition';
@@ -41,6 +55,14 @@ export default function ClientesPage() {
   const [editing, setEditing] = useState<TaxClient | null>(null);
   const [form, setForm] = useState<FormState>(FORM_VACIO);
   const [delTarget, setDelTarget] = useState<TaxClient | null>(null);
+
+  // ── Importación masiva desde Excel ──────────────────────────────────────────
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewData, setPreviewData] = useState<PreviewData | null>(null);
+  const [importResult, setImportResult] = useState<ImportResult | null>(null);
+  const [isDragOver, setIsDragOver] = useState(false);
 
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['contable-clients', page, search],
@@ -73,6 +95,57 @@ export default function ClientesPage() {
     },
     onError: (err: any) => toast.error(err.response?.data?.error || 'No se pudo eliminar'),
   });
+
+  const previewMut = useMutation({
+    mutationFn: (file: File) => {
+      const fd = new FormData();
+      fd.append('file', file);
+      return api.post('/contable/clients/import?dryRun=true', fd, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      }).then((r) => r.data.data as PreviewData);
+    },
+    onSuccess: (d) => setPreviewData(d),
+    onError: (err: any) => {
+      setPreviewOpen(false);
+      setPendingFile(null);
+      toast.error(err.response?.data?.error || 'No se pudo leer el archivo');
+    },
+  });
+
+  const importMut = useMutation({
+    mutationFn: (file: File) => {
+      const fd = new FormData();
+      fd.append('file', file);
+      return api.post('/contable/clients/import', fd, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      }).then((r) => r.data.data as ImportResult);
+    },
+    onSuccess: (result) => {
+      setPreviewOpen(false);
+      setPreviewData(null);
+      setPendingFile(null);
+      setImportResult(result);
+      qc.invalidateQueries({ queryKey: ['contable-clients'] });
+      qc.invalidateQueries({ queryKey: ['contable-panel'] });
+      toast.success(`${result.imported} creados, ${result.updated} actualizados`);
+    },
+    onError: (err: any) => toast.error(err.response?.data?.error || 'Error al importar'),
+  });
+
+  function handleFile(file: File) {
+    const allowed = ['.xlsx', '.xls', '.csv'];
+    const ext = file.name.slice(file.name.lastIndexOf('.')).toLowerCase();
+    if (!allowed.includes(ext)) { toast.error('Solo archivos .xlsx, .xls o .csv'); return; }
+    setPendingFile(file);
+    setPreviewData(null);
+    setPreviewOpen(true);
+    previewMut.mutate(file);
+  }
+  function closePreview() {
+    setPreviewOpen(false);
+    setPreviewData(null);
+    setPendingFile(null);
+  }
 
   function openNew() {
     setEditing(null);
@@ -118,7 +191,28 @@ export default function ClientesPage() {
   }
 
   return (
-    <div className="space-y-4 animate-fade-up">
+    <div
+      className="space-y-4 animate-fade-up relative"
+      onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
+      onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setIsDragOver(false); }}
+      onDrop={(e) => {
+        e.preventDefault();
+        setIsDragOver(false);
+        const file = e.dataTransfer.files?.[0];
+        if (file) handleFile(file);
+      }}
+    >
+      {/* Overlay al arrastrar un archivo encima */}
+      {isDragOver && (
+        <div className="fixed inset-0 z-[60] bg-emerald-600/10 backdrop-blur-[2px] border-2 border-dashed border-emerald-500 flex items-center justify-center pointer-events-none">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-modal px-8 py-6 text-center">
+            <FileUp size={30} className="mx-auto mb-2 text-emerald-500" />
+            <p className="text-[15px] font-semibold text-slate-800 dark:text-white">Suelta para importar clientes</p>
+            <p className="text-[13px] text-slate-400">.xlsx · .xls · .csv</p>
+          </div>
+        </div>
+      )}
+
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative flex-1 min-w-[220px]">
@@ -130,6 +224,26 @@ export default function ClientesPage() {
             className={cn(inputCls, 'pl-9')}
           />
         </div>
+        <a
+          href={`${process.env.NEXT_PUBLIC_API_URL}/contable/clients/import-template`}
+          title="Formato de ejemplo para empezar desde cero — si ya tienes tu propio Excel de clientes, no lo necesitas, solo súbelo en 'Importar Excel'"
+          className="flex items-center gap-2 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 font-medium px-3 py-2.5 rounded-xl text-sm transition-colors"
+        >
+          <FileDown size={15} /> Plantilla
+        </a>
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          className="flex items-center gap-2 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 font-medium px-3 py-2.5 rounded-xl text-sm transition-colors"
+        >
+          <FileUp size={15} /> Importar Excel
+        </button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".xlsx,.xls,.csv"
+          className="hidden"
+          onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); e.target.value = ''; }}
+        />
         <button onClick={openNew} className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2.5 rounded-xl text-sm transition-colors">
           <Plus size={16} /> Nuevo cliente
         </button>
@@ -165,7 +279,14 @@ export default function ClientesPage() {
               ) : clientes.length === 0 ? (
                 <tr><td colSpan={5} className="px-4 py-12 text-center text-slate-400 dark:text-slate-500">
                   <Users size={30} className="mx-auto mb-2" strokeWidth={1.5} />
-                  <p className="text-sm">{search ? `Sin resultados para "${search}"` : 'Aún no tienes clientes. Crea el primero.'}</p>
+                  {search ? (
+                    <p className="text-sm">Sin resultados para &quot;{search}&quot;</p>
+                  ) : (
+                    <>
+                      <p className="text-sm">Aún no tienes clientes.</p>
+                      <p className="text-[13px] mt-1">Crea el primero o <button onClick={() => fileInputRef.current?.click()} className="text-emerald-600 hover:underline font-medium">importa tu Excel</button> de una sola vez.</p>
+                    </>
+                  )}
                 </td></tr>
               ) : (
                 clientes.map((c) => (
@@ -306,6 +427,177 @@ export default function ClientesPage() {
               <button onClick={handleSubmit} disabled={saveMut.isPending} className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-60">
                 {saveMut.isPending ? <Loader2 size={15} className="animate-spin" /> : null}
                 {editing ? 'Guardar cambios' : 'Crear cliente'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal: vista previa de importación (dry-run) ────────────────────── */}
+      {previewOpen && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" onClick={closePreview} />
+          <div className="relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/[0.08] rounded-2xl shadow-modal w-full max-w-lg flex flex-col max-h-[90vh] animate-scale-in">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-white/[0.06] flex-shrink-0">
+              <h2 className="text-[15px] font-semibold text-slate-800 dark:text-white flex items-center gap-2">
+                <FileUp size={16} className="text-emerald-500" /> Vista previa de importación
+              </h2>
+              <button type="button" aria-label="Cerrar" onClick={closePreview} className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-white/[0.06] transition">
+                <X size={16} />
+              </button>
+            </div>
+
+            {previewMut.isPending ? (
+              <div className="flex flex-col items-center justify-center py-16 gap-3">
+                <Loader2 size={32} className="animate-spin text-emerald-500" />
+                <p className="text-[13px] text-slate-500 dark:text-slate-400">Analizando archivo...</p>
+              </div>
+            ) : previewData ? (
+              <div className="p-6 space-y-5 overflow-y-auto min-h-0">
+                <p className="text-[13px] text-slate-600 dark:text-slate-400">
+                  Se encontraron <span className="font-bold text-slate-800 dark:text-white">{previewData.total}</span> cliente{previewData.total !== 1 ? 's' : ''} en el archivo
+                </p>
+
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="bg-emerald-50 dark:bg-emerald-500/10 rounded-xl p-3 text-center">
+                    <p className="text-[22px] font-bold text-emerald-700 dark:text-emerald-400 tabular">{previewData.valid}</p>
+                    <p className="text-[11px] text-emerald-600 dark:text-emerald-500 mt-0.5 uppercase tracking-wide font-medium">Válidos</p>
+                  </div>
+                  <div className="bg-emerald-50 dark:bg-emerald-500/10 rounded-xl p-3 text-center">
+                    <p className="text-[22px] font-bold text-emerald-700 dark:text-emerald-400 tabular">{previewData.toCreate}</p>
+                    <p className="text-[11px] text-emerald-600 dark:text-emerald-500 mt-0.5 uppercase tracking-wide font-medium">Nuevos</p>
+                  </div>
+                  <div className="bg-violet-50 dark:bg-violet-500/10 rounded-xl p-3 text-center">
+                    <p className="text-[22px] font-bold text-violet-700 dark:text-violet-400 tabular">{previewData.toUpdate}</p>
+                    <p className="text-[11px] text-violet-600 dark:text-violet-500 mt-0.5 uppercase tracking-wide font-medium">Actualizan</p>
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide mb-2">
+                    Columnas reconocidas ({previewData.detectedColumns.length})
+                  </p>
+                  {previewData.detectedColumns.length > 0 ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {previewData.detectedColumns.map(({ field, header }) => (
+                        <span key={field} className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 text-[11px] rounded-full font-medium">
+                          <CheckCircle2 size={10} /> {header}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-[12px] text-slate-400">Ninguna — revisa que la primera fila tenga los títulos de columna.</p>
+                  )}
+                </div>
+
+                {previewData.issues.length > 0 && (
+                  <div>
+                    <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide mb-2">
+                      {previewData.issues.filter((i) => i.type === 'error').length > 0 && (
+                        <span className="text-red-500">{previewData.issues.filter((i) => i.type === 'error').length} error{previewData.issues.filter((i) => i.type === 'error').length > 1 ? 'es' : ''}</span>
+                      )}
+                      {previewData.issues.filter((i) => i.type === 'error').length > 0 && previewData.issues.filter((i) => i.type === 'warning').length > 0 && ' · '}
+                      {previewData.issues.filter((i) => i.type === 'warning').length > 0 && (
+                        <span className="text-amber-500">{previewData.issues.filter((i) => i.type === 'warning').length} advertencia{previewData.issues.filter((i) => i.type === 'warning').length > 1 ? 's' : ''}</span>
+                      )}
+                    </p>
+                    <div className="rounded-xl border border-slate-100 dark:border-white/[0.06] divide-y divide-slate-100 dark:divide-white/[0.04] max-h-44 overflow-y-auto text-[12px]">
+                      {previewData.issues.map((issue, i) => (
+                        <div key={i} className={`flex gap-2 items-start px-3 py-2 ${issue.type === 'error' ? 'bg-red-50 dark:bg-red-500/10' : 'bg-amber-50 dark:bg-amber-500/10'}`}>
+                          <span className={`flex-shrink-0 font-semibold ${issue.type === 'error' ? 'text-red-500' : 'text-amber-500'}`}>Fila {issue.row}</span>
+                          <span className={`min-w-0 ${issue.type === 'error' ? 'text-red-700 dark:text-red-300' : 'text-amber-700 dark:text-amber-300'}`}>
+                            {issue.type === 'warning' ? '⚠ ' : '✕ '}
+                            {issue.name && <span className="font-medium">{issue.name}</span>}{issue.name ? ' — ' : ''}{issue.message}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                    {previewData.issues.some((i) => i.type === 'error') && (
+                      <p className="text-[11px] text-slate-400 mt-1.5">Las filas con error no se importan. Las advertencias sí se incluyen.</p>
+                    )}
+                  </div>
+                )}
+
+                {previewData.valid === 0 && (
+                  <div className="bg-red-50 dark:bg-red-500/10 border border-red-100 dark:border-red-500/20 rounded-xl p-4 text-center">
+                    <p className="text-[13px] text-red-700 dark:text-red-300 font-medium">No hay filas válidas para importar.</p>
+                    <p className="text-[12px] text-red-500 mt-1">Revisa que cada fila tenga nombre y NIT.</p>
+                  </div>
+                )}
+              </div>
+            ) : null}
+
+            {!previewMut.isPending && previewData && (
+              <div className="flex gap-3 px-6 pb-5 pt-4 border-t border-slate-100 dark:border-white/[0.06] flex-shrink-0">
+                <button type="button" onClick={closePreview} className="flex-1 px-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-xl text-[13px] font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition">
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  disabled={previewData.valid === 0 || importMut.isPending}
+                  onClick={() => pendingFile && importMut.mutate(pendingFile)}
+                  className="flex-1 px-4 py-2.5 bg-emerald-600 text-white rounded-xl text-[13px] font-semibold hover:bg-emerald-700 disabled:opacity-50 shadow-sm shadow-emerald-600/25 transition flex items-center justify-center gap-2"
+                >
+                  {importMut.isPending
+                    ? <><Loader2 size={14} className="animate-spin" /> Importando...</>
+                    : <><ArrowRight size={14} /> Importar {previewData.valid} cliente{previewData.valid !== 1 ? 's' : ''}</>}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal: resultado de la importación ──────────────────────────────── */}
+      {importResult && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4" onClick={() => setImportResult(null)}>
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" />
+          <div className="relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/[0.08] rounded-2xl shadow-modal w-full max-w-md max-h-[80vh] flex flex-col animate-scale-in" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-white/[0.06] flex-shrink-0">
+              <h2 className="text-[15px] font-semibold text-slate-800 dark:text-white flex items-center gap-2">
+                <CheckCircle2 size={16} className="text-emerald-500" /> Importación completada
+              </h2>
+              <button type="button" aria-label="Cerrar" onClick={() => setImportResult(null)} className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-white/[0.06] transition">
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4 overflow-y-auto min-h-0">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-emerald-50 dark:bg-emerald-500/10 rounded-xl p-4 text-center">
+                  <p className="text-[22px] font-bold text-emerald-700 dark:text-emerald-400 tabular">{importResult.imported}</p>
+                  <p className="text-[11px] text-emerald-600 dark:text-emerald-500 mt-0.5 uppercase tracking-wide font-medium">Creados</p>
+                </div>
+                <div className="bg-emerald-50 dark:bg-emerald-500/10 rounded-xl p-4 text-center">
+                  <p className="text-[22px] font-bold text-emerald-700 dark:text-emerald-400 tabular">{importResult.updated}</p>
+                  <p className="text-[11px] text-emerald-600 dark:text-emerald-500 mt-0.5 uppercase tracking-wide font-medium">Actualizados</p>
+                </div>
+              </div>
+
+              {importResult.errors.length > 0 && (
+                <div>
+                  <p className="text-[11px] font-semibold text-red-600 mb-2 uppercase tracking-wide">
+                    {importResult.errors.length} fila{importResult.errors.length > 1 ? 's' : ''} con error:
+                  </p>
+                  <div className="bg-red-50 dark:bg-red-500/10 border border-red-100 dark:border-red-500/20 rounded-xl divide-y divide-red-100 dark:divide-red-500/10 max-h-48 overflow-y-auto">
+                    {importResult.errors.map((e, i) => (
+                      <div key={i} className="px-3 py-2 flex gap-2 text-[12px]">
+                        <span className="text-red-400 flex-shrink-0">Fila {e.row}</span>
+                        <span className="text-red-700 dark:text-red-300">{e.message}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {importResult.imported === 0 && importResult.updated === 0 && importResult.errors.length === 0 && (
+                <p className="text-[13px] text-slate-400 text-center py-2">El archivo no contenía filas válidas.</p>
+              )}
+            </div>
+
+            <div className="px-6 pb-5 flex-shrink-0">
+              <button type="button" onClick={() => setImportResult(null)} className="w-full py-2.5 bg-emerald-600 text-white rounded-xl text-[13px] font-semibold hover:bg-emerald-700 shadow-sm shadow-emerald-600/25 transition">
+                Entendido
               </button>
             </div>
           </div>

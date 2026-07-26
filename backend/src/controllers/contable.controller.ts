@@ -6,6 +6,12 @@ import { success, created, paginated, AppError } from '../utils/response';
 import { getPagination } from '../utils/pagination';
 import { calcularDV, soloDigitos, ultimoDigito, dosUltimosDigitos } from '../utils/nit';
 import { normalizarResponsabilidades, obligacionesSugeridas } from '../utils/calidades';
+import ExcelJS from 'exceljs';
+import { findDataSheet, findHeaderRow, mapColumns, cellVal, normalizeHeader } from '../utils/excelParser';
+import {
+  TAX_CLIENT_COL_DEFS, TAX_CLIENT_FIELD_LABELS,
+  parseTipoPersona, parseCalidades, parseIvaPeriodicidad,
+} from '../utils/contableImport';
 
 // El calendario sembrado hoy es solo 2026 (cada año se siembra el decreto nuevo).
 const ANIO_CALENDARIO = 2026;
@@ -172,6 +178,189 @@ export const contableController = {
       // Vencimientos y resoluciones caen por la cascada declarada en el schema.
       await prisma.taxClient.delete({ where: { id: req.params.id } });
       return success(res, null, 'Cliente eliminado');
+    } catch (err) { next(err); }
+  },
+
+  /** Importación masiva de clientes desde Excel/CSV. Soporta ?dryRun=true para
+   *  una vista previa antes de escribir. Cada cliente se crea EXACTAMENTE como
+   *  lo haría createClient (DV por fórmula DIAN, exclusión RST, IVA solo si es
+   *  responsable). Upsert por NIT dentro de la misma oficina. */
+  async importClients(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      if (!req.file) throw new AppError('Archivo requerido', 400);
+      const dryRun = req.query.dryRun === 'true';
+      const businessId = req.user!.businessId!;
+
+      const wb = new ExcelJS.Workbook();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (wb.xlsx.load as any)(req.file.buffer);
+      const ws = findDataSheet(wb);
+
+      const allAliases = Object.values(TAX_CLIENT_COL_DEFS).flat();
+      const headerRowNum = findHeaderRow(ws, allAliases);
+
+      const headers: string[] = [];
+      ws.getRow(headerRowNum).eachCell((cell) => {
+        headers.push(normalizeHeader(String(cell.value ?? '')));
+      });
+
+      const { col, detectedColumns } = mapColumns(headers, TAX_CLIENT_COL_DEFS);
+
+      if (col.razonSocial === -1) {
+        throw new AppError(
+          'No se encontró la columna del nombre. Asegúrate de tener una columna "Nombre" o "Razón social".',
+          400,
+        );
+      }
+      if (col.nit === -1) {
+        throw new AppError(
+          'No se encontró la columna del NIT/cédula. Es obligatoria para calcular el dígito de verificación.',
+          400,
+        );
+      }
+
+      const detectedColumnsLabeled = detectedColumns.map((d) => ({
+        field: d.field,
+        header: `${d.header} → ${TAX_CLIENT_FIELD_LABELS[d.field] ?? d.field}`,
+      }));
+
+      interface ParsedRow {
+        rowNum: number;
+        razonSocial: string;
+        nit: string;
+        dv: number;
+        tipoPersona: 'natural' | 'juridica';
+        celular: string | null;
+        direccion: string | null;
+        responsabilidades: ReturnType<typeof normalizarResponsabilidades>;
+        ivaPeriodicidad: 'bimestral' | 'cuatrimestral' | null;
+      }
+      type RowIssue = { row: number; name: string; message: string; type: 'error' | 'warning' };
+
+      const issues: RowIssue[] = [];
+      const validRows: ParsedRow[] = [];
+      const seenNits = new Map<string, number>();
+      let totalRows = 0;
+
+      const tieneColTipo = col.tipoPersona !== -1;
+
+      for (let rowNum = headerRowNum + 1; rowNum <= ws.rowCount; rowNum++) {
+        const row = ws.getRow(rowNum);
+        const razonSocial = cellVal(row, col.razonSocial);
+        if (!razonSocial) continue;
+        totalRows++;
+
+        const nit = soloDigitos(cellVal(row, col.nit));
+        if (!nit) {
+          issues.push({ row: rowNum, name: razonSocial, message: 'Sin NIT/cédula — no se puede importar', type: 'error' });
+          continue;
+        }
+
+        // NIT duplicado dentro del archivo → gana la primera fila, se avisa.
+        if (seenNits.has(nit)) {
+          issues.push({
+            row: rowNum, name: razonSocial,
+            message: `NIT ${nit} repetido (ya aparece en la fila ${seenNits.get(nit)})`,
+            type: 'warning',
+          });
+          continue;
+        }
+        seenNits.set(nit, rowNum);
+
+        // Tipo de persona: se interpreta la columna; si falta o no se entiende,
+        // se asume Jurídica y se avisa (afecta el calendario de renta).
+        let tipoPersona: 'natural' | 'juridica' = 'juridica';
+        if (tieneColTipo) {
+          const parsed = parseTipoPersona(cellVal(row, col.tipoPersona));
+          if (parsed) tipoPersona = parsed;
+          else if (cellVal(row, col.tipoPersona)) {
+            issues.push({ row: rowNum, name: razonSocial, message: 'Tipo de persona no reconocido — se asumió Jurídica', type: 'warning' });
+          }
+        }
+
+        const responsabilidades = normalizarResponsabilidades(parseCalidades(cellVal(row, col.calidades)));
+        const ivaPeriodicidad = responsabilidades.includes('responsable_iva')
+          ? parseIvaPeriodicidad(cellVal(row, col.ivaPeriodicidad))
+          : null;
+
+        validRows.push({
+          rowNum, razonSocial, nit, dv: calcularDV(nit),
+          tipoPersona,
+          celular: cellVal(row, col.celular) || null,
+          direccion: cellVal(row, col.direccion) || null,
+          responsabilidades,
+          ivaPeriodicidad,
+        });
+      }
+
+      // Si no vino columna de tipo de persona, un solo aviso global (no por fila).
+      if (!tieneColTipo && validRows.length > 0) {
+        issues.unshift({
+          row: headerRowNum, name: '',
+          message: 'No se detectó la columna "Tipo de persona": todos se asumieron Jurídica. Revísalo si tienes personas naturales.',
+          type: 'warning',
+        });
+      }
+
+      if (dryRun) {
+        const nitsInFile = validRows.map((r) => r.nit);
+        const existing = nitsInFile.length > 0
+          ? await prisma.taxClient.findMany({
+              where: { businessId, nit: { in: nitsInFile } },
+              select: { nit: true },
+            })
+          : [];
+        const existingNits = new Set(existing.map((c) => c.nit));
+
+        return success(res, {
+          total: totalRows,
+          valid: validRows.length,
+          toCreate: validRows.filter((r) => !existingNits.has(r.nit)).length,
+          toUpdate: validRows.filter((r) => existingNits.has(r.nit)).length,
+          issues,
+          detectedColumns: detectedColumnsLabeled,
+        }, 'Vista previa generada');
+      }
+
+      // ── Importación real ─────────────────────────────────────────────────────
+      const results = {
+        imported: 0,
+        updated: 0,
+        errors: issues
+          .filter((i) => i.type === 'error')
+          .map((i) => ({ row: i.row, message: `"${i.name}": ${i.message}` })),
+      };
+
+      for (const r of validRows) {
+        try {
+          const data = {
+            razonSocial: r.razonSocial,
+            nit: r.nit,
+            dv: r.dv,
+            celular: r.celular,
+            direccion: r.direccion,
+            tipoPersona: r.tipoPersona,
+            responsabilidades: r.responsabilidades,
+            ivaPeriodicidad: r.ivaPeriodicidad,
+          };
+          const existing = await prisma.taxClient.findFirst({
+            where: { businessId, nit: r.nit },
+            select: { id: true },
+          });
+          if (existing) {
+            await prisma.taxClient.update({ where: { id: existing.id }, data: { ...data, activo: true } });
+            results.updated++;
+          } else {
+            await prisma.taxClient.create({ data: { ...data, businessId } });
+            results.imported++;
+          }
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : 'Error desconocido';
+          results.errors.push({ row: r.rowNum, message: `"${r.razonSocial}": ${msg}` });
+        }
+      }
+
+      return success(res, results, `Importación: ${results.imported} creados, ${results.updated} actualizados`);
     } catch (err) { next(err); }
   },
 
