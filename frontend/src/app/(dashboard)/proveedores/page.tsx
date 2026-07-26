@@ -363,7 +363,7 @@ export default function ProveedoresPage() {
                 <p className="text-[13px] text-slate-500 dark:text-slate-400">Analizando archivo...</p>
               </div>
             ) : previewData ? (
-              <div className="p-6 space-y-5 overflow-y-auto min-h-0">
+              <div className="p-6 space-y-5 overflow-y-auto min-h-0 flex-1">
                 <p className="text-[13px] text-slate-600 dark:text-slate-400">
                   Se encontraron{' '}
                   <span className="font-bold text-slate-800 dark:text-white">{previewData.total}</span>{' '}
@@ -468,7 +468,7 @@ export default function ProveedoresPage() {
                 <X size={16} />
               </button>
             </div>
-            <div className="p-6 space-y-4 overflow-y-auto min-h-0">
+            <div className="p-6 space-y-4 overflow-y-auto min-h-0 flex-1">
               <div className="grid grid-cols-2 gap-3">
                 <div className="bg-emerald-50 dark:bg-emerald-500/10 rounded-xl p-4 text-center">
                   <p className="text-[22px] font-bold text-emerald-700 dark:text-emerald-400 tabular-nums">{importResult.imported}</p>
@@ -518,7 +518,7 @@ export default function ProveedoresPage() {
                 <X size={16} />
               </button>
             </div>
-            <form ref={formRef} onSubmit={handleSubmit((d: any) => saveMutation.mutate(d))} className="p-6 grid grid-cols-2 gap-4 overflow-y-auto min-h-0">
+            <form ref={formRef} onSubmit={handleSubmit((d: any) => saveMutation.mutate(d))} className="p-6 grid grid-cols-2 gap-4 overflow-y-auto min-h-0 flex-1">
               {FIELDS.map((f) => (
                 <div key={f.name} className={f.col === 2 ? 'col-span-2' : ''}>
                   <label className="block text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5">{f.label}</label>

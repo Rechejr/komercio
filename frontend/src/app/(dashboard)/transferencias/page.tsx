@@ -195,7 +195,7 @@ export default function TransferenciasPage() {
               </button>
             </div>
 
-            <div className="p-6 space-y-4 overflow-y-auto min-h-0">
+            <div className="p-6 space-y-4 overflow-y-auto min-h-0 flex-1">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-slate-100 dark:border-white/[0.06]">
@@ -241,7 +241,7 @@ export default function TransferenciasPage() {
               </button>
             </div>
 
-            <form onSubmit={handleSubmit((d: any) => saveMutation.mutate(d))} className="p-6 space-y-5 overflow-y-auto min-h-0">
+            <form onSubmit={handleSubmit((d: any) => saveMutation.mutate(d))} className="p-6 space-y-5 overflow-y-auto min-h-0 flex-1">
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5 block">Bodega de origen *</label>
