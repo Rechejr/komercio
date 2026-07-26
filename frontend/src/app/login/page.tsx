@@ -349,6 +349,12 @@ function LoginContent() {
   // el mismo y el destino tras entrar lo decide el businessType de la cuenta.
   const esContable = searchParams.get('tipo') === 'contable';
 
+  // El título de la pestaña lo pone el layout raíz como POS; en el flujo contable
+  // se corrige a "Ventrix Contable" para que no diga "punto de venta".
+  useEffect(() => {
+    if (esContable) document.title = 'Iniciar sesión | Ventrix Contable';
+  }, [esContable]);
+
   return (
     <div className="min-h-screen flex flex-col lg:flex-row">
 
@@ -397,7 +403,7 @@ function LoginContent() {
           {/* Mobile logo */}
           <div className="flex items-center gap-2.5 mb-8 lg:hidden">
             <div className="auth-mobile-logo-mark"><span>V</span></div>
-            <span className="font-semibold text-[17px] text-slate-900 dark:text-white tracking-tight">Ventrix</span>
+            <span className="font-semibold text-[17px] text-slate-900 dark:text-white tracking-tight">Ventrix{esContable ? ' Contable' : ''}</span>
           </div>
 
           {/* Heading */}

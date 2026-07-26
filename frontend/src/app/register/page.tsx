@@ -1,6 +1,6 @@
 ﻿'use client';
 
-import { Suspense, useState } from 'react';
+import { Suspense, useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import toast from 'react-hot-toast';
 import Link from 'next/link';
@@ -29,13 +29,19 @@ const CATEGORIES = [
 const STEPS = ['Tu cuenta', 'Tu negocio'];
 
 // ── Step indicator (left panel) ───────────────────────────────────────────────
-function StepIndicator({ current }: { current: number }) {
+function StepIndicator({ current, esContable }: { current: number; esContable: boolean }) {
   return (
     <div className="flex flex-col gap-0">
       {STEPS.map((label, i) => {
         const done   = i < current;
         const active = i === current;
         const state  = done ? 'done' : active ? 'active' : 'pending';
+        // El segundo paso cambia según el producto: un contador registra su
+        // oficina (sin categoría), un comercio su negocio.
+        const shownLabel = i === 1 && esContable ? 'Tu oficina' : label;
+        const subtitle = i === 0
+          ? 'Nombre, email y contraseña'
+          : esContable ? 'Nombre de la oficina' : 'Nombre y categoría';
         return (
           <div key={i} className="flex items-start gap-4">
             <div className="flex flex-col items-center">
@@ -48,10 +54,10 @@ function StepIndicator({ current }: { current: number }) {
             </div>
             <div className="pt-1.5">
               <p className={`text-[13px] font-semibold leading-tight auth-step-label-${state}`}>
-                {label}
+                {shownLabel}
               </p>
               <p className={cn('text-[11px] mt-0.5', active ? 'text-slate-400' : 'text-white/20')}>
-                {i === 0 ? 'Nombre, email y contraseña' : 'Nombre y categoría'}
+                {subtitle}
               </p>
             </div>
           </div>
@@ -162,6 +168,11 @@ function RegisterForm() {
     searchParams.get('tipo') === 'contable' ? 'contable' : 'pos',
   );
   const esContable = businessType === 'contable';
+
+  // Título de la pestaña acorde al producto (el layout raíz pone el del POS).
+  useEffect(() => {
+    document.title = esContable ? 'Crea tu cuenta | Ventrix Contable' : 'Crea tu cuenta | Ventrix';
+  }, [esContable]);
   const [businessName, setBusinessName]           = useState('');
   const [businessCategory, setBusinessCategory]   = useState('');
   const [showCategoryModal, setShowCategoryModal] = useState(false);
@@ -219,9 +230,9 @@ function RegisterForm() {
           <div className="auth-left-glow-bl" />
 
           {/* Logo */}
-          <Link href="/" className="relative z-10 flex items-center gap-3">
+          <Link href={esContable ? '/contable' : '/'} className="relative z-10 flex items-center gap-3">
             <div className="auth-logo-mark"><span>V</span></div>
-            <span className="auth-brand-name">Ventrix</span>
+            <span className="auth-brand-name">Ventrix{esContable ? ' Contable' : ''}</span>
           </Link>
 
           {/* Step progress */}
@@ -234,6 +245,8 @@ function RegisterForm() {
             <h2 className="auth-panel-headline">
               {step === 0 ? (
                 <>Crea tu<br /><span className="auth-panel-headline-accent">cuenta</span></>
+              ) : esContable ? (
+                <>Tu<br /><span className="auth-panel-headline-accent">oficina</span></>
               ) : (
                 <>Tu<br /><span className="auth-panel-headline-accent">negocio</span></>
               )}
@@ -242,15 +255,20 @@ function RegisterForm() {
             <p className="auth-panel-sub">
               {step === 0
                 ? 'Empieza con tu información personal.'
-                : 'Cuéntanos sobre tu negocio para personalizarlo.'}
+                : esContable
+                  ? 'Cuéntanos sobre tu despacho contable.'
+                  : 'Cuéntanos sobre tu negocio para personalizarlo.'}
             </p>
 
-            <StepIndicator current={step} />
+            <StepIndicator current={step} esContable={esContable} />
           </div>
 
           {/* Bottom benefits */}
           <div className="relative z-10 space-y-2">
-            {['Gratis para siempre en el plan básico', 'Sin tarjeta de crédito requerida', 'Listo en menos de 2 minutos'].map((b) => (
+            {(esContable
+              ? ['7 días de prueba gratis', 'Sin tarjeta de crédito requerida', 'Listo en menos de 2 minutos']
+              : ['Gratis para siempre en el plan básico', 'Sin tarjeta de crédito requerida', 'Listo en menos de 2 minutos']
+            ).map((b) => (
               <div key={b} className="auth-benefit-item">
                 <Check size={12} className="text-[#34D399] flex-shrink-0" strokeWidth={2.5} />
                 {b}
@@ -267,7 +285,7 @@ function RegisterForm() {
             <div className="flex items-center justify-between mb-8 lg:hidden">
               <div className="flex items-center gap-2.5">
                 <div className="auth-mobile-logo-mark"><span>V</span></div>
-                <span className="font-semibold text-[16px] text-slate-900 dark:text-white tracking-tight">Ventrix</span>
+                <span className="font-semibold text-[16px] text-slate-900 dark:text-white tracking-tight">Ventrix{esContable ? ' Contable' : ''}</span>
               </div>
               <div className="flex items-center gap-1.5">
                 {STEPS.map((_, i) => (
@@ -457,7 +475,7 @@ function RegisterForm() {
                   <button type="submit" disabled={loading} className={btnPrimary}>
                     {loading
                       ? <><Loader2 size={15} className="animate-spin" /> Creando tu cuenta...</>
-                      : <>Comenzar a usar Ventrix <ArrowRight size={15} /></>
+                      : <>Comenzar a usar Ventrix{esContable ? ' Contable' : ''} <ArrowRight size={15} /></>
                     }
                   </button>
                 </div>
