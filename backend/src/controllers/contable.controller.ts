@@ -462,7 +462,9 @@ export const contableController = {
     try {
       const businessId = req.user!.businessId!;
       const { estado } = req.body;
-      const ESTADOS = ['pendiente', 'en_proceso', 'presentada', 'pagada', 'vencida'];
+      // "vencida" ya NO es un estado que se fije a mano: es automático según la
+      // fecha (lo calcula el frontend). El contador solo maneja estos.
+      const ESTADOS = ['pendiente', 'en_proceso', 'presentada', 'pagada'];
       if (!ESTADOS.includes(estado)) throw new AppError('Estado inválido', 400);
 
       // Asegurar que el vencimiento sea de esta oficina antes de tocarlo.

@@ -66,6 +66,58 @@ export const ESTADO_COLOR: Record<EstadoVencimiento, string> = {
   vencida:    'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300',
 };
 
+// ─── Estado manual vs. situación automática ─────────────────────────────────────
+// El contador SOLO elige a mano: Pendiente / Presentada / Pagada. Que esté
+// "vencida" NO se elige — se calcula de la fecha (un estado que depende del
+// tiempo cambia solo, no debe quedar quemado en la base).
+export const ESTADOS_MANUALES: { codigo: EstadoVencimiento; label: string }[] = [
+  { codigo: 'pendiente',  label: 'Pendiente' },
+  { codigo: 'presentada', label: 'Presentada' },
+  { codigo: 'pagada',     label: 'Pagada' },
+];
+
+/** Devuelve el estado manual con el que se debe mostrar el selector. Los estados
+ *  heredados que ya no son manuales (en_proceso, vencida) se muestran como
+ *  "pendiente" — la situación real de vencido la pinta la columna automática. */
+export function estadoManual(estado: EstadoVencimiento): EstadoVencimiento {
+  return estado === 'presentada' || estado === 'pagada' ? estado : 'pendiente';
+}
+
+/** Días de calendario (hora de Colombia) entre hoy y una fecha DIAN (columna
+ *  @db.Date, serializada como medianoche UTC). Negativo = ya pasó. Compara el
+ *  día de calendario, no las horas, para no correrse por zona horaria. */
+export function diasHastaVencimiento(iso: string): number {
+  const f = new Date(iso);
+  if (isNaN(f.getTime())) return 0;
+  const objetivo = Date.UTC(f.getUTCFullYear(), f.getUTCMonth(), f.getUTCDate());
+  const hoyCO = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Bogota', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(new Date());
+  const [y, m, d] = hoyCO.split('-').map(Number);
+  const hoy = Date.UTC(y, m - 1, d);
+  return Math.round((objetivo - hoy) / 86400000);
+}
+
+export interface Urgencia { label: string; className: string; vencido: boolean; }
+
+/** Situación automática de un vencimiento según su fecha y su estado manual.
+ *  Si ya está presentada o pagada, está resuelto → no hay urgencia (null). */
+export function urgenciaVencimiento(iso: string, estado: EstadoVencimiento): Urgencia | null {
+  if (estado === 'presentada' || estado === 'pagada') return null;
+  const dias = diasHastaVencimiento(iso);
+  const rojo  = 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300';
+  const ambar = 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300';
+  const gris  = 'bg-slate-100 text-slate-600 dark:bg-slate-700/40 dark:text-slate-300';
+  if (dias < 0) {
+    const n = Math.abs(dias);
+    return { label: `Vencido hace ${n} día${n === 1 ? '' : 's'}`, className: rojo, vencido: true };
+  }
+  if (dias === 0) return { label: 'Vence hoy', className: rojo, vencido: true };
+  if (dias === 1) return { label: 'Vence mañana', className: ambar, vencido: false };
+  if (dias <= 7)  return { label: `Faltan ${dias} días`, className: ambar, vencido: false };
+  return { label: `Faltan ${dias} días`, className: gris, vencido: false };
+}
+
 // ─── DV (idéntico al backend utils/nit.ts) ──────────────────────────────────────
 const PESOS = [3, 7, 13, 17, 19, 23, 29, 37, 41, 43, 47, 53, 59, 67, 71];
 export function calcularDV(nitCrudo: string): number | null {

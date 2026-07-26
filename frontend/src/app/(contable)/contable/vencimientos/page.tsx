@@ -7,7 +7,8 @@ import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import {
-  OBLIGACIONES, OBLIGACION_LABEL, ESTADOS, ESTADO_COLOR, formatNit, formatFecha,
+  OBLIGACIONES, OBLIGACION_LABEL, ESTADOS_MANUALES, ESTADO_COLOR, estadoManual,
+  urgenciaVencimiento, formatNit, formatFecha,
   type Obligacion, type EstadoVencimiento,
 } from '@/lib/contable';
 import { Plus, Search, Trash2, X, Loader2, CalendarClock, Sparkles } from 'lucide-react';
@@ -93,6 +94,7 @@ export default function VencimientosPage() {
                 <th className="px-4 py-3 font-semibold">Obligación</th>
                 <th className="px-4 py-3 font-semibold">Periodo</th>
                 <th className="px-4 py-3 font-semibold">Vence</th>
+                <th className="px-4 py-3 font-semibold">Situación</th>
                 <th className="px-4 py-3 font-semibold">Estado</th>
                 <th className="px-4 py-3 font-semibold text-right">Acciones</th>
               </tr>
@@ -100,12 +102,12 @@ export default function VencimientosPage() {
             <tbody className="divide-y divide-slate-100 dark:divide-white/[0.06]">
               {isLoading ? (
                 [...Array(5)].map((_, i) => (
-                  <tr key={i}>{[...Array(6)].map((_, j) => (
+                  <tr key={i}>{[...Array(7)].map((_, j) => (
                     <td key={j} className="px-4 py-3"><div className="h-4 bg-slate-100 dark:bg-slate-800 rounded animate-pulse" /></td>
                   ))}</tr>
                 ))
               ) : visibles.length === 0 ? (
-                <tr><td colSpan={6} className="px-4 py-12 text-center text-slate-400 dark:text-slate-500">
+                <tr><td colSpan={7} className="px-4 py-12 text-center text-slate-400 dark:text-slate-500">
                   <CalendarClock size={30} className="mx-auto mb-2" strokeWidth={1.5} />
                   <p className="text-sm">No hay vencimientos {tab !== 'todas' ? `de ${OBLIGACION_LABEL[tab as Obligacion]}` : 'registrados'}.</p>
                 </td></tr>
@@ -120,12 +122,20 @@ export default function VencimientosPage() {
                     <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{v.periodo}</td>
                     <td className="px-4 py-3 text-slate-700 dark:text-slate-200 tabular">{formatFecha(v.fecha)}</td>
                     <td className="px-4 py-3">
+                      {(() => {
+                        const u = urgenciaVencimiento(v.fecha, v.estado);
+                        return u
+                          ? <span className={cn('inline-block text-xs font-semibold px-2 py-1 rounded-lg whitespace-nowrap', u.className)}>{u.label}</span>
+                          : <span className="text-xs text-slate-300 dark:text-slate-600">—</span>;
+                      })()}
+                    </td>
+                    <td className="px-4 py-3">
                       <select
-                        value={v.estado}
+                        value={estadoManual(v.estado)}
                         onChange={(e) => estadoMut.mutate({ id: v.id, estado: e.target.value })}
-                        className={cn('text-xs font-medium px-2 py-1 rounded-lg border-0 cursor-pointer capitalize focus:ring-2 focus:ring-emerald-500/30', ESTADO_COLOR[v.estado])}
+                        className={cn('text-xs font-medium px-2 py-1 rounded-lg border-0 cursor-pointer focus:ring-2 focus:ring-emerald-500/30', ESTADO_COLOR[estadoManual(v.estado)])}
                       >
-                        {ESTADOS.map((s) => <option key={s.codigo} value={s.codigo}>{s.label}</option>)}
+                        {ESTADOS_MANUALES.map((s) => <option key={s.codigo} value={s.codigo}>{s.label}</option>)}
                       </select>
                     </td>
                     <td className="px-4 py-3 text-right">
