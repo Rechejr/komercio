@@ -13,8 +13,8 @@ const inputCls =
   'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[16px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition';
 
 const TIPOS = [
-  { codigo: 'facturacion_numeracion', label: 'Facturación / Numeración' },
-  { codigo: 'habilitacion_electronica', label: 'Habilitación electrónica' },
+  { codigo: 'factura_electronica', label: 'Factura Electrónica' },
+  { codigo: 'documento_soporte', label: 'Documento Soporte' },
   { codigo: 'otra', label: 'Otra' },
 ];
 const TIPO_LABEL: Record<string, string> = Object.fromEntries(TIPOS.map((t) => [t.codigo, t.label]));
@@ -143,7 +143,7 @@ function NuevaResolucionModal({ onClose }: { onClose: () => void }) {
   const [clienteSearch, setClienteSearch] = useState('');
   const [cliente, setCliente] = useState<{ id: string; razonSocial: string; nit: string; dv: number } | null>(null);
   const [form, setForm] = useState({
-    tipo: 'facturacion_numeracion', clase: 'autorizacion', numero: '', prefijo: '',
+    tipo: 'factura_electronica', clase: 'autorizacion', numero: '', prefijo: '',
     fechaExpedicion: '', fechaVigencia: '', modalidad: '',
   });
 

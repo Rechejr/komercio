@@ -804,8 +804,8 @@ enum EstadoVencimiento {
 }
 
 enum TipoResolucion {
-  facturacion_numeracion
-  habilitacion_electronica
+  factura_electronica
+  documento_soporte
   otra
 
   @@map("tipo_resolucion")
