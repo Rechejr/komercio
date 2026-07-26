@@ -449,7 +449,7 @@ export default function ClientesPage() {
       {previewOpen && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" onClick={closePreview} />
-          <div className="relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/[0.08] rounded-2xl shadow-modal w-full max-w-lg flex flex-col max-h-[90vh] animate-scale-in">
+          <div className="relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/[0.08] rounded-2xl shadow-modal w-full max-w-lg flex flex-col max-h-[90vh] overflow-hidden animate-scale-in">
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-white/[0.06] flex-shrink-0">
               <h2 className="text-[15px] font-semibold text-slate-800 dark:text-white flex items-center gap-2">
                 <FileUp size={16} className="text-emerald-500" /> Vista previa de importación
@@ -465,7 +465,7 @@ export default function ClientesPage() {
                 <p className="text-[13px] text-slate-500 dark:text-slate-400">Analizando archivo...</p>
               </div>
             ) : previewData ? (
-              <div className="p-6 space-y-5 overflow-y-auto min-h-0">
+              <div className="p-6 space-y-5 overflow-y-auto min-h-0 flex-1">
                 <p className="text-[13px] text-slate-600 dark:text-slate-400">
                   Se encontraron <span className="font-bold text-slate-800 dark:text-white">{previewData.total}</span> cliente{previewData.total !== 1 ? 's' : ''} en el archivo
                 </p>
@@ -564,7 +564,7 @@ export default function ClientesPage() {
       {importResult && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4" onClick={() => setImportResult(null)}>
           <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" />
-          <div className="relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/[0.08] rounded-2xl shadow-modal w-full max-w-md max-h-[80vh] flex flex-col animate-scale-in" onClick={(e) => e.stopPropagation()}>
+          <div className="relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/[0.08] rounded-2xl shadow-modal w-full max-w-md max-h-[80vh] flex flex-col overflow-hidden animate-scale-in" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-white/[0.06] flex-shrink-0">
               <h2 className="text-[15px] font-semibold text-slate-800 dark:text-white flex items-center gap-2">
                 <CheckCircle2 size={16} className="text-emerald-500" /> Importación completada
@@ -574,7 +574,7 @@ export default function ClientesPage() {
               </button>
             </div>
 
-            <div className="p-6 space-y-4 overflow-y-auto min-h-0">
+            <div className="p-6 space-y-4 overflow-y-auto min-h-0 flex-1">
               <div className="grid grid-cols-2 gap-3">
                 <div className="bg-emerald-50 dark:bg-emerald-500/10 rounded-xl p-4 text-center">
                   <p className="text-[22px] font-bold text-emerald-700 dark:text-emerald-400 tabular">{importResult.imported}</p>
