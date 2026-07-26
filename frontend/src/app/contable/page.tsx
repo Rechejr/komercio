@@ -22,11 +22,11 @@ export const metadata: Metadata = {
   },
 };
 
-// Precio anual por oficina (contador + hasta 3 auxiliares incluidos). Decidido
-// como precio de lanzamiento: debajo de la barrera de $200k, un "no-brainer"
-// frente a una sanción por extemporaneidad (~$520k) y horas de Excel. Con
-// espacio para subir con grandfathering cuando haya tracción.
-const PRECIO_ANUAL = 199900;
+// Precio anual por oficina (contador + hasta 3 auxiliares incluidos). Precio de
+// lanzamiento agresivo (~$10k/mes): un "no-brainer" frente a una sanción por
+// extemporaneidad (~$520k) y horas de Excel, y fácil de decir "sí" en la primera
+// prueba. Con espacio para subir con grandfathering cuando haya tracción.
+const PRECIO_ANUAL = 120000;
 const precioFmt = `$${PRECIO_ANUAL.toLocaleString('es-CO')}`;
 
 const BENEFITS = [

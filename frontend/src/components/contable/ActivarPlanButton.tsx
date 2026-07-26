@@ -10,7 +10,7 @@ import { cn } from '@/lib/utils';
  * Botón para activar/renovar el plan de Ventrix Contable.
  *
  * Reusa el mismo endpoint del POS (/payments/create-link): el backend detecta
- * que la cuenta es contable y cobra el precio anual correcto ($199.900) — el
+ * que la cuenta es contable y cobra el precio anual correcto ($120.000) — el
  * frontend no necesita saber el precio. Al volver de Wompi, /payment-result
  * refresca el plan y lleva al contador a su panel.
  */
@@ -41,7 +41,7 @@ export function ActivarPlanButton({ variant = 'primary' }: { variant?: 'primary'
       )}
     >
       {loading ? <Loader2 size={15} className="animate-spin" /> : null}
-      Activar plan — $199.900/año
+      Activar plan — $120.000/año
     </button>
   );
 }

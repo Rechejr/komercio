@@ -34,7 +34,7 @@ const PERIOD_LABELS: Record<string, string> = {
 
 // Ventrix Contable: plan anual por oficina (contador + hasta 3 auxiliares).
 // Debe coincidir con PRECIO_ANUAL del landing (frontend app/contable/page.tsx).
-const CONTABLE_ANNUAL_PRICE = 199900;
+const CONTABLE_ANNUAL_PRICE = 120000;
 const CONTABLE_ANNUAL_MONTHS = 12;
 
 function wompiPost(path: string, body: unknown): Promise<{ ok: boolean; status: number; data: any }> {
@@ -75,7 +75,7 @@ export const paymentController = {
       if (!businessId) throw new AppError('No tienes un negocio registrado', 400);
 
       // El producto define el precio. Una cuenta contable tiene un único plan
-      // (anual $199.900); una cuenta POS elige mensual/trimestral/anual.
+      // (anual $120.000); una cuenta POS elige mensual/trimestral/anual.
       const business = await prisma.business.findUnique({
         where: { id: businessId },
         select: { type: true },
