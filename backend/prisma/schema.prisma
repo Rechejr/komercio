@@ -828,6 +828,15 @@ enum EstadoResolucion {
   @@map("estado_resolucion")
 }
 
+// Clasificación DIAN de la resolución de numeración: autorización (tradicional/
+// POS) o habilitación (para facturación electrónica). La pide el contador.
+enum ClaseResolucion {
+  autorizacion
+  habilitacion
+
+  @@map("clase_resolucion")
+}
+
 // ─── Cliente del contador (multi-tenant) ───────────────────────────────────────
 model TaxClient {
   id                String            @id @default(uuid())
@@ -921,6 +930,8 @@ model ResolucionDian {
   taxClientId       String
   taxClient         TaxClient            @relation(fields: [taxClientId], references: [id], onDelete: Cascade)
   tipo              TipoResolucion
+  // Autorización o habilitación (nullable: registros previos no lo tenían).
+  clase             ClaseResolucion?
   numero            String
   fechaExpedicion   DateTime             @db.Date
   prefijo           String?

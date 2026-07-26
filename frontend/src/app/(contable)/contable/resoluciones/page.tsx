@@ -19,6 +19,12 @@ const TIPOS = [
 ];
 const TIPO_LABEL: Record<string, string> = Object.fromEntries(TIPOS.map((t) => [t.codigo, t.label]));
 
+const CLASES = [
+  { codigo: 'autorizacion', label: 'Autorización' },
+  { codigo: 'habilitacion', label: 'Habilitación' },
+];
+const CLASE_LABEL: Record<string, string> = Object.fromEntries(CLASES.map((c) => [c.codigo, c.label]));
+
 const ESTADO_COLOR: Record<string, string> = {
   vigente:   'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300',
   por_vencer:'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
@@ -27,7 +33,7 @@ const ESTADO_COLOR: Record<string, string> = {
 };
 
 interface Resolucion {
-  id: string; tipo: string; numero: string; fechaExpedicion: string; fechaVigencia: string;
+  id: string; tipo: string; clase: string | null; numero: string; fechaExpedicion: string; fechaVigencia: string;
   prefijo: string | null; estado: string;
   taxClient: { id: string; razonSocial: string };
 }
@@ -90,7 +96,10 @@ export default function ResolucionesPage() {
                 resoluciones.map((r) => (
                   <tr key={r.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
                     <td className="px-4 py-3 font-medium text-slate-900 dark:text-white">{r.taxClient.razonSocial}</td>
-                    <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{TIPO_LABEL[r.tipo] ?? r.tipo}</td>
+                    <td className="px-4 py-3 text-slate-600 dark:text-slate-300">
+                      {TIPO_LABEL[r.tipo] ?? r.tipo}
+                      {r.clase && <span className="block text-xs text-slate-400">{CLASE_LABEL[r.clase] ?? r.clase}</span>}
+                    </td>
                     <td className="px-4 py-3 text-slate-600 dark:text-slate-300">
                       {r.prefijo ? `${r.prefijo} · ` : ''}{r.numero}
                     </td>
@@ -134,7 +143,7 @@ function NuevaResolucionModal({ onClose }: { onClose: () => void }) {
   const [clienteSearch, setClienteSearch] = useState('');
   const [cliente, setCliente] = useState<{ id: string; razonSocial: string; nit: string; dv: number } | null>(null);
   const [form, setForm] = useState({
-    tipo: 'facturacion_numeracion', numero: '', prefijo: '',
+    tipo: 'facturacion_numeracion', clase: 'autorizacion', numero: '', prefijo: '',
     fechaExpedicion: '', fechaVigencia: '', modalidad: '',
   });
 
@@ -166,7 +175,7 @@ function NuevaResolucionModal({ onClose }: { onClose: () => void }) {
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" />
       <div className="relative bg-white dark:bg-slate-900 rounded-2xl shadow-modal w-full max-w-md max-h-[90vh] overflow-hidden flex flex-col animate-scale-in" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-slate-100 dark:border-white/[0.06]">
+        <div className="flex items-center justify-between px-6 pt-5 pb-4 flex-shrink-0 border-b border-slate-100 dark:border-white/[0.06]">
           <h2 className="text-lg font-bold text-slate-900 dark:text-white">Nueva resolución</h2>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 p-1"><X size={20} /></button>
         </div>
@@ -199,11 +208,19 @@ function NuevaResolucionModal({ onClose }: { onClose: () => void }) {
 
           {cliente && (
             <>
-              <div>
-                <label className="block text-[13px] font-medium text-slate-700 dark:text-slate-300 mb-1.5">Tipo</label>
-                <select value={form.tipo} onChange={(e) => setForm((f) => ({ ...f, tipo: e.target.value }))} className={inputCls}>
-                  {TIPOS.map((t) => <option key={t.codigo} value={t.codigo}>{t.label}</option>)}
-                </select>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[13px] font-medium text-slate-700 dark:text-slate-300 mb-1.5">Tipo</label>
+                  <select value={form.tipo} onChange={(e) => setForm((f) => ({ ...f, tipo: e.target.value }))} className={inputCls}>
+                    {TIPOS.map((t) => <option key={t.codigo} value={t.codigo}>{t.label}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[13px] font-medium text-slate-700 dark:text-slate-300 mb-1.5">Clase</label>
+                  <select value={form.clase} onChange={(e) => setForm((f) => ({ ...f, clase: e.target.value }))} className={inputCls}>
+                    {CLASES.map((c) => <option key={c.codigo} value={c.codigo}>{c.label}</option>)}
+                  </select>
+                </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -229,7 +246,7 @@ function NuevaResolucionModal({ onClose }: { onClose: () => void }) {
           )}
         </div>
 
-        <div className="px-6 py-4 border-t border-slate-100 dark:border-white/[0.06] flex gap-2">
+        <div className="px-6 py-4 border-t border-slate-100 dark:border-white/[0.06] flex-shrink-0 flex gap-2">
           <button onClick={onClose} className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-sm font-medium text-slate-600 dark:text-slate-300">Cancelar</button>
           <button onClick={submit} disabled={saveMut.isPending} className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-60">
             {saveMut.isPending ? <Loader2 size={15} className="animate-spin" /> : null} Registrar

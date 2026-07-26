@@ -561,7 +561,7 @@ export const contableController = {
   async createResolucion(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const businessId = req.user!.businessId!;
-      const { taxClientId, tipo, numero, fechaExpedicion, fechaVigencia, prefijo, rangoDesde, rangoHasta, modalidad, notas } = req.body;
+      const { taxClientId, tipo, clase, numero, fechaExpedicion, fechaVigencia, prefijo, rangoDesde, rangoHasta, modalidad, notas } = req.body;
 
       await getClientOfBusiness(taxClientId, businessId);
       const TIPOS = ['facturacion_numeracion', 'habilitacion_electronica', 'otra'];
@@ -573,6 +573,7 @@ export const contableController = {
         data: {
           taxClientId,
           tipo,
+          clase: clase === 'autorizacion' || clase === 'habilitacion' ? clase : null,
           numero: numero.trim(),
           fechaExpedicion: new Date(`${fechaExpedicion}T00:00:00Z`),
           fechaVigencia: new Date(`${fechaVigencia}T00:00:00Z`),
