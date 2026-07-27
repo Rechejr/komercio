@@ -6,7 +6,11 @@ import { AppError, success } from '../utils/response';
 import { logger } from '../config/logger';
 import { AuthRequest } from '../middlewares/auth';
 
-const isTestMode = process.env.WOMPI_PRIVATE_KEY?.startsWith('prv_test_');
+// .trim() defensivo: al pegar las llaves en el panel de hosting es fácil arrastrar
+// un espacio o salto de línea, y un '\n' en el valor rompe el header Authorization
+// (ERR_INVALID_CHAR) o desalinea el secreto de firma. Se limpia una sola vez aquí.
+const WOMPI_PRIVATE_KEY = (process.env.WOMPI_PRIVATE_KEY || '').trim();
+const isTestMode = WOMPI_PRIVATE_KEY.startsWith('prv_test_');
 const WOMPI_BASE = isTestMode
   ? 'sandbox.wompi.co'
   : 'production.wompi.co';
@@ -45,7 +49,7 @@ function wompiPost(path: string, body: unknown): Promise<{ ok: boolean; status: 
       path,
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${process.env.WOMPI_PRIVATE_KEY}`,
+        'Authorization': `Bearer ${WOMPI_PRIVATE_KEY}`,
         'Content-Type': 'application/json',
         'Content-Length': Buffer.byteLength(payload),
       },
@@ -173,7 +177,7 @@ export const paymentController = {
 
   async webhook(req: Request, res: Response, next: NextFunction) {
     try {
-      const eventsSecret = process.env.WOMPI_EVENTS_SECRET;
+      const eventsSecret = (process.env.WOMPI_EVENTS_SECRET || '').trim();
       if (!eventsSecret) {
         logger.error('WOMPI_EVENTS_SECRET no configurado — rechazando webhook');
         return res.status(500).json({ error: 'Webhook no configurado' });
