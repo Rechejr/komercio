@@ -30,6 +30,7 @@ const PAGE_LABELS: Record<string, string> = {
   '/contable/panel':        'Panel',
   '/contable/clientes':     'Clientes',
   '/contable/vencimientos': 'Vencimientos',
+  '/contable/pila':         'PILA',
   '/contable/resoluciones': 'Resoluciones DIAN',
   '/contable/exogena':      'Información Exógena',
   '/contable/otras-responsabilidades': 'Otras Responsabilidades',
