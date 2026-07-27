@@ -135,6 +135,7 @@ describe('POST /api/v1/auth/register', () => {
           create: jest.fn().mockResolvedValue({ id: 'biz-2', branches: [{ id: 'br-2' }] }),
         },
         expenseCategory: { createMany: jest.fn().mockResolvedValue({ count: 8 }) },
+        paymentAccount: { createMany: jest.fn().mockResolvedValue({ count: 5 }) },
       })
     );
 
