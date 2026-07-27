@@ -4,7 +4,8 @@ import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
-import { formatCurrency, formatDateTime, statusColor, statusLabel, paymentMethodLabel } from '@/lib/utils';
+import { formatCurrency, formatDateTime, statusColor, statusLabel } from '@/lib/utils';
+import { usePaymentAccounts, labelPago } from '@/lib/usePaymentAccounts';
 import toast from 'react-hot-toast';
 import { Search, X, ShoppingCart, Ban, ChevronRight, FileDown, Loader2, AlertTriangle, Trash2, Printer } from 'lucide-react';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -20,6 +21,7 @@ const inputCls = 'px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-
 
 export default function VentasPage() {
   const qc = useQueryClient();
+  const { all: allAccounts } = usePaymentAccounts();
   const searchParams = useSearchParams();
   // El backend ya rechaza anular/eliminar para Cajero (sale.routes.ts) — esto solo
   // evita mostrarle un botón que de todas formas le va a fallar con un 403.
@@ -221,7 +223,7 @@ export default function VentasPage() {
                   <td className="hidden md:table-cell px-4 py-3 text-[13px] text-slate-500 dark:text-slate-400">{s.user?.name}</td>
                   <td className="hidden sm:table-cell px-4 py-3 text-center text-[13px] text-slate-500 dark:text-slate-400 tabular-nums">{s._count?.details}</td>
                   <td className="px-4 py-3 text-right text-[13px] font-semibold text-slate-900 dark:text-white tabular-nums">{formatCurrency(s.total)}</td>
-                  <td className="hidden md:table-cell px-4 py-3 text-[12px] text-slate-500 dark:text-slate-400">{paymentMethodLabel[s.paymentMethod] || s.paymentMethod}</td>
+                  <td className="hidden md:table-cell px-4 py-3 text-[12px] text-slate-500 dark:text-slate-400">{labelPago(allAccounts, s.paymentAccountId, s.paymentMethod)}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1.5 flex-wrap">
                       {s.credit && s.credit.status !== 'PAID' ? (
@@ -362,6 +364,7 @@ export default function VentasPage() {
                   paidAmount={Number(detail.paidAmount)}
                   changeAmount={Number(detail.changeAmount)}
                   paymentMethod={detail.paymentMethod}
+                  paymentLabel={labelPago(allAccounts, detail.paymentAccountId, detail.paymentMethod)}
                   customerName={detail.customer?.name || null}
                   cashierName={detail.user?.name || null}
                   business={businessInfo}

@@ -7,7 +7,8 @@ import { api } from '@/lib/api';
 import { useCartStore } from '@/store/cart.store';
 import { useAuthStore } from '@/store/auth.store';
 import { useUpgradeStore } from '@/store/upgrade.store';
-import { formatCurrency, formatDate, paymentMethodLabel, statusColor, statusLabel, cn } from '@/lib/utils';
+import { formatCurrency, formatDate, statusColor, statusLabel, cn } from '@/lib/utils';
+import { usePaymentAccounts, labelPago } from '@/lib/usePaymentAccounts';
 import { EASE, DUR } from '@/lib/motion';
 import { useSound } from '@/lib/useSound';
 import toast from 'react-hot-toast';
@@ -23,8 +24,6 @@ import { Receipt, type ReceiptItem } from '@/components/Receipt';
 import { BarcodeScanner } from '@/components/ui/BarcodeScanner';
 import { WhatsAppIcon } from '@/components/ui/WhatsAppIcon';
 import { shareSaleViaWhatsApp } from '@/lib/receiptShare';
-
-const PAYMENT_METHODS = ['CASH', 'NEQUI', 'DAVIPLATA', 'TRANSFER', 'CARD', 'MIXED'];
 
 // ── Category color + icon palette (alineado con guía de estilo Ventrix) ──────
 const CAT_MAP: Record<string, { rgb: string; color: string; icon: LucideIcon }> = {
@@ -108,7 +107,7 @@ export default function POSPage() {
   const [newCustPhone, setNewCustPhone]       = useState('');
   const [newCustDoc, setNewCustDoc]           = useState('');
   const [newCustAddress, setNewCustAddress]   = useState('');
-  const [mixedPayments, setMixedPayments]     = useState<Array<{ method: string; amount: number }>>([]);
+  const [mixedPayments, setMixedPayments]     = useState<Array<{ method: string; amount: number; paymentAccountId?: string; name?: string }>>([]);
   const [splitMethod, setSplitMethod]         = useState('CASH');
   const [splitAmount, setSplitAmount]         = useState('');
   const [saleNotes, setSaleNotes]             = useState('');
@@ -117,6 +116,22 @@ export default function POSPage() {
   const [creditPayAmount, setCreditPayAmount] = useState('');
   const [creditPayMethod, setCreditPayMethod] = useState('CASH');
   const searchRef = useRef<HTMLInputElement>(null);
+
+  // Medios de pago configurables. paymentMethod/splitMethod/creditPayMethod pasan a
+  // guardar el ID del medio (o 'MIXED' para el pago mixto).
+  const { active: paymentAccounts, all: allAccounts } = usePaymentAccounts();
+  const selectedAccount = paymentAccounts.find((a) => a.id === paymentMethod);
+  const isCashSelected = selectedAccount?.type === 'CASH';
+
+  // Al cargar los medios, fijar un valor válido por defecto (el estado inicial
+  // 'CASH' no es un id de medio). Solo corrige si la selección no es válida.
+  useEffect(() => {
+    if (paymentAccounts.length === 0) return;
+    const firstId = paymentAccounts[0].id;
+    if (paymentMethod !== 'MIXED' && !paymentAccounts.some((a) => a.id === paymentMethod)) setPaymentMethod(firstId);
+    if (!paymentAccounts.some((a) => a.id === splitMethod)) setSplitMethod(firstId);
+    if (!paymentAccounts.some((a) => a.id === creditPayMethod)) setCreditPayMethod(firstId);
+  }, [paymentAccounts]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Focalizar el buscador solo en escritorio al montar (en móvil evita teclado automático)
   useEffect(() => {
@@ -188,7 +203,7 @@ export default function POSPage() {
 
   function handleCreditPayment() {
     if (!selectedCreditId || !creditPayAmount || parseFloat(creditPayAmount) <= 0) return;
-    creditPaymentMutation.mutate({ creditId: selectedCreditId, amount: parseFloat(creditPayAmount), paymentMethod: creditPayMethod });
+    creditPaymentMutation.mutate({ creditId: selectedCreditId, amount: parseFloat(creditPayAmount), paymentAccountId: creditPayMethod });
   }
 
   const saleMutation = useMutation({
@@ -210,7 +225,7 @@ export default function POSPage() {
       setSearch('');
       setMixedPayments([]);
       setSplitAmount('');
-      setSplitMethod('CASH');
+      setSplitMethod(paymentAccounts[0]?.id || '');
       setSaleNotes('');
       setPaidAmount('');
       toast.success('¡Venta registrada!');
@@ -250,7 +265,15 @@ export default function POSPage() {
   function addSplitPayment() {
     const amount = parseFloat(splitAmount);
     if (!amount || amount <= 0) return;
-    const newPayments = [...mixedPayments, { method: splitMethod, amount }];
+    const acct = paymentAccounts.find((a) => a.id === splitMethod);
+    const newPayments = [...mixedPayments, {
+      // method (enum) alimenta la validación y el cálculo de caja del backend;
+      // paymentAccountId + name se guardan para mostrar el medio real.
+      method: (acct?.legacyEnum || 'TRANSFER') as string,
+      amount,
+      paymentAccountId: acct?.id,
+      name: acct?.name,
+    }];
     setMixedPayments(newPayments);
     const newTotal = newPayments.reduce((sum, p) => sum + p.amount, 0);
     const remaining = Math.max(0, total - newTotal);
@@ -291,8 +314,12 @@ export default function POSPage() {
     saleMutation.mutate({
       customerId: customerId || undefined,
       items: items.map((i) => ({ productId: i.productId, quantity: i.quantity, discountPct: i.discountPct })),
-      paymentMethod, paidAmount: paid,
-      paymentDetails: paymentMethod === 'MIXED' ? { splits: mixedPayments } : undefined,
+      // Pago simple → paymentAccountId (el backend deriva el enum). MIXTO conserva
+      // el flujo por splits (paymentMethod='MIXED').
+      ...(paymentMethod === 'MIXED'
+        ? { paymentMethod: 'MIXED', paymentDetails: { splits: mixedPayments } }
+        : { paymentAccountId: paymentMethod }),
+      paidAmount: paid,
       discountAmount: discount, isCredit,
       notes: saleNotes.trim() || undefined,
     });
@@ -327,6 +354,7 @@ export default function POSPage() {
               paidAmount={Number(lastSale.paidAmount)}
               changeAmount={Number(lastSale.changeAmount)}
               paymentMethod={lastSale.paymentMethod}
+              paymentLabel={labelPago(allAccounts, lastSale.paymentAccountId, lastSale.paymentMethod)}
               customerName={selectedCustomer?.name || null}
               cashierName={cashierName || null}
               business={businessInfo}
@@ -825,19 +853,19 @@ export default function POSPage() {
             <div>
               <label className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2 block">Método de pago</label>
               <div className="grid grid-cols-2 gap-1.5">
-                {PAYMENT_METHODS.map((m) => (
+                {[...paymentAccounts.map((a) => ({ value: a.id, label: a.name })), { value: 'MIXED', label: 'Mixto' }].map((opt) => (
                   <button
-                    key={m}
+                    key={opt.value}
                     type="button"
-                    onClick={() => setPaymentMethod(m)}
+                    onClick={() => setPaymentMethod(opt.value)}
                     className={cn(
                       'text-[12px] py-2 px-2 rounded-xl border font-semibold transition-all duration-150',
-                      paymentMethod === m
+                      paymentMethod === opt.value
                         ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
                         : 'border-slate-200 dark:border-slate-700/60 text-slate-600 dark:text-slate-400 hover:border-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/50',
                     )}
                   >
-                    {paymentMethodLabel[m]}
+                    {opt.label}
                   </button>
                 ))}
               </div>
@@ -852,8 +880,8 @@ export default function POSPage() {
                     onChange={(e) => setSplitMethod(e.target.value)}
                     className="flex-1 min-w-0 px-2 py-2 border border-slate-200 dark:border-slate-700/60 rounded-xl text-[16px] sm:text-[12px] focus:outline-none focus:ring-2 focus:ring-emerald-500/30 bg-slate-50 dark:bg-slate-800/60 dark:text-white"
                   >
-                    {PAYMENT_METHODS.filter((m) => m !== 'MIXED').map((m) => (
-                      <option key={m} value={m}>{paymentMethodLabel[m]}</option>
+                    {paymentAccounts.map((a) => (
+                      <option key={a.id} value={a.id}>{a.name}</option>
                     ))}
                   </select>
                   <input
@@ -878,7 +906,7 @@ export default function POSPage() {
                   <div className="bg-slate-50 dark:bg-slate-800/40 rounded-xl overflow-hidden border border-slate-100 dark:border-white/[0.06]">
                     {mixedPayments.map((p, i) => (
                       <div key={i} className="flex items-center justify-between px-3 py-2 border-b border-slate-100 dark:border-white/[0.04] last:border-b-0">
-                        <span className="text-[12px] text-slate-600 dark:text-slate-400">{paymentMethodLabel[p.method]}</span>
+                        <span className="text-[12px] text-slate-600 dark:text-slate-400">{p.name || labelPago(allAccounts, p.paymentAccountId, p.method)}</span>
                         <div className="flex items-center gap-2">
                           <span className="text-[13px] font-semibold text-slate-800 dark:text-white tabular">{formatCurrency(p.amount)}</span>
                           <button type="button" aria-label="Quitar pago" onClick={() => removeSplitPayment(i)} className="text-slate-300 hover:text-red-500 transition-colors">
@@ -947,7 +975,7 @@ export default function POSPage() {
                     <p className="font-bold text-amber-700 dark:text-amber-400 text-[18px] tabular">{formatCurrency(total - parseFloat(paidAmount))}</p>
                   </div>
                 )}
-                {paymentMethod === 'CASH' && parseFloat(paidAmount) >= total && parseFloat(paidAmount) > 0 && (
+                {isCashSelected && parseFloat(paidAmount) >= total && parseFloat(paidAmount) > 0 && (
                   <div className="bg-emerald-50 dark:bg-emerald-500/10 rounded-xl p-2.5 text-center border border-emerald-100 dark:border-emerald-500/20">
                     <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold uppercase tracking-wide">Cambio</p>
                     <p className="font-bold text-emerald-700 dark:text-emerald-400 text-[18px] tabular">{formatCurrency(change)}</p>
@@ -1098,19 +1126,19 @@ export default function POSPage() {
                 <div>
                   <label className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5 block">Método de pago</label>
                   <div className="grid grid-cols-3 gap-1.5">
-                    {(['CASH', 'NEQUI', 'DAVIPLATA', 'TRANSFER', 'CARD'] as const).map((m) => (
+                    {paymentAccounts.map((a) => (
                       <button
-                        key={m}
+                        key={a.id}
                         type="button"
-                        onClick={() => setCreditPayMethod(m)}
+                        onClick={() => setCreditPayMethod(a.id)}
                         className={cn(
                           'text-[12px] py-1.5 px-1 rounded-xl border font-semibold transition-all duration-150',
-                          creditPayMethod === m
+                          creditPayMethod === a.id
                             ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
                             : 'border-slate-200 dark:border-slate-700/60 text-slate-600 dark:text-slate-400 hover:border-slate-300',
                         )}
                       >
-                        {paymentMethodLabel[m]}
+                        {a.name}
                       </button>
                     ))}
                   </div>

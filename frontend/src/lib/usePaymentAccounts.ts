@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { paymentMethodLabel } from '@/lib/utils';
@@ -19,8 +20,11 @@ export function usePaymentAccounts() {
     queryFn: () => api.get('/business/payment-accounts').then((r) => r.data.data),
     staleTime: 5 * 60 * 1000,
   });
-  const all = data || [];
-  return { all, active: all.filter((a) => a.active) };
+  // Memoizado por `data`: refs estables entre renders (importa para deps de efectos).
+  return useMemo(() => {
+    const all = data || [];
+    return { all, active: all.filter((a) => a.active) };
+  }, [data]);
 }
 
 /** Nombre a mostrar de un pago: el nombre del medio configurable si existe; si no

@@ -47,7 +47,9 @@ interface ReceiptProps {
   /** Si es 'CANCELLED' se muestra el sello ANULADA en vez de COBRADO/FIADO */
   status?: string;
   /** Desglose de pago mixto, se lista bajo el pill de método de pago */
-  paymentDetails?: { splits?: { method: string; amount: number }[] } | null;
+  paymentDetails?: { splits?: { method: string; amount: number; name?: string }[] } | null;
+  /** Nombre del medio de pago configurable (si se conoce); reemplaza la etiqueta del enum. */
+  paymentLabel?: string;
 }
 
 function Dash() {
@@ -58,7 +60,7 @@ export function Receipt({
   invoiceNumber, createdAt, items, subtotal, discountAmount, taxAmount,
   total, paidAmount, changeAmount, paymentMethod,
   customerName, cashierName, business, animated = false,
-  status, paymentDetails,
+  status, paymentDetails, paymentLabel,
 }: ReceiptProps) {
   const date     = new Date(createdAt);
   const dateStr  = date.toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -269,13 +271,13 @@ export function Receipt({
           padding: '3px 12px',
           borderRadius: 20,
         }}>
-          {PM_LABEL[paymentMethod] || paymentMethod}
+          {paymentLabel || PM_LABEL[paymentMethod] || paymentMethod}
         </span>
         {paymentMethod === 'MIXED' && paymentDetails?.splits && paymentDetails.splits.length > 0 && (
           <div style={{ marginTop: 6 }}>
             {paymentDetails.splits.map((s, i) => (
               <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#64748b', maxWidth: 200, margin: '0 auto' }}>
-                <span>{PM_LABEL[s.method] || s.method}</span>
+                <span>{s.name || PM_LABEL[s.method] || s.method}</span>
                 <span style={{ fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(s.amount)}</span>
               </div>
             ))}
