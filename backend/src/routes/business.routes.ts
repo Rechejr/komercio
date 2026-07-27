@@ -125,4 +125,110 @@ router.put('/branches/:id', authorize('ADMIN'), async (req: AuthRequest, res: Re
   } catch (err) { next(err); }
 });
 
+// ─── MEDIOS DE PAGO (PaymentAccount) ──────────────────────────────────────────
+// Cuentas configurables donde entra/sale la plata (Efectivo, Bancolombia, Caja 1,
+// Nequi…). Patrón de Bodegas: solo el ADMIN las gestiona. `type` define cuáles son
+// EFECTIVO (los únicos que alimentan la caja física); `legacyEnum` mantiene poblado
+// el enum viejo en escrituras nuevas para no romper reportes durante la transición.
+const PAYMENT_TYPES = ['CASH', 'BANK', 'OTHER'] as const;
+const legacyEnumDeTipo = (type: string) => (type === 'CASH' ? 'CASH' : 'TRANSFER');
+
+router.get('/payment-accounts', async (req: AuthRequest, res, next) => {
+  try {
+    const businessId = req.user!.businessId;
+    if (!businessId) return success(res, []);
+    const accounts = await prisma.paymentAccount.findMany({
+      where: { businessId },
+      orderBy: [{ order: 'asc' }, { createdAt: 'asc' }],
+    });
+    return success(res, accounts);
+  } catch (err) { next(err); }
+});
+
+router.post('/payment-accounts', authorize('ADMIN'),
+  [
+    body('name').trim().notEmpty().withMessage('El nombre es requerido'),
+    body('type').optional().isIn(PAYMENT_TYPES as unknown as string[]).withMessage('Tipo inválido'),
+  ],
+  validate,
+  async (req: AuthRequest, res: Response, next: NextFunction) => {
+    try {
+      const businessId = req.user!.businessId;
+      if (!businessId) throw new AppError('No se encontró un negocio para este usuario', 400);
+
+      const { name } = req.body;
+      const type = (req.body.type as string) || 'OTHER';
+      const count = await prisma.paymentAccount.count({ where: { businessId } });
+
+      const account = await prisma.paymentAccount.create({
+        data: {
+          businessId,
+          name: name.trim(),
+          type: type as any,
+          legacyEnum: legacyEnumDeTipo(type) as any,
+          order: count,
+        },
+      });
+      return created(res, account, 'Medio de pago creado');
+    } catch (err) { next(err); }
+  });
+
+router.put('/payment-accounts/:id', authorize('ADMIN'),
+  [
+    body('name').optional().trim().notEmpty().withMessage('El nombre no puede estar vacío'),
+    body('type').optional().isIn(PAYMENT_TYPES as unknown as string[]).withMessage('Tipo inválido'),
+    body('active').optional().isBoolean(),
+    body('order').optional().isInt({ min: 0 }),
+  ],
+  validate,
+  async (req: AuthRequest, res: Response, next: NextFunction) => {
+    try {
+      const existing = await prisma.paymentAccount.findFirst({
+        where: { id: req.params.id, businessId: req.user!.businessId },
+      });
+      if (!existing) throw new AppError('Medio de pago no encontrado', 404);
+
+      const { name, type, active, order } = req.body;
+      const account = await prisma.paymentAccount.update({
+        where: { id: req.params.id },
+        data: {
+          name: name !== undefined ? name.trim() : undefined,
+          type: type !== undefined ? (type as any) : undefined,
+          // Si cambia el tipo, se recalcula el puente con el enum viejo.
+          legacyEnum: type !== undefined ? (legacyEnumDeTipo(type) as any) : undefined,
+          active: active !== undefined ? active : undefined,
+          order: order !== undefined ? order : undefined,
+        },
+      });
+      return success(res, account, 'Medio de pago actualizado');
+    } catch (err) { next(err); }
+  });
+
+// Borrado seguro: si el medio ya tiene movimientos (ventas/compras/gastos/abonos),
+// NO se borra — se desactiva, para conservar a qué cuenta fue cada movimiento
+// histórico. Solo se elimina de verdad si nunca se usó.
+router.delete('/payment-accounts/:id', authorize('ADMIN'), async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const existing = await prisma.paymentAccount.findFirst({
+      where: { id: req.params.id, businessId: req.user!.businessId },
+    });
+    if (!existing) throw new AppError('Medio de pago no encontrado', 404);
+
+    const [ventas, compras, gastos, abonos] = await Promise.all([
+      prisma.sale.count({ where: { paymentAccountId: existing.id } }),
+      prisma.purchase.count({ where: { paymentAccountId: existing.id } }),
+      prisma.expense.count({ where: { paymentAccountId: existing.id } }),
+      prisma.creditPayment.count({ where: { paymentAccountId: existing.id } }),
+    ]);
+    const enUso = ventas + compras + gastos + abonos > 0;
+
+    if (enUso) {
+      await prisma.paymentAccount.update({ where: { id: existing.id }, data: { active: false } });
+      return success(res, { deactivated: true }, 'Medio de pago desactivado (tiene movimientos y no se puede borrar para no perder el historial)');
+    }
+    await prisma.paymentAccount.delete({ where: { id: existing.id } });
+    return success(res, { deleted: true }, 'Medio de pago eliminado');
+  } catch (err) { next(err); }
+});
+
 export default router;

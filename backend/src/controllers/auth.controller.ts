@@ -83,6 +83,17 @@ export const authController = {
             await tx.expenseCategory.createMany({
               data: defaultCategories.map((name) => ({ name, businessId: business.id })),
             });
+            // Medios de pago por defecto (los mismos que sembró el backfill a los
+            // negocios existentes). Solo Efectivo es CASH → alimenta la caja física.
+            await tx.paymentAccount.createMany({
+              data: [
+                { name: 'Efectivo',      type: 'CASH',  legacyEnum: 'CASH',      order: 0 },
+                { name: 'Transferencia', type: 'BANK',  legacyEnum: 'TRANSFER',  order: 1 },
+                { name: 'Nequi',         type: 'OTHER', legacyEnum: 'NEQUI',     order: 2 },
+                { name: 'Daviplata',     type: 'OTHER', legacyEnum: 'DAVIPLATA', order: 3 },
+                { name: 'Tarjeta',       type: 'BANK',  legacyEnum: 'CARD',      order: 4 },
+              ].map((a) => ({ ...a, type: a.type as any, legacyEnum: a.legacyEnum as any, businessId: business.id })),
+            });
           }
         }
 

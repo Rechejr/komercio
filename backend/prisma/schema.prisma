@@ -60,32 +60,32 @@ enum MovementType {
 
 // ─── USERS ────────────────────────────────────────────────────────────────────
 model User {
-  id                   String         @id @default(uuid())
+  id                   String          @id @default(uuid())
   name                 String
-  email                String         @unique
+  email                String          @unique
   phone                String?
   password             String
-  googleId             String?        @unique
-  role                 UserRole       @default(CASHIER)
-  isActive             Boolean        @default(true)
-  isEmailVerified      Boolean        @default(false)
+  googleId             String?         @unique
+  role                 UserRole        @default(CASHIER)
+  isActive             Boolean         @default(true)
+  isEmailVerified      Boolean         @default(false)
   emailVerifyToken     String?
   resetPasswordToken   String?
   resetPasswordExpires DateTime?
   avatar               String?
   lastLogin            DateTime?
   refreshTokens        RefreshToken[]
-  business             Business?      @relation("BusinessOwner")
+  business             Business?       @relation("BusinessOwner")
   branchId             String?
-  branch               Branch?        @relation(fields: [branchId], references: [id])
-  createdBranches      Branch[]       @relation("BranchCreator")
+  branch               Branch?         @relation(fields: [branchId], references: [id])
+  createdBranches      Branch[]        @relation("BranchCreator")
   createdTransfers     StockTransfer[]
   cashMovements        CashMovement[]
   sales                Sale[]
   auditLogs            AuditLog[]
   notifications        Notification[]
-  createdAt            DateTime       @default(now())
-  updatedAt            DateTime       @updatedAt
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
   deletedAt            DateTime?
 
   @@index([email])
@@ -145,6 +145,9 @@ model Business {
   settings          Json?
   paymentLinks      PaymentLink[]
   aiWeeklySummaries AiWeeklySummary[]
+  // Medios de pago configurables (Efectivo, Bancolombia, BBVA, Caja 1, Nequi…).
+  // Reemplazan progresivamente al enum PaymentMethod fijo. Ver PaymentAccount.
+  paymentAccounts   PaymentAccount[]
   // Ventrix Contable: los clientes tributarios de una oficina contable. Solo se
   // usan cuando type == "contable"; en una cuenta POS la relación queda vacía.
   taxClients        TaxClient[]
@@ -193,29 +196,29 @@ model PaymentLink {
 }
 
 model Branch {
-  id            String         @id @default(uuid())
-  name          String
-  address       String?
-  phone         String?
-  businessId    String
-  business      Business       @relation(fields: [businessId], references: [id])
+  id                 String              @id @default(uuid())
+  name               String
+  address            String?
+  phone              String?
+  businessId         String
+  business           Business            @relation(fields: [businessId], references: [id])
   // Quién creó la sucursal — pista de auditoría; nunca se usa para autorizar nada,
   // solo para poder revisar el historial si algo se ve raro (ej. reventa de sucursal).
-  createdById   String?
-  createdBy     User?          @relation("BranchCreator", fields: [createdById], references: [id])
-  users         User[]
-  products      Product[]
-  sales         Sale[]
-  cashRegisters CashRegister[]
-  purchases     Purchase[]
+  createdById        String?
+  createdBy          User?               @relation("BranchCreator", fields: [createdById], references: [id])
+  users              User[]
+  products           Product[]
+  sales              Sale[]
+  cashRegisters      CashRegister[]
+  purchases          Purchase[]
   inventoryMovements InventoryMovement[]
-  productStocks ProductStock[]
-  purchaseDetails PurchaseDetail[]
-  transfersOut  StockTransfer[] @relation("TransferFrom")
-  transfersIn   StockTransfer[] @relation("TransferTo")
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-  deletedAt     DateTime?
+  productStocks      ProductStock[]
+  purchaseDetails    PurchaseDetail[]
+  transfersOut       StockTransfer[]     @relation("TransferFrom")
+  transfersIn        StockTransfer[]     @relation("TransferTo")
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  deletedAt          DateTime?
 
   @@index([businessId])
   @@map("branches")
@@ -457,29 +460,33 @@ model Supplier {
 
 // ─── SALES ────────────────────────────────────────────────────────────────────
 model Sale {
-  id             String        @id @default(uuid())
-  invoiceNumber  String
-  customerId     String?
-  customer       Customer?     @relation(fields: [customerId], references: [id])
-  userId         String
-  user           User          @relation(fields: [userId], references: [id])
-  branchId       String
-  branch         Branch        @relation(fields: [branchId], references: [id])
-  status         SaleStatus    @default(COMPLETED)
-  subtotal       Decimal
-  taxAmount      Decimal       @default(0)
-  discountAmount Decimal       @default(0)
-  total          Decimal
-  paidAmount     Decimal
-  changeAmount   Decimal       @default(0)
-  paymentMethod  PaymentMethod @default(CASH)
-  paymentDetails Json?
-  notes          String?
-  details        SaleDetail[]
-  credit         Credit?
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
-  deletedAt      DateTime?
+  id               String          @id @default(uuid())
+  invoiceNumber    String
+  customerId       String?
+  customer         Customer?       @relation(fields: [customerId], references: [id])
+  userId           String
+  user             User            @relation(fields: [userId], references: [id])
+  branchId         String
+  branch           Branch          @relation(fields: [branchId], references: [id])
+  status           SaleStatus      @default(COMPLETED)
+  subtotal         Decimal
+  taxAmount        Decimal         @default(0)
+  discountAmount   Decimal         @default(0)
+  total            Decimal
+  paidAmount       Decimal
+  changeAmount     Decimal         @default(0)
+  paymentMethod    PaymentMethod   @default(CASH)
+  // Medio de pago configurable (nullable durante la transición; convive con el
+  // enum de arriba). En ventas MIXTAS queda null: el desglose va en paymentDetails.
+  paymentAccountId String?
+  paymentAccount   PaymentAccount? @relation(fields: [paymentAccountId], references: [id])
+  paymentDetails   Json?
+  notes            String?
+  details          SaleDetail[]
+  credit           Credit?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  deletedAt        DateTime?
 
   @@unique([branchId, invoiceNumber])
   @@index([customerId])
@@ -489,6 +496,7 @@ model Sale {
   @@index([branchId, createdAt])
   @@index([status, createdAt])
   @@index([branchId, status, createdAt])
+  @@index([paymentAccountId])
   @@map("sales")
 }
 
@@ -514,32 +522,35 @@ model SaleDetail {
 
 // ─── PURCHASES ────────────────────────────────────────────────────────────────
 model Purchase {
-  id            String          @id @default(uuid())
-  businessId    String
-  business      Business        @relation(fields: [businessId], references: [id])
-  invoiceNumber String?
-  supplierId    String
-  supplier      Supplier        @relation(fields: [supplierId], references: [id])
-  status        PurchaseStatus  @default(COMPLETED)
-  subtotal      Decimal
-  taxAmount     Decimal         @default(0)
-  total         Decimal
-  paymentMethod PaymentMethod   @default(CASH)
-  invoicePdf    String?
-  notes         String?
-  purchaseDate  DateTime        @default(now())
-  details       PurchaseDetail[]
+  id               String           @id @default(uuid())
+  businessId       String
+  business         Business         @relation(fields: [businessId], references: [id])
+  invoiceNumber    String?
+  supplierId       String
+  supplier         Supplier         @relation(fields: [supplierId], references: [id])
+  status           PurchaseStatus   @default(COMPLETED)
+  subtotal         Decimal
+  taxAmount        Decimal          @default(0)
+  total            Decimal
+  paymentMethod    PaymentMethod    @default(CASH)
+  paymentAccountId String?
+  paymentAccount   PaymentAccount?  @relation(fields: [paymentAccountId], references: [id])
+  invoicePdf       String?
+  notes            String?
+  purchaseDate     DateTime         @default(now())
+  details          PurchaseDetail[]
   // Nullable — compras históricas (antes de esta función) quedan sin bodega.
-  branchId      String?
-  branch        Branch?         @relation(fields: [branchId], references: [id])
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
-  deletedAt     DateTime?
+  branchId         String?
+  branch           Branch?          @relation(fields: [branchId], references: [id])
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  deletedAt        DateTime?
 
   @@index([supplierId])
   @@index([businessId])
   @@index([branchId])
   @@index([businessId, purchaseDate])
+  @@index([paymentAccountId])
   @@map("purchases")
 }
 
@@ -584,14 +595,16 @@ model ExpenseCategory {
 }
 
 model Expense {
-  id            String           @id @default(uuid())
-  businessId    String?
-  business      Business?        @relation(fields: [businessId], references: [id])
-  categoryId    String?
-  category      ExpenseCategory? @relation(fields: [categoryId], references: [id])
-  description   String
-  amount        Decimal
-  paymentMethod PaymentMethod    @default(CASH)
+  id                String           @id @default(uuid())
+  businessId        String?
+  business          Business?        @relation(fields: [businessId], references: [id])
+  categoryId        String?
+  category          ExpenseCategory? @relation(fields: [categoryId], references: [id])
+  description       String
+  amount            Decimal
+  paymentMethod     PaymentMethod    @default(CASH)
+  paymentAccountId  String?
+  paymentAccount    PaymentAccount?  @relation(fields: [paymentAccountId], references: [id])
   receiptUrl        String?
   date              DateTime         @default(now())
   notes             String?
@@ -600,15 +613,16 @@ model Expense {
   recipientPhone    String?
   supplierId        String?
   supplier          Supplier?        @relation(fields: [supplierId], references: [id])
-  createdAt     DateTime         @default(now())
-  updatedAt     DateTime         @updatedAt
-  deletedAt     DateTime?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  deletedAt         DateTime?
 
   @@index([businessId])
   @@index([categoryId])
   @@index([supplierId])
   @@index([date])
   @@index([businessId, date])
+  @@index([paymentAccountId])
   @@map("expenses")
 }
 
@@ -638,16 +652,52 @@ model Credit {
 }
 
 model CreditPayment {
-  id            String        @id @default(uuid())
-  creditId      String
-  credit        Credit        @relation(fields: [creditId], references: [id], onDelete: Cascade)
-  amount        Decimal
-  paymentMethod PaymentMethod @default(CASH)
-  notes         String?
-  createdAt     DateTime      @default(now())
+  id               String          @id @default(uuid())
+  creditId         String
+  credit           Credit          @relation(fields: [creditId], references: [id], onDelete: Cascade)
+  amount           Decimal
+  paymentMethod    PaymentMethod   @default(CASH)
+  paymentAccountId String?
+  paymentAccount   PaymentAccount? @relation(fields: [paymentAccountId], references: [id])
+  notes            String?
+  createdAt        DateTime        @default(now())
 
   @@index([creditId])
+  @@index([paymentAccountId])
   @@map("credit_payments")
+}
+
+// ─── PAYMENT ACCOUNTS (medios de pago configurables) ──────────────────────────
+// Lista por negocio de medios de pago / cuentas donde entra o sale la plata
+// (Efectivo, Bancolombia, BBVA, Caja 1, Nequi del negocio…). El contador los
+// crea/edita en Configuración (patrón de Bodegas). Reemplazan al enum fijo
+// PaymentMethod; mientras conviven, `legacyEnum` mapea al valor viejo para que
+// reportes/exportaciones no se rompan. `type` define cuáles son EFECTIVO (los
+// únicos que alimentan la caja física).
+model PaymentAccount {
+  id             String             @id @default(uuid())
+  businessId     String
+  business       Business           @relation(fields: [businessId], references: [id])
+  name           String
+  type           PaymentAccountType @default(OTHER)
+  legacyEnum     PaymentMethod?
+  active         Boolean            @default(true)
+  order          Int                @default(0)
+  sales          Sale[]
+  purchases      Purchase[]
+  expenses       Expense[]
+  creditPayments CreditPayment[]
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  @@index([businessId])
+  @@map("payment_accounts")
+}
+
+enum PaymentAccountType {
+  CASH
+  BANK
+  OTHER
 }
 
 // ─── CASH REGISTER ────────────────────────────────────────────────────────────
@@ -839,9 +889,9 @@ enum ClaseResolucion {
 
 // ─── Cliente del contador (multi-tenant) ───────────────────────────────────────
 model TaxClient {
-  id                String            @id @default(uuid())
+  id                String                  @id @default(uuid())
   businessId        String
-  business          Business          @relation(fields: [businessId], references: [id])
+  business          Business                @relation(fields: [businessId], references: [id])
   razonSocial       String
   nit               String
   // Dígito de verificación: se calcula solo con la fórmula oficial DIAN al
@@ -855,12 +905,12 @@ model TaxClient {
   // Solo aplica si es responsable de IVA; null en caso contrario. La define el
   // contador según los ingresos, no se deduce de las calidades.
   ivaPeriodicidad   IvaPeriodicidad?
-  activo            Boolean           @default(true)
+  activo            Boolean                 @default(true)
   vencimientos      Vencimiento[]
   resoluciones      ResolucionDian[]
   respManuales      ResponsabilidadManual[]
-  createdAt         DateTime          @default(now())
-  updatedAt         DateTime          @updatedAt
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
 
   // No repetir un cliente por NIT dentro de la misma oficina.
   @@unique([businessId, nit, dv])
@@ -905,18 +955,18 @@ model ResponsabilidadManual {
 
 // ─── Vencimiento de una obligación (scoped vía TaxClient) ──────────────────────
 model Vencimiento {
-  id           String            @id @default(uuid())
-  taxClientId  String
-  taxClient    TaxClient         @relation(fields: [taxClientId], references: [id], onDelete: Cascade)
-  obligacion   Obligacion
-  periodo      String
+  id          String            @id @default(uuid())
+  taxClientId String
+  taxClient   TaxClient         @relation(fields: [taxClientId], references: [id], onDelete: Cascade)
+  obligacion  Obligacion
+  periodo     String
   // Se propone desde el calendario (por dígito del NIT) pero es editable.
-  fecha        DateTime          @db.Date
-  estado       EstadoVencimiento @default(pendiente)
-  monto        Decimal?
-  notas        String?
-  createdAt    DateTime          @default(now())
-  updatedAt    DateTime          @updatedAt
+  fecha       DateTime          @db.Date
+  estado      EstadoVencimiento @default(pendiente)
+  monto       Decimal?
+  notas       String?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
 
   @@unique([taxClientId, obligacion, periodo])
   @@index([taxClientId])
