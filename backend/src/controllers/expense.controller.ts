@@ -4,6 +4,7 @@ import { cache } from '../config/redis';
 import { AppError, success, created, paginated } from '../utils/response';
 import { getPagination, getSearch } from '../utils/pagination';
 import { AuthRequest } from '../middlewares/auth';
+import { resolvePayment } from '../utils/paymentAccount';
 
 export const expenseController = {
   async list(req: AuthRequest, res: Response, next: NextFunction) {
@@ -43,7 +44,7 @@ export const expenseController = {
 
   async create(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const { description, amount, date, categoryId, notes, paymentMethod,
+      const { description, amount, date, categoryId, notes, paymentMethod, paymentAccountId,
               recipientName, recipientDocument, recipientPhone, supplierId } = req.body;
       if (parseFloat(amount) <= 0) throw new AppError('El monto debe ser mayor a 0', 400);
       const businessId = req.user!.businessId;
@@ -57,13 +58,15 @@ export const expenseController = {
         const sup = await prisma.supplier.findFirst({ where: { id: supplierId, businessId, deletedAt: null } });
         if (!sup) throw new AppError('Proveedor inválido', 400);
       }
+      const pay = await resolvePayment({ paymentAccountId, paymentMethod }, businessId!);
       const base = {
         description,
         amount: parseFloat(amount),
         date: date ? new Date(date) : new Date(),
         categoryId: categoryId || null,
         notes: notes || null,
-        paymentMethod: paymentMethod || 'CASH',
+        paymentMethod: pay.paymentMethod,
+        paymentAccountId: pay.paymentAccountId,
         businessId,
       };
       let expense: any;
@@ -86,7 +89,7 @@ export const expenseController = {
         }
       }
       // Registrar egreso en caja abierta cuando se paga en efectivo (best effort)
-      if (paymentMethod === 'CASH') {
+      if (pay.paymentMethod === 'CASH') {
         try {
           const branchId = req.user!.branchId;
           if (branchId) {
@@ -119,7 +122,7 @@ export const expenseController = {
         where: { id: req.params.id, deletedAt: null, businessId: req.user!.businessId },
       });
       if (!existing) throw new AppError('Gasto no encontrado', 404);
-      const { description, amount, date, categoryId, notes, paymentMethod,
+      const { description, amount, date, categoryId, notes, paymentMethod, paymentAccountId,
               recipientName, recipientDocument, recipientPhone, supplierId } = req.body;
       if (amount !== undefined && parseFloat(amount) <= 0) throw new AppError('El monto debe ser mayor a 0', 400);
       const businessId = req.user!.businessId;
@@ -133,13 +136,23 @@ export const expenseController = {
         const sup = await prisma.supplier.findFirst({ where: { id: supplierId, businessId, deletedAt: null } });
         if (!sup) throw new AppError('Proveedor inválido', 400);
       }
+      // Si viene un medio de pago nuevo, se resuelve y se deriva el enum; si no,
+      // se conserva el paymentMethod que mande (o nada, para no tocarlo).
+      let resolvedMethod = paymentMethod;
+      let resolvedAccountId: string | null | undefined = undefined;
+      if (paymentAccountId !== undefined) {
+        const pay = await resolvePayment({ paymentAccountId, paymentMethod }, businessId!);
+        resolvedMethod = pay.paymentMethod;
+        resolvedAccountId = pay.paymentAccountId;
+      }
       const base = {
         description,
         amount: amount !== undefined ? parseFloat(amount) : undefined,
         date: date !== undefined ? new Date(date) : undefined,
         categoryId: categoryId !== undefined ? (categoryId || null) : undefined,
         notes,
-        paymentMethod,
+        paymentMethod: resolvedMethod,
+        paymentAccountId: resolvedAccountId,
       };
       let expense: any;
       try {
@@ -171,7 +184,7 @@ export const expenseController = {
           where: { referenceId: existing.id, type: 'OUT' },
           include: { cashRegister: true },
         });
-        const newPaymentMethod = paymentMethod !== undefined ? paymentMethod : existing.paymentMethod;
+        const newPaymentMethod = resolvedMethod !== undefined ? resolvedMethod : existing.paymentMethod;
         const newAmount = amount !== undefined ? parseFloat(amount) : Number(existing.amount);
         const newDescription = (description !== undefined ? description : existing.description) || 'Gasto';
 

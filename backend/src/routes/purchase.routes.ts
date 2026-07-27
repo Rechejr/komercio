@@ -10,6 +10,7 @@ import { getPagination } from '../utils/pagination';
 import { AppError } from '../utils/response';
 import { validate } from '../middlewares/validate';
 import { planLimit } from '../middlewares/planLimit';
+import { resolvePayment } from '../utils/paymentAccount';
 
 const purchaseItemValidators = [
   body('items').isArray({ min: 1 }).withMessage('Se requieren productos'),
@@ -23,6 +24,7 @@ const purchaseItemValidators = [
   body('notes').optional().trim(),
   // MIXED no se ofrece aquí — mismo criterio que el <select> de Gastos.
   body('paymentMethod').optional().isIn(['CASH', 'TRANSFER', 'NEQUI', 'DAVIPLATA', 'CARD']).withMessage('Método de pago inválido'),
+  body('paymentAccountId').optional({ nullable: true }).isString(),
 ];
 
 // Compras de antes de esta función quedaron con branchId null — al editarlas o
@@ -101,10 +103,11 @@ router.post('/', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE', 'CASHIER'), planL
   [body('supplierId').isUUID().withMessage('Selecciona un proveedor'), ...purchaseItemValidators],
   validate, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const { supplierId, invoiceNumber, items, notes, purchaseDate, branchId, paymentMethod } = req.body;
+    const { supplierId, invoiceNumber, items, notes, purchaseDate, branchId, paymentMethod, paymentAccountId } = req.body;
     if (!items?.length) throw new AppError('Se requieren productos', 400);
     const businessId = req.user!.businessId;
-    const effectivePaymentMethod = paymentMethod || 'CASH';
+    const resolvedPay = await resolvePayment({ paymentAccountId, paymentMethod }, businessId!);
+    const effectivePaymentMethod = resolvedPay.paymentMethod;
 
     // Validate all products belong to this business before starting the transaction.
     // Dedupe primero — con bodega por línea, un mismo producto puede repetirse en
@@ -164,6 +167,7 @@ router.post('/', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE', 'CASHIER'), planL
           taxAmount,
           total: subtotal + taxAmount,
           paymentMethod: effectivePaymentMethod,
+          paymentAccountId: resolvedPay.paymentAccountId,
           details: { create: details },
           // Valor de referencia/compat: la bodega de la primera línea. No se
           // lee en ningún otro lado del backend — solo sirve de fallback
@@ -267,9 +271,16 @@ router.post('/', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE', 'CASHIER'), planL
 
 router.put('/:id', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE'), purchaseItemValidators, validate, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const { supplierId, invoiceNumber, items, notes, purchaseDate, paymentMethod } = req.body;
+    const { supplierId, invoiceNumber, items, notes, purchaseDate, paymentMethod, paymentAccountId } = req.body;
     if (!items?.length) throw new AppError('Se requieren productos', 400);
     const businessId = req.user!.businessId;
+    let resolvedMethod = paymentMethod;
+    let resolvedAccountId: string | null | undefined = undefined;
+    if (paymentAccountId !== undefined) {
+      const pay = await resolvePayment({ paymentAccountId, paymentMethod }, businessId!);
+      resolvedMethod = pay.paymentMethod;
+      resolvedAccountId = pay.paymentAccountId;
+    }
 
     const existing = await prisma.purchase.findFirst({
       where: { id: req.params.id, deletedAt: null, businessId },
@@ -454,7 +465,7 @@ router.put('/:id', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE'), purchaseItemVa
       const updatedPurchase = await tx.purchase.update({
         where: { id: req.params.id },
         data: {
-          supplierId, invoiceNumber, notes, paymentMethod,
+          supplierId, invoiceNumber, notes, paymentMethod: resolvedMethod, paymentAccountId: resolvedAccountId,
           purchaseDate: purchaseDate ? new Date(purchaseDate) : existing.purchaseDate,
           subtotal, taxAmount, total: subtotal + taxAmount,
           details: { create: details },
@@ -475,7 +486,7 @@ router.put('/:id', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE'), purchaseItemVa
         where: { referenceId: existing.id, type: 'OUT' },
         include: { cashRegister: true },
       });
-      const newPaymentMethod = paymentMethod !== undefined ? paymentMethod : existing.paymentMethod;
+      const newPaymentMethod = resolvedMethod !== undefined ? resolvedMethod : existing.paymentMethod;
       const newAmount = Number(updated.total);
 
       if (movement && movement.cashRegister.status === 'OPEN') {

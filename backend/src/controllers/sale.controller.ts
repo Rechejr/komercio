@@ -12,6 +12,7 @@ import { getPlan } from '../config/plans';
 import { acquirePlanLimitLock } from '../utils/planLimitLock';
 import { logger } from '../config/logger';
 import { resolveEffectiveBranchId } from '../utils/resolveBranch';
+import { resolvePayment } from '../utils/paymentAccount';
 
 // Checked once per process on first sale; avoids breaking when migration is pending.
 let _counterTableReady: boolean | undefined;
@@ -226,6 +227,19 @@ export const saleController = {
         }
       }
 
+      // Medio de pago configurable (single-method). El MIXTO conserva su flujo
+      // actual (splits por enum): paymentMethod = 'MIXED', sin paymentAccountId.
+      let effectivePaymentMethod: string = paymentMethod || 'CASH';
+      let effectivePaymentAccountId: string | null = null;
+      if (paymentMethod !== 'MIXED') {
+        const resolved = await resolvePayment(
+          { paymentAccountId: req.body.paymentAccountId, paymentMethod },
+          req.user!.businessId!,
+        );
+        effectivePaymentMethod = resolved.paymentMethod;
+        effectivePaymentAccountId = resolved.paymentAccountId;
+      }
+
       const productIds: string[] = items.map((i: any) => i.productId);
 
       // Early rejection before acquiring locks — also validates products belong to this business
@@ -408,7 +422,8 @@ export const saleController = {
             total,
             paidAmount: paid,
             changeAmount: changeAmt,
-            paymentMethod: paymentMethod || 'CASH',
+            paymentMethod: effectivePaymentMethod as any,
+            paymentAccountId: effectivePaymentAccountId,
             paymentDetails: paymentDetails || null,
             notes: notes || null,
             details: { create: saleDetails },
@@ -479,7 +494,7 @@ export const saleController = {
         // Registrar ingreso en caja abierta — dentro de la misma transacción que la
         // venta (antes corría después, "best effort": si el proceso caía justo en ese
         // instante, la venta quedaba completa pero el ingreso en caja se perdía sin dejar rastro).
-        const cashAmount = computeCashAmount(paymentMethod, paid, changeAmt, paymentDetails);
+        const cashAmount = computeCashAmount(effectivePaymentMethod, paid, changeAmt, paymentDetails);
         if (cashAmount > 0 && effectiveBranchId) {
           const openRegister = await tx.cashRegister.findFirst({
             where: { branchId: effectiveBranchId, status: 'OPEN' },

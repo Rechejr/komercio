@@ -5,6 +5,7 @@ import { AppError, success, created, paginated } from '../utils/response';
 import { getPagination } from '../utils/pagination';
 import { AuthRequest } from '../middlewares/auth';
 import { emitToBusinesss, socketEvents } from '../config/socket';
+import { resolvePayment } from '../utils/paymentAccount';
 
 export const creditController = {
   async list(req: AuthRequest, res: Response, next: NextFunction) {
@@ -96,12 +97,13 @@ export const creditController = {
   async addPayment(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const { id } = req.params;
-      const { amount, paymentMethod, notes } = req.body;
+      const { amount, paymentMethod, paymentAccountId, notes } = req.body;
 
       const paymentAmount = parseFloat(amount);
       if (!paymentAmount || paymentAmount <= 0) throw new AppError('El monto debe ser mayor a 0', 400);
 
       const businessId = req.user!.businessId;
+      const pay = await resolvePayment({ paymentAccountId, paymentMethod }, businessId!);
 
       const [newBalance, newStatus, customerName] = await prisma.$transaction(async (tx) => {
         // Lock the row to prevent concurrent payment race conditions
@@ -132,7 +134,7 @@ export const creditController = {
             : newPaid > 0 ? 'PARTIAL' : 'PENDING';
 
         await tx.creditPayment.create({
-          data: { creditId: id, amount: paymentAmount, paymentMethod, notes },
+          data: { creditId: id, amount: paymentAmount, paymentMethod: pay.paymentMethod, paymentAccountId: pay.paymentAccountId, notes },
         });
 
         await tx.credit.update({
@@ -154,7 +156,7 @@ export const creditController = {
       // effort) — sin esto, el dinero entra físicamente a la caja pero el
       // arqueo nunca lo espera, así que un cajero podría quedárselo sin que
       // el cierre de turno muestre ningún faltante.
-      if (paymentMethod === 'CASH') {
+      if (pay.paymentMethod === 'CASH') {
         try {
           const branchId = req.user!.branchId;
           if (branchId) {
