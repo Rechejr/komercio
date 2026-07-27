@@ -29,11 +29,13 @@ const deleteBusinessLimiter = rateLimit({
 
 router.get('/stats', async (_req, res, next) => {
   try {
-    const [totalBusinesses, totalUsers, freePlan, proPlan, salesAgg, recentBusinesses] = await Promise.all([
+    const [totalBusinesses, totalUsers, freePlan, proPlan, posCount, contableCount, salesAgg, recentBusinesses] = await Promise.all([
       prisma.business.count({ where: { deletedAt: null } }),
       prisma.user.count({ where: { deletedAt: null, role: { not: 'SUPER_ADMIN' } } }),
       prisma.business.count({ where: { deletedAt: null, plan: 'free' } }),
       prisma.business.count({ where: { deletedAt: null, plan: 'pro' } }),
+      prisma.business.count({ where: { deletedAt: null, type: 'pos' } }),
+      prisma.business.count({ where: { deletedAt: null, type: 'contable' } }),
       prisma.sale.aggregate({
         where: { deletedAt: null, status: 'COMPLETED' },
         _sum: { total: true },
@@ -44,7 +46,7 @@ router.get('/stats', async (_req, res, next) => {
         orderBy: { createdAt: 'desc' },
         take: 5,
         select: {
-          id: true, name: true, plan: true, createdAt: true,
+          id: true, name: true, type: true, plan: true, createdAt: true,
           owner: { select: { email: true, name: true } },
         },
       }),
@@ -54,6 +56,7 @@ router.get('/stats', async (_req, res, next) => {
       totalBusinesses,
       totalUsers,
       plans: { free: freePlan, pro: proPlan },
+      types: { pos: posCount, contable: contableCount },
       sales: { total: salesAgg._sum.total || 0, count: salesAgg._count.id },
       recentBusinesses,
     });
@@ -63,11 +66,12 @@ router.get('/stats', async (_req, res, next) => {
 router.get('/businesses', async (req: AuthRequest, res, next) => {
   try {
     const { page, limit, skip } = getPagination(req);
-    const { search, plan } = req.query;
+    const { search, plan, type } = req.query;
 
     const where: any = { deletedAt: null };
     if (search) where.name = { contains: search, mode: 'insensitive' };
     if (plan) where.plan = plan;
+    if (type === 'pos' || type === 'contable') where.type = type;
 
     const [businesses, total] = await Promise.all([
       prisma.business.findMany({
@@ -76,7 +80,7 @@ router.get('/businesses', async (req: AuthRequest, res, next) => {
         take: limit,
         orderBy: { createdAt: 'desc' },
         select: {
-          id: true, name: true, plan: true, planExpiresAt: true,
+          id: true, name: true, type: true, plan: true, planExpiresAt: true,
           createdAt: true, city: true,
           owner: { select: { id: true, name: true, email: true } },
           _count: { select: { branches: true } },

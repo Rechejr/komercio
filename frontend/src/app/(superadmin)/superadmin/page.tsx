@@ -7,12 +7,14 @@ import toast from 'react-hot-toast';
 import {
   Building2, Users, ShoppingCart, Zap, Search,
   ChevronLeft, ChevronRight, X, CheckCircle, Ban, Loader2, Trash2, AlertTriangle, KeyRound,
+  Store, Calculator,
 } from 'lucide-react';
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 interface Business {
   id: string;
   name: string;
+  type: 'pos' | 'contable';
   city?: string;
   plan: 'free' | 'pro';
   planExpiresAt?: string | null;
@@ -20,6 +22,19 @@ interface Business {
   deletedAt?: string | null;
   owner: { name: string; email: string };
   _count: { branches: number };
+}
+
+// Badge de producto (POS vs Contable) — colores distintos para separarlos de un vistazo.
+function TypeBadge({ type }: { type: 'pos' | 'contable' }) {
+  const isContable = type === 'contable';
+  return (
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${
+      isContable ? 'bg-violet-500/20 text-violet-300' : 'bg-sky-500/20 text-sky-300'
+    }`}>
+      {isContable ? <Calculator size={10} /> : <Store size={10} />}
+      {isContable ? 'Contable' : 'POS'}
+    </span>
+  );
 }
 
 // ── Stat tile ─────────────────────────────────────────────────────────────────
@@ -323,6 +338,7 @@ export default function SuperAdminPage() {
   const qc = useQueryClient();
   const [search, setSearch] = useState('');
   const [planFilter, setPlanFilter] = useState('');
+  const [typeFilter, setTypeFilter] = useState('');
   const [page, setPage] = useState(1);
   const [planModal, setPlanModal] = useState<Business | null>(null);
   const [deleteModal, setDeleteModal] = useState<Business | null>(null);
@@ -336,10 +352,15 @@ export default function SuperAdminPage() {
   });
 
   const { data: bizData, isLoading } = useQuery({
-    queryKey: ['sa-businesses', page, search, planFilter],
+    queryKey: ['sa-businesses', page, search, planFilter, typeFilter],
     queryFn: () =>
       api.get('/superadmin/businesses', {
-        params: { page, limit: LIMIT, search: search || undefined, plan: planFilter || undefined },
+        params: {
+          page, limit: LIMIT,
+          search: search || undefined,
+          plan: planFilter || undefined,
+          type: typeFilter || undefined,
+        },
       }).then((r) => r.data),
     placeholderData: (prev) => prev,
   });
@@ -382,7 +403,8 @@ export default function SuperAdminPage() {
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
-          label="Negocios activos" value={stats?.totalBusinesses ?? '—'} sub="registrados"
+          label="Negocios activos" value={stats?.totalBusinesses ?? '—'}
+          sub={stats?.types ? `${stats.types.pos} POS · ${stats.types.contable} Contable` : 'registrados'}
           icon={Building2} color="bg-emerald-600"
         />
         <StatCard
@@ -415,6 +437,16 @@ export default function SuperAdminPage() {
             />
           </div>
           <select
+            value={typeFilter}
+            onChange={(e) => { setTypeFilter(e.target.value); setPage(1); }}
+            aria-label="Filtrar por producto"
+            className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          >
+            <option value="">Todos los productos</option>
+            <option value="pos">POS (Comercio)</option>
+            <option value="contable">Contable</option>
+          </select>
+          <select
             value={planFilter}
             onChange={(e) => { setPlanFilter(e.target.value); setPage(1); }}
             aria-label="Filtrar por plan"
@@ -431,6 +463,7 @@ export default function SuperAdminPage() {
             <thead>
               <tr className="border-b border-gray-800 text-gray-500 text-xs uppercase">
                 <th className="text-left px-4 py-3 font-medium">Negocio</th>
+                <th className="text-left px-4 py-3 font-medium">Producto</th>
                 <th className="text-left px-4 py-3 font-medium">Propietario</th>
                 <th className="text-left px-4 py-3 font-medium">Plan</th>
                 <th className="text-left px-4 py-3 font-medium">Vence</th>
@@ -444,7 +477,7 @@ export default function SuperAdminPage() {
               {isLoading ? (
                 [...Array(5)].map((_, i) => (
                   <tr key={i}>
-                    {[...Array(8)].map((__, j) => (
+                    {[...Array(9)].map((__, j) => (
                       <td key={j} className="px-4 py-3">
                         <div className="h-4 bg-gray-800 rounded animate-pulse" />
                       </td>
@@ -453,8 +486,8 @@ export default function SuperAdminPage() {
                 ))
               ) : businesses.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-gray-500">
-                    {search || planFilter ? 'Sin resultados para los filtros aplicados' : 'No hay negocios registrados'}
+                  <td colSpan={9} className="px-4 py-8 text-center text-gray-500">
+                    {search || planFilter || typeFilter ? 'Sin resultados para los filtros aplicados' : 'No hay negocios registrados'}
                   </td>
                 </tr>
               ) : (
@@ -465,6 +498,9 @@ export default function SuperAdminPage() {
                       <td className="px-4 py-3">
                         <p className="font-medium text-white">{b.name}</p>
                         {b.city && <p className="text-xs text-gray-500">{b.city}</p>}
+                      </td>
+                      <td className="px-4 py-3">
+                        <TypeBadge type={b.type} />
                       </td>
                       <td className="px-4 py-3">
                         <p className="text-white">{b.owner?.name}</p>
