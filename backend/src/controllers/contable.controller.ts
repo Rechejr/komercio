@@ -6,6 +6,7 @@ import { success, created, paginated, AppError } from '../utils/response';
 import { getPagination } from '../utils/pagination';
 import { calcularDV, soloDigitos, ultimoDigito, dosUltimosDigitos } from '../utils/nit';
 import { normalizarResponsabilidades, obligacionesSugeridas } from '../utils/calidades';
+import { periodosPila } from '../utils/pila';
 import ExcelJS from 'exceljs';
 import { findDataSheet, findHeaderRow, mapColumns, cellVal, normalizeHeader } from '../utils/excelParser';
 import {
@@ -39,6 +40,9 @@ function varianteDe(obligacion: Obligacion, tipoPersona: string, ivaPeriodicidad
  *  dos últimos (renta de personas naturales). Porta periodosCalendario() de la
  *  app de referencia. */
 async function periodosCalendario(obligacion: Obligacion, variante: string | null, nit: string) {
+  // PILA no se siembra: se calcula (N-ésimo día hábil del mes según los 2 últimos
+  // dígitos). Ver utils/pila.ts — validado vs. miplanilla.com.
+  if (obligacion === 'pila') return periodosPila(nit, ANIO_CALENDARIO);
   if (obligacion === 'renta' && variante === 'natural') {
     const row = await prisma.calendarioRentaNatural.findUnique({
       where: { anio_dosDigitos: { anio: ANIO_CALENDARIO, dosDigitos: dosUltimosDigitos(nit) } },
@@ -392,8 +396,8 @@ export const contableController = {
       const client = await getClientOfBusiness(req.query.taxClientId as string, businessId);
       const variante = varianteDe(obligacion, client.tipoPersona, client.ivaPeriodicidad);
       const periodos = await periodosCalendario(obligacion, variante, client.nit);
-      // periodos = [] cuando la obligación no está en el calendario (ICA, PILA,
-      // exógena) → el frontend deja la fecha en modo manual.
+      // periodos = [] cuando la obligación no tiene calendario (ICA, exógena) →
+      // el frontend deja la fecha en modo manual. PILA sí trae fechas (calculadas).
       return success(res, periodos);
     } catch (err) { next(err); }
   },
@@ -473,7 +477,8 @@ export const contableController = {
    *  por periodo. Sin `obligacion` → genera TODA la agenda del cliente según sus
    *  calidades (agenda completa). Con `obligacion` → genera todos los periodos de
    *  esa obligación. Idempotente: los que ya existen se saltan (no duplica). Las
-   *  obligaciones sin calendario (ICA, PILA, exógena) se reportan aparte. */
+   *  obligaciones sin calendario (ICA, exógena) se reportan aparte; PILA sí
+   *  genera (12 vencimientos mensuales calculados). */
   async generarVencimientos(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const businessId = req.user!.businessId!;

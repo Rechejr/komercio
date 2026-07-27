@@ -330,8 +330,8 @@ function NuevoVencimientoModal({ onClose, clienteInicial }: { onClose: () => voi
   const sinCalendario = !!cliente && !!obligacion && !cargandoPeriodos && periodos.length === 0;
   const conCalendario = !!cliente && !!obligacion && periodos.length > 0;
 
-  // Registro manual de UN vencimiento (para ICA/PILA/exógena que no están en el
-  // calendario). Las obligaciones con calendario se generan en lote.
+  // Registro manual de UN vencimiento (para ICA/exógena que no están en el
+  // calendario). Las obligaciones con calendario (incl. PILA) se generan en lote.
   const saveMut = useMutation({
     mutationFn: () => api.post('/contable/vencimientos', { taxClientId: cliente!.id, obligacion, periodo, fecha }),
     onSuccess: () => {
