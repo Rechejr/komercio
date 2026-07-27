@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { api } from '@/lib/api';
 import toast from 'react-hot-toast';
-import { Loader2, Store, Lock, ImagePlus, X, Users, UserPlus, Edit, Shield, UserX, Volume2, VolumeX, Building2, MapPin, Plus, Trash2 } from 'lucide-react';
+import { Loader2, Store, Lock, ImagePlus, X, Users, UserPlus, Edit, Shield, UserX, Volume2, VolumeX, Building2, MapPin, Plus, Trash2, Wallet } from 'lucide-react';
 import { useAuthStore } from '@/store/auth.store';
 import { useSoundStore } from '@/store/sound.store';
 import { useUpgradeStore } from '@/store/upgrade.store';
@@ -50,6 +50,20 @@ const ROLE_LABEL: Record<string, string> = {
 // en el frontend; el límite real siempre lo aplica el servidor.
 const BRANCH_LIMIT: Record<string, number> = { free: 1, pro: 3 };
 
+// Medios de pago (PaymentAccount). El "tipo" define cuáles son EFECTIVO (los
+// únicos que alimentan la caja física); el resto es informativo.
+const PAY_TYPES = [
+  { value: 'CASH',  label: 'Efectivo',        hint: 'Entra a la caja física' },
+  { value: 'BANK',  label: 'Banco / Tarjeta', hint: 'Cuenta bancaria o datáfono' },
+  { value: 'OTHER', label: 'Otro',            hint: 'Nequi, Daviplata, billeteras…' },
+] as const;
+const PAY_TYPE_LABEL: Record<string, string> = { CASH: 'Efectivo', BANK: 'Banco', OTHER: 'Otro' };
+const PAY_TYPE_BADGE: Record<string, string> = {
+  CASH:  'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400',
+  BANK:  'bg-sky-50 text-sky-700 dark:bg-sky-500/10 dark:text-sky-400',
+  OTHER: 'bg-violet-50 text-violet-700 dark:bg-violet-500/10 dark:text-violet-400',
+};
+
 export default function ConfiguracionPage() {
   const { user } = useAuthStore();
   const qc = useQueryClient();
@@ -66,6 +80,11 @@ export default function ConfiguracionPage() {
   // Branch form state
   const [showBranchForm, setShowBranchForm] = useState(false);
   const [editBranch, setEditBranch] = useState<any>(null);
+
+  // Payment account (medios de pago) form state
+  const [showPayAcctForm, setShowPayAcctForm] = useState(false);
+  const [editPayAcct, setEditPayAcct] = useState<any>(null);
+  const [deletePayAcctTarget, setDeletePayAcctTarget] = useState<any>(null);
 
   const { data: business } = useQuery({
     queryKey: ['business'],
@@ -84,13 +103,21 @@ export default function ConfiguracionPage() {
     enabled: user?.role === 'ADMIN',
   });
 
+  const { data: payAcctsData } = useQuery({
+    queryKey: ['payment-accounts'],
+    queryFn: () => api.get('/business/payment-accounts').then((r) => r.data.data),
+    enabled: user?.role === 'ADMIN',
+  });
+
   const employees = usersData?.data || [];
   const branches: any[] = branchesData || [];
+  const paymentAccounts: any[] = payAcctsData || [];
 
   const { register: regBusiness, handleSubmit: handleBusiness, formState: { isSubmitting: savingBusiness, errors: bizErrors } } = useForm({ values: business });
   const { register: regPwd, handleSubmit: handlePwd, reset: resetPwd, watch: watchPwd, formState: { isSubmitting: savingPwd } } = useForm();
   const { register: regEmp, handleSubmit: handleEmp, reset: resetEmp, formState: { errors: empErrors } } = useForm();
   const { register: regBranch, handleSubmit: handleBranchSubmit, reset: resetBranch, formState: { errors: branchErrors } } = useForm();
+  const { register: regPayAcct, handleSubmit: handlePayAcctSubmit, reset: resetPayAcct, formState: { errors: payAcctErrors } } = useForm();
 
   const businessMutation = useMutation({
     mutationFn: (data: any) => api.put('/business/me', data),
@@ -168,6 +195,42 @@ export default function ConfiguracionPage() {
     setEditBranch(branch);
     resetBranch({ name: branch.name, address: branch.address || '', phone: branch.phone || '' });
     setShowBranchForm(true);
+  }
+
+  const savePayAcctMutation = useMutation({
+    mutationFn: (data: any) => editPayAcct
+      ? api.put(`/business/payment-accounts/${editPayAcct.id}`, data)
+      : api.post('/business/payment-accounts', data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['payment-accounts'] });
+      toast.success(editPayAcct ? 'Medio de pago actualizado' : 'Medio de pago creado');
+      setShowPayAcctForm(false);
+      setEditPayAcct(null);
+      resetPayAcct();
+    },
+    onError: (err: any) => toast.error(err.response?.data?.error || 'Error al guardar el medio de pago'),
+  });
+
+  const deletePayAcctMutation = useMutation({
+    mutationFn: (id: string) => api.delete(`/business/payment-accounts/${id}`),
+    onSuccess: (res: any) => {
+      qc.invalidateQueries({ queryKey: ['payment-accounts'] });
+      toast.success(res?.data?.message || 'Medio de pago eliminado');
+      setDeletePayAcctTarget(null);
+    },
+    onError: (err: any) => toast.error(err.response?.data?.error || 'Error al eliminar'),
+  });
+
+  function openNewPayAcct() {
+    setEditPayAcct(null);
+    resetPayAcct({ name: '', type: 'BANK' });
+    setShowPayAcctForm(true);
+  }
+
+  function openEditPayAcct(acct: any) {
+    setEditPayAcct(acct);
+    resetPayAcct({ name: acct.name, type: acct.type, active: acct.active });
+    setShowPayAcctForm(true);
   }
 
   function openNewEmp() {
@@ -472,6 +535,64 @@ export default function ConfiguracionPage() {
         </div>
       )}
 
+      {/* ── Medios de pago (solo ADMIN) ───────────────────────────────────── */}
+      {user?.role === 'ADMIN' && (
+        <div className="card overflow-hidden">
+          <div className="px-6 py-4 border-b border-slate-100 dark:border-white/[0.06] flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="w-7 h-7 bg-emerald-50 dark:bg-emerald-500/10 rounded-lg flex items-center justify-center">
+                <Wallet size={14} className="text-emerald-600 dark:text-emerald-400" />
+              </div>
+              <div>
+                <h2 className="text-[14px] font-semibold text-slate-800 dark:text-white">Medios de pago</h2>
+                <p className="text-[11px] text-slate-400 dark:text-slate-500">
+                  Cuentas donde entra la plata (Efectivo, Bancolombia, Nequi…). Aparecen al registrar ventas, compras y gastos.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={openNewPayAcct}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white rounded-xl text-[12px] font-semibold hover:bg-emerald-700 shadow-sm shadow-emerald-600/25 transition"
+            >
+              <Plus size={13} /> Nuevo medio
+            </button>
+          </div>
+
+          <div className="divide-y divide-slate-50 dark:divide-white/[0.04]">
+            {paymentAccounts.length === 0 ? (
+              <p className="text-center py-8 text-[13px] text-slate-400">No hay medios de pago</p>
+            ) : paymentAccounts.map((a: any) => (
+              <div key={a.id} className={`px-6 py-3.5 flex items-center justify-between gap-3 ${!a.active ? 'opacity-50' : ''}`}>
+                <div className="min-w-0 flex items-center gap-2.5">
+                  <span className="text-[13px] font-medium text-slate-800 dark:text-white truncate">{a.name}</span>
+                  <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md ${PAY_TYPE_BADGE[a.type]}`}>{PAY_TYPE_LABEL[a.type]}</span>
+                  {!a.active && <span className="text-[10px] text-slate-400">(inactivo)</span>}
+                </div>
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  <button
+                    type="button"
+                    aria-label="Editar medio de pago"
+                    onClick={() => openEditPayAcct(a)}
+                    className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 transition"
+                  >
+                    <Edit size={13} />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Eliminar medio de pago"
+                    onClick={() => setDeletePayAcctTarget(a)}
+                    className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 transition"
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* ── Cambiar contraseña ────────────────────────────────────────────── */}
       <div className="card overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-100 dark:border-white/[0.06] flex items-center gap-2.5">
@@ -713,6 +834,81 @@ export default function ConfiguracionPage() {
           </div>
         </div>
       )}
+
+      {/* ── Medio de pago Form Modal ─────────────────────────────────────────── */}
+      {showPayAcctForm && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-[2px] z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/[0.08] rounded-2xl shadow-modal w-full max-w-sm animate-scale-in">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-white/[0.06]">
+              <h2 className="text-[15px] font-semibold text-slate-800 dark:text-white">
+                {editPayAcct ? 'Editar medio de pago' : 'Nuevo medio de pago'}
+              </h2>
+              <button
+                type="button"
+                aria-label="Cerrar"
+                onClick={() => { setShowPayAcctForm(false); setEditPayAcct(null); }}
+                className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-white/[0.06] transition"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <form onSubmit={handlePayAcctSubmit((d: any) => savePayAcctMutation.mutate(d))} className="p-6 space-y-4">
+              <div>
+                <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5 block">Nombre *</label>
+                <input
+                  {...regPayAcct('name', { required: 'El nombre es obligatorio' })}
+                  className={inputCls}
+                  placeholder="Ej: Bancolombia, Caja 1, Nequi…"
+                />
+                {payAcctErrors.name && <p className="text-[11px] text-red-500 mt-1">{payAcctErrors.name.message as string}</p>}
+              </div>
+              <div>
+                <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5 block">Tipo</label>
+                <select {...regPayAcct('type')} className={inputCls}>
+                  {PAY_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                </select>
+                <p className="text-[11px] text-slate-400 mt-1">Solo <b>Efectivo</b> entra a la caja física; el resto es informativo.</p>
+              </div>
+              {editPayAcct && (
+                <label className="flex items-center gap-2 text-[13px] text-slate-600 dark:text-slate-300">
+                  <input type="checkbox" {...regPayAcct('active')} className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500/30" />
+                  Activo (aparece al registrar pagos)
+                </label>
+              )}
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => { setShowPayAcctForm(false); setEditPayAcct(null); }}
+                  className="flex-1 px-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-xl text-[13px] font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={savePayAcctMutation.isPending}
+                  className="flex-1 px-4 py-2.5 bg-emerald-600 text-white rounded-xl text-[13px] font-semibold hover:bg-emerald-700 disabled:opacity-60 shadow-sm shadow-emerald-600/25 flex items-center justify-center gap-2 transition"
+                >
+                  {savePayAcctMutation.isPending && <Loader2 size={14} className="animate-spin" />}
+                  {editPayAcct ? 'Actualizar' : 'Crear medio'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── Eliminar medio de pago ────────────────────────────────────────────── */}
+      <ConfirmDialog
+        open={!!deletePayAcctTarget}
+        onOpenChange={(open) => { if (!open) setDeletePayAcctTarget(null); }}
+        title="Eliminar medio de pago"
+        description={deletePayAcctTarget ? `¿Eliminar "${deletePayAcctTarget.name}"? Si ya tiene movimientos, se desactivará en vez de borrarse (para conservar el historial).` : undefined}
+        confirmLabel="Eliminar"
+        onConfirm={() => deletePayAcctTarget && deletePayAcctMutation.mutate(deletePayAcctTarget.id)}
+        loading={deletePayAcctMutation.isPending}
+        variant="danger"
+      />
 
       {/* ── Eliminar empleado ────────────────────────────────────────────────── */}
       <ConfirmDialog
