@@ -4,7 +4,8 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm, useFieldArray, Controller } from 'react-hook-form';
 import { api } from '@/lib/api';
-import { formatCurrency, formatDate, paymentMethodLabel } from '@/lib/utils';
+import { formatCurrency, formatDate } from '@/lib/utils';
+import { usePaymentAccounts, labelPago } from '@/lib/usePaymentAccounts';
 import toast from 'react-hot-toast';
 import { Plus, ShoppingBag, X, Loader2, Trash2, Edit, ChevronRight, FileDown, Search } from 'lucide-react';
 import { useAuthStore } from '@/store/auth.store';
@@ -74,8 +75,9 @@ export default function ComprasPage() {
     queryFn: () => api.get('/business/branches').then((r) => r.data.data),
   });
 
+  const { active: paymentAccounts, all: allAccounts } = usePaymentAccounts();
   const { register, handleSubmit, control, reset, watch, setValue, formState: { errors } } = useForm({
-    defaultValues: { supplierId: '', invoiceNumber: '', notes: '', purchaseDate: '', paymentMethod: 'CASH', items: [{ productId: '', quantity: 1, unitCost: 0, taxRate: 0, branchId: '' }] },
+    defaultValues: { supplierId: '', invoiceNumber: '', notes: '', purchaseDate: '', paymentAccountId: '', items: [{ productId: '', quantity: 1, unitCost: 0, taxRate: 0, branchId: '' }] },
   });
 
   const { fields, append, remove } = useFieldArray({ control, name: 'items' });
@@ -171,7 +173,7 @@ export default function ComprasPage() {
         invoiceNumber: p.invoiceNumber || '',
         notes: p.notes || '',
         purchaseDate: p.purchaseDate ? p.purchaseDate.split('T')[0] : '',
-        paymentMethod: p.paymentMethod || 'CASH',
+        paymentAccountId: p.paymentAccountId || '',
         items: p.details.map((d: any) => ({
           productId: d.productId,
           quantity: d.quantity,
@@ -207,7 +209,7 @@ export default function ComprasPage() {
           type="button"
           onClick={() => {
             setEditItem(null);
-            reset({ supplierId: '', invoiceNumber: '', notes: '', purchaseDate: '', paymentMethod: 'CASH', items: [{ productId: '', quantity: 1, unitCost: 0, taxRate: 0, branchId: myBranchId }] });
+            reset({ supplierId: '', invoiceNumber: '', notes: '', purchaseDate: '', paymentAccountId: '', items: [{ productId: '', quantity: 1, unitCost: 0, taxRate: 0, branchId: myBranchId }] });
             setSelectedSupplierName('');
             setSupplierSearch('');
             setShowForm(true);
@@ -292,8 +294,8 @@ export default function ComprasPage() {
                   <td className="px-4 py-3 text-right text-[13px] font-semibold text-slate-900 dark:text-white tabular-nums">{formatCurrency(p.total)}</td>
                   <td className="hidden sm:table-cell px-4 py-3 text-[12px] text-slate-400 dark:text-slate-500">{formatDate(p.purchaseDate)}</td>
                   <td className="hidden md:table-cell px-4 py-3">
-                    <span className={`badge ${PAYMENT_BADGE[p.paymentMethod] || 'badge-slate'}`}>
-                      {paymentMethodLabel[p.paymentMethod] || p.paymentMethod}
+                    <span className="badge badge-slate">
+                      {labelPago(allAccounts, p.paymentAccountId, p.paymentMethod)}
                     </span>
                   </td>
                   <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
@@ -363,8 +365,8 @@ export default function ComprasPage() {
                 <p className="text-[12px] text-slate-400 mt-0.5">
                   {detail.invoiceNumber ? `Factura: ${detail.invoiceNumber}` : 'Sin número de factura'} · {formatDate(detail.purchaseDate)}
                 </p>
-                <span className={`badge ${PAYMENT_BADGE[detail.paymentMethod] || 'badge-slate'} mt-1.5 inline-block`}>
-                  {paymentMethodLabel[detail.paymentMethod] || detail.paymentMethod}
+                <span className="badge badge-slate mt-1.5 inline-block">
+                  {labelPago(allAccounts, detail.paymentAccountId, detail.paymentMethod)}
                 </span>
               </div>
               <div className="flex items-center gap-2">
@@ -559,13 +561,9 @@ export default function ComprasPage() {
 
                 {/* Método de pago */}
                 <div>
-                  <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5 block">Método de pago</label>
-                  <select {...register('paymentMethod')} className={inputCls}>
-                    <option value="CASH">Efectivo</option>
-                    <option value="TRANSFER">Transferencia</option>
-                    <option value="NEQUI">Nequi</option>
-                    <option value="DAVIPLATA">Daviplata</option>
-                    <option value="CARD">Tarjeta</option>
+                  <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5 block">Medio de pago</label>
+                  <select {...register('paymentAccountId')} className={inputCls}>
+                    {paymentAccounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
                   </select>
                 </div>
 

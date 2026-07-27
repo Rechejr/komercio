@@ -4,7 +4,8 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm, Controller } from 'react-hook-form';
 import { api } from '@/lib/api';
-import { formatCurrency, formatDate, paymentMethodLabel } from '@/lib/utils';
+import { formatCurrency, formatDate } from '@/lib/utils';
+import { usePaymentAccounts, labelPago } from '@/lib/usePaymentAccounts';
 import toast from 'react-hot-toast';
 import { Plus, X, Loader2, Receipt, Edit, Trash2, FileDown, Tag, Search, Building2 } from 'lucide-react';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -70,6 +71,7 @@ export default function GastosPage() {
   });
 
   const { register, handleSubmit, reset, control, watch, setValue, formState: { isSubmitting, errors } } = useForm();
+  const { active: paymentAccounts, all: allAccounts } = usePaymentAccounts();
 
   const recipientNameValue = watch('recipientName') || '';
   const filteredSuppliers = (suppliers || []).filter((s: any) =>
@@ -121,7 +123,7 @@ export default function GastosPage() {
   function selectExpenseTemplate(e: any) {
     setValue('description', e.description);
     setValue('categoryId', e.categoryId || '');
-    setValue('paymentMethod', e.paymentMethod || 'CASH');
+    setValue('paymentAccountId', e.paymentAccountId || '');
     setValue('recipientName', e.recipientName || '');
     setValue('recipientDocument', e.recipientDocument || '');
     setValue('recipientPhone', e.recipientPhone || '');
@@ -138,7 +140,7 @@ export default function GastosPage() {
     const lastExpense = (expenseHistory || []).find((e: any) => e.supplierId === s.id);
     if (lastExpense) {
       setValue('categoryId', lastExpense.categoryId || '');
-      setValue('paymentMethod', lastExpense.paymentMethod || 'CASH');
+      setValue('paymentAccountId', lastExpense.paymentAccountId || '');
     }
     setShowDescriptionDD(false);
   }
@@ -211,7 +213,7 @@ export default function GastosPage() {
       description: expense.description,
       categoryId: expense.categoryId || '',
       amount: expense.amount,
-      paymentMethod: expense.paymentMethod,
+      paymentAccountId: expense.paymentAccountId || '',
       date: expense.date ? expense.date.split('T')[0] : today,
       notes: expense.notes || '',
       recipientName: expense.recipientName || '',
@@ -228,7 +230,7 @@ export default function GastosPage() {
       description: '',
       categoryId: '',
       amount: '',
-      paymentMethod: 'CASH',
+      paymentAccountId: '',
       date: today,
       notes: '',
       recipientName: '',
@@ -332,8 +334,8 @@ export default function GastosPage() {
                       : <span className="text-slate-300 dark:text-slate-600">—</span>}
                   </td>
                   <td className="hidden md:table-cell px-4 py-3">
-                    <span className={`badge ${PAYMENT_BADGE[e.paymentMethod] || 'badge-slate'}`}>
-                      {paymentMethodLabel[e.paymentMethod] || e.paymentMethod}
+                    <span className="badge badge-slate">
+                      {labelPago(allAccounts, e.paymentAccountId, e.paymentMethod)}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-right text-[13px] font-bold text-red-600 dark:text-red-400 tabular-nums">
@@ -499,13 +501,9 @@ export default function GastosPage() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5 block">Método de pago</label>
-                  <select {...register('paymentMethod')} className={inputCls}>
-                    <option value="CASH">Efectivo</option>
-                    <option value="TRANSFER">Transferencia</option>
-                    <option value="NEQUI">Nequi</option>
-                    <option value="DAVIPLATA">Daviplata</option>
-                    <option value="CARD">Tarjeta</option>
+                  <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5 block">Medio de pago</label>
+                  <select {...register('paymentAccountId')} className={inputCls}>
+                    {paymentAccounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
                   </select>
                 </div>
                 <div>

@@ -7,6 +7,7 @@ import { useForm, Controller } from 'react-hook-form';
 import { PriceInput } from '@/components/ui/PriceInput';
 import { api } from '@/lib/api';
 import { formatCurrency, formatDate, formatDateTime, statusColor, statusLabel } from '@/lib/utils';
+import { usePaymentAccounts, labelPago } from '@/lib/usePaymentAccounts';
 import toast from 'react-hot-toast';
 import { CreditCard, X, Loader2, Plus, DollarSign, ChevronRight, Clock, Search, Ban } from 'lucide-react';
 import { useAuthStore } from '@/store/auth.store';
@@ -74,6 +75,7 @@ export default function CreditosPage() {
     enabled: !!selected?.id && showDetail,
   });
 
+  const { active: paymentAccounts, all: allAccounts } = usePaymentAccounts();
   const { register, handleSubmit, reset, control, formState: { errors: payErrors } } = useForm();
   const { register: regNew, handleSubmit: handleNew, reset: resetNew, control: controlNew, formState: { errors: newErrors } } = useForm();
 
@@ -392,8 +394,8 @@ export default function CreditosPage() {
                         <div key={p.id || i} className="flex items-center justify-between px-4 py-3">
                           <div>
                             <p className="text-[12px] text-slate-500 dark:text-slate-400">{formatDateTime(p.createdAt)}</p>
-                            {p.paymentMethod && (
-                              <p className="text-[11px] text-slate-400 dark:text-slate-500 capitalize mt-0.5">{p.paymentMethod.toLowerCase()}</p>
+                            {(p.paymentAccountId || p.paymentMethod) && (
+                              <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">{labelPago(allAccounts, p.paymentAccountId, p.paymentMethod)}</p>
                             )}
                             {p.notes && <p className="text-[11px] text-slate-400 italic">{p.notes}</p>}
                           </div>
@@ -521,12 +523,9 @@ export default function CreditosPage() {
                   {payErrors.amount && <p className="text-[11px] text-red-500 mt-1">{payErrors.amount.message as string}</p>}
                 </div>
                 <div>
-                  <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5 block">Método de pago</label>
-                  <select {...register('paymentMethod')} className={inputCls}>
-                    <option value="CASH">Efectivo</option>
-                    <option value="NEQUI">Nequi</option>
-                    <option value="DAVIPLATA">Daviplata</option>
-                    <option value="TRANSFER">Transferencia</option>
+                  <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5 block">Medio de pago</label>
+                  <select {...register('paymentAccountId')} className={inputCls}>
+                    {paymentAccounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
                   </select>
                 </div>
                 <div>
