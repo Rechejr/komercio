@@ -25,16 +25,33 @@ router.get('/catalogo/:businessId', async (req, res, next) => {
       select: {
         id: true, name: true, description: true,
         salePrice: true, unit: true,
-        stock: true, image: true,
+        stock: true, image: true, hasVariants: true,
         category: { select: { id: true, name: true } },
+        // Variantes (ropa) para que el catálogo deje elegir talla/color al pedir.
+        variants: {
+          where: { active: true },
+          select: { id: true, talla: true, color: true, stocks: { select: { stock: true } } },
+          orderBy: { createdAt: 'asc' },
+        },
       },
       orderBy: [{ category: { name: 'asc' } }, { name: 'asc' }],
     });
 
     // La pantalla pública solo necesita "disponible/agotado" — mandar el stock
     // exacto le regala a cualquiera que mire la red una forma de ir midiendo el
-    // inventario real del negocio a lo largo del tiempo.
-    const publicProducts = products.map(({ stock, ...p }) => ({ ...p, inStock: stock > 0 }));
+    // inventario real del negocio a lo largo del tiempo. Igual para las variantes.
+    const publicProducts = products.map(({ stock, variants, ...p }) => ({
+      ...p,
+      inStock: stock > 0,
+      variants: p.hasVariants
+        ? variants.map((v) => ({
+            id: v.id,
+            talla: v.talla,
+            color: v.color,
+            inStock: v.stocks.reduce((s, x) => s + Number(x.stock), 0) > 0,
+          }))
+        : [],
+    }));
 
     res.json({ success: true, data: { business, products: publicProducts } });
   } catch (err) { next(err); }
