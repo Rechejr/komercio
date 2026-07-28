@@ -196,29 +196,30 @@ model PaymentLink {
 }
 
 model Branch {
-  id                 String              @id @default(uuid())
-  name               String
-  address            String?
-  phone              String?
-  businessId         String
-  business           Business            @relation(fields: [businessId], references: [id])
+  id                   String                @id @default(uuid())
+  name                 String
+  address              String?
+  phone                String?
+  businessId           String
+  business             Business              @relation(fields: [businessId], references: [id])
   // Quién creó la sucursal — pista de auditoría; nunca se usa para autorizar nada,
   // solo para poder revisar el historial si algo se ve raro (ej. reventa de sucursal).
-  createdById        String?
-  createdBy          User?               @relation("BranchCreator", fields: [createdById], references: [id])
-  users              User[]
-  products           Product[]
-  sales              Sale[]
-  cashRegisters      CashRegister[]
-  purchases          Purchase[]
-  inventoryMovements InventoryMovement[]
-  productStocks      ProductStock[]
-  purchaseDetails    PurchaseDetail[]
-  transfersOut       StockTransfer[]     @relation("TransferFrom")
-  transfersIn        StockTransfer[]     @relation("TransferTo")
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
-  deletedAt          DateTime?
+  createdById          String?
+  createdBy            User?                 @relation("BranchCreator", fields: [createdById], references: [id])
+  users                User[]
+  products             Product[]
+  sales                Sale[]
+  cashRegisters        CashRegister[]
+  purchases            Purchase[]
+  inventoryMovements   InventoryMovement[]
+  productStocks        ProductStock[]
+  productVariantStocks ProductVariantStock[]
+  purchaseDetails      PurchaseDetail[]
+  transfersOut         StockTransfer[]       @relation("TransferFrom")
+  transfersIn          StockTransfer[]       @relation("TransferTo")
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  deletedAt            DateTime?
 
   @@index([businessId])
   @@map("branches")
@@ -292,6 +293,12 @@ model Product {
   taxRate            Decimal             @default(0)
   isActive           Boolean             @default(true)
   allowNegativeStock Boolean             @default(false)
+  // Si es true, el producto se vende por VARIANTES (talla/color): su stock vive
+  // en ProductVariant/ProductVariantStock, no en ProductStock. Product.stock
+  // sigue siendo el total denormalizado (suma de todas las variantes) para que
+  // dashboard/reportes/catálogo/búsqueda lean un solo número, igual que hoy.
+  // Apagado por defecto → los productos existentes se comportan idéntico.
+  hasVariants        Boolean             @default(false)
   // Marca cuándo se notificó por última vez el stock bajo — evita reenviar la
   // misma alerta en cada venta mientras el stock sigue bajo el mínimo; se
   // limpia (null) cuando el producto se reabastece por encima del mínimo.
@@ -304,6 +311,7 @@ model Product {
   // reportes, exportaciones, catálogo público y búsqueda sigan leyendo un solo
   // número sin tener que enterarse de que el stock ahora vive por bodega.
   productStocks      ProductStock[]
+  variants           ProductVariant[]
   transferItems      StockTransferItem[]
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
@@ -334,6 +342,44 @@ model ProductStock {
   @@unique([productId, branchId])
   @@index([branchId])
   @@map("product_stocks")
+}
+
+// ─── VARIANTES DE PRODUCTO (ropa: tallas/colores) ─────────────────────────────
+// Solo se usan cuando Product.hasVariants = true. Cada variante es una combinación
+// (talla y/o color) con su propio stock por bodega (ProductVariantStock). Mismo
+// precio que el producto (decisión de negocio; el precio vive en Product). Los
+// productos simples (hasVariants=false) no crean ninguna fila aquí y funcionan
+// exactamente como hoy.
+model ProductVariant {
+  id              String                @id @default(uuid())
+  productId       String
+  product         Product               @relation(fields: [productId], references: [id], onDelete: Cascade)
+  talla           String?
+  color           String?
+  active          Boolean               @default(true)
+  stocks          ProductVariantStock[]
+  saleDetails     SaleDetail[]
+  purchaseDetails PurchaseDetail[]
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  @@index([productId])
+  @@map("product_variants")
+}
+
+model ProductVariantStock {
+  id        String         @id @default(uuid())
+  variantId String
+  variant   ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  branchId  String
+  branch    Branch         @relation(fields: [branchId], references: [id])
+  stock     Float          @default(0)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  @@unique([variantId, branchId])
+  @@index([branchId])
+  @@map("product_variant_stocks")
 }
 
 model StockTransfer {
@@ -501,22 +547,27 @@ model Sale {
 }
 
 model SaleDetail {
-  id          String   @id @default(uuid())
-  saleId      String
-  sale        Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
-  productId   String
-  product     Product  @relation(fields: [productId], references: [id])
-  quantity    Float
-  unitPrice   Decimal
-  costPrice   Decimal
-  discountPct Decimal  @default(0)
-  taxRate     Decimal  @default(0)
-  subtotal    Decimal
-  total       Decimal
-  createdAt   DateTime @default(now())
+  id               String          @id @default(uuid())
+  saleId           String
+  sale             Sale            @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  productId        String
+  product          Product         @relation(fields: [productId], references: [id])
+  // Variante vendida (talla/color) cuando el producto maneja variantes; null en
+  // productos simples. Determina de qué variante se descuenta el stock.
+  productVariantId String?
+  productVariant   ProductVariant? @relation(fields: [productVariantId], references: [id])
+  quantity         Float
+  unitPrice        Decimal
+  costPrice        Decimal
+  discountPct      Decimal         @default(0)
+  taxRate          Decimal         @default(0)
+  subtotal         Decimal
+  total            Decimal
+  createdAt        DateTime        @default(now())
 
   @@index([saleId])
   @@index([productId])
+  @@index([productVariantId])
   @@map("sale_details")
 }
 
@@ -555,26 +606,29 @@ model Purchase {
 }
 
 model PurchaseDetail {
-  id         String   @id @default(uuid())
-  purchaseId String
-  purchase   Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
-  productId  String
-  product    Product  @relation(fields: [productId], references: [id])
-  quantity   Float
-  unitCost   Decimal
-  taxRate    Decimal  @default(0)
-  subtotal   Decimal
-  total      Decimal
+  id               String          @id @default(uuid())
+  purchaseId       String
+  purchase         Purchase        @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  productId        String
+  product          Product         @relation(fields: [productId], references: [id])
+  productVariantId String?
+  productVariant   ProductVariant? @relation(fields: [productVariantId], references: [id])
+  quantity         Float
+  unitCost         Decimal
+  taxRate          Decimal         @default(0)
+  subtotal         Decimal
+  total            Decimal
   // Nullable — detalles de antes de este campo quedan sin bodega propia; se
   // asume la de Purchase.branchId (o la más antigua del negocio) al editar/
   // eliminar. Ver legacyBranchId en purchase.routes.ts.
-  branchId   String?
-  branch     Branch?  @relation(fields: [branchId], references: [id])
-  createdAt  DateTime @default(now())
+  branchId         String?
+  branch           Branch?         @relation(fields: [branchId], references: [id])
+  createdAt        DateTime        @default(now())
 
   @@index([purchaseId])
   @@index([productId])
   @@index([branchId])
+  @@index([productVariantId])
   @@map("purchase_details")
 }
 
