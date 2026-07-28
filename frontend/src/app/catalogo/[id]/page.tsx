@@ -72,11 +72,15 @@ export default function CatalogoPage() {
   function sendOrder() {
     if (!business?.phone || cart.length === 0) return;
     const phone = `57${business.phone.replace(/\D/g, '').replace(/^57/, '')}`;
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
     const lines = cart.map((l) => {
       const v = [l.talla, l.color].filter(Boolean).join(' · ');
       const ref = l.code ? ` [Ref: ${l.code}]` : '';
-      return `• ${l.qty}× ${l.name}${ref}${v ? ` · ${v}` : ''} — ${formatCOP(l.price * l.qty)}`;
-    }).join('\n');
+      // Link a la ficha del producto: el vendedor toca y ve la prenda. El primero
+      // le da a WhatsApp la tarjeta de vista previa con foto.
+      const foto = `\n📷 Ver foto: ${origin}/p/${l.productId}`;
+      return `• ${l.qty}× ${l.name}${ref}${v ? ` · ${v}` : ''} — ${formatCOP(l.price * l.qty)}${foto}`;
+    }).join('\n\n');
     const text = `Hola *${business.name}*, quiero hacer este pedido:\n\n${lines}\n\n*Total: ${formatCOP(cartTotal)}*`;
     window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, '_blank');
   }
