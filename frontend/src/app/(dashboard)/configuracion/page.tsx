@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { api } from '@/lib/api';
 import toast from 'react-hot-toast';
-import { Loader2, Store, Lock, ImagePlus, X, Users, UserPlus, Edit, Shield, UserX, Volume2, VolumeX, Building2, MapPin, Plus, Trash2, Wallet } from 'lucide-react';
+import { Loader2, Store, Lock, ImagePlus, X, Users, UserPlus, Edit, Shield, UserX, Volume2, VolumeX, Building2, MapPin, Plus, Trash2, Wallet, AlertTriangle } from 'lucide-react';
 import { useAuthStore } from '@/store/auth.store';
 import { useSoundStore } from '@/store/sound.store';
 import { useUpgradeStore } from '@/store/upgrade.store';
@@ -28,7 +28,8 @@ const BIZ_FIELDS = [
     validation: { pattern: { value: /^[0-9\-]{5,20}$/, message: 'Solo dígitos y guiones (5-20 caracteres)' } },
   },
   {
-    name: 'phone', label: 'Teléfono', col: 1, maxLength: 10,
+    name: 'phone', label: 'WhatsApp / Teléfono', col: 1, maxLength: 10, highlight: true,
+    hint: 'Aquí te llegarán los pedidos que hagan desde tu catálogo. Sin este número, los clientes no pueden pedirte.',
     validation: { maxLength: { value: 10, message: 'Máximo 10 dígitos' }, pattern: { value: /^[0-9+\s\-()]{7,10}$/, message: 'Teléfono inválido (máx. 10 dígitos)' } },
   },
   {
@@ -38,7 +39,7 @@ const BIZ_FIELDS = [
   { name: 'address', label: 'Dirección', col: 1, validation: {} },
   { name: 'city',    label: 'Ciudad',    col: 1, validation: {} },
   { name: 'currency', label: 'Moneda',  col: 1, validation: {} },
-] satisfies { name: string; label: string; col: number; type?: string; maxLength?: number; validation: object }[];
+] satisfies { name: string; label: string; col: number; type?: string; maxLength?: number; hint?: string; highlight?: boolean; validation: object }[];
 
 const ROLE_LABEL: Record<string, string> = {
   ADMIN: 'Administrador',
@@ -113,7 +114,7 @@ export default function ConfiguracionPage() {
   const branches: any[] = branchesData || [];
   const paymentAccounts: any[] = payAcctsData || [];
 
-  const { register: regBusiness, handleSubmit: handleBusiness, formState: { isSubmitting: savingBusiness, errors: bizErrors } } = useForm({ values: business });
+  const { register: regBusiness, handleSubmit: handleBusiness, watch: watchBusiness, formState: { isSubmitting: savingBusiness, errors: bizErrors } } = useForm({ values: business });
   const { register: regPwd, handleSubmit: handlePwd, reset: resetPwd, watch: watchPwd, formState: { isSubmitting: savingPwd } } = useForm();
   const { register: regEmp, handleSubmit: handleEmp, reset: resetEmp, formState: { errors: empErrors } } = useForm();
   const { register: regBranch, handleSubmit: handleBranchSubmit, reset: resetBranch, formState: { errors: branchErrors } } = useForm();
@@ -344,22 +345,38 @@ export default function ConfiguracionPage() {
           <form onSubmit={handleBusiness((d: any) => businessMutation.mutate(d))} className="p-6 grid grid-cols-2 gap-4">
             {BIZ_FIELDS.map((f) => {
               const err = (bizErrors as Record<string, { message?: string } | undefined>)[f.name];
+              const hint = (f as { hint?: string }).hint;
+              const highlight = (f as { highlight?: boolean }).highlight;
+              // Se resalta el campo (borde ámbar + aviso "Falta") solo si es importante
+              // y todavía está vacío, para empujar a completarlo sin bloquear nada.
+              const empty = highlight && !String(watchBusiness(f.name) || '').trim();
               return (
                 <div key={f.name} className={f.col === 2 ? 'col-span-2' : ''}>
-                  <label className="block text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5">{f.label}</label>
+                  <label className="flex items-center gap-2 text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5">
+                    {f.label}
+                    {empty && (
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400">
+                        <AlertTriangle size={10} /> Falta
+                      </span>
+                    )}
+                  </label>
                   <input
                     {...regBusiness(f.name, f.validation)}
                     type={f.type || 'text'}
                     maxLength={f.maxLength}
-                    className={`${inputCls} ${err ? 'border-red-400 focus:border-red-400 focus:ring-red-500/20' : ''}`}
+                    className={`${inputCls} ${err ? 'border-red-400 focus:border-red-400 focus:ring-red-500/20' : empty ? 'border-amber-300 dark:border-amber-500/40' : ''}`}
                     aria-invalid={err ? 'true' : 'false'}
-                    aria-describedby={err ? `${f.name}-error` : undefined}
+                    aria-describedby={err ? `${f.name}-error` : hint ? `${f.name}-hint` : undefined}
                   />
-                  {err && (
+                  {err ? (
                     <p id={`${f.name}-error`} className="mt-1 text-[11px] text-red-500 dark:text-red-400">
                       {err.message as string}
                     </p>
-                  )}
+                  ) : hint ? (
+                    <p id={`${f.name}-hint`} className="mt-1 text-[11px] text-slate-400 dark:text-slate-500">
+                      {hint}
+                    </p>
+                  ) : null}
                 </div>
               );
             })}

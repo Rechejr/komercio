@@ -68,16 +68,51 @@ export default function InventarioPage() {
   const role = useAuthStore((s) => s.user?.role);
   const canDelete = role === 'ADMIN' || role === 'SUPERVISOR';
 
+  // Necesitamos el teléfono del negocio para avisar si falta: sin él, los clientes
+  // no pueden pedir desde el catálogo. Reusa la misma query cacheada que Configuración.
+  const { data: business } = useQuery({
+    queryKey: ['business'],
+    queryFn: () => api.get('/business/me').then((r) => r.data.data),
+    staleTime: 5 * 60 * 1000,
+  });
+  const hasBusinessPhone = !!String(business?.phone || '').trim();
+
+  // Si no hay WhatsApp configurado, compartir el catálogo no sirve (no se pueden
+  // recibir pedidos). En vez de dejarlo pasar, avisamos y ofrecemos ir a arreglarlo.
+  function ensurePhone(): boolean {
+    if (hasBusinessPhone) return true;
+    toast((t) => (
+      <span className="flex items-center gap-3 text-[13px]">
+        <span>Configura tu <b>WhatsApp</b> para recibir pedidos del catálogo.</span>
+        <button
+          onClick={() => { toast.dismiss(t.id); router.push('/configuracion'); }}
+          className="flex-shrink-0 px-2.5 py-1 bg-emerald-600 text-white rounded-lg text-[12px] font-semibold hover:bg-emerald-700"
+        >
+          Configurar
+        </button>
+      </span>
+    ), { icon: '📱', duration: 8000 });
+    return false;
+  }
+
   function shareCatalog() {
-    if (!businessId) return;
+    if (!businessId || !ensurePhone()) return;
     const url = `${window.location.origin}/catalogo/${businessId}`;
     navigator.clipboard.writeText(url).then(() => toast.success('¡Link del catálogo copiado!'));
   }
   function shareCatalogWhatsApp() {
-    if (!businessId) return;
+    if (!businessId || !ensurePhone()) return;
     const url = `${window.location.origin}/catalogo/${businessId}`;
     const text = `¡Mira nuestro catálogo de productos!\n${url}`;
-    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+    // <a> real en vez de window.open: Samsung Internet y varios navegadores móviles
+    // bloquean window.open() silenciosamente.
+    const a = document.createElement('a');
+    a.href = `https://wa.me/?text=${encodeURIComponent(text)}`;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
   }
   const [search, setSearch]         = useState(() => searchParams.get('search') || '');
   const [showScanner, setShowScanner] = useState(false);
