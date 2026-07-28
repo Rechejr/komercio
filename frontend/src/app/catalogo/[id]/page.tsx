@@ -9,12 +9,12 @@ const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
 
 interface Variant { id: string; talla?: string | null; color?: string | null; inStock: boolean; }
 interface Product {
-  id: string; name: string; description?: string;
+  id: string; name: string; code: string; description?: string;
   salePrice: number; unit: string; inStock: boolean;
   image?: string; category?: { id: string; name: string };
   hasVariants?: boolean; variants?: Variant[];
 }
-interface CartLine { key: string; productId: string; name: string; price: number; talla?: string; color?: string; qty: number; }
+interface CartLine { key: string; productId: string; name: string; code?: string; price: number; talla?: string; color?: string; qty: number; }
 interface Business {
   id: string; name: string; logo?: string;
   city?: string; phone?: string; address?: string; category?: string;
@@ -59,7 +59,7 @@ export default function CatalogoPage() {
     setCart((prev) => {
       const ex = prev.find((l) => l.key === key);
       if (ex) return prev.map((l) => (l.key === key ? { ...l, qty: l.qty + 1 } : l));
-      return [...prev, { key, productId: p.id, name: p.name, price: p.salePrice, talla: v?.talla || undefined, color: v?.color || undefined, qty: 1 }];
+      return [...prev, { key, productId: p.id, name: p.name, code: p.code, price: p.salePrice, talla: v?.talla || undefined, color: v?.color || undefined, qty: 1 }];
     });
   }
   function addProduct(p: Product) {
@@ -74,7 +74,8 @@ export default function CatalogoPage() {
     const phone = `57${business.phone.replace(/\D/g, '').replace(/^57/, '')}`;
     const lines = cart.map((l) => {
       const v = [l.talla, l.color].filter(Boolean).join(' · ');
-      return `• ${l.qty}× ${l.name}${v ? ` (${v})` : ''} — ${formatCOP(l.price * l.qty)}`;
+      const ref = l.code ? ` [Ref: ${l.code}]` : '';
+      return `• ${l.qty}× ${l.name}${ref}${v ? ` · ${v}` : ''} — ${formatCOP(l.price * l.qty)}`;
     }).join('\n');
     const text = `Hola *${business.name}*, quiero hacer este pedido:\n\n${lines}\n\n*Total: ${formatCOP(cartTotal)}*`;
     window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, '_blank');
@@ -243,8 +244,9 @@ export default function CatalogoPage() {
                   {/* Info */}
                   <div className="p-2.5">
                     <p className="text-[13px] font-semibold text-slate-800 leading-tight line-clamp-2">{p.name}</p>
+                    {p.code && <p className="text-[10px] text-slate-400 mt-0.5">Ref: {p.code}</p>}
                     {p.category && (
-                      <p className="text-[11px] text-slate-400 mt-0.5">{p.category.name}</p>
+                      <p className="text-[11px] text-slate-400">{p.category.name}</p>
                     )}
                     <p className="text-[15px] font-bold text-[#0DA06A] mt-1.5">{formatCOP(p.salePrice)}</p>
                     {available ? (
@@ -332,6 +334,7 @@ export default function CatalogoPage() {
                   <div key={l.key} className="flex items-center gap-3 px-4 py-3">
                     <div className="flex-1 min-w-0">
                       <p className="text-[13px] font-semibold text-slate-800 truncate">{l.name}</p>
+                      {l.code && <p className="text-[10px] text-slate-400">Ref: {l.code}</p>}
                       {(l.talla || l.color) && <p className="text-[11px] font-semibold text-[#0DA06A]">{[l.talla, l.color].filter(Boolean).join(' · ')}</p>}
                       <p className="text-[12px] text-slate-500">{formatCOP(l.price)} c/u</p>
                     </div>

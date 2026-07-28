@@ -23,7 +23,7 @@ router.get('/catalogo/:businessId', async (req, res, next) => {
     const products = await prisma.product.findMany({
       where: { businessId, isActive: true, deletedAt: null },
       select: {
-        id: true, name: true, description: true,
+        id: true, name: true, code: true, description: true,
         salePrice: true, unit: true,
         stock: true, image: true, hasVariants: true,
         category: { select: { id: true, name: true } },
