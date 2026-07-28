@@ -25,7 +25,7 @@ router.get('/catalogo/:businessId', async (req, res, next) => {
       select: {
         id: true, name: true, code: true, description: true,
         salePrice: true, unit: true,
-        stock: true, image: true, hasVariants: true,
+        stock: true, image: true, images: true, hasVariants: true,
         category: { select: { id: true, name: true } },
         // Variantes (ropa) para que el catálogo deje elegir talla/color al pedir.
         variants: {

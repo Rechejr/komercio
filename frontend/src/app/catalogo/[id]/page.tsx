@@ -11,7 +11,7 @@ interface Variant { id: string; talla?: string | null; color?: string | null; in
 interface Product {
   id: string; name: string; code: string; description?: string;
   salePrice: number; unit: string; inStock: boolean;
-  image?: string; category?: { id: string; name: string };
+  image?: string; images?: string[]; category?: { id: string; name: string };
   hasVariants?: boolean; variants?: Variant[];
 }
 interface CartLine { key: string; productId: string; name: string; code?: string; price: number; talla?: string; color?: string; qty: number; }
@@ -49,7 +49,10 @@ export default function CatalogoPage() {
   const [catFilter, setCatFilter] = useState('');
   // Carrito del catálogo (solo cliente; el pedido se manda por WhatsApp al vendedor).
   const [cart, setCart]   = useState<CartLine[]>([]);
-  const [picker, setPicker] = useState<Product | null>(null);
+  const [detail, setDetail] = useState<Product | null>(null);
+  const [dTalla, setDTalla] = useState('');
+  const [dColor, setDColor] = useState('');
+  const [dImg, setDImg]     = useState(0);
   const [cartOpen, setCartOpen] = useState(false);
   const cartCount = cart.reduce((s, l) => s + l.qty, 0);
   const cartTotal = cart.reduce((s, l) => s + l.price * l.qty, 0);
@@ -62,10 +65,7 @@ export default function CatalogoPage() {
       return [...prev, { key, productId: p.id, name: p.name, code: p.code, price: p.salePrice, talla: v?.talla || undefined, color: v?.color || undefined, qty: 1 }];
     });
   }
-  function addProduct(p: Product) {
-    if (p.hasVariants) { setPicker(p); return; }
-    addLine(p);
-  }
+  function openDetail(p: Product) { setDTalla(''); setDColor(''); setDImg(0); setDetail(p); }
   function setQty(key: string, qty: number) {
     setCart((prev) => (qty <= 0 ? prev.filter((l) => l.key !== key) : prev.map((l) => (l.key === key ? { ...l, qty } : l))));
   }
@@ -224,7 +224,8 @@ export default function CatalogoPage() {
               return (
                 <div
                   key={p.id}
-                  className={`bg-white rounded-2xl overflow-hidden border transition-shadow ${
+                  onClick={() => openDetail(p)}
+                  className={`bg-white rounded-2xl overflow-hidden border transition-shadow cursor-pointer ${
                     available ? 'border-slate-100 shadow-sm hover:shadow-md' : 'border-slate-100 opacity-60'
                   }`}
                 >
@@ -251,10 +252,10 @@ export default function CatalogoPage() {
                     <p className="text-[15px] font-bold text-[#0DA06A] mt-1.5">{formatCOP(p.salePrice)}</p>
                     {available ? (
                       <button
-                        onClick={() => addProduct(p)}
+                        onClick={(e) => { e.stopPropagation(); openDetail(p); }}
                         className="mt-1.5 w-full flex items-center justify-center gap-1 bg-[#0DA06A] text-white text-[12px] font-semibold py-1.5 rounded-lg hover:bg-[#0b8f5e] transition-colors"
                       >
-                        <Plus size={12} /> {p.hasVariants ? 'Elegir' : 'Agregar'}
+                        Ver
                       </button>
                     ) : (
                       <span className="inline-block mt-1 text-[10px] font-semibold bg-slate-100 text-slate-400 px-1.5 py-0.5 rounded-full">Agotado</span>
@@ -287,35 +288,88 @@ export default function CatalogoPage() {
         </button>
       )}
 
-      {/* Selector de talla/color */}
-      {picker && (
-        <div className="fixed inset-0 z-40 flex items-end sm:items-center justify-center p-4" onClick={() => setPicker(null)}>
-          <div className="absolute inset-0 bg-black/50" />
-          <div className="relative bg-white rounded-2xl w-full max-w-sm max-h-[80vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100">
-              <div className="min-w-0">
-                <h2 className="text-[15px] font-bold text-slate-900">Elige talla / color</h2>
-                <p className="text-[12px] text-slate-500 truncate">{picker.name}</p>
-              </div>
-              <button onClick={() => setPicker(null)} className="text-slate-400 p-1 flex-shrink-0"><X size={18} /></button>
-            </div>
-            <div className="p-3 overflow-y-auto grid grid-cols-2 gap-2">
-              {(picker.variants || []).map((v) => (
-                <button
-                  key={v.id}
-                  disabled={!v.inStock}
-                  onClick={() => { addLine(picker, v); setPicker(null); }}
-                  className={`text-left rounded-xl border p-3 transition ${v.inStock ? 'border-slate-200 hover:border-[#0DA06A] hover:bg-emerald-50' : 'border-slate-100 opacity-50 cursor-not-allowed'}`}
+      {/* Detalle del producto — galería deslizable + selección de talla/color */}
+      {detail && (() => {
+        const imgs = (detail.images && detail.images.length ? detail.images : (detail.image ? [detail.image] : []));
+        const tallas = Array.from(new Set((detail.variants || []).map((v) => v.talla).filter(Boolean))) as string[];
+        const colores = Array.from(new Set((detail.variants || []).map((v) => v.color).filter(Boolean))) as string[];
+        const selV = detail.hasVariants ? (detail.variants || []).find((v) => (v.talla || '') === dTalla && (v.color || '') === dColor) : undefined;
+        const missing = !!detail.hasVariants && ((tallas.length > 0 && !dTalla) || (colores.length > 0 && !dColor));
+        const agotado = !!detail.hasVariants && !missing && (!selV || !selV.inStock);
+        const canAdd = !detail.hasVariants || (!missing && !!selV && selV.inStock);
+        return (
+          <div className="fixed inset-0 z-40 flex items-end sm:items-center justify-center" onClick={() => setDetail(null)}>
+            <div className="absolute inset-0 bg-black/50" />
+            <div className="relative bg-white w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl max-h-[92vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
+              {/* Galería */}
+              <div className="relative flex-shrink-0">
+                <div
+                  onScroll={(e) => { const el = e.currentTarget; setDImg(Math.round(el.scrollLeft / Math.max(1, el.clientWidth))); }}
+                  className="flex overflow-x-auto snap-x snap-mandatory scrollbar-none"
                 >
-                  <p className="text-[13px] font-semibold text-slate-800">{[v.talla, v.color].filter(Boolean).join(' · ')}</p>
-                  <p className={`text-[11px] mt-0.5 ${v.inStock ? 'text-emerald-600' : 'text-red-500'}`}>{v.inStock ? 'Disponible' : 'Agotado'}</p>
+                  {imgs.length > 0 ? imgs.map((src, i) => (
+                    <div key={i} className="snap-center shrink-0 w-full aspect-square relative bg-slate-50">
+                      <Image src={src} alt={detail.name} fill className="object-contain" />
+                    </div>
+                  )) : (
+                    <div className="shrink-0 w-full aspect-square flex items-center justify-center text-6xl bg-slate-50">{catEmoji(detail.category?.name)}</div>
+                  )}
+                </div>
+                <button onClick={() => setDetail(null)} className="absolute top-3 right-3 w-8 h-8 rounded-full bg-white/90 shadow flex items-center justify-center text-slate-600"><X size={16} /></button>
+                {imgs.length > 1 && (
+                  <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-1.5">
+                    {imgs.map((_, i) => <span key={i} className={`w-1.5 h-1.5 rounded-full transition-colors ${i === dImg ? 'bg-[#0DA06A]' : 'bg-white/80 ring-1 ring-slate-300'}`} />)}
+                  </div>
+                )}
+              </div>
+              {/* Info + selección */}
+              <div className="overflow-y-auto p-4 space-y-3 flex-1">
+                <div>
+                  <h2 className="text-[16px] font-bold text-slate-900 leading-tight">{detail.name}</h2>
+                  {detail.code && <p className="text-[11px] text-slate-400 mt-0.5">Ref: {detail.code}</p>}
+                  <p className="text-[20px] font-bold text-[#0DA06A] mt-1">{formatCOP(detail.salePrice)}</p>
+                </div>
+                {detail.description && <p className="text-[13px] text-slate-600 leading-relaxed whitespace-pre-line">{detail.description}</p>}
+                {detail.hasVariants && (
+                  <div className="space-y-3 pt-1">
+                    {colores.length > 0 && (
+                      <div>
+                        <p className="text-[12px] font-semibold text-slate-700 mb-1.5">Color: <span className="text-slate-500 font-normal">{dColor || 'Elige'}</span></p>
+                        <div className="flex flex-wrap gap-2">
+                          {colores.map((c) => (
+                            <button key={c} onClick={() => setDColor(dColor === c ? '' : c)} className={`px-3 py-1.5 rounded-lg text-[13px] font-medium border transition ${dColor === c ? 'border-[#0DA06A] bg-emerald-50 text-[#0DA06A]' : 'border-slate-200 text-slate-600'}`}>{c}</button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {tallas.length > 0 && (
+                      <div>
+                        <p className="text-[12px] font-semibold text-slate-700 mb-1.5">Talla: <span className="text-slate-500 font-normal">{dTalla || 'Elige'}</span></p>
+                        <div className="flex flex-wrap gap-2">
+                          {tallas.map((t) => (
+                            <button key={t} onClick={() => setDTalla(dTalla === t ? '' : t)} className={`min-w-[44px] px-3 py-1.5 rounded-lg text-[13px] font-medium border transition ${dTalla === t ? 'border-[#0DA06A] bg-emerald-50 text-[#0DA06A]' : 'border-slate-200 text-slate-600'}`}>{t}</button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {agotado && <p className="text-[12px] text-red-500 font-medium">Esa combinación está agotada.</p>}
+                  </div>
+                )}
+              </div>
+              {/* Agregar */}
+              <div className="border-t border-slate-100 p-4 flex-shrink-0">
+                <button
+                  disabled={!canAdd}
+                  onClick={() => { addLine(detail, selV || undefined); setDetail(null); }}
+                  className="w-full flex items-center justify-center gap-2 bg-[#0DA06A] text-white font-bold py-3 rounded-xl hover:bg-[#0b8f5e] disabled:opacity-50 transition-colors"
+                >
+                  <Plus size={17} /> {missing ? 'Elige talla/color' : 'Agregar al carrito'}
                 </button>
-              ))}
-              {(picker.variants || []).length === 0 && <p className="col-span-2 text-center text-[13px] text-slate-400 py-6">Sin tallas/colores.</p>}
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Panel del pedido */}
       {cartOpen && (
