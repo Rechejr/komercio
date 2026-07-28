@@ -19,6 +19,18 @@ function formatCOP(n: number) {
   return new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(n);
 }
 
+// window.open() lo bloquean varios navegadores móviles (Samsung Internet, in-app).
+// Un click de <a> real cuenta como navegación del usuario y no se bloquea.
+function openWhatsApp(url: string) {
+  const a = document.createElement('a');
+  a.href = url;
+  a.target = '_blank';
+  a.rel = 'noopener noreferrer';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
 export default function ProductShareView({ product, business }: { product: ShareProduct; business: ShareBusiness }) {
   const [talla, setTalla] = useState('');
   const [color, setColor] = useState('');
@@ -42,7 +54,7 @@ export default function ProductShareView({ product, business }: { product: Share
       `Hola *${business.name}*, me interesa este producto:\n\n` +
       `• ${product.name}${ref}${v ? ` · ${v}` : ''} — ${formatCOP(product.salePrice)}` +
       (link ? `\n📷 ${link}` : '');
-    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, '_blank');
+    openWhatsApp(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`);
   }
 
   const catalogHref = `/catalogo/${business.id}`;

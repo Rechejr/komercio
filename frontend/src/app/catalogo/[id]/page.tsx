@@ -24,6 +24,19 @@ function formatCOP(n: number) {
   return new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(n);
 }
 
+// Abrir WhatsApp de forma confiable. window.open() lo bloquean varios navegadores
+// móviles (Samsung Internet, algunos in-app) → usar un click de <a> real, que
+// cuenta como navegación iniciada por el usuario y no se bloquea.
+function openWhatsApp(url: string) {
+  const a = document.createElement('a');
+  a.href = url;
+  a.target = '_blank';
+  a.rel = 'noopener noreferrer';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
 // Emoji por categoría para productos sin imagen
 const CAT_EMOJI: Record<string, string> = {
   bebidas: '🥤', lácteos: 'lacteos', lacteos: '🥛', snacks: '🍿',
@@ -82,7 +95,7 @@ export default function CatalogoPage() {
       return `• ${l.qty}× ${l.name}${ref}${v ? ` · ${v}` : ''} — ${formatCOP(l.price * l.qty)}${foto}`;
     }).join('\n\n');
     const text = `Hola *${business.name}*, quiero hacer este pedido:\n\n${lines}\n\n*Total: ${formatCOP(cartTotal)}*`;
-    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, '_blank');
+    openWhatsApp(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`);
   }
 
   useEffect(() => {
@@ -118,7 +131,7 @@ export default function CatalogoPage() {
     const phone = business.phone.replace(/\D/g, '');
     const full  = `57${phone.replace(/^57/, '')}`;
     const text  = `Hola, vi su catálogo de *${business.name}* y quisiera hacer un pedido`;
-    window.open(`https://wa.me/${full}?text=${encodeURIComponent(text)}`, '_blank');
+    openWhatsApp(`https://wa.me/${full}?text=${encodeURIComponent(text)}`);
   }
 
   if (loading) return (
