@@ -438,6 +438,11 @@ describe('productController.update', () => {
   it('actualiza el producto e invalida el cache', async () => {
     (mockPrisma.product.findFirst as jest.Mock).mockResolvedValue(makeProduct());
     (mockPrisma.product.update as jest.Mock).mockResolvedValue(makeProduct({ name: 'Nuevo Nombre' }));
+    // El update ahora es transaccional (por la reconciliación de variantes); el
+    // callback se ejecuta con un tx que expone product.update.
+    (mockPrisma.$transaction as jest.Mock).mockImplementationOnce(async (fn: any) =>
+      fn({ product: { update: jest.fn().mockResolvedValue(makeProduct({ name: 'Nuevo Nombre' })) } })
+    );
     mockCache.del.mockResolvedValue(1 as any);
 
     const { res, json } = makeRes();

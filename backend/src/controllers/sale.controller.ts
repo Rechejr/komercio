@@ -293,7 +293,7 @@ export const saleController = {
         interface LockedProduct {
           id: string; stock: number; name: string; allowNegativeStock: boolean;
           salePrice: number; costPrice: number; taxRate: number; minStock: number;
-          lowStockNotifiedAt: Date | null;
+          lowStockNotifiedAt: Date | null; hasVariants: boolean;
         }
         // Lock each row individually (sorted order prevents deadlocks).
         // Decimal columns (salePrice, costPrice, taxRate) are returned as strings by the pg
@@ -308,7 +308,7 @@ export const saleController = {
         for (const pid of [...productIds].sort()) {
           const rows = await tx.$queryRawUnsafe<any[]>(
             `SELECT id, stock, name, "allowNegativeStock",
-                    "salePrice", "costPrice", "taxRate", "minStock", "lowStockNotifiedAt"
+                    "salePrice", "costPrice", "taxRate", "minStock", "lowStockNotifiedAt", "hasVariants"
              FROM products
              WHERE id::text = $1
                AND "deletedAt" IS NULL AND "isActive" = true
@@ -327,6 +327,7 @@ export const saleController = {
               taxRate: Number(r.taxRate),
               minStock: Number(r.minStock),
               lowStockNotifiedAt: r.lowStockNotifiedAt,
+              hasVariants: r.hasVariants,
             });
 
             const [psRow] = await tx.$queryRawUnsafe<any[]>(
@@ -347,6 +348,46 @@ export const saleController = {
 
         const productMap = new Map(lockedProducts.map((p) => [p.id, p]));
 
+        // ─── Variantes (ropa) ──────────────────────────────────────────────────
+        // En un producto con variantes, cada item debe traer un productVariantId
+        // válido de ESE producto; el stock se chequea y descuenta por variante,
+        // no a nivel de producto.
+        const variantIds = [...new Set(items.filter((i: any) => i.productVariantId).map((i: any) => i.productVariantId))] as string[];
+        const variantMap = new Map<string, { id: string; productId: string }>();
+        if (variantIds.length > 0) {
+          const vrows = await tx.productVariant.findMany({
+            where: { id: { in: variantIds }, active: true, product: { businessId: req.user!.businessId! } },
+            select: { id: true, productId: true },
+          });
+          for (const v of vrows) variantMap.set(v.id, v);
+        }
+        for (const item of items) {
+          const product = productMap.get(item.productId)!;
+          if (product.hasVariants) {
+            if (!item.productVariantId) throw new AppError(`Elige la talla/color de: ${product.name}`, 400);
+            const v = variantMap.get(item.productVariantId);
+            if (!v || v.productId !== item.productId) throw new AppError(`Variante inválida para: ${product.name}`, 400);
+          } else if (item.productVariantId) {
+            item.productVariantId = null; // producto simple: se ignora una variante enviada por error
+          }
+        }
+        // Bloquear/leer el stock por variante de la bodega (mismo patrón atómico que product_stocks).
+        const branchStockByVariant = new Map<string, number>();
+        for (const vid of [...variantIds].filter((v) => variantMap.has(v)).sort()) {
+          const [row] = await tx.$queryRawUnsafe<any[]>(
+            `INSERT INTO product_variant_stocks (id, "variantId", "branchId", stock, "createdAt", "updatedAt")
+             VALUES ($1, $2, $3, 0, now(), now())
+             ON CONFLICT ("variantId", "branchId") DO UPDATE SET "updatedAt" = product_variant_stocks."updatedAt"
+             RETURNING stock`,
+            randomUUID(), vid, effectiveBranchId,
+          );
+          branchStockByVariant.set(vid, Number(row.stock));
+        }
+        const qtyByVariant = new Map<string, number>();
+        for (const item of items) {
+          if (item.productVariantId) qtyByVariant.set(item.productVariantId, (qtyByVariant.get(item.productVariantId) || 0) + item.quantity);
+        }
+
         // Cantidad total por producto — un mismo producto puede venir repetido en
         // varias líneas (ej. llamada directa a la API); el chequeo de stock y el
         // descuento de inventario deben mirar el total combinado, no línea por línea,
@@ -357,11 +398,21 @@ export const saleController = {
         }
         for (const [pid, qty] of qtyByProduct) {
           const product = productMap.get(pid)!;
+          if (product.hasVariants) continue; // el stock se chequea por variante (abajo)
           // El chequeo mira el stock de LA BODEGA que está vendiendo, no el total
           // del negocio — otra bodega con stock de sobra no debe permitir vender
           // algo que físicamente no está ahí.
           const branchStock = branchStockByProduct.get(pid) ?? 0;
           if (branchStock < qty && !product.allowNegativeStock) {
+            throw new AppError(`Stock insuficiente para: ${product.name}`, 400);
+          }
+        }
+        // Chequeo de stock por variante (ropa) — cada talla/color por separado.
+        for (const [vid, vqty] of qtyByVariant) {
+          const v = variantMap.get(vid)!;
+          const product = productMap.get(v.productId)!;
+          const branchStock = branchStockByVariant.get(vid) ?? 0;
+          if (branchStock < vqty && !product.allowNegativeStock) {
             throw new AppError(`Stock insuficiente para: ${product.name}`, 400);
           }
         }
@@ -382,6 +433,7 @@ export const saleController = {
 
           return {
             productId: product.id,
+            productVariantId: item.productVariantId || null,
             quantity: item.quantity,
             unitPrice: product.salePrice,
             costPrice: product.costPrice,
@@ -447,11 +499,15 @@ export const saleController = {
           });
           // La fila product_stocks de esta bodega ya quedó creada/bloqueada arriba
           // (branchStockByProduct) — aquí solo se descuenta, el total en Product.stock
-          // se mantiene sincronizado con el update de arriba.
-          await tx.productStock.update({
-            where: { productId_branchId: { productId: pid, branchId: effectiveBranchId } },
-            data: { stock: { decrement: qty } },
-          });
+          // se mantiene sincronizado con el update de arriba. En productos con
+          // variantes el stock granular vive en product_variant_stocks (se descuenta
+          // aparte, abajo), así que aquí NO se toca product_stocks.
+          if (!product.hasVariants) {
+            await tx.productStock.update({
+              where: { productId_branchId: { productId: pid, branchId: effectiveBranchId } },
+              data: { stock: { decrement: qty } },
+            });
+          }
           await tx.inventoryMovement.create({
             data: {
               productId: pid,
@@ -470,6 +526,16 @@ export const saleController = {
           if (isNewLowStock) {
             lowStockProducts.push({ id: product.id, name: product.name, stock: newStock, minStock: product.minStock });
           }
+        }
+
+        // Descuento granular por variante (ropa). La fila ya quedó creada/bloqueada
+        // arriba (branchStockByVariant); Product.stock ya se descontó en el loop de
+        // arriba (por qtyByProduct, que suma las variantes de cada producto).
+        for (const [vid, vqty] of qtyByVariant) {
+          await tx.productVariantStock.update({
+            where: { variantId_branchId: { variantId: vid, branchId: effectiveBranchId } },
+            data: { stock: { decrement: vqty } },
+          });
         }
 
         // Update customer debt if credit sale
@@ -580,13 +646,24 @@ export const saleController = {
           await tx.product.update({ where: { id: detail.productId }, data: { stock: { increment: detail.quantity } } });
           // Devuelve el stock a la bodega donde se vendió (sale.branchId) — se usa
           // INSERT ... ON CONFLICT por si la venta es de antes de esta función y
-          // nunca tuvo una fila product_stocks creada.
-          await tx.$executeRawUnsafe(
-            `INSERT INTO product_stocks (id, "productId", "branchId", stock, "createdAt", "updatedAt")
-             VALUES ($1, $2, $3, $4, now(), now())
-             ON CONFLICT ("productId", "branchId") DO UPDATE SET stock = product_stocks.stock + $4, "updatedAt" = now()`,
-            randomUUID(), detail.productId, sale.branchId, detail.quantity,
-          );
+          // nunca tuvo una fila de stock creada. En ventas de ropa el stock granular
+          // vuelve a la VARIANTE; en las simples, a product_stocks. Product.stock
+          // (total) se incrementa en ambos casos con el update de arriba.
+          if (detail.productVariantId) {
+            await tx.$executeRawUnsafe(
+              `INSERT INTO product_variant_stocks (id, "variantId", "branchId", stock, "createdAt", "updatedAt")
+               VALUES ($1, $2, $3, $4, now(), now())
+               ON CONFLICT ("variantId", "branchId") DO UPDATE SET stock = product_variant_stocks.stock + $4, "updatedAt" = now()`,
+              randomUUID(), detail.productVariantId, sale.branchId, detail.quantity,
+            );
+          } else {
+            await tx.$executeRawUnsafe(
+              `INSERT INTO product_stocks (id, "productId", "branchId", stock, "createdAt", "updatedAt")
+               VALUES ($1, $2, $3, $4, now(), now())
+               ON CONFLICT ("productId", "branchId") DO UPDATE SET stock = product_stocks.stock + $4, "updatedAt" = now()`,
+              randomUUID(), detail.productId, sale.branchId, detail.quantity,
+            );
+          }
           await tx.inventoryMovement.create({
             data: {
               productId: detail.productId,
