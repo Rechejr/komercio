@@ -108,6 +108,12 @@ export const productController = {
             orderBy: { createdAt: 'desc' },
             take: 10,
           },
+          // Variantes activas con su stock por bodega (para el form de edición de ropa).
+          variants: {
+            where: { active: true },
+            include: { stocks: { select: { branchId: true, stock: true } } },
+            orderBy: { createdAt: 'asc' },
+          },
         },
       });
 
@@ -131,6 +137,23 @@ export const productController = {
       if (data.supplierId) {
         const sup = await prisma.supplier.findFirst({ where: { id: data.supplierId, businessId, deletedAt: null } });
         if (!sup) throw new AppError('Proveedor inválido', 400);
+      }
+
+      // Variantes (ropa): opt-in. Si viene hasVariants con una matriz, el stock
+      // vive por variante (ProductVariantStock), no en ProductStock. Un producto
+      // simple (sin esto) se comporta exactamente igual que siempre.
+      const variantsInput: any[] = Array.isArray(data.variants) ? data.variants : [];
+      const hasVariants = !!data.hasVariants && variantsInput.length > 0;
+      if (hasVariants) {
+        const seen = new Set<string>();
+        for (const v of variantsInput) {
+          const talla = (v.talla ?? '').toString().trim();
+          const color = (v.color ?? '').toString().trim();
+          if (!talla && !color) throw new AppError('Cada variante debe tener al menos talla o color', 400);
+          const key = `${talla.toLowerCase()}|${color.toLowerCase()}`;
+          if (seen.has(key)) throw new AppError('Hay variantes repetidas (misma talla y color)', 400);
+          seen.add(key);
+        }
       }
 
       const product = await prisma.$transaction(async (tx) => {
@@ -166,7 +189,8 @@ export const productController = {
             costPrice: parseFloat(data.costPrice) || 0,
             salePrice: parseFloat(data.salePrice) || 0,
             wholesalePrice: data.wholesalePrice ? parseFloat(data.wholesalePrice) : null,
-            stock: parseFloat(data.stock) || 0,
+            stock: hasVariants ? 0 : (parseFloat(data.stock) || 0),
+            hasVariants,
             minStock: parseFloat(data.minStock) || 0,
             unit: data.unit || 'unit',
             taxRate: parseFloat(data.taxRate) || 0,
@@ -176,8 +200,41 @@ export const productController = {
           },
         });
 
-        if (parseFloat(data.stock) > 0) {
-          const initialCost = parseFloat(data.costPrice) || 0;
+        const initialCost = parseFloat(data.costPrice) || 0;
+
+        if (hasVariants) {
+          // Crea cada variante (talla/color) con su stock inicial en la bodega.
+          // Product.stock queda como la SUMA total (para dashboard/reportes/catálogo).
+          let total = 0;
+          for (const v of variantsInput) {
+            const vStock = parseFloat(v.stock) || 0;
+            const variant = await tx.productVariant.create({
+              data: {
+                productId: newProduct.id,
+                talla: (v.talla ?? '').toString().trim() || null,
+                color: (v.color ?? '').toString().trim() || null,
+              },
+            });
+            if (vStock > 0) {
+              await tx.productVariantStock.create({
+                data: { variantId: variant.id, branchId, stock: vStock },
+              });
+              await tx.inventoryMovement.create({
+                data: {
+                  productId: newProduct.id, type: 'IN', quantity: vStock,
+                  previousStock: 0, newStock: vStock,
+                  reason: `Stock inicial · ${[variant.talla, variant.color].filter(Boolean).join(' ')}`,
+                  unitCost: initialCost, totalCost: initialCost * vStock, branchId,
+                },
+              });
+              total += vStock;
+            }
+          }
+          if (total > 0) {
+            await tx.product.update({ where: { id: newProduct.id }, data: { stock: total } });
+          }
+          newProduct.stock = total; // reflejar el total en la respuesta
+        } else if (parseFloat(data.stock) > 0) {
           const initialQty = parseFloat(data.stock);
           await tx.inventoryMovement.create({
             data: {
@@ -227,27 +284,95 @@ export const productController = {
         if (!sup) throw new AppError('Proveedor inválido', 400);
       }
 
-      const product = await prisma.product.update({
-        where: { id },
-        data: {
-          code: data.code,
-          barcode: data.barcode !== undefined ? (data.barcode || null) : undefined,
-          name: data.name,
-          description: data.description,
-          categoryId: data.categoryId !== undefined ? (data.categoryId || null) : undefined,
-          brandId: data.brandId !== undefined ? (data.brandId || null) : undefined,
-          supplierId: data.supplierId !== undefined ? (data.supplierId || null) : undefined,
-          costPrice: data.costPrice !== undefined ? parseFloat(data.costPrice) : undefined,
-          salePrice: data.salePrice !== undefined ? parseFloat(data.salePrice) : undefined,
-          wholesalePrice: data.wholesalePrice ? parseFloat(data.wholesalePrice) : undefined,
-          minStock: data.minStock !== undefined ? parseFloat(data.minStock) : undefined,
-          unit: data.unit,
-          taxRate: data.taxRate !== undefined ? parseFloat(data.taxRate) : undefined,
-          image: Array.isArray(data.images) ? (data.images[0] || null) : data.image,
-          images: Array.isArray(data.images) ? data.images : undefined,
-          isActive: data.isActive,
-          allowNegativeStock: data.allowNegativeStock,
-        },
+      // Reconciliación de variantes (opt-in). Si el front manda `variants`, se
+      // agregan las nuevas, se reactivan las que vuelven y se desactivan las que
+      // ya no están; el stock de variantes existentes NO se toca aquí (eso se
+      // ajusta en inventario, con su movimiento). Product.stock se recalcula como
+      // la suma de las variantes activas.
+      const variantsInput: any[] = Array.isArray(data.variants) ? data.variants : [];
+      if (variantsInput.length > 0) {
+        const seen = new Set<string>();
+        for (const v of variantsInput) {
+          const talla = (v.talla ?? '').toString().trim();
+          const color = (v.color ?? '').toString().trim();
+          if (!talla && !color) throw new AppError('Cada variante debe tener al menos talla o color', 400);
+          const key = `${talla.toLowerCase()}|${color.toLowerCase()}`;
+          if (seen.has(key)) throw new AppError('Hay variantes repetidas (misma talla y color)', 400);
+          seen.add(key);
+        }
+      }
+      const updBranchId = variantsInput.length > 0 ? await resolveEffectiveBranchId(prisma, req, data.branchId) : null;
+      const key = (t: any, c: any) => `${(t || '').toString().toLowerCase()}|${(c || '').toString().toLowerCase()}`;
+
+      const product = await prisma.$transaction(async (tx) => {
+        const updated = await tx.product.update({
+          where: { id },
+          data: {
+            code: data.code,
+            barcode: data.barcode !== undefined ? (data.barcode || null) : undefined,
+            name: data.name,
+            description: data.description,
+            categoryId: data.categoryId !== undefined ? (data.categoryId || null) : undefined,
+            brandId: data.brandId !== undefined ? (data.brandId || null) : undefined,
+            supplierId: data.supplierId !== undefined ? (data.supplierId || null) : undefined,
+            costPrice: data.costPrice !== undefined ? parseFloat(data.costPrice) : undefined,
+            salePrice: data.salePrice !== undefined ? parseFloat(data.salePrice) : undefined,
+            wholesalePrice: data.wholesalePrice ? parseFloat(data.wholesalePrice) : undefined,
+            minStock: data.minStock !== undefined ? parseFloat(data.minStock) : undefined,
+            unit: data.unit,
+            taxRate: data.taxRate !== undefined ? parseFloat(data.taxRate) : undefined,
+            image: Array.isArray(data.images) ? (data.images[0] || null) : data.image,
+            images: Array.isArray(data.images) ? data.images : undefined,
+            isActive: data.isActive,
+            allowNegativeStock: data.allowNegativeStock,
+            hasVariants: data.hasVariants !== undefined ? !!data.hasVariants : undefined,
+          },
+        });
+
+        if (variantsInput.length > 0) {
+          const existingVariants = await tx.productVariant.findMany({ where: { productId: id } });
+          const byKey = new Map(existingVariants.map((v) => [key(v.talla, v.color), v]));
+          const incoming = new Set<string>();
+          const initialCost = data.costPrice !== undefined ? parseFloat(data.costPrice) : Number(existing.costPrice) || 0;
+
+          for (const v of variantsInput) {
+            const talla = (v.talla ?? '').toString().trim() || null;
+            const color = (v.color ?? '').toString().trim() || null;
+            const k = key(talla, color);
+            incoming.add(k);
+            const found = byKey.get(k);
+            if (found) {
+              if (!found.active) await tx.productVariant.update({ where: { id: found.id }, data: { active: true } });
+            } else {
+              const variant = await tx.productVariant.create({ data: { productId: id, talla, color } });
+              const vStock = parseFloat(v.stock) || 0;
+              if (vStock > 0) {
+                await tx.productVariantStock.create({ data: { variantId: variant.id, branchId: updBranchId!, stock: vStock } });
+                await tx.inventoryMovement.create({
+                  data: {
+                    productId: id, type: 'IN', quantity: vStock, previousStock: 0, newStock: vStock,
+                    reason: `Stock inicial · ${[talla, color].filter(Boolean).join(' ')}`,
+                    unitCost: initialCost, totalCost: initialCost * vStock, branchId: updBranchId!,
+                  },
+                });
+              }
+            }
+          }
+          // Desactivar las variantes que ya no vienen en la matriz.
+          for (const v of existingVariants) {
+            if (v.active && !incoming.has(key(v.talla, v.color))) {
+              await tx.productVariant.update({ where: { id: v.id }, data: { active: false } });
+            }
+          }
+          // Product.stock = suma de las variantes ACTIVAS (total denormalizado).
+          const agg = await tx.productVariantStock.aggregate({
+            where: { variant: { productId: id, active: true } },
+            _sum: { stock: true },
+          });
+          await tx.product.update({ where: { id }, data: { stock: agg._sum.stock || 0 } });
+        }
+
+        return updated;
       });
 
       await cache.del(`product:${businessId}:${id}`);
