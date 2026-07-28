@@ -341,18 +341,37 @@ export const productController = {
             const k = key(talla, color);
             incoming.add(k);
             const found = byKey.get(k);
+            let variantId: string;
             if (found) {
+              variantId = found.id;
               if (!found.active) await tx.productVariant.update({ where: { id: found.id }, data: { active: true } });
             } else {
               const variant = await tx.productVariant.create({ data: { productId: id, talla, color } });
-              const vStock = parseFloat(v.stock) || 0;
-              if (vStock > 0) {
-                await tx.productVariantStock.create({ data: { variantId: variant.id, branchId: updBranchId!, stock: vStock } });
+              variantId = variant.id;
+            }
+            // Si el form manda un stock, se fija (upsert) en la bodega efectiva y se
+            // registra el delta como movimiento — así el editar sirve para
+            // reabastecer/corregir cada talla. (En negocios de una sola bodega, que
+            // es el caso típico de ropa, esto es exacto.)
+            if (v.stock !== undefined && v.stock !== null && v.stock !== '') {
+              const target = parseFloat(v.stock) || 0;
+              const cur = await tx.productVariantStock.findUnique({
+                where: { variantId_branchId: { variantId, branchId: updBranchId! } },
+              });
+              const prev = cur ? Number(cur.stock) : 0;
+              if (cur) {
+                await tx.productVariantStock.update({ where: { variantId_branchId: { variantId, branchId: updBranchId! } }, data: { stock: target } });
+              } else {
+                await tx.productVariantStock.create({ data: { variantId, branchId: updBranchId!, stock: target } });
+              }
+              const delta = target - prev;
+              if (delta !== 0) {
                 await tx.inventoryMovement.create({
                   data: {
-                    productId: id, type: 'IN', quantity: vStock, previousStock: 0, newStock: vStock,
-                    reason: `Stock inicial · ${[talla, color].filter(Boolean).join(' ')}`,
-                    unitCost: initialCost, totalCost: initialCost * vStock, branchId: updBranchId!,
+                    productId: id, type: delta > 0 ? 'IN' : 'OUT', quantity: Math.abs(delta),
+                    previousStock: prev, newStock: target,
+                    reason: `Ajuste variante · ${[talla, color].filter(Boolean).join(' ')}`,
+                    unitCost: initialCost, totalCost: initialCost * Math.abs(delta), branchId: updBranchId!,
                   },
                 });
               }

@@ -3,6 +3,11 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 
 export interface CartItem {
   productId: string;
+  // Variante (ropa): cuando el producto maneja tallas/colores. La identidad de la
+  // línea es productVariantId ?? productId, así dos variantes del mismo producto
+  // (M-Navy y L-Navy) son líneas separadas.
+  productVariantId?: string;
+  variantLabel?: string; // ej. "M · Navy" (solo para mostrar)
   name: string;
   code: string;
   unitPrice: number;
@@ -13,14 +18,17 @@ export interface CartItem {
   total: number;
 }
 
+/** Identidad de línea del carrito: la variante si existe, si no el producto. */
+export const lineKey = (i: { productId: string; productVariantId?: string }) => i.productVariantId || i.productId;
+
 interface CartState {
   items: CartItem[];
   customerId: string | null;
   discount: number;
   addItem: (item: Omit<CartItem, 'subtotal' | 'total'>) => void;
-  updateQty: (productId: string, qty: number) => void;
-  updateDiscount: (productId: string, pct: number) => void;
-  removeItem: (productId: string) => void;
+  updateQty: (key: string, qty: number) => void;
+  updateDiscount: (key: string, pct: number) => void;
+  removeItem: (key: string) => void;
   setCustomer: (id: string | null) => void;
   setGlobalDiscount: (amount: number) => void;
   clear: () => void;
@@ -42,12 +50,13 @@ export const useCartStore = create<CartState>()(
       discount: 0,
 
       addItem(item) {
+        const key = lineKey(item);
         set((state) => {
-          const existing = state.items.find((i) => i.productId === item.productId);
+          const existing = state.items.find((i) => lineKey(i) === key);
           if (existing) {
             return {
               items: state.items.map((i) =>
-                i.productId === item.productId
+                lineKey(i) === key
                   ? calcItem({ ...i, quantity: i.quantity + item.quantity })
                   : i,
               ),
@@ -57,24 +66,24 @@ export const useCartStore = create<CartState>()(
         });
       },
 
-      updateQty(productId, qty) {
+      updateQty(key, qty) {
         if (qty <= 0) {
-          get().removeItem(productId);
+          get().removeItem(key);
           return;
         }
         set((state) => ({
-          items: state.items.map((i) => i.productId === productId ? calcItem({ ...i, quantity: qty }) : i),
+          items: state.items.map((i) => lineKey(i) === key ? calcItem({ ...i, quantity: qty }) : i),
         }));
       },
 
-      updateDiscount(productId, pct) {
+      updateDiscount(key, pct) {
         set((state) => ({
-          items: state.items.map((i) => i.productId === productId ? calcItem({ ...i, discountPct: pct }) : i),
+          items: state.items.map((i) => lineKey(i) === key ? calcItem({ ...i, discountPct: pct }) : i),
         }));
       },
 
-      removeItem(productId) {
-        set((state) => ({ items: state.items.filter((i) => i.productId !== productId) }));
+      removeItem(key) {
+        set((state) => ({ items: state.items.filter((i) => lineKey(i) !== key) }));
       },
 
       setCustomer(customerId) { set({ customerId }); },

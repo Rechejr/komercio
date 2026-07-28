@@ -105,6 +105,23 @@ export default function InventarioPage() {
   const [countQuantities, setCountQuantities] = useState<Record<string, string>>({});
   const [showQuickCreate, setShowQuickCreate] = useState(false);
 
+  // ── Editor de variantes (ropa: tallas/colores) ──────────────────────────────
+  const [pvOn, setPvOn] = useState(false);
+  const [pvTallas, setPvTallas] = useState('');
+  const [pvColores, setPvColores] = useState('');
+  const [pvStock, setPvStock] = useState<Record<string, string>>({});
+  const parseList = (s: string) => Array.from(new Set(s.split(',').map((x) => x.trim()).filter(Boolean)));
+  const pvKey = (t: string, c: string) => `${t}|${c}`;
+  const pvCombos = (() => {
+    const T = parseList(pvTallas), C = parseList(pvColores);
+    if (!T.length && !C.length) return [] as { talla: string; color: string }[];
+    if (T.length && C.length) return T.flatMap((t) => C.map((c) => ({ talla: t, color: c })));
+    if (T.length) return T.map((t) => ({ talla: t, color: '' }));
+    return C.map((c) => ({ talla: '', color: c }));
+  })();
+  const pvTotal = pvCombos.reduce((s, c) => s + (parseFloat(pvStock[pvKey(c.talla, c.color)]) || 0), 0);
+  function resetVariantes() { setPvOn(false); setPvTallas(''); setPvColores(''); setPvStock({}); }
+
   function handleDroppedFile(file: File) {
     const allowed = ['.xlsx', '.xls', '.csv'];
     const ext = file.name.slice(file.name.lastIndexOf('.')).toLowerCase();
@@ -273,14 +290,44 @@ export default function InventarioPage() {
     onError: (err: any) => toast.error(err.response?.data?.error || 'Error al crear producto'),
   });
 
-  function openEdit(item: any) {
+  async function openEdit(item: any) {
     setEditItem(item);
     reset({
       ...item,
       categoryId: item.category?.id || item.categoryId || '',
       images: item.images || [],
     });
+    // Cargar la matriz de variantes (ropa) si el producto las maneja.
+    if (item.hasVariants) {
+      try {
+        const full = (await api.get(`/products/${item.id}`)).data.data;
+        const vs: any[] = full.variants || [];
+        setPvOn(true);
+        setPvTallas(Array.from(new Set(vs.map((v) => v.talla).filter(Boolean))).join(', '));
+        setPvColores(Array.from(new Set(vs.map((v) => v.color).filter(Boolean))).join(', '));
+        const stk: Record<string, string> = {};
+        for (const v of vs) stk[pvKey(v.talla || '', v.color || '')] = String((v.stocks || []).reduce((s: number, x: any) => s + Number(x.stock), 0));
+        setPvStock(stk);
+      } catch { resetVariantes(); }
+    } else {
+      resetVariantes();
+    }
     setShowForm(true);
+  }
+
+  // Merge del editor de variantes con los datos del formulario al guardar.
+  function submitProduct(d: any) {
+    if (pvOn) {
+      if (pvCombos.length === 0) { toast.error('Agrega al menos una talla o un color'); return; }
+      const variants = pvCombos.map((c) => ({
+        talla: c.talla || undefined,
+        color: c.color || undefined,
+        stock: parseFloat(pvStock[pvKey(c.talla, c.color)]) || 0,
+      }));
+      saveMutation.mutate({ ...d, hasVariants: true, variants, stock: undefined });
+    } else {
+      saveMutation.mutate({ ...d, hasVariants: false });
+    }
   }
 
   // Auto-selecciona la bodega en el modal de Ajustar Stock cuando solo hay una
@@ -531,7 +578,7 @@ export default function InventarioPage() {
 
         <button
           type="button"
-          onClick={() => { setEditItem(null); reset({ images: [], isActive: true }); setShowForm(true); }}
+          onClick={() => { setEditItem(null); reset({ images: [], isActive: true }); resetVariantes(); setShowForm(true); }}
           className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-semibold hover:bg-emerald-700 shadow-sm shadow-emerald-600/25 transition"
         >
           <Plus size={15} /> Nuevo producto
@@ -882,7 +929,7 @@ export default function InventarioPage() {
               </button>
             </div>
 
-            <form ref={formScrollRef} tabIndex={-1} onSubmit={handleSubmit((d) => saveMutation.mutate(d))} className="p-6 grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-5 overflow-y-auto min-h-0 flex-1 outline-none">
+            <form ref={formScrollRef} tabIndex={-1} onSubmit={handleSubmit(submitProduct)} className="p-6 grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-5 overflow-y-auto min-h-0 flex-1 outline-none">
 
               {/* ── Columna izquierda ──────────────────── */}
               <div className="space-y-4">
@@ -921,7 +968,57 @@ export default function InventarioPage() {
                   {errors.name && <p className="text-[11px] text-red-500 mt-1">{errors.name.message as string}</p>}
                 </div>
 
+                {/* Variantes de ropa (tallas/colores) — opt-in por producto */}
+                <div className="md:col-span-2 rounded-xl border border-slate-200 dark:border-slate-700/60 p-3.5">
+                  <label className="flex items-center gap-2.5 cursor-pointer">
+                    <input type="checkbox" checked={pvOn} onChange={(e) => setPvOn(e.target.checked)} className="rounded accent-emerald-600 w-4 h-4" />
+                    <span className="text-[13px] font-semibold text-slate-700 dark:text-slate-200">🧵 Este producto maneja tallas/colores (ropa)</span>
+                  </label>
+                  {pvOn && (
+                    <div className="mt-3 space-y-3">
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400">Escribe las tallas y colores separados por coma. La matriz se arma sola; pon el stock de cada combinación.</p>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5">Tallas</label>
+                          <input value={pvTallas} onChange={(e) => setPvTallas(e.target.value)} placeholder="S, M, L, XL" className={inputCls} />
+                        </div>
+                        <div>
+                          <label className="block text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5">Colores</label>
+                          <input value={pvColores} onChange={(e) => setPvColores(e.target.value)} placeholder="Navy, Verde, Negro" className={inputCls} />
+                        </div>
+                      </div>
+                      {pvCombos.length > 0 ? (
+                        <div className="rounded-xl border border-slate-100 dark:border-white/[0.06] overflow-hidden">
+                          <div className="max-h-56 overflow-y-auto divide-y divide-slate-100 dark:divide-white/[0.05]">
+                            {pvCombos.map((c) => {
+                              const k = pvKey(c.talla, c.color);
+                              return (
+                                <div key={k} className="flex items-center justify-between gap-3 px-3 py-2">
+                                  <span className="text-[13px] text-slate-700 dark:text-slate-200">{[c.talla, c.color].filter(Boolean).join(' · ') || '—'}</span>
+                                  <input
+                                    type="number" inputMode="numeric" min="0" placeholder="0"
+                                    value={pvStock[k] ?? ''}
+                                    onChange={(e) => setPvStock((p) => ({ ...p, [k]: e.target.value }))}
+                                    className="w-24 px-2 py-1.5 text-[15px] sm:text-[13px] text-right border border-slate-200 dark:border-slate-700 rounded-lg bg-slate-50 dark:bg-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+                                  />
+                                </div>
+                              );
+                            })}
+                          </div>
+                          <div className="flex items-center justify-between px-3 py-2 bg-slate-50 dark:bg-slate-800/40 text-[12px] font-semibold text-slate-600 dark:text-slate-300">
+                            <span>{pvCombos.length} variante{pvCombos.length !== 1 ? 's' : ''}</span>
+                            <span>Stock total: {pvTotal}</span>
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="text-[12px] text-amber-600 dark:text-amber-400">Agrega al menos una talla o un color.</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+
                 <div className="grid grid-cols-2 gap-3">
+                  {!pvOn && (
                   <div>
                     <label className="block text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5">
                       Cantidad disponible
@@ -945,6 +1042,7 @@ export default function InventarioPage() {
                       </p>
                     )}
                   </div>
+                  )}
                   <div>
                     <label className="block text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5">Cantidad mínima</label>
                     <input

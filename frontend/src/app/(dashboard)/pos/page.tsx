@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import { api } from '@/lib/api';
-import { useCartStore } from '@/store/cart.store';
+import { useCartStore, lineKey } from '@/store/cart.store';
 import { useAuthStore } from '@/store/auth.store';
 import { useUpgradeStore } from '@/store/upgrade.store';
 import { formatCurrency, formatDate, statusColor, statusLabel, cn } from '@/lib/utils';
@@ -115,6 +115,8 @@ export default function POSPage() {
   const [selectedCreditId, setSelectedCreditId]   = useState<string | null>(null);
   const [creditPayAmount, setCreditPayAmount] = useState('');
   const [creditPayMethod, setCreditPayMethod] = useState('CASH');
+  // Selector de talla/color al vender un producto de ropa.
+  const [variantPicker, setVariantPicker] = useState<{ product: any; variants: any[] } | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
   // Medios de pago configurables. paymentMethod/splitMethod/creditPayMethod pasan a
@@ -212,7 +214,7 @@ export default function POSPage() {
       play('sale');
       // Snapshot cart items BEFORE clear() so the receipt has product names
       receiptItemsRef.current = items.map((i) => ({
-        name: i.name,
+        name: i.variantLabel ? `${i.name} (${i.variantLabel})` : i.name,
         quantity: i.quantity,
         unitPrice: i.unitPrice,
         discountPct: i.discountPct,
@@ -284,8 +286,17 @@ export default function POSPage() {
     setMixedPayments((prev) => prev.filter((_, i) => i !== index));
   }
 
-  function handleAddProduct(product: any) {
-    const cartQty = items.find((i) => i.productId === product.id)?.quantity ?? 0;
+  async function handleAddProduct(product: any) {
+    // Producto de ropa → abrir el selector de talla/color (carga las variantes).
+    if (product.hasVariants) {
+      try {
+        const full = (await api.get(`/products/${product.id}`)).data.data;
+        setVariantPicker({ product: full, variants: full.variants || [] });
+      } catch { toast.error('No se pudieron cargar las variantes'); }
+      setSearch('');
+      return;
+    }
+    const cartQty = items.find((i) => i.productId === product.id && !i.productVariantId)?.quantity ?? 0;
     if (product.stock <= cartQty && !product.allowNegativeStock) {
       play('error');
       toast.error(`"${product.name}" sin stock suficiente (${product.stock} disponibles)`);
@@ -303,6 +314,25 @@ export default function POSPage() {
     }
   }
 
+  // Agrega al carrito la talla/color elegida (línea propia por variante).
+  function pickVariant(product: any, variant: any) {
+    const vStock = (variant.stocks || []).reduce((s: number, x: any) => s + Number(x.stock), 0);
+    const inCart = items.find((i) => i.productVariantId === variant.id)?.quantity ?? 0;
+    if (vStock <= inCart && !product.allowNegativeStock) {
+      play('error');
+      toast.error(`Sin stock de esa talla/color (${vStock} disponibles)`);
+      return;
+    }
+    play('add');
+    addItem({
+      productId: product.id, productVariantId: variant.id,
+      variantLabel: [variant.talla, variant.color].filter(Boolean).join(' · '),
+      name: product.name, code: product.code,
+      unitPrice: product.salePrice, quantity: 1, discountPct: 0, taxRate: product.taxRate || 0,
+    });
+    setVariantPicker(null);
+  }
+
   function handleSale() {
     setSaleError('');
     if (items.length === 0) { toast.error('Agrega productos'); return; }
@@ -313,7 +343,7 @@ export default function POSPage() {
       : isCredit ? parseFloat(paidAmount || '0') : parseFloat(paidAmount || String(total));
     saleMutation.mutate({
       customerId: customerId || undefined,
-      items: items.map((i) => ({ productId: i.productId, quantity: i.quantity, discountPct: i.discountPct })),
+      items: items.map((i) => ({ productId: i.productId, productVariantId: i.productVariantId, quantity: i.quantity, discountPct: i.discountPct })),
       // Pago simple → paymentAccountId (el backend deriva el enum). MIXTO conserva
       // el flujo por splits (paymentMethod='MIXED').
       ...(paymentMethod === 'MIXED'
@@ -631,9 +661,10 @@ export default function POSPage() {
                 </thead>
                 <tbody className="divide-y divide-slate-50 dark:divide-white/[0.04]">
                   {items.map((item) => (
-                    <tr key={item.productId} className="hover:bg-slate-50/50 dark:hover:bg-white/[0.02] transition-colors">
+                    <tr key={lineKey(item)} className="hover:bg-slate-50/50 dark:hover:bg-white/[0.02] transition-colors">
                       <td className="px-4 py-2.5">
                         <p className="font-medium text-slate-800 dark:text-slate-100 truncate max-w-[180px]">{item.name}</p>
+                        {item.variantLabel && <p className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">{item.variantLabel}</p>}
                         <p className="text-[11px] text-slate-400">{item.code}</p>
                       </td>
                       <td className="px-2 py-2.5">
@@ -641,7 +672,7 @@ export default function POSPage() {
                           <button
                             type="button"
                             aria-label="Disminuir cantidad"
-                            onClick={() => updateQty(item.productId, item.quantity - 1)}
+                            onClick={() => updateQty(lineKey(item), item.quantity - 1)}
                             className="w-6 h-6 rounded-md border border-slate-200 dark:border-slate-700/60 flex items-center justify-center text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
                           >
                             <Minus size={11} />
@@ -654,14 +685,14 @@ export default function POSPage() {
                             value={item.quantity}
                             onChange={(e) => {
                               const v = parseInt(e.target.value);
-                              if (!isNaN(v) && v > 0) updateQty(item.productId, v);
+                              if (!isNaN(v) && v > 0) updateQty(lineKey(item), v);
                             }}
                             className="w-10 text-center text-[16px] sm:text-[13px] font-mono border border-slate-200 dark:border-slate-700/60 rounded-md px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-emerald-500 dark:bg-slate-800 dark:text-white"
                           />
                           <button
                             type="button"
                             aria-label="Aumentar cantidad"
-                            onClick={() => updateQty(item.productId, item.quantity + 1)}
+                            onClick={() => updateQty(lineKey(item), item.quantity + 1)}
                             className="w-6 h-6 rounded-md border border-slate-200 dark:border-slate-700/60 flex items-center justify-center text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
                           >
                             <Plus size={11} />
@@ -678,7 +709,7 @@ export default function POSPage() {
                             value={item.discountPct}
                             onChange={(e) => {
                               const v = parseFloat(e.target.value);
-                              updateDiscount(item.productId, isNaN(v) ? 0 : Math.min(100, Math.max(0, v)));
+                              updateDiscount(lineKey(item), isNaN(v) ? 0 : Math.min(100, Math.max(0, v)));
                             }}
                             className="w-10 text-right text-[16px] sm:text-[12px] border border-slate-200 dark:border-slate-700/60 rounded-md px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-emerald-500 dark:bg-slate-800 dark:text-white"
                           />
@@ -692,7 +723,7 @@ export default function POSPage() {
                         <button
                           type="button"
                           aria-label="Eliminar producto"
-                          onClick={() => removeItem(item.productId)}
+                          onClick={() => removeItem(lineKey(item))}
                           className="text-slate-300 dark:text-slate-600 hover:text-red-500 transition-colors"
                         >
                           <Trash2 size={13} />
@@ -1169,6 +1200,48 @@ export default function POSPage() {
     )}
 
     {/* ── Create customer modal ──────────────────────────────────────────── */}
+    {/* Selector de talla/color (ropa) */}
+    {variantPicker && (
+      <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4" onClick={() => setVariantPicker(null)}>
+        <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" />
+        <div className="relative bg-white dark:bg-slate-900 rounded-2xl shadow-modal w-full max-w-sm max-h-[85vh] overflow-hidden flex flex-col animate-scale-in" onClick={(e) => e.stopPropagation()}>
+          <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-slate-100 dark:border-white/[0.06]">
+            <div className="min-w-0">
+              <h2 className="text-[15px] font-bold text-slate-900 dark:text-white">Elige talla / color</h2>
+              <p className="text-[12px] text-slate-500 dark:text-slate-400 truncate">{variantPicker.product.name}</p>
+            </div>
+            <button type="button" onClick={() => setVariantPicker(null)} className="text-slate-400 hover:text-slate-600 p-1 flex-shrink-0"><X size={18} /></button>
+          </div>
+          <div className="p-3 overflow-y-auto grid grid-cols-2 gap-2">
+            {variantPicker.variants.map((v: any) => {
+              const vStock = (v.stocks || []).reduce((s: number, x: any) => s + Number(x.stock), 0);
+              const agotado = vStock <= 0 && !variantPicker.product.allowNegativeStock;
+              return (
+                <button
+                  key={v.id}
+                  type="button"
+                  disabled={agotado}
+                  onClick={() => pickVariant(variantPicker.product, v)}
+                  className={cn(
+                    'text-left rounded-xl border p-3 transition',
+                    agotado
+                      ? 'border-slate-100 dark:border-slate-800 opacity-50 cursor-not-allowed'
+                      : 'border-slate-200 dark:border-slate-700/60 hover:border-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-500/10',
+                  )}
+                >
+                  <p className="text-[13px] font-semibold text-slate-800 dark:text-white">{[v.talla, v.color].filter(Boolean).join(' · ')}</p>
+                  <p className={cn('text-[11px] mt-0.5', vStock <= 0 ? 'text-red-500' : 'text-slate-500 dark:text-slate-400')}>{vStock <= 0 ? 'Agotado' : `${vStock} disponibles`}</p>
+                </button>
+              );
+            })}
+            {variantPicker.variants.length === 0 && (
+              <p className="col-span-2 text-center text-[13px] text-slate-400 py-6">Este producto no tiene tallas/colores configurados.</p>
+            )}
+          </div>
+        </div>
+      </div>
+    )}
+
     {showCreateCustomer && (
       <div
         className="fixed inset-0 bg-black/60 backdrop-blur-[2px] z-50 flex items-center justify-center p-4"
