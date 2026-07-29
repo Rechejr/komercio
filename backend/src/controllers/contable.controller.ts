@@ -64,6 +64,18 @@ function enteroValido(v: unknown, campo: string): number | null {
 
 const OBLIGACIONES_VALIDAS: Obligacion[] = ['renta', 'iva', 'retefuente', 'ica', 'exogena', 'pila', 'impoconsumo', 'simple'];
 
+/** ¿La suscripción/prueba está vigente? requireContable deja planExpiresAt en req.
+ *  La purga perezosa solo debe correr con plan activo: si venció, la agenda queda
+ *  en solo-lectura y sus datos NO se tocan. */
+function planActivo(req: AuthRequest): boolean {
+  const exp = (req as AuthRequest & { planExpiresAt?: Date | null }).planExpiresAt;
+  return exp != null && new Date(exp) > new Date();
+}
+
+// Tope de seguridad para listados sin paginar (evita respuestas gigantes en memoria).
+// Muy por encima del volumen real de una oficina; si se acerca, toca paginar.
+const LIST_CAP = 2000;
+
 /** Variante del calendario según la obligación y el cliente:
  *  IVA → periodicidad; renta → tipo de persona; el resto no tiene variante. */
 function varianteDe(obligacion: Obligacion, tipoPersona: string, ivaPeriodicidad: string | null): string | null {
@@ -461,7 +473,8 @@ export const contableController = {
 
       // Auto-borrado: los ya cumplidos (presentada/pagada) se borran 2 meses
       // después de su fecha, para no saturar. Lo pendiente/vencido se conserva.
-      {
+      // Solo con plan activo: en modo solo-lectura (vencido) sus datos no se tocan.
+      if (planActivo(req)) {
         const corte = new Date();
         corte.setMonth(corte.getMonth() - 2);
         await prisma.vencimiento.deleteMany({
@@ -487,6 +500,7 @@ export const contableController = {
         include: { taxClient: { select: { id: true, razonSocial: true, nit: true, dv: true } } },
         // Ascendente: lo más próximo a vencer (y lo ya vencido) queda arriba.
         orderBy: { fecha: 'asc' },
+        take: LIST_CAP,
       });
       return success(res, items);
     } catch (err) { next(err); }
@@ -612,8 +626,9 @@ export const contableController = {
       const businessId = req.user!.businessId!;
 
       // Auto-borrado: las resoluciones vencidas se borran 2 meses después de que
-      // expiró su vigencia (ya no sirven). Purga perezosa al consultar.
-      {
+      // expiró su vigencia (ya no sirven). Purga perezosa al consultar; solo con
+      // plan activo (en solo-lectura sus datos no se tocan).
+      if (planActivo(req)) {
         const corte = new Date();
         corte.setMonth(corte.getMonth() - 2);
         await prisma.resolucionDian.deleteMany({
@@ -630,6 +645,7 @@ export const contableController = {
         where,
         include: { taxClient: { select: { id: true, razonSocial: true } } },
         orderBy: { fechaVigencia: 'asc' },
+        take: LIST_CAP,
       });
       return success(res, items);
     } catch (err) { next(err); }
@@ -688,8 +704,8 @@ export const contableController = {
 
       // Auto-borrado: un registro se borra 2 meses después de su fecha SI ya está
       // "presentado" (cumplido). Lo pendiente/vencido se conserva. Purga perezosa
-      // (sin cron) al consultar. Aplica igual a exógena y a otras.
-      {
+      // (sin cron) al consultar; solo con plan activo (en solo-lectura no se tocan).
+      if (planActivo(req)) {
         const corte = new Date();
         corte.setMonth(corte.getMonth() - 2);
         await prisma.responsabilidadManual.deleteMany({
@@ -701,6 +717,7 @@ export const contableController = {
         where: { tipo, taxClient: { businessId } },
         include: { taxClient: { select: { id: true, razonSocial: true, nit: true, dv: true } } },
         orderBy: { fecha: 'asc' },
+        take: LIST_CAP,
       });
       return success(res, items);
     } catch (err) { next(err); }

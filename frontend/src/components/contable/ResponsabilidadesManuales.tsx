@@ -6,11 +6,15 @@ import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { Portal } from '@/components/ui/Portal';
 import { formatNit, formatFecha, situacionPorFecha } from '@/lib/contable';
 import { Plus, Search, Edit, Trash2, X, Loader2, ClipboardList } from 'lucide-react';
 
 const inputCls =
   'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[16px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition';
+
+// Normaliza para buscar sin distinguir tildes ("pena" encuentra "Peña").
+const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 
 type EstadoResp = 'pendiente' | 'presentado';
 type ClientePicker = { id: string; razonSocial: string; nit: string; dv: number };
@@ -63,12 +67,12 @@ export function ResponsabilidadesManuales({ tipo, conceptoLabel, conceptoPlaceho
 
   const visibles = items.filter((r) => {
     if (!search.trim()) return true;
-    const q = search.toLowerCase();
+    const q = norm(search);
     // OJO: solo comparar el NIT si el texto trae dígitos. Con letras, replace(/\D/g,'')
     // da "" y `nit.includes("")` es SIEMPRE true → dejaba pasar todos los registros.
     const soloDigitos = search.replace(/\D/g, '');
-    return r.taxClient.razonSocial.toLowerCase().includes(q)
-      || r.concepto.toLowerCase().includes(q)
+    return norm(r.taxClient.razonSocial).includes(q)
+      || norm(r.concepto).includes(q)
       || (soloDigitos.length > 0 && r.taxClient.nit.includes(soloDigitos));
   });
 
@@ -233,6 +237,7 @@ export function ResponsabilidadesManuales({ tipo, conceptoLabel, conceptoPlaceho
 
       {/* Modal crear/editar */}
       {modalOpen && (
+        <Portal>
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4" onClick={() => setModalOpen(false)}>
           <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" />
           <div className="relative bg-white dark:bg-slate-900 rounded-2xl shadow-modal w-full max-w-md max-h-[90vh] overflow-hidden flex flex-col animate-scale-in" onClick={(e) => e.stopPropagation()}>
@@ -241,24 +246,25 @@ export function ResponsabilidadesManuales({ tipo, conceptoLabel, conceptoPlaceho
               <button onClick={() => setModalOpen(false)} className="text-slate-400 hover:text-slate-600 p-1"><X size={20} /></button>
             </div>
 
-            <div className="px-6 py-5 overflow-y-auto flex-1 space-y-4">
+            <form id="resp-form" onSubmit={(e) => { e.preventDefault(); submit(); }} className="px-6 py-5 overflow-y-auto flex-1 space-y-4">
               {/* Cliente */}
               <div>
                 <label className="block text-[13px] font-medium text-slate-700 dark:text-slate-300 mb-1.5">Cliente</label>
                 {cliente ? (
                   <div className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-900/15 border border-emerald-200 dark:border-emerald-800">
                     <span className="text-sm font-medium text-slate-900 dark:text-white">{cliente.razonSocial}</span>
-                    {!editing && <button onClick={() => setCliente(null)} className="text-xs text-emerald-600 hover:underline">Cambiar</button>}
+                    {!editing && <button type="button" onClick={() => setCliente(null)} className="text-xs text-emerald-600 hover:underline">Cambiar</button>}
                   </div>
                 ) : (
                   <>
-                    <input value={clienteSearch} onChange={(e) => setClienteSearch(e.target.value)} placeholder="Buscar cliente..." className={inputCls} autoFocus />
+                    {/* Enter aquí NO envía el form: se usa para buscar/elegir cliente. */}
+                    <input value={clienteSearch} onChange={(e) => setClienteSearch(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault(); }} placeholder="Buscar cliente..." className={inputCls} autoFocus />
                     {clienteSearch && (
                       <div className="mt-1 border border-slate-200 dark:border-slate-700 rounded-xl divide-y divide-slate-100 dark:divide-white/[0.06] max-h-40 overflow-y-auto">
                         {clientes.length === 0 ? (
                           <p className="px-3 py-2 text-sm text-slate-400">Sin resultados</p>
                         ) : clientes.map((c: any) => (
-                          <button key={c.id} onClick={() => setCliente(c)} className="w-full text-left px-3 py-2 hover:bg-slate-50 dark:hover:bg-slate-800 text-sm">
+                          <button type="button" key={c.id} onClick={() => setCliente(c)} className="w-full text-left px-3 py-2 hover:bg-slate-50 dark:hover:bg-slate-800 text-sm">
                             <span className="font-medium text-slate-900 dark:text-white">{c.razonSocial}</span>
                             <span className="text-xs text-slate-400 ml-2 tabular">{formatNit(c.nit, c.dv)}</span>
                           </button>
@@ -289,17 +295,18 @@ export function ResponsabilidadesManuales({ tipo, conceptoLabel, conceptoPlaceho
                   <option value="presentado">Presentado</option>
                 </select>
               </div>
-            </div>
+            </form>
 
             <div className="px-6 py-4 border-t border-slate-100 dark:border-white/[0.06] flex-shrink-0 flex gap-2">
-              <button onClick={() => setModalOpen(false)} className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-sm font-medium text-slate-600 dark:text-slate-300">Cancelar</button>
-              <button onClick={submit} disabled={saveMut.isPending} className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-60">
+              <button type="button" onClick={() => setModalOpen(false)} className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-sm font-medium text-slate-600 dark:text-slate-300">Cancelar</button>
+              <button type="submit" form="resp-form" disabled={saveMut.isPending} className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-60">
                 {saveMut.isPending ? <Loader2 size={15} className="animate-spin" /> : null}
                 {editing ? 'Guardar cambios' : 'Crear registro'}
               </button>
             </div>
           </div>
         </div>
+        </Portal>
       )}
 
       <ConfirmDialog
