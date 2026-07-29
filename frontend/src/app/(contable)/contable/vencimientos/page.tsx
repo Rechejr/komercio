@@ -6,6 +6,7 @@ import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { Portal } from '@/components/ui/Portal';
 import {
   OBLIGACIONES, OBLIGACION_LABEL, ESTADOS_MANUALES, ESTADO_COLOR, estadoManual,
   urgenciaVencimiento, diasHastaVencimiento, formatNit, formatFecha,
@@ -368,6 +369,7 @@ function NuevoVencimientoModal({ onClose, clienteInicial }: { onClose: () => voi
   }
 
   return (
+    <Portal>
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" />
       <div className="relative bg-white dark:bg-slate-900 rounded-2xl shadow-modal w-full max-w-md max-h-[90vh] overflow-hidden flex flex-col animate-scale-in" onClick={(e) => e.stopPropagation()}>
@@ -481,5 +483,6 @@ function NuevoVencimientoModal({ onClose, clienteInicial }: { onClose: () => voi
         </div>
       </div>
     </div>
+    </Portal>
   );
 }

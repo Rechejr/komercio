@@ -6,6 +6,7 @@ import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { Portal } from '@/components/ui/Portal';
 import { formatNit, formatFecha, situacionPorFecha } from '@/lib/contable';
 import { Plus, Trash2, X, Loader2, FileText } from 'lucide-react';
 
@@ -171,6 +172,7 @@ function NuevaResolucionModal({ onClose }: { onClose: () => void }) {
   }
 
   return (
+    <Portal>
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" />
       <div className="relative bg-white dark:bg-slate-900 rounded-2xl shadow-modal w-full max-w-md max-h-[90vh] overflow-hidden flex flex-col animate-scale-in" onClick={(e) => e.stopPropagation()}>
@@ -253,5 +255,6 @@ function NuevaResolucionModal({ onClose }: { onClose: () => void }) {
         </div>
       </div>
     </div>
+    </Portal>
   );
 }

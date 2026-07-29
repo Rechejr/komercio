@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '@/store/auth.store';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { Portal } from '@/components/ui/Portal';
 import {
   CALIDADES, calcularDV, calidadBloqueada, formatNit, resumenCalidades,
   type TaxClient, type Calidad,
@@ -342,6 +343,7 @@ export default function ClientesPage() {
 
       {/* ── Modal ficha de cliente ─────────────────────────────────────────── */}
       {modalOpen && (
+        <Portal>
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4" onClick={() => setModalOpen(false)}>
           <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" />
           <div className="relative bg-white dark:bg-slate-900 rounded-2xl shadow-modal w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col animate-scale-in" onClick={(e) => e.stopPropagation()}>
@@ -443,10 +445,12 @@ export default function ClientesPage() {
             </div>
           </div>
         </div>
+        </Portal>
       )}
 
       {/* ── Modal: vista previa de importación (dry-run) ────────────────────── */}
       {previewOpen && (
+        <Portal>
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" onClick={closePreview} />
           <div className="relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/[0.08] rounded-2xl shadow-modal w-full max-w-lg flex flex-col max-h-[90vh] overflow-hidden animate-scale-in">
@@ -558,10 +562,12 @@ export default function ClientesPage() {
             )}
           </div>
         </div>
+        </Portal>
       )}
 
       {/* ── Modal: resultado de la importación ──────────────────────────────── */}
       {importResult && (
+        <Portal>
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4" onClick={() => setImportResult(null)}>
           <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" />
           <div className="relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/[0.08] rounded-2xl shadow-modal w-full max-w-md max-h-[80vh] flex flex-col overflow-hidden animate-scale-in" onClick={(e) => e.stopPropagation()}>
@@ -614,6 +620,7 @@ export default function ClientesPage() {
             </div>
           </div>
         </div>
+        </Portal>
       )}
 
       <ConfirmDialog
