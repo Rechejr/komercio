@@ -64,9 +64,12 @@ export function ResponsabilidadesManuales({ tipo, conceptoLabel, conceptoPlaceho
   const visibles = items.filter((r) => {
     if (!search.trim()) return true;
     const q = search.toLowerCase();
+    // OJO: solo comparar el NIT si el texto trae dígitos. Con letras, replace(/\D/g,'')
+    // da "" y `nit.includes("")` es SIEMPRE true → dejaba pasar todos los registros.
+    const soloDigitos = search.replace(/\D/g, '');
     return r.taxClient.razonSocial.toLowerCase().includes(q)
       || r.concepto.toLowerCase().includes(q)
-      || r.taxClient.nit.includes(search.replace(/\D/g, ''));
+      || (soloDigitos.length > 0 && r.taxClient.nit.includes(soloDigitos));
   });
 
   const saveMut = useMutation({
