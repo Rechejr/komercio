@@ -70,6 +70,9 @@ export function parseCalidades(raw: string): Calidad[] {
   const fragmentos = raw.split(/[,;/|\n]+/).map((f) => normalizeHeader(f)).filter(Boolean);
   const encontradas = new Set<Calidad>();
   for (const frag of fragmentos) {
+    // "No declarante de renta", "no responsable de iva"… → NO es esa calidad.
+    // Sin este guard, el `includes` marcaría la calidad negada por error.
+    if (/^no\b/.test(frag)) continue;
     for (const { calidad, tokens } of CALIDAD_ALIASES) {
       if (tokens.some((t) => frag === t || frag.includes(t))) {
         encontradas.add(calidad);

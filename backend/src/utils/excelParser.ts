@@ -70,7 +70,12 @@ export function mapColumns(
   for (const [field, aliases] of Object.entries(colDefs)) {
     if (col[field] !== -1) continue;
     for (const a of aliases) {
-      const i = headers.findIndex((h, idx) => h.includes(a) && !claimedCols.has(idx));
+      // En el paso "contains" solo entran aliases de >2 letras: un alias corto como
+      // "id" o "cc" haría match dentro de otras palabras ("unidad", "dirección"...) y
+      // robaría la columna equivocada. Los cortos ya se atendieron por match exacto.
+      const i = a.length > 2
+        ? headers.findIndex((h, idx) => h.includes(a) && !claimedCols.has(idx))
+        : -1;
       if (i >= 0) {
         claimedCols.set(i, field);
         col[field] = i + 1;

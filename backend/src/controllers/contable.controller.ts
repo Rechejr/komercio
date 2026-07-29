@@ -27,6 +27,43 @@ async function getClientOfBusiness(taxClientId: string, businessId: string) {
   return client;
 }
 
+// ── Validadores de entrada ────────────────────────────────────────────────────
+// Convierten datos crudos del body en valores seguros para Prisma, lanzando 400
+// con mensaje claro en vez de dejar que un valor basura reviente en un 500.
+
+/** Fecha "AAAA-MM-DD" (input date) → Date UTC. 400 si el formato o el día no son válidos. */
+function fechaValida(fecha: unknown, campo = 'fecha'): Date {
+  if (typeof fecha !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
+    throw new AppError(`La ${campo} no tiene un formato válido (AAAA-MM-DD)`, 400);
+  }
+  const d = new Date(`${fecha}T00:00:00Z`);
+  // Ida y vuelta: rechaza días que JS "corre" (30-feb → 2-mar) y fechas inválidas.
+  if (isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== fecha) {
+    throw new AppError(`La ${campo} no es una fecha válida`, 400);
+  }
+  return d;
+}
+
+/** Monto opcional → Decimal ≥ 0 o null. 400 si no es número o es negativo. */
+function montoValido(monto: unknown, campo = 'monto'): Prisma.Decimal | null {
+  if (monto == null || monto === '') return null;
+  let dec: Prisma.Decimal;
+  try { dec = new Prisma.Decimal(monto as Prisma.Decimal.Value); }
+  catch { throw new AppError(`El ${campo} no es un número válido`, 400); }
+  if (!dec.isFinite() || dec.isNegative()) throw new AppError(`El ${campo} debe ser un número positivo`, 400);
+  return dec;
+}
+
+/** Entero opcional ≥ 0 o null. 400 si no es un entero válido. */
+function enteroValido(v: unknown, campo: string): number | null {
+  if (v == null || v === '') return null;
+  const n = Number(v);
+  if (!Number.isInteger(n) || n < 0) throw new AppError(`El ${campo} debe ser un número entero positivo`, 400);
+  return n;
+}
+
+const OBLIGACIONES_VALIDAS: Obligacion[] = ['renta', 'iva', 'retefuente', 'ica', 'exogena', 'pila', 'impoconsumo', 'simple'];
+
 /** Variante del calendario según la obligación y el cliente:
  *  IVA → periodicidad; renta → tipo de persona; el resto no tiene variante. */
 function varianteDe(obligacion: Obligacion, tipoPersona: string, ivaPeriodicidad: string | null): string | null {
@@ -248,7 +285,12 @@ export const contableController = {
 
       const tieneColTipo = col.tipoPersona !== -1;
 
-      for (let rowNum = headerRowNum + 1; rowNum <= ws.rowCount; rowNum++) {
+      // Tope de filas: evita que un archivo gigante genere miles de queries y
+      // tumbe el request. Las filas de más se avisan y se ignoran.
+      const MAX_IMPORT_ROWS = 5000;
+      const ultimaFila = Math.min(ws.rowCount, headerRowNum + MAX_IMPORT_ROWS);
+
+      for (let rowNum = headerRowNum + 1; rowNum <= ultimaFila; rowNum++) {
         const row = ws.getRow(rowNum);
         const razonSocial = cellVal(row, col.razonSocial);
         if (!razonSocial) continue;
@@ -294,6 +336,14 @@ export const contableController = {
           direccion: cellVal(row, col.direccion) || null,
           responsabilidades,
           ivaPeriodicidad,
+        });
+      }
+
+      if (ws.rowCount > ultimaFila) {
+        issues.unshift({
+          row: ultimaFila, name: '',
+          message: `El archivo supera las ${MAX_IMPORT_ROWS} filas; solo se procesaron las primeras ${MAX_IMPORT_ROWS}. Divídelo en varios archivos.`,
+          type: 'warning',
         });
       }
 
@@ -449,6 +499,7 @@ export const contableController = {
 
       await getClientOfBusiness(taxClientId, businessId);
       if (!obligacion) throw new AppError('La obligación es requerida', 400);
+      if (!OBLIGACIONES_VALIDAS.includes(obligacion)) throw new AppError('La obligación no es válida', 400);
       if (!periodo?.trim()) throw new AppError('El periodo es requerido', 400);
       if (!fecha) throw new AppError('La fecha es requerida', 400);
 
@@ -458,8 +509,8 @@ export const contableController = {
             taxClientId,
             obligacion,
             periodo: periodo.trim(),
-            fecha: new Date(`${fecha}T00:00:00Z`),
-            monto: monto != null && monto !== '' ? new Prisma.Decimal(monto) : null,
+            fecha: fechaValida(fecha),
+            monto: montoValido(monto),
             notas: notas?.trim() || null,
           },
         });
@@ -601,11 +652,11 @@ export const contableController = {
           tipo,
           clase: clase === 'autorizacion' || clase === 'habilitacion' ? clase : null,
           numero: numero.trim(),
-          fechaExpedicion: new Date(`${fechaExpedicion}T00:00:00Z`),
-          fechaVigencia: new Date(`${fechaVigencia}T00:00:00Z`),
+          fechaExpedicion: fechaValida(fechaExpedicion, 'fecha de expedición'),
+          fechaVigencia: fechaValida(fechaVigencia, 'fecha de vigencia'),
           prefijo: prefijo?.trim() || null,
-          rangoDesde: rangoDesde != null && rangoDesde !== '' ? Number(rangoDesde) : null,
-          rangoHasta: rangoHasta != null && rangoHasta !== '' ? Number(rangoHasta) : null,
+          rangoDesde: enteroValido(rangoDesde, 'rango desde'),
+          rangoHasta: enteroValido(rangoHasta, 'rango hasta'),
           modalidad: ['pos', 'electronica', 'contingencia'].includes(modalidad) ? modalidad : null,
           notas: notas?.trim() || null,
         },
@@ -670,7 +721,7 @@ export const contableController = {
           taxClientId,
           tipo,
           concepto: concepto.trim(),
-          fecha: new Date(`${fecha}T00:00:00Z`),
+          fecha: fechaValida(fecha),
           estado: est,
         },
       });
@@ -692,7 +743,7 @@ export const contableController = {
         if (!concepto?.trim()) throw new AppError('El concepto no puede estar vacío', 400);
         data.concepto = concepto.trim();
       }
-      if (fecha !== undefined && fecha) data.fecha = new Date(`${fecha}T00:00:00Z`);
+      if (fecha !== undefined && fecha) data.fecha = fechaValida(fecha);
       if (estado !== undefined) {
         if (estado !== 'pendiente' && estado !== 'presentado') throw new AppError('Estado inválido', 400);
         data.estado = estado;
