@@ -88,8 +88,21 @@ export function ResponsabilidadesManuales({ tipo, conceptoLabel, conceptoPlaceho
   const estadoMut = useMutation({
     mutationFn: ({ id, estado }: { id: string; estado: EstadoResp }) =>
       api.patch(`/contable/responsabilidades/${id}`, { estado }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['contable-resp', tipo] }),
-    onError: (e: any) => toast.error(e.response?.data?.error || 'No se pudo actualizar'),
+    // Update optimista: el <select> es controlado por los datos del query, así que
+    // sin esto React lo revierte al valor viejo hasta que llegue el refetch (en red
+    // lenta parece que no guardó). Pintamos el cambio ya y revertimos si falla.
+    onMutate: async ({ id, estado }) => {
+      await qc.cancelQueries({ queryKey: ['contable-resp', tipo] });
+      const prev = qc.getQueryData<RespManual[]>(['contable-resp', tipo]);
+      qc.setQueryData<RespManual[]>(['contable-resp', tipo], (old) =>
+        (old || []).map((r) => (r.id === id ? { ...r, estado } : r)));
+      return { prev };
+    },
+    onError: (e: any, _vars, ctx) => {
+      if (ctx?.prev) qc.setQueryData(['contable-resp', tipo], ctx.prev);
+      toast.error(e.response?.data?.error || 'No se pudo actualizar');
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: ['contable-resp', tipo] }),
   });
 
   const delMut = useMutation({

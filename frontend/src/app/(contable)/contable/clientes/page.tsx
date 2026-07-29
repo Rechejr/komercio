@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
@@ -73,6 +73,14 @@ export default function ClientesPage() {
   });
   const clientes: TaxClient[] = data?.data ?? [];
   const pagination = data?.pagination;
+
+  // Si borras el último cliente de la página actual (o cambia el total), la página
+  // podría quedar por fuera del rango y mostrarse vacía sin botón para volver.
+  // Reajustamos a la última página válida.
+  useEffect(() => {
+    const totalPages = pagination?.totalPages ?? 1;
+    if (page > totalPages) setPage(totalPages);
+  }, [pagination?.totalPages, page]);
 
   const saveMut = useMutation({
     mutationFn: (payload: any) =>

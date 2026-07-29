@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth.store';
 import { cn } from '@/lib/utils';
-import { OBLIGACION_LABEL, ESTADO_COLOR, formatNit, formatFecha, type EstadoVencimiento, type Obligacion } from '@/lib/contable';
+import { OBLIGACION_LABEL, ESTADO_COLOR, formatNit, formatFecha, diasHastaVencimiento, type EstadoVencimiento, type Obligacion } from '@/lib/contable';
 import { CalendarClock, FileText, Users, AlertTriangle, Clock, ArrowRight } from 'lucide-react';
 import { ActivarPlanButton } from '@/components/contable/ActivarPlanButton';
 
@@ -20,13 +20,6 @@ interface PanelData {
   }>;
   totalClientes: number;
   suscripcion: { activa: boolean; diasRestantes: number; planExpiresAt: string | null };
-}
-
-/** ¿Cuántos días faltan (negativo = ya venció)? Para resaltar en rojo. */
-function diasHasta(fecha: string): number {
-  const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
-  const f = new Date(fecha); f.setHours(0, 0, 0, 0);
-  return Math.round((f.getTime() - hoy.getTime()) / 86400000);
 }
 
 export default function ContablePanelPage() {
@@ -100,7 +93,7 @@ export default function ContablePanelPage() {
         ) : (
           <div className="divide-y divide-slate-100 dark:divide-white/[0.06]">
             {data.proximosVencimientos.map((v) => {
-              const dias = diasHasta(v.fecha);
+              const dias = diasHastaVencimiento(v.fecha);
               const urgente = dias <= 3;
               return (
                 <div key={v.id} className="flex items-center gap-3 py-2.5">
