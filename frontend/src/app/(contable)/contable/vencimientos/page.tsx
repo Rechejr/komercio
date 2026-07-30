@@ -419,8 +419,9 @@ function NuevoVencimientoModal({ onClose, clienteInicial }: { onClose: () => voi
               <label className="block text-[13px] font-medium text-slate-700 dark:text-slate-300 mb-1.5">Obligación</label>
               <select value={obligacion} onChange={(e) => { setObligacion(e.target.value as Obligacion); setPeriodo(''); setFecha(''); }} className={inputCls}>
                 <option value="">Todas — agenda completa del cliente</option>
-                {/* PILA se maneja en su sección propia — no se crea desde aquí. */}
-                {OBLIGACIONES.filter((o) => o.codigo !== 'pila').map((o) => <option key={o.codigo} value={o.codigo}>{o.label}</option>)}
+                {/* ICA, Información exógena y PILA se manejan en sus propias secciones,
+                    no se crean desde aquí. (Agenda completa tampoco las genera.) */}
+                {OBLIGACIONES.filter((o) => !['ica', 'exogena', 'pila'].includes(o.codigo)).map((o) => <option key={o.codigo} value={o.codigo}>{o.label}</option>)}
               </select>
             </div>
           )}
