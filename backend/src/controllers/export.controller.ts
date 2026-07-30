@@ -656,14 +656,23 @@ export const exportController = {
 
       const ws = wb.addWorksheet('Gastos');
       ws.columns = [
-        { header: 'Fecha',        key: 'date',     width: 14 },
-        { header: 'Descripción',  key: 'desc',     width: 38 },
-        { header: 'Categoría',    key: 'category', width: 22 },
-        { header: 'Método Pago',  key: 'method',   width: 16 },
-        { header: 'Monto ($)',    key: 'amount',   width: 16 },
-        { header: 'Notas',        key: 'notes',    width: 30 },
+        { header: 'Fecha',          key: 'date',     width: 14 },
+        { header: 'Descripción',    key: 'desc',     width: 34 },
+        { header: 'Nombre',         key: 'nombre',   width: 26 },
+        { header: 'Identificación', key: 'iddoc',    width: 18 },
+        { header: 'Categoría',      key: 'category', width: 20 },
+        { header: 'Método Pago',    key: 'method',   width: 18 },
+        { header: 'Monto ($)',      key: 'amount',   width: 16 },
+        { header: 'Notas',          key: 'notes',    width: 28 },
       ];
       styleHeaderStream(ws);
+
+      // Método de pago en español: si el gasto usa una cuenta configurable, su
+      // nombre (ya en español) manda; si no, se traduce el enum viejo.
+      const METODO_ES: Record<string, string> = {
+        CASH: 'Efectivo', TRANSFER: 'Transferencia', NEQUI: 'Nequi',
+        DAVIPLATA: 'Daviplata', CARD: 'Tarjeta', MIXED: 'Mixto',
+      };
 
       const where = { date: { gte: start, lte: end }, deletedAt: null, businessId: req.user!.businessId };
       let lastId: string | undefined;
@@ -676,7 +685,11 @@ export const exportController = {
           orderBy: [{ date: 'asc' }, { id: 'asc' }],
           take: Math.min(BATCH_SIZE, MAX_EXPORT_ROWS - fetched),
           ...(lastId ? { skip: 1, cursor: { id: lastId } } : {}),
-          include: { category: { select: { name: true } } },
+          include: {
+            category: { select: { name: true } },
+            supplier: { select: { name: true, document: true } },
+            paymentAccount: { select: { name: true } },
+          },
         });
 
         if (batch.length === 0) break;
@@ -686,8 +699,10 @@ export const exportController = {
           ws.addRow({
             date: fmtDate(e.date),
             desc: safeStr(e.description),
+            nombre: safeStr(e.recipientName || e.supplier?.name || ''),
+            iddoc: safeStr(e.recipientDocument || e.supplier?.document || ''),
             category: safeStr(e.category?.name || 'Sin categoría'),
-            method: String(e.paymentMethod),
+            method: safeStr(e.paymentAccount?.name || METODO_ES[e.paymentMethod] || e.paymentMethod),
             amount: fmtMoney(e.amount),
             notes: safeStr(e.notes || ''),
           }).commit();
