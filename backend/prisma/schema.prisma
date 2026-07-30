@@ -967,6 +967,7 @@ model TaxClient {
   vencimientos      Vencimiento[]
   resoluciones      ResolucionDian[]
   respManuales      ResponsabilidadManual[]
+  credenciales      ClientCredential[]
   createdAt         DateTime                @default(now())
   updatedAt         DateTime                @updatedAt
 
@@ -974,6 +975,26 @@ model TaxClient {
   @@unique([businessId, nit, dv])
   @@index([businessId])
   @@map("tax_clients")
+}
+
+// Bóveda de credenciales de portales (DIAN/MUISCA, Aportes en Línea, etc.) por
+// cliente. La contraseña (claveEnc) se guarda CIFRADA (AES-256-GCM) — ver
+// utils/crypto.ts —; el contador la ve/copia en la app (se descifra al leer).
+model ClientCredential {
+  id          String    @id @default(uuid())
+  taxClientId String
+  taxClient   TaxClient @relation(fields: [taxClientId], references: [id], onDelete: Cascade)
+  entidad     String // "DIAN", "Aportes en Línea", etc.
+  usuario1    String
+  usuario2    String? // opcional (p. ej. segundo documento en MUISCA)
+  claveEnc    String // contraseña cifrada
+  link        String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  @@index([taxClientId])
+  @@map("client_credentials")
 }
 
 // Estas dos son mini-agendas MANUALES para lo que NO está en el calendario DIAN:

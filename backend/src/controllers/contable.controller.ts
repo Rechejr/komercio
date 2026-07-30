@@ -3,11 +3,12 @@ import { Prisma, Calidad, Obligacion, TipoRespManual, EstadoRespManual } from '@
 import { prisma } from '../config/database';
 import { AuthRequest } from '../middlewares/auth';
 import { success, created, paginated, AppError } from '../utils/response';
-import { getPagination } from '../utils/pagination';
+import { getPagination, getSearch } from '../utils/pagination';
 import { calcularDV, soloDigitos, ultimoDigito, dosUltimosDigitos } from '../utils/nit';
 import { normalizarResponsabilidades, obligacionesSugeridas } from '../utils/calidades';
 import { periodosPila } from '../utils/pila';
 import { periodosExogena } from '../utils/exogena';
+import { encrypt, decrypt } from '../utils/crypto';
 import ExcelJS from 'exceljs';
 import { findDataSheet, findHeaderRow, mapColumns, cellVal, normalizeHeader } from '../utils/excelParser';
 import {
@@ -888,6 +889,100 @@ export const contableController = {
         totalClientes,
         suscripcion: { activa, diasRestantes, planExpiresAt },
       });
+    } catch (err) { next(err); }
+  },
+
+  // ─── BÓVEDA DE CREDENCIALES ────────────────────────────────────────────────
+  async listCredenciales(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const businessId = req.user!.businessId!;
+      const search = getSearch(req);
+      const where: Prisma.ClientCredentialWhereInput = { deletedAt: null, taxClient: { businessId } };
+      if (search) {
+        // Solo agregar el filtro por NIT si hay dígitos: `contains: ''` matchea todo.
+        const num = soloDigitos(search);
+        where.OR = [
+          { entidad: { contains: search, mode: 'insensitive' } },
+          { usuario1: { contains: search, mode: 'insensitive' } },
+          { taxClient: { razonSocial: { contains: search, mode: 'insensitive' } } },
+          ...(num ? [{ taxClient: { nit: { contains: num } } }] : []),
+        ];
+      }
+      const rows = await prisma.clientCredential.findMany({
+        where,
+        include: { taxClient: { select: { id: true, razonSocial: true, nit: true, dv: true } } },
+        orderBy: { createdAt: 'desc' },
+        take: LIST_CAP,
+      });
+      // La clave se descifra para que el contador la vea/copie (es su bóveda).
+      const data = rows.map((r) => ({
+        id: r.id, entidad: r.entidad, usuario1: r.usuario1, usuario2: r.usuario2,
+        clave: decrypt(r.claveEnc), link: r.link, taxClient: r.taxClient,
+      }));
+      return success(res, data);
+    } catch (err) { next(err); }
+  },
+
+  async createCredencial(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const businessId = req.user!.businessId!;
+      const { taxClientId, entidad, usuario1, usuario2, clave, link } = req.body;
+      await getClientOfBusiness(taxClientId, businessId); // valida pertenencia
+      if (!entidad?.trim()) throw new AppError('La entidad es requerida', 400);
+      if (!usuario1?.trim()) throw new AppError('El usuario es requerido', 400);
+      if (!clave) throw new AppError('La contraseña es requerida', 400);
+      const cred = await prisma.clientCredential.create({
+        data: {
+          taxClientId,
+          entidad: entidad.trim(),
+          usuario1: usuario1.trim(),
+          usuario2: usuario2?.trim() || null,
+          claveEnc: encrypt(String(clave)),
+          link: link?.trim() || null,
+        },
+      });
+      return created(res, { id: cred.id }, 'Credencial guardada');
+    } catch (err) { next(err); }
+  },
+
+  async updateCredencial(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const businessId = req.user!.businessId!;
+      const existing = await prisma.clientCredential.findFirst({
+        where: { id: req.params.id, deletedAt: null, taxClient: { businessId } },
+      });
+      if (!existing) throw new AppError('Credencial no encontrada', 404);
+
+      const { entidad, usuario1, usuario2, clave, link } = req.body;
+      const data: Prisma.ClientCredentialUpdateInput = {};
+      if (entidad !== undefined) {
+        if (!entidad?.trim()) throw new AppError('La entidad es requerida', 400);
+        data.entidad = entidad.trim();
+      }
+      if (usuario1 !== undefined) {
+        if (!usuario1?.trim()) throw new AppError('El usuario es requerido', 400);
+        data.usuario1 = usuario1.trim();
+      }
+      if (usuario2 !== undefined) data.usuario2 = usuario2?.trim() || null;
+      if (link !== undefined) data.link = link?.trim() || null;
+      // Solo se recifra la clave si mandan una nueva no vacía (editar otros campos
+      // sin re-escribir la contraseña conserva la actual).
+      if (clave !== undefined && clave !== '') data.claveEnc = encrypt(String(clave));
+
+      await prisma.clientCredential.update({ where: { id: existing.id }, data });
+      return success(res, null, 'Credencial actualizada');
+    } catch (err) { next(err); }
+  },
+
+  async deleteCredencial(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const businessId = req.user!.businessId!;
+      const existing = await prisma.clientCredential.findFirst({
+        where: { id: req.params.id, deletedAt: null, taxClient: { businessId } },
+      });
+      if (!existing) throw new AppError('Credencial no encontrada', 404);
+      await prisma.clientCredential.update({ where: { id: existing.id }, data: { deletedAt: new Date() } });
+      return success(res, null, 'Credencial eliminada');
     } catch (err) { next(err); }
   },
 };

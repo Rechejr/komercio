@@ -112,4 +112,10 @@ router.post('/responsabilidades', ...ESCRIBIR, contableController.createResponsa
 router.patch('/responsabilidades/:id', ...ESCRIBIR, contableController.updateResponsabilidad);
 router.delete('/responsabilidades/:id', ...ESCRIBIR, contableController.deleteResponsabilidad);
 
+// ─── Bóveda de credenciales (usuarios y contraseñas de portales) ───────────────
+router.get('/credenciales', VER_Y_GESTIONAR, contableController.listCredenciales);
+router.post('/credenciales', ...ESCRIBIR, contableController.createCredencial);
+router.put('/credenciales/:id', ...ESCRIBIR, contableController.updateCredencial);
+router.delete('/credenciales/:id', ...ESCRIBIR, contableController.deleteCredencial);
+
 export default router;
