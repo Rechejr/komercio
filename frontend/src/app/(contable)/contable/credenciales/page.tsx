@@ -15,14 +15,22 @@ import {
 const inputCls =
   'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[16px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition';
 
-// Portales frecuentes de un contador — se eligen como atajo (rellenan entidad + link).
+// Entidades frecuentes de un contador — se eligen de la lista y rellenan el link.
+// En orden alfabético. La opción "Otra" permite escribir una nueva.
 const PORTALES = [
-  { nombre: 'DIAN (MUISCA)',       link: 'https://muisca.dian.gov.co/WebArquitectura/DefLogin.faces' },
-  { nombre: 'Aportes en Línea',    link: 'https://www.aportesenlinea.com/' },
-  { nombre: 'Asopagos / SOI',      link: 'https://www.asopagos.com/' },
-  { nombre: 'Supersociedades',     link: 'https://www.supersociedades.gov.co/' },
-  { nombre: 'Cámara de Comercio',  link: 'https://www.rues.org.co/' },
+  { nombre: 'Alcaldía Municipal', link: '' },
+  { nombre: 'Aportes en Línea',   link: 'https://www.aportesenlinea.com/' },
+  { nombre: 'Asopagos',           link: 'https://www.asopagos.com/' },
+  { nombre: 'Cámara de Comercio', link: 'https://www.rues.org.co/' },
+  { nombre: 'DIAN',               link: 'https://muisca.dian.gov.co/WebArquitectura/DefLogin.faces' },
+  { nombre: 'Gmail',              link: 'https://mail.google.com/' },
+  { nombre: 'MiPlanilla',         link: 'https://www.miplanilla.com/' },
+  { nombre: 'Outlook',            link: 'https://outlook.live.com/' },
+  { nombre: 'Positiva',           link: 'https://www.positiva.gov.co/' },
+  { nombre: 'Siigo',              link: 'https://www.siigo.com/' },
+  { nombre: 'SOI',                link: 'https://www.nuevosoi.com.co/' },
 ];
+const OTRA = '__otra';
 
 interface Credencial {
   id: string; entidad: string; usuario1: string; usuario2: string | null;
@@ -172,6 +180,11 @@ function CredencialModal({ editing, onClose, onDone }: { editing: Credencial | n
   const [clienteSearch, setClienteSearch] = useState('');
   const [cliente, setCliente] = useState<ClientePicker | null>(editing ? editing.taxClient : null);
   const [entidad, setEntidad] = useState(editing?.entidad || '');
+  // Valor del desplegable: el nombre de un portal de la lista, o OTRA si es una
+  // entidad personalizada (al editar, si no coincide con la lista → "Otra").
+  const [entidadSel, setEntidadSel] = useState(
+    editing ? (PORTALES.some((p) => p.nombre === editing.entidad) ? editing.entidad : OTRA) : '',
+  );
   const [usuario1, setUsuario1] = useState(editing?.usuario1 || '');
   const [usuario2, setUsuario2] = useState(editing?.usuario2 || '');
   const [clave, setClave] = useState(editing?.clave || '');
@@ -241,23 +254,35 @@ function CredencialModal({ editing, onClose, onDone }: { editing: Credencial | n
             )}
           </div>
 
-          {/* Atajos de portal */}
-          <div>
-            <label className="block text-[12px] font-medium text-slate-500 dark:text-slate-400 mb-1.5">Portal frecuente (opcional)</label>
-            <div className="flex flex-wrap gap-1.5">
-              {PORTALES.map((p) => (
-                <button key={p.nombre} type="button" onClick={() => { setEntidad(p.nombre); setLink(p.link); }}
-                  className={cn('px-2.5 py-1 rounded-lg text-[12px] font-medium border transition', entidad === p.nombre ? 'border-emerald-400 bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300' : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300')}>
-                  {p.nombre}
-                </button>
-              ))}
-            </div>
-          </div>
-
+          {/* Entidad: lista desplegable + "Otra" para agregar una nueva */}
           <div>
             <label className="block text-[13px] font-medium text-slate-700 dark:text-slate-300 mb-1.5">Entidad *</label>
-            <input value={entidad} onChange={(e) => setEntidad(e.target.value)} placeholder="DIAN, Aportes en Línea…" className={inputCls} />
+            <select
+              value={entidadSel}
+              onChange={(e) => {
+                const val = e.target.value;
+                setEntidadSel(val);
+                if (val === OTRA) {
+                  setEntidad('');
+                } else {
+                  const p = PORTALES.find((x) => x.nombre === val);
+                  if (p) { setEntidad(p.nombre); if (p.link) setLink(p.link); }
+                }
+              }}
+              className={inputCls}
+            >
+              <option value="">Elige una entidad…</option>
+              {PORTALES.map((p) => <option key={p.nombre} value={p.nombre}>{p.nombre}</option>)}
+              <option value={OTRA}>Otra (agregar)…</option>
+            </select>
           </div>
+
+          {entidadSel === OTRA && (
+            <div>
+              <label className="block text-[13px] font-medium text-slate-700 dark:text-slate-300 mb-1.5">Nombre de la entidad *</label>
+              <input value={entidad} onChange={(e) => setEntidad(e.target.value)} placeholder="Escribe la entidad" className={inputCls} autoFocus />
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -281,7 +306,7 @@ function CredencialModal({ editing, onClose, onDone }: { editing: Credencial | n
           </div>
 
           <div>
-            <label className="block text-[13px] font-medium text-slate-700 dark:text-slate-300 mb-1.5">Link del portal</label>
+            <label className="block text-[13px] font-medium text-slate-700 dark:text-slate-300 mb-1.5">Link del portal <span className="text-slate-400 font-normal">(opcional)</span></label>
             <input value={link} onChange={(e) => setLink(e.target.value)} placeholder="https://…" className={inputCls} />
           </div>
         </div>
