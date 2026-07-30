@@ -7,6 +7,7 @@ import { authenticate, authorize, AuthRequest } from '../middlewares/auth';
 import { resolveEffectiveBranchId } from '../utils/resolveBranch';
 import { success, created, paginated } from '../utils/response';
 import { getPagination, getSearch } from '../utils/pagination';
+import { parseBogotaBoundary } from '../utils/bogotaTime';
 import { AppError } from '../utils/response';
 import { validate } from '../middlewares/validate';
 import { planLimit } from '../middlewares/planLimit';
@@ -60,13 +61,13 @@ router.get('/', async (req: AuthRequest, res, next) => {
       ];
     }
     if (startDate || endDate) {
+      // Límites en hora de Colombia (ver parseBogotaBoundary): con UTC se colaban
+      // compras del día anterior/siguiente al filtrar.
       where.purchaseDate = {};
-      if (startDate) where.purchaseDate.gte = new Date(startDate as string);
-      if (endDate) {
-        const end = new Date(endDate as string);
-        end.setUTCHours(23, 59, 59, 999);
-        where.purchaseDate.lte = end;
-      }
+      const start = parseBogotaBoundary(startDate, 'start');
+      const end = parseBogotaBoundary(endDate, 'end');
+      if (start) where.purchaseDate.gte = start;
+      if (end) where.purchaseDate.lte = end;
     }
 
     const [purchases, total] = await Promise.all([

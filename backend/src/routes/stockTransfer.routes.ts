@@ -6,6 +6,7 @@ import { prisma } from '../config/database';
 import { authenticate, authorize, AuthRequest } from '../middlewares/auth';
 import { success, created, paginated, AppError } from '../utils/response';
 import { getPagination, getSearch } from '../utils/pagination';
+import { parseBogotaBoundary } from '../utils/bogotaTime';
 import { validate } from '../middlewares/validate';
 
 const transferValidators = [
@@ -184,13 +185,13 @@ router.get('/', async (req: AuthRequest, res, next) => {
     const where: any = { businessId, deletedAt: null };
     if (and.length) where.AND = and;
     if (startDate || endDate) {
+      // Límites en hora de Colombia (ver parseBogotaBoundary): con UTC se colaban
+      // transferencias del día anterior/siguiente al filtrar.
       where.createdAt = {};
-      if (startDate) where.createdAt.gte = new Date(startDate as string);
-      if (endDate) {
-        const end = new Date(endDate as string);
-        end.setUTCHours(23, 59, 59, 999);
-        where.createdAt.lte = end;
-      }
+      const start = parseBogotaBoundary(startDate, 'start');
+      const end = parseBogotaBoundary(endDate, 'end');
+      if (start) where.createdAt.gte = start;
+      if (end) where.createdAt.lte = end;
     }
 
     const [transfers, total] = await Promise.all([

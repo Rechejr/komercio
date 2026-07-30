@@ -3,6 +3,7 @@ import { prisma } from '../config/database';
 import { cache } from '../config/redis';
 import { AppError, success, created, paginated } from '../utils/response';
 import { getPagination, getSearch } from '../utils/pagination';
+import { parseBogotaBoundary } from '../utils/bogotaTime';
 import { AuthRequest } from '../middlewares/auth';
 import { resolvePayment } from '../utils/paymentAccount';
 
@@ -29,15 +30,15 @@ export const expenseController = {
       if (categoryId) where.categoryId = categoryId;
       if (paymentAccountId) where.paymentAccountId = paymentAccountId;
       if (startDate || endDate) {
+        // Límites en hora de COLOMBIA (no UTC): un gasto guardado a las 02:00 UTC
+        // pertenece al día ANTERIOR en Colombia. Con `new Date(fecha)` (UTC) se
+        // colaban gastos del día previo al filtrar. parseBogotaBoundary alinea el
+        // corte a la medianoche/fin-de-día de Bogotá (igual que reportes/export).
         where.date = {};
-        if (startDate) where.date.gte = new Date(startDate as string);
-        if (endDate) {
-          // Sin esto, "hasta" corta a las 00:00 del día final y excluye casi todo
-          // lo registrado ese mismo día (ver export.controller.ts, que sí lo hace).
-          const end = new Date(endDate as string);
-          end.setUTCHours(23, 59, 59, 999);
-          where.date.lte = end;
-        }
+        const start = parseBogotaBoundary(startDate, 'start');
+        const end = parseBogotaBoundary(endDate, 'end');
+        if (start) where.date.gte = start;
+        if (end) where.date.lte = end;
       }
 
       const [expenses, total] = await Promise.all([
