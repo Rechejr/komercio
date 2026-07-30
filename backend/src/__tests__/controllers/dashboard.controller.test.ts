@@ -10,6 +10,7 @@ jest.mock('../../config/database', () => ({
     product: { count: jest.fn() },
     customer: { count: jest.fn() },
     credit: { aggregate: jest.fn() },
+    expense: { aggregate: jest.fn() },
   },
 }));
 
@@ -77,6 +78,7 @@ describe('dashboardController.getSummary', () => {
     (mockPrisma.product.count as jest.Mock).mockResolvedValue(50);
     (mockPrisma.customer.count as jest.Mock).mockResolvedValueOnce(30).mockResolvedValueOnce(5);
     (mockPrisma.credit.aggregate as jest.Mock).mockResolvedValue({ _sum: { balance: 500000 }, _count: { id: 3 } });
+    (mockPrisma.expense.aggregate as jest.Mock).mockResolvedValue({ _sum: { amount: 150000 } });
 
     const { res, json } = makeRes();
     await dashboardController.getSummary(makeReq(), res, next);
@@ -101,6 +103,7 @@ describe('dashboardController.getSummary', () => {
     (mockPrisma.product.count as jest.Mock).mockResolvedValue(0);
     (mockPrisma.customer.count as jest.Mock).mockResolvedValue(0);
     (mockPrisma.credit.aggregate as jest.Mock).mockResolvedValue({ _sum: { balance: null }, _count: { id: 0 } });
+    (mockPrisma.expense.aggregate as jest.Mock).mockResolvedValue({ _sum: { amount: null } });
 
     const { res, json } = makeRes();
     await dashboardController.getSummary(makeReq(), res, next);
