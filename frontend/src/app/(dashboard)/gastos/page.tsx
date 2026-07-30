@@ -481,8 +481,8 @@ export default function GastosPage() {
                   <div className="flex items-center justify-between mb-1.5">
                     <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400">Categoría</label>
                     <button type="button" onClick={() => setShowCategoryModal(true)}
-                      className="flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400 hover:underline">
-                      <Tag size={11} /> Nueva
+                      className="flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 hover:underline">
+                      <Plus size={12} /> Nueva categoría
                     </button>
                   </div>
                   <select {...register('categoryId')} className={inputCls}>

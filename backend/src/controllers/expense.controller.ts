@@ -292,10 +292,25 @@ export const expenseController = {
   async listCategories(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const businessId = req.user!.businessId;
-      const categories = await prisma.expenseCategory.findMany({
+      const rows = await prisma.expenseCategory.findMany({
         where: { OR: [{ businessId }, { businessId: null }] },
         orderBy: { name: 'asc' },
       });
+      // Puede haber duplicados por nombre: una categoría GLOBAL (businessId null,
+      // heredada de versiones viejas) junto a la copia PROPIA del negocio, o
+      // diferencias de mayúsculas/tildes/espacios. Se colapsan por nombre
+      // normalizado, prefiriendo la del negocio (la global no se puede eliminar
+      // desde la UI; la propia sí). Así la lista no muestra repetidas.
+      const norm = (s: string) =>
+        s.trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+      const unicas = new Map<string, (typeof rows)[number]>();
+      for (const c of rows) {
+        const key = norm(c.name);
+        const previa = unicas.get(key);
+        if (!previa || (!previa.businessId && c.businessId)) unicas.set(key, c);
+      }
+      const categories = Array.from(unicas.values())
+        .sort((a, b) => a.name.localeCompare(b.name, 'es'));
       return success(res, categories);
     } catch (err) { next(err); }
   },
