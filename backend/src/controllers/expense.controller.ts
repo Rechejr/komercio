@@ -11,11 +11,23 @@ export const expenseController = {
     try {
       const { page, limit, skip } = getPagination(req);
       const search = getSearch(req);
-      const { categoryId, startDate, endDate } = req.query;
+      const { categoryId, startDate, endDate, paymentAccountId } = req.query;
       const businessId = req.user!.businessId;
       const where: any = { deletedAt: null, businessId };
-      if (search) where.description = { contains: search, mode: 'insensitive' };
+      if (search) {
+        // Busca por descripción, nombre del beneficiario/proveedor e identificación.
+        // El filtro por documento SOLO se agrega si hay dígitos: `contains: ''` en
+        // Prisma matchea todo y rompería la búsqueda (mismo caso que el includes("")).
+        const digits = search.replace(/\D/g, '');
+        where.OR = [
+          { description: { contains: search, mode: 'insensitive' } },
+          { recipientName: { contains: search, mode: 'insensitive' } },
+          { supplier: { name: { contains: search, mode: 'insensitive' } } },
+          ...(digits ? [{ recipientDocument: { contains: digits } }] : []),
+        ];
+      }
       if (categoryId) where.categoryId = categoryId;
+      if (paymentAccountId) where.paymentAccountId = paymentAccountId;
       if (startDate || endDate) {
         where.date = {};
         if (startDate) where.date.gte = new Date(startDate as string);

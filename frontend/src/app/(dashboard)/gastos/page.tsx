@@ -14,6 +14,8 @@ import { downloadExcel } from '@/lib/exportExcel';
 import { useAuthStore } from '@/store/auth.store';
 
 const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[16px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition';
+// Igual que inputCls pero sin w-full — para los controles del toolbar de filtros.
+const filterCls = 'px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[16px] sm:text-[13px] focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition';
 
 const PAYMENT_BADGE: Record<string, string> = {
   CASH: 'badge-green',
@@ -50,9 +52,32 @@ export default function GastosPage() {
   const [exportStart, setExportStart] = useState(firstOfMonth);
   const [exportEnd, setExportEnd] = useState(today);
 
+  // Filtros de la lista (búsqueda por nombre/identificación, categoría, método y fecha)
+  const [search, setSearch] = useState('');
+  const [fCategory, setFCategory] = useState('');
+  const [fAccount, setFAccount] = useState('');
+  const [fStart, setFStart] = useState('');
+  const [fEnd, setFEnd] = useState('');
+  const hayFiltros = !!(search.trim() || fCategory || fAccount || fStart || fEnd);
+  // Cualquier cambio de filtro vuelve a la página 1 para no quedar en una vacía.
+  function onFilter<T>(setter: (v: T) => void) {
+    return (v: T) => { setter(v); setPage(1); };
+  }
+  function limpiarFiltros() {
+    setSearch(''); setFCategory(''); setFAccount(''); setFStart(''); setFEnd(''); setPage(1);
+  }
+
   const { data, isLoading } = useQuery({
-    queryKey: ['expenses', page],
-    queryFn: () => api.get(`/expenses?page=${page}&limit=20`).then((r) => r.data),
+    queryKey: ['expenses', page, search, fCategory, fAccount, fStart, fEnd],
+    queryFn: () => {
+      const params = new URLSearchParams({ page: String(page), limit: '20' });
+      if (search.trim()) params.set('search', search.trim());
+      if (fCategory) params.set('categoryId', fCategory);
+      if (fAccount) params.set('paymentAccountId', fAccount);
+      if (fStart) params.set('startDate', fStart);
+      if (fEnd) params.set('endDate', fEnd);
+      return api.get(`/expenses?${params.toString()}`).then((r) => r.data);
+    },
   });
 
   const { data: categories } = useQuery({
@@ -286,6 +311,38 @@ export default function GastosPage() {
         </button>
       </div>
 
+      {/* ── Filtros de la lista ───────────────────────────────────────────────── */}
+      <div className="card px-4 py-3 flex flex-wrap items-center gap-2">
+        <div className="relative flex-1 min-w-[200px]">
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            value={search}
+            onChange={(e) => onFilter(setSearch)(e.target.value)}
+            placeholder="Buscar por nombre, identificación o descripción..."
+            className={`${inputCls} pl-9 py-2`}
+          />
+        </div>
+        <select value={fCategory} onChange={(e) => onFilter(setFCategory)(e.target.value)} className={`${filterCls} min-w-[150px]`} aria-label="Filtrar por categoría">
+          <option value="">Todas las categorías</option>
+          {categories?.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
+        <select value={fAccount} onChange={(e) => onFilter(setFAccount)(e.target.value)} className={`${filterCls} min-w-[150px]`} aria-label="Filtrar por método de pago">
+          <option value="">Todos los métodos</option>
+          {allAccounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+        </select>
+        <div className="flex items-center gap-1.5">
+          <input type="date" aria-label="Desde" value={fStart} onChange={(e) => onFilter(setFStart)(e.target.value)} className={filterCls} />
+          <span className="text-[12px] text-slate-400">a</span>
+          <input type="date" aria-label="Hasta" value={fEnd} onChange={(e) => onFilter(setFEnd)(e.target.value)} className={filterCls} />
+        </div>
+        {hayFiltros && (
+          <button type="button" onClick={limpiarFiltros}
+            className="flex items-center gap-1 text-[12px] font-medium text-slate-500 hover:text-red-600 dark:text-slate-400 px-2 py-2 transition-colors">
+            <X size={13} /> Limpiar
+          </button>
+        )}
+      </div>
+
       {/* ── Tabla ─────────────────────────────────────────────────────────────── */}
       <div className="card overflow-hidden">
         <div className="overflow-x-auto">
@@ -316,7 +373,7 @@ export default function GastosPage() {
                   <td colSpan={6} className="text-center py-16">
                     <div className="flex flex-col items-center gap-3 text-slate-400 dark:text-slate-600">
                       <Receipt size={36} strokeWidth={1.5} />
-                      <p className="text-[13px]">No hay gastos registrados</p>
+                      <p className="text-[13px]">{hayFiltros ? 'Sin resultados para los filtros' : 'No hay gastos registrados'}</p>
                     </div>
                   </td>
                 </tr>
