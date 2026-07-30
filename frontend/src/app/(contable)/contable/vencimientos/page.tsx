@@ -25,7 +25,7 @@ const inputCls =
 interface Vencimiento {
   id: string; obligacion: Obligacion; periodo: string; fecha: string;
   estado: EstadoVencimiento; monto: string | null;
-  taxClient: { id: string; razonSocial: string; nit: string; dv: number };
+  taxClient: { id: string; razonSocial: string; nit: string; dv: number; tipoPersona: 'natural' | 'juridica' };
 }
 
 export default function VencimientosPage() {
@@ -40,6 +40,7 @@ export default function VencimientosPage() {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [filtroEstado, setFiltroEstado] = useState<'todos' | EstadoVencimiento>('todos');
   const [filtroSituacion, setFiltroSituacion] = useState<'todas' | 'vencidos' | 'por_vencer' | 'resueltos'>('todas');
+  const [filtroTipo, setFiltroTipo] = useState<'todos' | 'natural' | 'juridica'>('todos');
 
   function toggleSort(key: SortKey) {
     if (sortBy === key) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
@@ -92,6 +93,8 @@ export default function VencimientosPage() {
 
     if (filtroEstado !== 'todos') arr = arr.filter((v) => estadoManual(v.estado) === filtroEstado);
 
+    if (filtroTipo !== 'todos') arr = arr.filter((v) => v.taxClient.tipoPersona === filtroTipo);
+
     if (filtroSituacion !== 'todas') {
       arr = arr.filter((v) => {
         if (filtroSituacion === 'resueltos') return resuelto(v);
@@ -120,7 +123,7 @@ export default function VencimientosPage() {
         : String(va).localeCompare(String(vb), 'es');
       return sortDir === 'asc' ? cmp : -cmp;
     });
-  }, [vencimientos, tab, filtroEstado, filtroSituacion, sortBy, sortDir]);
+  }, [vencimientos, tab, filtroEstado, filtroTipo, filtroSituacion, sortBy, sortDir]);
 
   const estadoMut = useMutation({
     mutationFn: ({ id, estado }: { id: string; estado: string }) =>
@@ -186,8 +189,17 @@ export default function VencimientosPage() {
           <option value="por_vencer">Por vencer</option>
           <option value="resueltos">Resueltos (presentada/pagada)</option>
         </select>
-        {(filtroEstado !== 'todos' || filtroSituacion !== 'todas') && (
-          <button onClick={() => { setFiltroEstado('todos'); setFiltroSituacion('todas'); }} className="text-xs text-emerald-600 hover:underline">Limpiar filtros</button>
+        <select
+          value={filtroTipo}
+          onChange={(e) => setFiltroTipo(e.target.value as any)}
+          className="px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+        >
+          <option value="todos">Tipo: todos</option>
+          <option value="juridica">Jurídica</option>
+          <option value="natural">Natural</option>
+        </select>
+        {(filtroEstado !== 'todos' || filtroSituacion !== 'todas' || filtroTipo !== 'todos') && (
+          <button onClick={() => { setFiltroEstado('todos'); setFiltroSituacion('todas'); setFiltroTipo('todos'); }} className="text-xs text-emerald-600 hover:underline">Limpiar filtros</button>
         )}
         <span className="text-xs text-slate-400 ml-auto">{visibles.length} resultado{visibles.length !== 1 ? 's' : ''}</span>
       </div>
@@ -198,6 +210,7 @@ export default function VencimientosPage() {
             <thead className="bg-slate-50 dark:bg-slate-800/50 text-left">
               <tr className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
                 <Th label="Cliente"    sortKey="cliente"    sortBy={sortBy} sortDir={sortDir} onSort={toggleSort} />
+                <th className="px-4 py-3 font-semibold">Tipo persona</th>
                 <Th label="Obligación" sortKey="obligacion" sortBy={sortBy} sortDir={sortDir} onSort={toggleSort} />
                 <Th label="Periodo"    sortKey="periodo"    sortBy={sortBy} sortDir={sortDir} onSort={toggleSort} />
                 <Th label="Vence"      sortKey="fecha"      sortBy={sortBy} sortDir={sortDir} onSort={toggleSort} />
@@ -209,15 +222,15 @@ export default function VencimientosPage() {
             <tbody className="divide-y divide-slate-100 dark:divide-white/[0.06]">
               {isLoading ? (
                 [...Array(5)].map((_, i) => (
-                  <tr key={i}>{[...Array(7)].map((_, j) => (
+                  <tr key={i}>{[...Array(8)].map((_, j) => (
                     <td key={j} className="px-4 py-3"><div className="h-4 bg-slate-100 dark:bg-slate-800 rounded animate-pulse" /></td>
                   ))}</tr>
                 ))
               ) : visibles.length === 0 ? (
-                <tr><td colSpan={7} className="px-4 py-12 text-center text-slate-400 dark:text-slate-500">
+                <tr><td colSpan={8} className="px-4 py-12 text-center text-slate-400 dark:text-slate-500">
                   <CalendarClock size={30} className="mx-auto mb-2" strokeWidth={1.5} />
                   <p className="text-sm">
-                    {tab !== 'todas' || filtroEstado !== 'todos' || filtroSituacion !== 'todas'
+                    {tab !== 'todas' || filtroEstado !== 'todos' || filtroSituacion !== 'todas' || filtroTipo !== 'todos'
                       ? 'No hay vencimientos que coincidan con los filtros.'
                       : 'No hay vencimientos registrados.'}
                   </p>
@@ -228,6 +241,14 @@ export default function VencimientosPage() {
                     <td className="px-4 py-3">
                       <p className="font-medium text-slate-900 dark:text-white">{v.taxClient.razonSocial}</p>
                       <p className="text-xs text-slate-400 tabular">{formatNit(v.taxClient.nit, v.taxClient.dv)}</p>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={cn('text-[11px] font-semibold px-2 py-1 rounded-lg',
+                        v.taxClient.tipoPersona === 'natural'
+                          ? 'bg-sky-50 text-sky-700 dark:bg-sky-900/25 dark:text-sky-300'
+                          : 'bg-violet-50 text-violet-700 dark:bg-violet-900/25 dark:text-violet-300')}>
+                        {v.taxClient.tipoPersona === 'natural' ? 'Natural' : 'Jurídica'}
+                      </span>
                     </td>
                     <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{OBLIGACION_LABEL[v.obligacion]}</td>
                     <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{v.periodo}</td>

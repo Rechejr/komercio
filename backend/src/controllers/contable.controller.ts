@@ -116,6 +116,52 @@ function diasDesdeHoy(dias: number): Date {
   return d;
 }
 
+/** Genera en LOTE los vencimientos derivados de las calidades de varios clientes
+ *  (para el import masivo). Carga el calendario en memoria UNA vez y hace un solo
+ *  createMany, en vez de consultar por cliente. Solo obligaciones de calidades
+ *  (renta, iva, retefuente, impoconsumo, simple); PILA/exógena no se auto-generan. */
+async function generarAgendaBatch(
+  clientes: Array<{ taxClientId: string; nit: string; tipoPersona: string; ivaPeriodicidad: string | null; responsabilidades: Calidad[] }>,
+): Promise<number> {
+  const conCalidades = clientes.filter((c) => c.responsabilidades.length > 0);
+  if (conCalidades.length === 0) return 0;
+
+  const dianRows = await prisma.calendarioDian.findMany({
+    where: { anio: ANIO_CALENDARIO },
+    select: { obligacion: true, variante: true, digito: true, periodo: true, fecha: true },
+    orderBy: { periodoOrden: 'asc' },
+  });
+  const dianMap = new Map<string, { periodo: string; fecha: Date }[]>();
+  for (const row of dianRows) {
+    const key = `${row.obligacion}|${row.variante ?? ''}|${row.digito}`;
+    const list = dianMap.get(key) ?? [];
+    list.push({ periodo: row.periodo, fecha: row.fecha });
+    dianMap.set(key, list);
+  }
+  const rentaNatRows = await prisma.calendarioRentaNatural.findMany({
+    where: { anio: ANIO_CALENDARIO },
+    select: { dosDigitos: true, fecha: true },
+  });
+  const rentaNatMap = new Map<number, Date>(rentaNatRows.map((r) => [r.dosDigitos, r.fecha]));
+
+  const filas: { taxClientId: string; obligacion: Obligacion; periodo: string; fecha: Date }[] = [];
+  for (const c of conCalidades) {
+    for (const obl of obligacionesSugeridas(c.responsabilidades, [])) {
+      if (obl === 'renta' && c.tipoPersona === 'natural') {
+        const fecha = rentaNatMap.get(dosUltimosDigitos(c.nit));
+        if (fecha) filas.push({ taxClientId: c.taxClientId, obligacion: obl, periodo: 'Año 2025', fecha });
+        continue;
+      }
+      const variante = varianteDe(obl, c.tipoPersona, c.ivaPeriodicidad);
+      const periodos = dianMap.get(`${obl}|${variante ?? ''}|${ultimoDigito(c.nit)}`) ?? [];
+      for (const p of periodos) filas.push({ taxClientId: c.taxClientId, obligacion: obl, periodo: p.periodo, fecha: p.fecha });
+    }
+  }
+  if (filas.length === 0) return 0;
+  const res = await prisma.vencimiento.createMany({ data: filas, skipDuplicates: true });
+  return res.count;
+}
+
 export const contableController = {
   // ─── CLIENTES ────────────────────────────────────────────────────────────────
   async listClients(req: AuthRequest, res: Response, next: NextFunction) {
@@ -439,11 +485,13 @@ export const contableController = {
       const results = {
         imported: 0,
         updated: 0,
+        generados: 0,
         errors: issues
           .filter((i) => i.type === 'error')
           .map((i) => ({ row: i.row, message: `"${i.name}": ${i.message}` })),
       };
 
+      const clientesParaAgenda: Array<{ taxClientId: string; nit: string; tipoPersona: string; ivaPeriodicidad: string | null; responsabilidades: Calidad[] }> = [];
       for (const r of validRows) {
         try {
           const data = {
@@ -460,20 +508,32 @@ export const contableController = {
             where: { businessId, nit: r.nit },
             select: { id: true },
           });
+          let taxClientId: string;
           if (existing) {
             await prisma.taxClient.update({ where: { id: existing.id }, data: { ...data, activo: true } });
+            taxClientId = existing.id;
             results.updated++;
           } else {
-            await prisma.taxClient.create({ data: { ...data, businessId } });
+            const nuevo = await prisma.taxClient.create({ data: { ...data, businessId } });
+            taxClientId = nuevo.id;
             results.imported++;
           }
+          clientesParaAgenda.push({
+            taxClientId, nit: r.nit, tipoPersona: r.tipoPersona,
+            ivaPeriodicidad: r.ivaPeriodicidad, responsabilidades: r.responsabilidades,
+          });
         } catch (err) {
           const msg = err instanceof Error ? err.message : 'Error desconocido';
           results.errors.push({ row: r.rowNum, message: `"${r.razonSocial}": ${msg}` });
         }
       }
 
-      return success(res, results, `Importación: ${results.imported} creados, ${results.updated} actualizados`);
+      // Genera automáticamente la agenda (vencimientos) según las calidades importadas:
+      // un responsable de IVA queda listo en la pestaña de IVA sin generar a mano. Los
+      // que ya existan no se duplican (skipDuplicates).
+      results.generados = await generarAgendaBatch(clientesParaAgenda).catch(() => 0);
+
+      return success(res, results, `Importación: ${results.imported} creados, ${results.updated} actualizados${results.generados ? `, ${results.generados} vencimientos generados` : ''}`);
     } catch (err) { next(err); }
   },
 
@@ -544,7 +604,7 @@ export const contableController = {
 
       const items = await prisma.vencimiento.findMany({
         where,
-        include: { taxClient: { select: { id: true, razonSocial: true, nit: true, dv: true } } },
+        include: { taxClient: { select: { id: true, razonSocial: true, nit: true, dv: true, tipoPersona: true } } },
         // Ascendente: lo más próximo a vencer (y lo ya vencido) queda arriba.
         orderBy: { fecha: 'asc' },
         take: LIST_CAP,

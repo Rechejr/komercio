@@ -13,7 +13,7 @@ import {
   CALIDADES, calcularDV, calidadBloqueada, formatNit, resumenCalidades,
   type TaxClient, type Calidad,
 } from '@/lib/contable';
-import { Plus, Search, Edit, Trash2, X, Loader2, Users, FileUp, FileDown, CheckCircle2, ArrowRight } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, X, Loader2, Users, FileUp, FileDown, CheckCircle2, ArrowRight, CalendarClock } from 'lucide-react';
 
 interface PreviewData {
   total: number;
@@ -26,6 +26,7 @@ interface PreviewData {
 interface ImportResult {
   imported: number;
   updated: number;
+  generados?: number;
   errors: { row: number; message: string }[];
 }
 
@@ -152,6 +153,9 @@ export default function ClientesPage() {
       setImportResult(result);
       qc.invalidateQueries({ queryKey: ['contable-clients'] });
       qc.invalidateQueries({ queryKey: ['contable-panel'] });
+      // El import genera la agenda automáticamente → refrescar vencimientos/PILA.
+      qc.invalidateQueries({ queryKey: ['contable-vencimientos'] });
+      qc.invalidateQueries({ queryKey: ['contable-pila'] });
       toast.success(`${result.imported} creados, ${result.updated} actualizados`);
     },
     onError: (err: any) => toast.error(err.response?.data?.error || 'Error al importar'),
@@ -603,6 +607,13 @@ export default function ClientesPage() {
                   <p className="text-[11px] text-emerald-600 dark:text-emerald-500 mt-0.5 uppercase tracking-wide font-medium">Actualizados</p>
                 </div>
               </div>
+
+              {!!importResult.generados && (
+                <div className="flex items-center gap-2 rounded-xl bg-sky-50 dark:bg-sky-900/15 border border-sky-100 dark:border-sky-500/20 px-3 py-2.5 text-[12px] text-sky-700 dark:text-sky-300">
+                  <CalendarClock size={15} className="flex-shrink-0" />
+                  Se generaron automáticamente <b>{importResult.generados}</b> vencimientos en la agenda según las calidades.
+                </div>
+              )}
 
               {importResult.errors.length > 0 && (
                 <div>
