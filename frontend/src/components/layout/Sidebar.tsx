@@ -108,7 +108,10 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
       <aside
         className={cn(
           'sidebar-bg flex flex-col z-50 select-none',
-          'fixed inset-y-0 left-0 w-72',
+          // h-[100dvh] (no inset-y-0/100vh): en móvil la barra del navegador reduce
+          // el área visible; con 100vh el aside quedaba más alto que la pantalla y las
+          // últimas opciones caían debajo del borde sin poder scrollear. dvh = alto real.
+          'fixed top-0 left-0 h-[100dvh] w-72',
           mobileOpen ? 'translate-x-0' : '-translate-x-full',
           'transition-transform duration-300 ease-spring',
           'md:relative md:translate-x-0 md:z-30',
