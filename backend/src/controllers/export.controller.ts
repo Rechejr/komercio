@@ -3,22 +3,31 @@ import ExcelJS from 'exceljs';
 import { prisma } from '../config/database';
 import { AppError } from '../utils/response';
 import { AuthRequest } from '../middlewares/auth';
+import { parseBogotaBoundary, bogotaDateString, bogotaDayStart, bogotaMonthStart } from '../utils/bogotaTime';
 
 const MAX_EXPORT_DAYS = 366;
 const MAX_EXPORT_ROWS = 50_000;
 const BATCH_SIZE = 1_000;
 
-function parseDate(val: unknown, fallback: Date): Date {
-  if (typeof val === 'string' && val) {
-    const d = new Date(val);
-    if (!isNaN(d.getTime())) return d;
-  }
-  return fallback;
+/**
+ * Rango del export en horario de Colombia — mismo criterio que los reportes en
+ * pantalla, para que el Excel y la gráfica nunca den cifras distintas para el
+ * mismo "del 25 al 29". Por defecto: del primero del mes hasta hoy.
+ */
+function resolveExportRange(startDate: unknown, endDate: unknown): { start: Date; end: Date; start0: string; end0: string } {
+  const now = new Date();
+  const start = parseBogotaBoundary(startDate, 'start') ?? bogotaMonthStart(now);
+  const end = parseBogotaBoundary(endDate, 'end') ?? new Date(bogotaDayStart(now, 1).getTime() - 1);
+  // Para el nombre del archivo: el día que el usuario eligió, no el UTC del
+  // instante límite (que ya cayó en el día siguiente).
+  return { start, end, start0: bogotaDateString(start), end0: bogotaDateString(end) };
 }
 
 function fmtDate(d: Date | null | undefined): string {
   if (!d) return '';
-  return new Date(d).toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  // timeZone explícito: el servidor corre en UTC, así que sin esto una venta de
+  // las 8 p.m. en Colombia se imprimía con la fecha del día siguiente.
+  return new Date(d).toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'America/Bogota' });
 }
 
 function fmtMoney(n: unknown): number {
@@ -52,17 +61,12 @@ function styleHeaderStream(ws: ExcelJS.Worksheet) {
 export const exportController = {
   async exportSales(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const now = new Date();
-      const start = parseDate(req.query.startDate, new Date(now.getFullYear(), now.getMonth(), 1));
-      const end = parseDate(req.query.endDate, now);
-      end.setUTCHours(23, 59, 59, 999);
+      const { start, end, start0, end0 } = resolveExportRange(req.query.startDate, req.query.endDate);
 
       if ((end.getTime() - start.getTime()) / 86_400_000 > MAX_EXPORT_DAYS) {
         return next(new AppError(`El rango de exportación no puede superar ${MAX_EXPORT_DAYS} días`, 400));
       }
 
-      const start0 = start.toISOString().split('T')[0];
-      const end0 = end.toISOString().split('T')[0];
       const wb = initStreamWriter(res, `ventas-${start0}-${end0}.xlsx`);
 
       const ws1 = wb.addWorksheet('Ventas');
@@ -154,17 +158,12 @@ export const exportController = {
 
   async exportPurchases(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const now = new Date();
-      const start = parseDate(req.query.startDate, new Date(now.getFullYear(), now.getMonth(), 1));
-      const end = parseDate(req.query.endDate, now);
-      end.setUTCHours(23, 59, 59, 999);
+      const { start, end, start0, end0 } = resolveExportRange(req.query.startDate, req.query.endDate);
 
       if ((end.getTime() - start.getTime()) / 86_400_000 > MAX_EXPORT_DAYS) {
         return next(new AppError(`El rango de exportación no puede superar ${MAX_EXPORT_DAYS} días`, 400));
       }
 
-      const start0 = start.toISOString().split('T')[0];
-      const end0 = end.toISOString().split('T')[0];
       const wb = initStreamWriter(res, `compras-${start0}-${end0}.xlsx`);
 
       const ws1 = wb.addWorksheet('Compras');
@@ -251,18 +250,13 @@ export const exportController = {
 
   async exportFinancialReport(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const now = new Date();
-      const start = parseDate(req.query.startDate, new Date(now.getFullYear(), now.getMonth(), 1));
-      const end   = parseDate(req.query.endDate, now);
-      end.setUTCHours(23, 59, 59, 999);
+      const { start, end, start0, end0 } = resolveExportRange(req.query.startDate, req.query.endDate);
 
       if ((end.getTime() - start.getTime()) / 86_400_000 > MAX_EXPORT_DAYS) {
         return next(new AppError(`El rango no puede superar ${MAX_EXPORT_DAYS} días`, 400));
       }
 
       const businessId = req.user!.businessId!;
-      const start0 = start.toISOString().split('T')[0];
-      const end0   = end.toISOString().split('T')[0];
 
       // ── 1. Gather all data in parallel ──────────────────────────────────────
       const saleWhere     = { createdAt: { gte: start, lte: end }, deletedAt: null, branch: { businessId } };
@@ -652,17 +646,12 @@ export const exportController = {
 
   async exportExpenses(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const now = new Date();
-      const start = parseDate(req.query.startDate, new Date(now.getFullYear(), now.getMonth(), 1));
-      const end = parseDate(req.query.endDate, now);
-      end.setUTCHours(23, 59, 59, 999);
+      const { start, end, start0, end0 } = resolveExportRange(req.query.startDate, req.query.endDate);
 
       if ((end.getTime() - start.getTime()) / 86_400_000 > MAX_EXPORT_DAYS) {
         return next(new AppError(`El rango de exportación no puede superar ${MAX_EXPORT_DAYS} días`, 400));
       }
 
-      const start0 = start.toISOString().split('T')[0];
-      const end0 = end.toISOString().split('T')[0];
       const wb = initStreamWriter(res, `gastos-${start0}-${end0}.xlsx`);
 
       const ws = wb.addWorksheet('Gastos');

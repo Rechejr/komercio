@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -8,8 +8,27 @@ import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
-import { TrendingUp, TrendingDown, DollarSign, ShoppingCart, Package, Users, FileSpreadsheet } from 'lucide-react';
+import { TrendingUp, TrendingDown, DollarSign, ShoppingCart, Package, Users, FileSpreadsheet, CalendarRange } from 'lucide-react';
 import { downloadExcel } from '@/lib/exportExcel';
+
+// Tope del backend para exportaciones (MAX_EXPORT_DAYS) — se valida aquí para
+// avisar antes de pedir un Excel que iba a fallar con 400.
+const MAX_RANGE_DAYS = 366;
+
+/** "YYYY-MM-DD" del día tal como lo ve el usuario. `toISOString()` daría el día
+ *  UTC, que después de las 7 p.m. en Colombia ya es el día siguiente. */
+function toDayStr(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function daysBetween(from: string, to: string): number {
+  return (Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000 + 1;
+}
+
+const LONG_DATE = new Intl.DateTimeFormat('es-CO', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
+function longDate(day: string): string {
+  return LONG_DATE.format(new Date(`${day}T00:00:00Z`));
+}
 
 function fillDailySeries(chart: any[], startDate: Date, endDate: Date) {
   const byDay = new Map(chart.map((c: any) => [c.period, c]));
@@ -25,11 +44,14 @@ function fillDailySeries(chart: any[], startDate: Date, endDate: Date) {
 }
 
 const PERIODS = [
-  { value: '7d',   label: '7 días'  },
-  { value: '30d',  label: '30 días' },
-  { value: '90d',  label: '90 días' },
-  { value: '365d', label: '1 año'   },
+  { value: '7d',     label: '7 días'        },
+  { value: '30d',    label: '30 días'       },
+  { value: '90d',    label: '90 días'       },
+  { value: '365d',   label: '1 año'         },
+  { value: 'custom', label: 'Personalizado' },
 ];
+
+const PRESET_DAYS: Record<string, number> = { '7d': 6, '30d': 29, '90d': 89, '365d': 364 };
 
 const TABS = [
   { id: 'sales',     label: 'Ventas',     icon: ShoppingCart },
@@ -38,29 +60,50 @@ const TABS = [
   { id: 'profit',    label: 'Utilidades', icon: TrendingUp   },
 ] as const;
 
+function presetRange(period: string) {
+  const start = new Date();
+  start.setDate(start.getDate() - (PRESET_DAYS[period] ?? 29));
+  return { startDate: toDayStr(start), endDate: toDayStr(new Date()) };
+}
+
 export default function ReportesPage() {
   const [period, setPeriod] = useState('30d');
   const [tab, setTab]   = useState<'sales' | 'products' | 'customers' | 'profit'>('sales');
+  // Rango manual: se guarda como "YYYY-MM-DD" (lo que produce <input type="date">)
+  // y así viaja al backend, que lo interpreta como día calendario colombiano.
+  const [customStart, setCustomStart] = useState('');
+  const [customEnd, setCustomEnd]     = useState('');
 
-  const getDateRange = () => {
-    const end   = new Date();
-    end.setHours(23, 59, 59, 999);
-    const start = new Date();
-    start.setHours(0, 0, 0, 0);
-    if      (period === '7d')   start.setDate(start.getDate() - 6);
-    else if (period === '30d')  start.setDate(start.getDate() - 29);
-    else if (period === '90d')  start.setDate(start.getDate() - 89);
-    else                        start.setDate(start.getDate() - 364);
-    return { startDate: start.toISOString(), endDate: end.toISOString() };
-  };
+  const today = toDayStr(new Date());
+  const isCustom = period === 'custom';
 
-  const dates = getDateRange();
-  const dateKey = dates.startDate.slice(0, 10);
+  const rangeError = !isCustom ? null
+    : !customStart || !customEnd ? 'Selecciona la fecha inicial y la final.'
+    : customStart > customEnd    ? 'La fecha inicial no puede ser posterior a la final.'
+    : daysBetween(customStart, customEnd) > MAX_RANGE_DAYS ? `El rango no puede superar ${MAX_RANGE_DAYS} días.`
+    : null;
 
-  const { data: salesData    } = useQuery({ queryKey: ['report-sales',     period, dateKey], queryFn: () => api.get(`/reports/sales?${new URLSearchParams(dates)}`).then((r) => r.data.data) });
-  const { data: topProducts  } = useQuery({ queryKey: ['report-products',  period, dateKey], queryFn: () => api.get(`/reports/top-products?${new URLSearchParams(dates)}&limit=10`).then((r) => r.data.data) });
-  const { data: topCustomers } = useQuery({ queryKey: ['report-customers', period, dateKey], queryFn: () => api.get(`/reports/top-customers?${new URLSearchParams(dates)}&limit=10`).then((r) => r.data.data) });
-  const { data: profitData   } = useQuery({ queryKey: ['report-profit',    period, dateKey], queryFn: () => api.get(`/reports/profit?${new URLSearchParams(dates)}`).then((r) => r.data.data) });
+  // Con un rango incompleto o inválido no se consulta nada: se dejan los datos
+  // del período anterior en pantalla en vez de mostrar ceros engañosos.
+  const rangeReady = !rangeError;
+  const dates = isCustom ? { startDate: customStart, endDate: customEnd } : presetRange(period);
+
+  function selectPeriod(value: string) {
+    // Al entrar a "Personalizado" se precarga el rango que ya se estaba viendo,
+    // para que el calendario abra en un punto útil y no en blanco.
+    if (value === 'custom' && !customStart && !customEnd) {
+      const current = presetRange(period);
+      setCustomStart(current.startDate);
+      setCustomEnd(current.endDate);
+    }
+    setPeriod(value);
+  }
+
+  const q = new URLSearchParams(dates).toString();
+  const { data: salesData    } = useQuery({ enabled: rangeReady, queryKey: ['report-sales',     dates.startDate, dates.endDate], queryFn: () => api.get(`/reports/sales?${q}`).then((r) => r.data.data) });
+  const { data: topProducts  } = useQuery({ enabled: rangeReady, queryKey: ['report-products',  dates.startDate, dates.endDate], queryFn: () => api.get(`/reports/top-products?${q}&limit=10`).then((r) => r.data.data) });
+  const { data: topCustomers } = useQuery({ enabled: rangeReady, queryKey: ['report-customers', dates.startDate, dates.endDate], queryFn: () => api.get(`/reports/top-customers?${q}&limit=10`).then((r) => r.data.data) });
+  const { data: profitData   } = useQuery({ enabled: rangeReady, queryKey: ['report-profit',    dates.startDate, dates.endDate], queryFn: () => api.get(`/reports/profit?${q}`).then((r) => r.data.data) });
 
   return (
     <div className="space-y-5 animate-fade-up">
@@ -72,26 +115,70 @@ export default function ReportesPage() {
           <button
             key={p.value}
             type="button"
-            onClick={() => setPeriod(p.value)}
-            className={`px-4 py-2 rounded-xl text-[13px] font-medium transition ${
+            onClick={() => selectPeriod(p.value)}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-[13px] font-medium transition ${
               period === p.value
                 ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-600/25'
                 : 'card text-slate-600 dark:text-slate-300 hover:border-emerald-300 dark:hover:border-emerald-500/40'
             }`}
           >
+            {p.value === 'custom' && <CalendarRange size={14} />}
             {p.label}
           </button>
         ))}
         </div>
         <button
           type="button"
-          onClick={() => downloadExcel('financial', dates.startDate.slice(0, 10), dates.endDate.slice(0, 10))}
-          className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-[13px] font-medium bg-emerald-600 hover:bg-emerald-700 text-white transition shadow-sm shadow-emerald-600/25"
+          disabled={!rangeReady}
+          onClick={() => downloadExcel('financial', dates.startDate, dates.endDate)}
+          className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-[13px] font-medium bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:hover:bg-emerald-600 text-white transition shadow-sm shadow-emerald-600/25"
         >
           <FileSpreadsheet size={15} />
           Estado de Resultados
         </button>
       </div>
+
+      {/* ── Rango manual ──────────────────────────────────────────────────── */}
+      {isCustom && (
+        <div className="card p-4 space-y-3">
+          <div className="flex flex-wrap items-end gap-3">
+            <div>
+              <label htmlFor="rango-desde" className="block text-[11px] font-medium text-slate-500 dark:text-slate-400 mb-1.5">Desde</label>
+              <input
+                id="rango-desde"
+                type="date"
+                value={customStart}
+                max={today}
+                onChange={(e) => setCustomStart(e.target.value)}
+                className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[16px] sm:text-[13px] focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition"
+              />
+            </div>
+            <div>
+              <label htmlFor="rango-hasta" className="block text-[11px] font-medium text-slate-500 dark:text-slate-400 mb-1.5">Hasta</label>
+              <input
+                id="rango-hasta"
+                type="date"
+                value={customEnd}
+                min={customStart || undefined}
+                max={today}
+                onChange={(e) => setCustomEnd(e.target.value)}
+                className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[16px] sm:text-[13px] focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition"
+              />
+            </div>
+            {rangeReady && (
+              <p className="text-[12px] text-slate-500 dark:text-slate-400 pb-2.5">
+                Mostrando del <span className="font-semibold text-slate-700 dark:text-slate-200">{longDate(customStart)}</span>
+                {' al '}
+                <span className="font-semibold text-slate-700 dark:text-slate-200">{longDate(customEnd)}</span>
+                {' '}({daysBetween(customStart, customEnd)} {daysBetween(customStart, customEnd) === 1 ? 'día' : 'días'})
+              </p>
+            )}
+          </div>
+          {rangeError && (
+            <p className="text-[12px] text-amber-600 dark:text-amber-400">{rangeError}</p>
+          )}
+        </div>
+      )}
 
       {/* ── KPI Cards ─────────────────────────────────────────────────────── */}
       {profitData && (

@@ -3,8 +3,26 @@ import { prisma } from '../config/database';
 import { cache } from '../config/redis';
 import { success } from '../utils/response';
 import { AuthRequest } from '../middlewares/auth';
+import { parseBogotaBoundary, bogotaDayStart, bogotaMonthStart } from '../utils/bogotaTime';
 
 const REPORT_TTL = 300; // 5 min — suficiente frescura para analítica
+
+/**
+ * Rango del reporte en horario de Colombia. Los `startDate`/`endDate` que
+ * manda la UI son días calendario ("2026-07-25"), y el usuario espera que
+ * "del 25 al 29" cubra esos 5 días completos tal como los vive en su negocio
+ * —no corridos 5 horas por el UTC del servidor.
+ *
+ * Por defecto: del primero del mes hasta hoy, también en Bogotá.
+ */
+function resolveRange(startDate: unknown, endDate: unknown): { start: Date; end: Date; startStr: string; endStr: string } {
+  const now = new Date();
+  const start = parseBogotaBoundary(startDate, 'start') ?? bogotaMonthStart(now);
+  const end = parseBogotaBoundary(endDate, 'end') ?? new Date(bogotaDayStart(now, 1).getTime() - 1);
+  // Las claves de cache se derivan del rango ya resuelto: dos formatos
+  // distintos que apuntan al mismo instante comparten entrada.
+  return { start, end, startStr: start.toISOString(), endStr: end.toISOString() };
+}
 
 export const reportController = {
   async salesReport(req: AuthRequest, res: Response, next: NextFunction) {
@@ -12,18 +30,11 @@ export const reportController = {
       const { startDate, endDate, groupBy = 'day' } = req.query;
       const businessId = req.user!.businessId!;
 
-      const startStr = (startDate as string) || new Date(new Date().setDate(1)).toISOString().split('T')[0];
-      const endStr = (endDate as string) || new Date().toISOString().split('T')[0];
+      const { start, end, startStr, endStr } = resolveRange(startDate, endDate);
       const cacheKey = `report:sales:${businessId}:${startStr}:${endStr}:${groupBy}`;
 
       const cached = await cache.get<object>(cacheKey);
       if (cached) return success(res, cached);
-
-      const start = new Date(startStr);
-      const end = new Date(endStr);
-      // Sin esto, "hasta" corta a las 00:00 del día final y excluye casi todo lo
-      // de ese mismo día — el export de Excel ya lo hacía bien, los reportes no.
-      end.setUTCHours(23, 59, 59, 999);
 
       let groupFormat = 'YYYY-MM-DD';
       if (groupBy === 'week') groupFormat = 'YYYY-WW';
@@ -32,7 +43,11 @@ export const reportController = {
       const [sales, totals] = await Promise.all([
         prisma.$queryRaw<Array<any>>`
           SELECT
-            TO_CHAR(s."createdAt", ${groupFormat})          AS period,
+            -- Se agrupa por el día calendario COLOMBIANO. La columna es
+            -- 'timestamp without time zone' en UTC, así que primero se ancla a
+            -- UTC y luego se convierte. Sin esto una venta de las 8 p.m. (01:00
+            -- UTC del día siguiente) salía graficada un día después.
+            TO_CHAR(s."createdAt" AT TIME ZONE 'UTC' AT TIME ZONE 'America/Bogota', ${groupFormat}) AS period,
             SUM(s.total)::float                             AS gross_revenue,
             SUM(s.total - s."taxAmount")::float             AS net_revenue,
             COUNT(*)::int                                   AS count,
@@ -93,19 +108,12 @@ export const reportController = {
       const { startDate, endDate, limit = '10' } = req.query;
       const businessId = req.user!.businessId!;
 
-      const startStr = (startDate as string) || new Date(new Date().setDate(1)).toISOString().split('T')[0];
-      const endStr = (endDate as string) || new Date().toISOString().split('T')[0];
+      const { start, end, startStr, endStr } = resolveRange(startDate, endDate);
       const limitNum = Math.min(50, Math.max(1, parseInt(limit as string) || 10));
       const cacheKey = `report:top-products:${businessId}:${startStr}:${endStr}:${limitNum}`;
 
       const cached = await cache.get<object[]>(cacheKey);
       if (cached) return success(res, cached);
-
-      const start = new Date(startStr);
-      const end = new Date(endStr);
-      // Sin esto, "hasta" corta a las 00:00 del día final y excluye casi todo lo
-      // de ese mismo día — el export de Excel ya lo hacía bien, los reportes no.
-      end.setUTCHours(23, 59, 59, 999);
 
       const top = await prisma.saleDetail.groupBy({
         by: ['productId'],
@@ -148,19 +156,12 @@ export const reportController = {
       const { startDate, endDate, limit = '10' } = req.query;
       const businessId = req.user!.businessId!;
 
-      const startStr = (startDate as string) || new Date(new Date().setDate(1)).toISOString().split('T')[0];
-      const endStr = (endDate as string) || new Date().toISOString().split('T')[0];
+      const { start, end, startStr, endStr } = resolveRange(startDate, endDate);
       const limitNum = Math.min(50, Math.max(1, parseInt(limit as string) || 10));
       const cacheKey = `report:top-customers:${businessId}:${startStr}:${endStr}:${limitNum}`;
 
       const cached = await cache.get<object[]>(cacheKey);
       if (cached) return success(res, cached);
-
-      const start = new Date(startStr);
-      const end = new Date(endStr);
-      // Sin esto, "hasta" corta a las 00:00 del día final y excluye casi todo lo
-      // de ese mismo día — el export de Excel ya lo hacía bien, los reportes no.
-      end.setUTCHours(23, 59, 59, 999);
 
       const top = await prisma.sale.groupBy({
         by: ['customerId'],
@@ -202,18 +203,11 @@ export const reportController = {
       const { startDate, endDate } = req.query;
       const businessId = req.user!.businessId!;
 
-      const startStr = (startDate as string) || new Date(new Date().setDate(1)).toISOString().split('T')[0];
-      const endStr = (endDate as string) || new Date().toISOString().split('T')[0];
+      const { start, end, startStr, endStr } = resolveRange(startDate, endDate);
       const cacheKey = `report:profit:${businessId}:${startStr}:${endStr}`;
 
       const cached = await cache.get<object>(cacheKey);
       if (cached) return success(res, cached);
-
-      const start = new Date(startStr);
-      const end = new Date(endStr);
-      // Sin esto, "hasta" corta a las 00:00 del día final y excluye casi todo lo
-      // de ese mismo día — el export de Excel ya lo hacía bien, los reportes no.
-      end.setUTCHours(23, 59, 59, 999);
 
       const [revenueData, expenseData, cogsResult] = await Promise.all([
         prisma.sale.aggregate({
