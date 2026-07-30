@@ -24,7 +24,7 @@ export const dashboardController = {
 
       const [
         summaryRaw, recentSales, topProducts,
-        totalProducts, lowStockRaw, totalCustomers, customersWithDebt, pendingCredits,
+        totalProducts, lowStockRaw, totalCustomers, customersWithDebt, pendingCredits, monthExpenses,
       ] = await Promise.all([
         prisma.$queryRaw<any[]>`
           SELECT
@@ -92,6 +92,11 @@ export const dashboardController = {
           _sum: { balance: true },
           _count: { id: true },
         }),
+        // Gastos del mes en curso (por fecha del gasto).
+        prisma.expense.aggregate({
+          where: { businessId, deletedAt: null, date: { gte: monthStart } },
+          _sum: { amount: true },
+        }),
       ]);
       const lowStock = Number(lowStockRaw[0]?.c || 0);
 
@@ -107,6 +112,9 @@ export const dashboardController = {
         credits: {
           totalBalance: pendingCredits._sum.balance || 0,
           count: pendingCredits._count.id,
+        },
+        expenses: {
+          month: Number(monthExpenses._sum.amount || 0),
         },
         recentSales: recentSales.map((s: any) => ({
           id: s.id,

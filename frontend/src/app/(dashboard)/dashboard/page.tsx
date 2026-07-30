@@ -147,9 +147,9 @@ export default function DashboardPage() {
     <div className="space-y-5 animate-fade-up">
 
       {/* ── KPI cards ──────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         {loadingSummary ? (
-          [...Array(4)].map((_, i) => <SkeletonCard key={i} />)
+          [...Array(5)].map((_, i) => <SkeletonCard key={i} />)
         ) : (
           <>
             <StatCard
@@ -169,6 +169,15 @@ export default function DashboardPage() {
               accent="text-emerald-600 dark:text-emerald-400"
               iconBg="bg-emerald-50 dark:bg-emerald-500/10"
               trend={{ current: s?.sales?.month?.total || 0, prev: s?.sales?.month?.prevTotal }}
+            />
+            <StatCard
+              title="Gastos del mes"
+              value={<CountUp value={s?.expenses?.month || 0} />}
+              sub="este mes"
+              icon={TrendingDown}
+              accent="text-rose-600 dark:text-rose-400"
+              iconBg="bg-rose-50 dark:bg-rose-500/10"
+              tooltip="Suma de los gastos registrados en el mes en curso."
             />
             <StatCard
               title="Stock bajo"
