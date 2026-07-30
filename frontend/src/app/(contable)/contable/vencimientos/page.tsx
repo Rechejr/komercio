@@ -61,10 +61,14 @@ export default function VencimientosPage() {
     }
   }, []);
 
-  const { data: vencimientos = [], isLoading } = useQuery<Vencimiento[]>({
+  const { data: vencimientosRaw = [], isLoading } = useQuery<Vencimiento[]>({
     queryKey: ['contable-vencimientos', search],
     queryFn: () => api.get(`/contable/vencimientos?search=${encodeURIComponent(search)}`).then((r) => r.data.data),
   });
+  // PILA tiene su propia sección independiente (/contable/pila), así que se excluye
+  // de la vista general de Vencimientos —pestaña, conteos y lista— para no duplicarlo.
+  // Los registros PILA siguen intactos en la tabla y se ven en su sección.
+  const vencimientos = useMemo(() => vencimientosRaw.filter((v) => v.obligacion !== 'pila'), [vencimientosRaw]);
 
   // Contador por obligación para las pestañas.
   const conteos = useMemo(() => {
@@ -412,7 +416,8 @@ function NuevoVencimientoModal({ onClose, clienteInicial }: { onClose: () => voi
               <label className="block text-[13px] font-medium text-slate-700 dark:text-slate-300 mb-1.5">Obligación</label>
               <select value={obligacion} onChange={(e) => { setObligacion(e.target.value as Obligacion); setPeriodo(''); setFecha(''); }} className={inputCls}>
                 <option value="">Todas — agenda completa del cliente</option>
-                {OBLIGACIONES.map((o) => <option key={o.codigo} value={o.codigo}>{o.label}</option>)}
+                {/* PILA se maneja en su sección propia — no se crea desde aquí. */}
+                {OBLIGACIONES.filter((o) => o.codigo !== 'pila').map((o) => <option key={o.codigo} value={o.codigo}>{o.label}</option>)}
               </select>
             </div>
           )}
