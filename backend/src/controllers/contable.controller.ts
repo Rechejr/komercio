@@ -184,7 +184,8 @@ export const contableController = {
   async updateClient(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const businessId = req.user!.businessId!;
-      await getClientOfBusiness(req.params.id, businessId);
+      const clienteAntes = await getClientOfBusiness(req.params.id, businessId);
+      const calidadesAntes = clienteAntes.responsabilidades as Calidad[];
 
       const { razonSocial, nit, celular, direccion, tipoPersona, responsabilidades, ivaPeriodicidad } = req.body;
       if (!razonSocial?.trim()) throw new AppError('La razón social es requerida', 400);
@@ -199,19 +200,61 @@ export const contableController = {
         ? (ivaPeriodicidad === 'bimestral' || ivaPeriodicidad === 'cuatrimestral' ? ivaPeriodicidad : null)
         : null;
 
+      // ── Reconciliación de vencimientos según el cambio de calidades ──────────
+      // Si el cliente gana/pierde una obligación DERIVADA DE CALIDADES (renta, iva,
+      // retefuente, impoconsumo, simple), sus vencimientos se ajustan solos. ICA,
+      // PILA y exógena NO se tocan (son manuales/independientes).
+      const oblAntes = new Set(obligacionesSugeridas(calidadesAntes, []));
+      const oblAhora = new Set(obligacionesSugeridas(calidades, []));
+      const quitadas = [...oblAntes].filter((o) => !oblAhora.has(o));
+      const agregadas = [...oblAhora].filter((o) => !oblAntes.has(o));
+
+      // Los vencimientos a crear se calculan ANTES de la transacción (leer el
+      // calendario es lectura de datos estáticos). Se usan los valores NUEVOS.
+      const nuevos: { obligacion: Obligacion; periodo: string; fecha: Date }[] = [];
+      for (const obl of agregadas) {
+        const variante = varianteDe(obl, tipoPersona, ivaPer);
+        const periodos = await periodosCalendario(obl, variante, nitLimpio);
+        for (const p of periodos) nuevos.push({ obligacion: obl, periodo: p.periodo, fecha: p.fecha });
+      }
+
       try {
-        const client = await prisma.taxClient.update({
-          where: { id: req.params.id },
-          data: {
-            razonSocial: razonSocial.trim(),
-            nit: nitLimpio,
-            dv: calcularDV(nitLimpio),
-            celular: celular?.trim() || null,
-            direccion: direccion?.trim() || null,
-            tipoPersona,
-            responsabilidades: calidades,
-            ivaPeriodicidad: ivaPer,
-          },
+        const client = await prisma.$transaction(async (tx) => {
+          const c = await tx.taxClient.update({
+            where: { id: req.params.id },
+            data: {
+              razonSocial: razonSocial.trim(),
+              nit: nitLimpio,
+              dv: calcularDV(nitLimpio),
+              celular: celular?.trim() || null,
+              direccion: direccion?.trim() || null,
+              tipoPersona,
+              responsabilidades: calidades,
+              ivaPeriodicidad: ivaPer,
+            },
+          });
+
+          // Quitar las obligaciones que ya no aplican — solo los vencimientos NO
+          // cumplidos; los ya presentados/pagados se conservan como historial.
+          if (quitadas.length) {
+            await tx.vencimiento.deleteMany({
+              where: {
+                taxClientId: c.id,
+                obligacion: { in: quitadas },
+                estado: { notIn: ['presentada', 'pagada'] },
+              },
+            });
+          }
+
+          // Agregar los vencimientos de las obligaciones nuevas (ignora duplicados).
+          if (nuevos.length) {
+            await tx.vencimiento.createMany({
+              data: nuevos.map((n) => ({ taxClientId: c.id, ...n })),
+              skipDuplicates: true,
+            });
+          }
+
+          return c;
         });
         return success(res, client, 'Cliente actualizado');
       } catch (e) {

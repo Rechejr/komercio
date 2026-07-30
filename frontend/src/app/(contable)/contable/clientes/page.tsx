@@ -90,6 +90,10 @@ export default function ClientesPage() {
     onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ['contable-clients'] });
       qc.invalidateQueries({ queryKey: ['contable-panel'] });
+      // Editar calidades ajusta los vencimientos automáticamente (agrega/quita
+      // obligaciones), así que se refrescan las vistas de vencimientos y PILA.
+      qc.invalidateQueries({ queryKey: ['contable-vencimientos'] });
+      qc.invalidateQueries({ queryKey: ['contable-pila'] });
       setModalOpen(false);
       if (editing) {
         toast.success('Cliente actualizado');
