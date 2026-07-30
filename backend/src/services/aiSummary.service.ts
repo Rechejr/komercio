@@ -3,8 +3,6 @@ import { gemini, GEMINI_MODEL } from '../config/gemini';
 import { logger } from '../config/logger';
 import { bogotaDayStart } from '../utils/bogotaTime';
 
-const FRESHNESS_MS = 7 * 24 * 60 * 60 * 1000;
-
 interface WeeklyMetrics {
   semana_actual: { total: number; moneda: 'COP' };
   semana_anterior: { total: number };
@@ -34,8 +32,13 @@ Reglas estrictas:
 - Sin saludo ni despedida, sin markdown, texto plano.
 - Si un dato viene en null o vacío, simplemente no lo menciones.`;
 
+// Se regenera una vez al día: el resumen es "fresco" solo si se generó HOY (hora
+// de Colombia). Así, la primera vez que el dueño abre el sistema cada día ve los
+// números al día, sin llamar a Gemini en cada carga del dashboard (su tier gratis
+// tiene límites). Aunque la tabla se llama "weekly", las métricas son de los
+// últimos 7 días y se recalculan a diario.
 function isFresh(createdAt: Date): boolean {
-  return Date.now() - createdAt.getTime() < FRESHNESS_MS;
+  return createdAt.getTime() >= bogotaDayStart(new Date(), 0).getTime();
 }
 
 async function gatherMetrics(businessId: string): Promise<WeeklyMetrics> {

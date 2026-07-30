@@ -47,7 +47,7 @@ describe('GET /api/v1/dashboard/ai-summary', () => {
     expect(res.body.error).toMatch(/plan Pro/);
   });
 
-  it('deja pasar en plan Pro y devuelve el resumen ya generado esta semana', async () => {
+  it('deja pasar en plan Pro y devuelve el resumen ya generado hoy', async () => {
     (mockPrisma.business.findUnique as jest.Mock).mockResolvedValue({
       id: 'biz-1', plan: 'pro', planExpiresAt: null, branches: [{ id: 'br-1' }],
     });

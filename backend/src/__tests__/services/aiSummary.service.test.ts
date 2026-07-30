@@ -107,7 +107,7 @@ describe('aiSummary.service — generateWeeklySummaryForBusiness', () => {
 });
 
 describe('aiSummary.service — getOrGenerateAiSummary', () => {
-  it('devuelve el resumen existente si tiene menos de 7 días', async () => {
+  it('devuelve el resumen existente si ya se generó hoy (mismo día en Colombia)', async () => {
     const recent = new Date();
     (mockPrisma.aiWeeklySummary.findFirst as jest.Mock).mockResolvedValue({
       summary: 'Resumen reciente', createdAt: recent,
@@ -119,8 +119,9 @@ describe('aiSummary.service — getOrGenerateAiSummary', () => {
     expect(mockGenerateContent).not.toHaveBeenCalled();
   });
 
-  it('regenera si el resumen mas reciente tiene mas de 7 dias', async () => {
-    const stale = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000);
+  it('regenera si el resumen mas reciente es de un día anterior', async () => {
+    // 25h atrás → siempre cae en un día calendario previo → debe regenerar.
+    const stale = new Date(Date.now() - 25 * 60 * 60 * 1000);
     (mockPrisma.aiWeeklySummary.findFirst as jest.Mock).mockResolvedValue({
       summary: 'Resumen viejo', createdAt: stale,
     });
