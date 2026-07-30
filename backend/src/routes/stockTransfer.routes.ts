@@ -5,7 +5,7 @@ import { body } from 'express-validator';
 import { prisma } from '../config/database';
 import { authenticate, authorize, AuthRequest } from '../middlewares/auth';
 import { success, created, paginated, AppError } from '../utils/response';
-import { getPagination } from '../utils/pagination';
+import { getPagination, getSearch } from '../utils/pagination';
 import { validate } from '../middlewares/validate';
 
 const transferValidators = [
@@ -162,11 +162,36 @@ router.use(authenticate);
 router.get('/', async (req: AuthRequest, res, next) => {
   try {
     const { page, limit, skip } = getPagination(req);
-    const { branchId } = req.query;
+    const search = getSearch(req);
+    const { branchId, startDate, endDate } = req.query;
     const businessId = req.user!.businessId;
 
+    // Se usa AND para poder combinar el filtro por bodega, la búsqueda y las fechas
+    // (cada uno con su propio OR) sin que se pisen en la misma clave `where.OR`.
+    const and: any[] = [];
+    if (branchId) and.push({ OR: [{ fromBranchId: branchId }, { toBranchId: branchId }] });
+    if (search) {
+      and.push({
+        OR: [
+          { fromBranch: { name: { contains: search, mode: 'insensitive' } } },
+          { toBranch: { name: { contains: search, mode: 'insensitive' } } },
+          { notes: { contains: search, mode: 'insensitive' } },
+          { items: { some: { product: { name: { contains: search, mode: 'insensitive' } } } } },
+        ],
+      });
+    }
+
     const where: any = { businessId, deletedAt: null };
-    if (branchId) where.OR = [{ fromBranchId: branchId }, { toBranchId: branchId }];
+    if (and.length) where.AND = and;
+    if (startDate || endDate) {
+      where.createdAt = {};
+      if (startDate) where.createdAt.gte = new Date(startDate as string);
+      if (endDate) {
+        const end = new Date(endDate as string);
+        end.setUTCHours(23, 59, 59, 999);
+        where.createdAt.lte = end;
+      }
+    }
 
     const [transfers, total] = await Promise.all([
       prisma.stockTransfer.findMany({

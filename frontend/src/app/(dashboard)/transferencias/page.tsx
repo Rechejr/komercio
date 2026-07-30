@@ -6,11 +6,13 @@ import { useForm, useFieldArray, Controller } from 'react-hook-form';
 import { api } from '@/lib/api';
 import { formatDateTime } from '@/lib/utils';
 import toast from 'react-hot-toast';
-import { Plus, ArrowLeftRight, X, Loader2, Trash2, Edit, ChevronRight, Package } from 'lucide-react';
+import { Plus, ArrowLeftRight, X, Loader2, Trash2, Edit, ChevronRight, Package, Search } from 'lucide-react';
 import { useAuthStore } from '@/store/auth.store';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[16px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition';
+// Igual que inputCls pero sin w-full — para los controles del toolbar de filtros.
+const filterCls = 'px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[16px] sm:text-[13px] focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition';
 const inputSmCls = 'w-full px-2 py-2 bg-slate-50 border border-slate-200 rounded-lg text-[16px] sm:text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition';
 
 export default function TransferenciasPage() {
@@ -26,9 +28,27 @@ export default function TransferenciasPage() {
   const [editItem, setEditItem] = useState<any>(null);
   const [deleteTarget, setDeleteTarget] = useState<any>(null);
 
+  // Filtros de la lista (búsqueda por bodega/producto/nota + rango de fechas)
+  const [search, setSearch] = useState('');
+  const [fStart, setFStart] = useState('');
+  const [fEnd, setFEnd] = useState('');
+  const hayFiltros = !!(search.trim() || fStart || fEnd);
+  function onFilter<T>(setter: (v: T) => void) {
+    return (v: T) => { setter(v); setPage(1); };
+  }
+  function limpiarFiltros() {
+    setSearch(''); setFStart(''); setFEnd(''); setPage(1);
+  }
+
   const { data, isLoading } = useQuery({
-    queryKey: ['stock-transfers', page],
-    queryFn: () => api.get(`/stock-transfers?page=${page}&limit=20`).then((r) => r.data),
+    queryKey: ['stock-transfers', page, search, fStart, fEnd],
+    queryFn: () => {
+      const params = new URLSearchParams({ page: String(page), limit: '20' });
+      if (search.trim()) params.set('search', search.trim());
+      if (fStart) params.set('startDate', fStart);
+      if (fEnd) params.set('endDate', fEnd);
+      return api.get(`/stock-transfers?${params.toString()}`).then((r) => r.data);
+    },
   });
 
   const { data: detail } = useQuery({
@@ -159,6 +179,30 @@ export default function TransferenciasPage() {
         </div>
       )}
 
+      {/* ── Filtros de la lista ───────────────────────────────────────────────── */}
+      <div className="card px-4 py-3 flex flex-wrap items-center gap-2">
+        <div className="relative flex-1 min-w-[200px]">
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            value={search}
+            onChange={(e) => onFilter(setSearch)(e.target.value)}
+            placeholder="Buscar por bodega, producto o nota..."
+            className={`${inputCls} pl-9 py-2`}
+          />
+        </div>
+        <div className="flex items-center gap-1.5">
+          <input type="date" aria-label="Desde" value={fStart} onChange={(e) => onFilter(setFStart)(e.target.value)} className={filterCls} />
+          <span className="text-[12px] text-slate-400">a</span>
+          <input type="date" aria-label="Hasta" value={fEnd} onChange={(e) => onFilter(setFEnd)(e.target.value)} className={filterCls} />
+        </div>
+        {hayFiltros && (
+          <button type="button" onClick={limpiarFiltros}
+            className="flex items-center gap-1 text-[12px] font-medium text-slate-500 hover:text-red-600 dark:text-slate-400 px-2 py-2 transition-colors">
+            <X size={13} /> Limpiar
+          </button>
+        )}
+      </div>
+
       {/* ── Transfers table ───────────────────────────────────────────────────── */}
       <div className="card overflow-hidden">
         <div className="overflow-x-auto">
@@ -189,7 +233,7 @@ export default function TransferenciasPage() {
                   <td colSpan={6} className="text-center py-16">
                     <div className="flex flex-col items-center gap-3 text-slate-400 dark:text-slate-600">
                       <ArrowLeftRight size={36} strokeWidth={1.5} />
-                      <p className="text-[13px]">No hay transferencias registradas</p>
+                      <p className="text-[13px]">{hayFiltros ? 'Sin resultados para los filtros' : 'No hay transferencias registradas'}</p>
                     </div>
                   </td>
                 </tr>
