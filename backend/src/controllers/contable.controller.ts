@@ -7,6 +7,7 @@ import { getPagination } from '../utils/pagination';
 import { calcularDV, soloDigitos, ultimoDigito, dosUltimosDigitos } from '../utils/nit';
 import { normalizarResponsabilidades, obligacionesSugeridas } from '../utils/calidades';
 import { periodosPila } from '../utils/pila';
+import { periodosExogena } from '../utils/exogena';
 import ExcelJS from 'exceljs';
 import { findDataSheet, findHeaderRow, mapColumns, cellVal, normalizeHeader } from '../utils/excelParser';
 import {
@@ -92,6 +93,8 @@ async function periodosCalendario(obligacion: Obligacion, variante: string | nul
   // PILA no se siembra: se calcula (N-ésimo día hábil del mes según los 2 últimos
   // dígitos). Ver utils/pila.ts — validado vs. miplanilla.com.
   if (obligacion === 'pila') return periodosPila(nit, ANIO_CALENDARIO);
+  // Exógena: un vencimiento anual, fecha por los dos últimos dígitos (util, no tabla).
+  if (obligacion === 'exogena') return periodosExogena(nit, ANIO_CALENDARIO);
   if (obligacion === 'renta' && variante === 'natural') {
     const row = await prisma.calendarioRentaNatural.findUnique({
       where: { anio_dosDigitos: { anio: ANIO_CALENDARIO, dosDigitos: dosUltimosDigitos(nit) } },
