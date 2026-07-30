@@ -6,7 +6,7 @@ import { cache } from '../config/redis';
 import { authenticate, authorize, AuthRequest } from '../middlewares/auth';
 import { resolveEffectiveBranchId } from '../utils/resolveBranch';
 import { success, created, paginated } from '../utils/response';
-import { getPagination } from '../utils/pagination';
+import { getPagination, getSearch } from '../utils/pagination';
 import { AppError } from '../utils/response';
 import { validate } from '../middlewares/validate';
 import { planLimit } from '../middlewares/planLimit';
@@ -43,17 +43,42 @@ router.use(authenticate);
 router.get('/', async (req: AuthRequest, res, next) => {
   try {
     const { page, limit, skip } = getPagination(req);
+    const search = getSearch(req);
+    const { startDate, endDate } = req.query;
     const businessId = req.user!.businessId;
+
+    const where: any = { deletedAt: null, businessId };
+    if (search) {
+      // Busca por N° de factura del proveedor, nombre/razón social e identificación.
+      // El filtro por documento SOLO si hay dígitos (`contains: ''` matchearía todo).
+      const digits = search.replace(/\D/g, '');
+      where.OR = [
+        { invoiceNumber: { contains: search, mode: 'insensitive' } },
+        { supplier: { name: { contains: search, mode: 'insensitive' } } },
+        { supplier: { legalName: { contains: search, mode: 'insensitive' } } },
+        ...(digits ? [{ supplier: { document: { contains: digits } } }] : []),
+      ];
+    }
+    if (startDate || endDate) {
+      where.purchaseDate = {};
+      if (startDate) where.purchaseDate.gte = new Date(startDate as string);
+      if (endDate) {
+        const end = new Date(endDate as string);
+        end.setUTCHours(23, 59, 59, 999);
+        where.purchaseDate.lte = end;
+      }
+    }
+
     const [purchases, total] = await Promise.all([
       prisma.purchase.findMany({
-        where: { deletedAt: null, businessId },
+        where,
         skip, take: limit, orderBy: { purchaseDate: 'desc' },
         include: {
           supplier: { select: { id: true, name: true } },
           _count: { select: { details: true } },
         },
       }),
-      prisma.purchase.count({ where: { deletedAt: null, businessId } }),
+      prisma.purchase.count({ where }),
     ]);
     return paginated(res, purchases, total, page, limit);
   } catch (err) { next(err); }
