@@ -237,14 +237,14 @@ export const contableController = {
             },
           });
 
-          // Quitar las obligaciones que ya no aplican — solo los vencimientos NO
-          // cumplidos; los ya presentados/pagados se conservan como historial.
+          // Quitar por completo las obligaciones que ya no aplican: se borran TODOS
+          // sus vencimientos, incluso los ya Presentada/Pagada (decisión del contador:
+          // que la obligación desaparezca por completo al cambiar las calidades).
           if (quitadas.length) {
             await tx.vencimiento.deleteMany({
               where: {
                 taxClientId: c.id,
                 obligacion: { in: quitadas },
-                estado: { notIn: ['presentada', 'pagada'] },
               },
             });
           }
