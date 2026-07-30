@@ -2,6 +2,7 @@ import { Response, NextFunction } from 'express';
 import { prisma } from '../config/database';
 import { getPlan } from '../config/plans';
 import { AppError } from '../utils/response';
+import { bogotaMonthStart } from '../utils/bogotaTime';
 import { AuthRequest } from './auth';
 
 // `feature` es solo "Límite de N X" — el plan y el CTA de upgrade se arman aquí,
@@ -59,9 +60,9 @@ export const planLimit = {
         const limits = getPlan(business.plan);
         if (limits.salesPerMonth === Infinity) return next();
 
-        const start = new Date();
-        start.setDate(1);
-        start.setHours(0, 0, 0, 0);
+        // Inicio del mes en hora de Colombia (no del servidor/UTC), para que el
+        // límite mensual del plan cuente el mes tal como lo ve el negocio.
+        const start = bogotaMonthStart(new Date());
 
         const count = await prisma.sale.count({
           where: {

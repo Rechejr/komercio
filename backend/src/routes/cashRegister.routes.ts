@@ -3,6 +3,7 @@ import { prisma } from '../config/database';
 import { authenticate, authorize } from '../middlewares/auth';
 import { success, created, paginated, AppError } from '../utils/response';
 import { getPagination } from '../utils/pagination';
+import { parseBogotaBoundary } from '../utils/bogotaTime';
 
 const router = Router();
 router.use(authenticate);
@@ -25,9 +26,13 @@ router.get('/history', authorize('ADMIN', 'SUPERVISOR'), async (req: any, res, n
     const where: any = { branchId: { in: branchIds } };
     if (userId) where.openedBy = userId;
     if (startDate || endDate) {
+      // Rango por día de Colombia (ver parseBogotaBoundary): con UTC se colaban
+      // aperturas de caja del día anterior/siguiente al filtrar.
       where.openedAt = {};
-      if (startDate) where.openedAt.gte = new Date(startDate);
-      if (endDate) { const end = new Date(endDate); end.setUTCHours(23, 59, 59, 999); where.openedAt.lte = end; }
+      const start = parseBogotaBoundary(startDate, 'start');
+      const end = parseBogotaBoundary(endDate, 'end');
+      if (start) where.openedAt.gte = start;
+      if (end) where.openedAt.lte = end;
     }
 
     const [registers, total] = await Promise.all([

@@ -5,6 +5,7 @@ import { prisma } from '../config/database';
 import { cache } from '../config/redis';
 import { AppError, success, created, paginated } from '../utils/response';
 import { getPagination, getSearch } from '../utils/pagination';
+import { parseBogotaBoundary, bogotaDayStart, bogotaMonthStart } from '../utils/bogotaTime';
 import { AuthRequest } from '../middlewares/auth';
 import { emitToBusinesss, socketEvents } from '../config/socket';
 import { notifyLowStockBatch } from '../services/notification.service';
@@ -131,9 +132,15 @@ export const saleController = {
       if (customerId) where.customerId = customerId;
       if (branchId) where.branchId = branchId;
       if (startDate || endDate) {
+        // Rango por día de COLOMBIA (no UTC): con `new Date(fecha)` se colaban
+        // ventas del día anterior/siguiente. parseBogotaBoundary alinea el corte a
+        // medianoche/fin-de-día de Bogotá (antes 'end' ni siquiera llegaba al final
+        // del día → excluía casi todo el último día).
         where.createdAt = {};
-        if (startDate) where.createdAt.gte = new Date(startDate as string);
-        if (endDate) where.createdAt.lte = new Date(endDate as string);
+        const start = parseBogotaBoundary(startDate, 'start');
+        const end = parseBogotaBoundary(endDate, 'end');
+        if (start) where.createdAt.gte = start;
+        if (end) where.createdAt.lte = end;
       }
 
       const [sales, total] = await Promise.all([
@@ -274,7 +281,7 @@ export const saleController = {
           const effectivePlan = biz.plan === 'pro' && biz.planExpiresAt && biz.planExpiresAt < new Date() ? 'free' : biz.plan;
           const limits = getPlan(effectivePlan);
           if (limits.salesPerMonth !== Infinity) {
-            const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0);
+            const monthStart = bogotaMonthStart(new Date());
             const branchIds = (await tx.branch.findMany({ where: { businessId: req.user!.businessId! }, select: { id: true } })).map((b) => b.id);
             const salesCount = await tx.sale.count({
               where: { branchId: { in: branchIds }, createdAt: { gte: monthStart }, deletedAt: null },
@@ -758,10 +765,11 @@ export const saleController = {
 
   async getDailySummary(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const tomorrow = new Date(today);
-      tomorrow.setDate(tomorrow.getDate() + 1);
+      // "Hoy" en hora de Colombia (no UTC): el resumen del día debe cortar en la
+      // medianoche de Bogotá, no del servidor (UTC).
+      const now = new Date();
+      const today = bogotaDayStart(now, 0);
+      const tomorrow = bogotaDayStart(now, 1);
 
       const sales = await prisma.sale.aggregate({
         where: {
