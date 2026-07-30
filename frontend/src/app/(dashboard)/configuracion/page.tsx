@@ -762,9 +762,8 @@ export default function ConfiguracionPage() {
 
               {branches.length > 1 && (
                 <div>
-                  <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5 block">Bodega</label>
-                  <select {...regEmp('branchId')} className={inputCls}>
-                    <option value="">Sin bodega asignada</option>
+                  <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5 block">Bodega *</label>
+                  <select {...regEmp('branchId', { required: true })} className={inputCls}>
                     {branches.map((b: any) => (
                       <option key={b.id} value={b.id}>{b.name}</option>
                     ))}

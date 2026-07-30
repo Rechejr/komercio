@@ -232,7 +232,10 @@ async function getBusinessWithPlan(req: AuthRequest) {
   // Check plan expiry: if pro plan expired, treat as free
   const business = await prisma.business.findUnique({
     where: { id: req.user.businessId },
-    select: { id: true, plan: true, planExpiresAt: true, branches: { select: { id: true } } },
+    // Solo bodegas activas: contar usuarios/productos sobre bodegas ya borradas
+    // (soft-delete) inflaba el conteo y podía bloquear por error una creación
+    // que el recuento atómico —que sí filtra deletedAt— sí permite.
+    select: { id: true, plan: true, planExpiresAt: true, branches: { where: { deletedAt: null }, select: { id: true } } },
   });
 
   if (!business) return null;
