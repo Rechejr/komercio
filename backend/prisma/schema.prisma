@@ -395,6 +395,10 @@ model StockTransfer {
   notes        String?
   items        StockTransferItem[]
   createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @default(now()) @updatedAt
+  // Soft delete — anular una transferencia revierte el stock pero conserva el
+  // registro, porque los InventoryMovement de auditoría apuntan a este id.
+  deletedAt    DateTime?
 
   @@index([businessId])
   @@index([fromBranchId])

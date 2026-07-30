@@ -1,21 +1,30 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm, useFieldArray, Controller } from 'react-hook-form';
 import { api } from '@/lib/api';
 import { formatDateTime } from '@/lib/utils';
 import toast from 'react-hot-toast';
-import { Plus, ArrowLeftRight, X, Loader2, Trash2, ChevronRight, Package } from 'lucide-react';
+import { Plus, ArrowLeftRight, X, Loader2, Trash2, Edit, ChevronRight, Package } from 'lucide-react';
+import { useAuthStore } from '@/store/auth.store';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[16px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition';
 const inputSmCls = 'w-full px-2 py-2 bg-slate-50 border border-slate-200 rounded-lg text-[16px] sm:text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition';
 
 export default function TransferenciasPage() {
   const qc = useQueryClient();
+  // El backend exige ADMIN/SUPERVISOR para crear, editar y anular
+  // (stockTransfer.routes.ts) — esto solo evita mostrar botones que de todas
+  // formas fallarían con un 403.
+  const role = useAuthStore((s) => s.user?.role);
+  const canManage = role === 'ADMIN' || role === 'SUPERVISOR';
   const [page, setPage] = useState(1);
   const [showForm, setShowForm] = useState(false);
   const [selected, setSelected] = useState<any>(null);
+  const [editItem, setEditItem] = useState<any>(null);
+  const [deleteTarget, setDeleteTarget] = useState<any>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ['stock-transfers', page],
@@ -46,18 +55,77 @@ export default function TransferenciasPage() {
   const fromBranchId = watch('fromBranchId');
   const toBranchId = watch('toBranchId');
 
+  function invalidateStock() {
+    qc.invalidateQueries({ queryKey: ['stock-transfers'] });
+    qc.invalidateQueries({ queryKey: ['stock-transfer'] });
+    qc.invalidateQueries({ queryKey: ['products'] });
+    qc.invalidateQueries({ queryKey: ['product-stock-by-branch'] });
+  }
+
   const saveMutation = useMutation({
-    mutationFn: (data: any) => api.post('/stock-transfers', data),
+    mutationFn: (data: any) => editItem
+      ? api.put(`/stock-transfers/${editItem.id}`, data)
+      : api.post('/stock-transfers', data),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['stock-transfers'] });
-      qc.invalidateQueries({ queryKey: ['products'] });
-      qc.invalidateQueries({ queryKey: ['product-stock-by-branch'] });
-      toast.success('Transferencia registrada');
+      invalidateStock();
+      toast.success(editItem ? 'Transferencia actualizada' : 'Transferencia registrada');
       setShowForm(false);
+      setEditItem(null);
       reset();
     },
-    onError: (err: any) => toast.error(err.response?.data?.error || 'Error al registrar la transferencia'),
+    onError: (err: any) => toast.error(err.response?.data?.error || 'Error al guardar la transferencia'),
   });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => api.delete(`/stock-transfers/${id}`),
+    onSuccess: () => {
+      invalidateStock();
+      toast.success('Transferencia eliminada y stock revertido');
+      setDeleteTarget(null);
+    },
+    onError: (err: any) => toast.error(err.response?.data?.error || 'Error al eliminar la transferencia'),
+  });
+
+  // Se relee el detalle completo (la fila de la tabla solo trae el conteo de
+  // líneas, no los productos) antes de abrir el formulario en modo edición.
+  function openEdit(transfer: any) {
+    setSelected(null);
+    api.get(`/stock-transfers/${transfer.id}`).then((r) => {
+      const t = r.data.data;
+      setEditItem(t);
+      reset({
+        fromBranchId: t.fromBranchId,
+        toBranchId: t.toBranchId,
+        notes: t.notes || '',
+        items: t.items.map((i: any) => ({ productId: i.productId, quantity: i.quantity })),
+      });
+      setShowForm(true);
+    }).catch((err: any) => toast.error(err.response?.data?.error || 'No se pudo cargar la transferencia'));
+  }
+
+  function handleDelete(transfer: any) {
+    setDeleteTarget(transfer);
+    setSelected(null);
+  }
+
+  function closeForm() {
+    setShowForm(false);
+    setEditItem(null);
+    reset();
+  }
+
+  // La lista del <select> solo trae productos activos: si uno se desactivó
+  // después de la transferencia, al editarla su línea aparecería en blanco y
+  // perdería el producto en silencio. Se agrega como opción extra.
+  const productOptions: any[] = useMemo(() => {
+    const base: any[] = products || [];
+    if (!editItem?.items?.length) return base;
+    const known = new Set(base.map((p: any) => p.id));
+    const missing = editItem.items
+      .filter((i: any) => !known.has(i.productId))
+      .map((i: any) => ({ id: i.productId, name: i.product?.name || 'Producto no disponible' }));
+    return missing.length ? [...base, ...missing] : base;
+  }, [products, editItem]);
 
   const branchList: any[] = branches || [];
   const transfers = data?.data || [];
@@ -73,6 +141,7 @@ export default function TransferenciasPage() {
         <button
           type="button"
           onClick={() => {
+            setEditItem(null);
             reset({ fromBranchId: '', toBranchId: '', notes: '', items: [{ productId: '', quantity: 1 }] });
             setShowForm(true);
           }}
@@ -101,7 +170,7 @@ export default function TransferenciasPage() {
                 <th className="hidden md:table-cell text-center px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Productos</th>
                 <th className="hidden sm:table-cell text-left px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Creado por</th>
                 <th className="hidden sm:table-cell text-left px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Fecha</th>
-                <th className="w-10 sr-only">Acciones</th>
+                <th className="w-24 sr-only">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50 dark:divide-white/[0.04]">
@@ -135,8 +204,39 @@ export default function TransferenciasPage() {
                   <td className="hidden md:table-cell px-4 py-3 text-center text-[13px] text-slate-500 dark:text-slate-400 tabular-nums">{t._count?.items}</td>
                   <td className="hidden sm:table-cell px-4 py-3 text-[13px] text-slate-500 dark:text-slate-400">{t.createdBy?.name}</td>
                   <td className="hidden sm:table-cell px-4 py-3 text-[12px] text-slate-400 dark:text-slate-500">{formatDateTime(t.createdAt)}</td>
-                  <td className="px-4 py-3">
-                    <ChevronRight size={14} className="text-slate-300 dark:text-slate-600" />
+                  <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex items-center gap-1.5 justify-end">
+                      {canManage && (
+                        <>
+                          <button
+                            type="button"
+                            aria-label="Editar transferencia"
+                            title="Editar"
+                            onClick={() => openEdit(t)}
+                            className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 transition"
+                          >
+                            <Edit size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            aria-label="Eliminar transferencia"
+                            title="Eliminar"
+                            onClick={() => handleDelete(t)}
+                            className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 transition"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </>
+                      )}
+                      <button
+                        type="button"
+                        aria-label="Ver detalle"
+                        onClick={() => setSelected(t)}
+                        className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-300 dark:text-slate-600 hover:text-slate-500 dark:hover:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/[0.06] transition"
+                      >
+                        <ChevronRight size={14} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -185,14 +285,34 @@ export default function TransferenciasPage() {
                   Por {detail.createdBy?.name} · {formatDateTime(detail.createdAt)}
                 </p>
               </div>
-              <button
-                type="button"
-                aria-label="Cerrar"
-                onClick={() => setSelected(null)}
-                className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/[0.06] transition"
-              >
-                <X size={16} />
-              </button>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {canManage && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => openEdit(selected)}
+                      className="flex items-center gap-1 px-3 py-1.5 text-[12px] text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/30 rounded-lg hover:bg-emerald-50 dark:hover:bg-emerald-500/10 transition"
+                    >
+                      <Edit size={12} /> Editar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(selected)}
+                      className="flex items-center gap-1 px-3 py-1.5 text-[12px] text-red-600 dark:text-red-400 border border-red-200 dark:border-red-500/30 rounded-lg hover:bg-red-50 dark:hover:bg-red-500/10 transition"
+                    >
+                      <Trash2 size={12} /> Eliminar
+                    </button>
+                  </>
+                )}
+                <button
+                  type="button"
+                  aria-label="Cerrar"
+                  onClick={() => setSelected(null)}
+                  className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/[0.06] transition"
+                >
+                  <X size={16} />
+                </button>
+              </div>
             </div>
 
             <div className="p-6 space-y-4 overflow-y-auto min-h-0 flex-1">
@@ -224,17 +344,33 @@ export default function TransferenciasPage() {
         </div>
       )}
 
+      {/* ── Delete Confirm ───────────────────────────────────────────────────── */}
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
+        title="Eliminar transferencia"
+        description={deleteTarget
+          ? `¿Eliminar la transferencia de ${deleteTarget.fromBranch?.name} a ${deleteTarget.toBranch?.name}? La mercancía volverá a la bodega de origen.`
+          : undefined}
+        confirmLabel="Eliminar"
+        onConfirm={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
+        loading={deleteMutation.isPending}
+        variant="danger"
+      />
+
       {/* ── Form Modal ───────────────────────────────────────────────────────── */}
       {showForm && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-[2px] z-50 flex items-center justify-center p-4">
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/[0.08] rounded-2xl shadow-modal w-full max-w-2xl max-h-[90vh] flex flex-col animate-scale-in">
 
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-white/[0.06] flex-shrink-0 bg-white dark:bg-slate-900">
-              <h2 className="text-[15px] font-semibold text-slate-800 dark:text-white">Nueva transferencia</h2>
+              <h2 className="text-[15px] font-semibold text-slate-800 dark:text-white">
+                {editItem ? 'Editar transferencia' : 'Nueva transferencia'}
+              </h2>
               <button
                 type="button"
                 aria-label="Cerrar"
-                onClick={() => { setShowForm(false); reset(); }}
+                onClick={closeForm}
                 className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/[0.06] transition"
               >
                 <X size={16} />
@@ -290,7 +426,7 @@ export default function TransferenciasPage() {
                       <div className="col-span-5 sm:col-span-8">
                         <select {...register(`items.${i}.productId`, { required: true })} className={inputSmCls}>
                           <option value="">Producto...</option>
-                          {products?.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                          {productOptions.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}
                         </select>
                       </div>
                       <div className="col-span-1 sm:hidden flex justify-center">
@@ -336,7 +472,7 @@ export default function TransferenciasPage() {
               <div className="flex justify-end gap-3 border-t border-slate-100 dark:border-white/[0.06] pt-4">
                 <button
                   type="button"
-                  onClick={() => { setShowForm(false); reset(); }}
+                  onClick={closeForm}
                   className="px-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-xl text-[13px] font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
                 >
                   Cancelar
@@ -347,7 +483,7 @@ export default function TransferenciasPage() {
                   className="px-6 py-2.5 bg-emerald-600 text-white rounded-xl text-[13px] font-semibold hover:bg-emerald-700 disabled:opacity-60 shadow-sm shadow-emerald-600/25 flex items-center gap-2 transition"
                 >
                   {saveMutation.isPending && <Loader2 size={14} className="animate-spin" />}
-                  Registrar transferencia
+                  {editItem ? 'Guardar cambios' : 'Registrar transferencia'}
                 </button>
               </div>
             </form>
