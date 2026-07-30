@@ -8,7 +8,7 @@ import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
-import { TrendingUp, TrendingDown, DollarSign, ShoppingCart, Package, Users, FileSpreadsheet, CalendarRange } from 'lucide-react';
+import { TrendingUp, TrendingDown, DollarSign, ShoppingCart, Package, Users, FileSpreadsheet, CalendarRange, Receipt } from 'lucide-react';
 import { downloadExcel } from '@/lib/exportExcel';
 
 // Tope del backend para exportaciones (MAX_EXPORT_DAYS) — se valida aquí para
@@ -182,11 +182,12 @@ export default function ReportesPage() {
 
       {/* ── KPI Cards ─────────────────────────────────────────────────────── */}
       {profitData && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
           {[
             { label: 'Ingresos netos',   value: formatCurrency(profitData.revenue),     icon: DollarSign,  bg: 'bg-emerald-50 dark:bg-emerald-500/10',   ic: 'text-emerald-600 dark:text-emerald-400'   },
             { label: 'Costo mercancía', value: formatCurrency(profitData.cogs),        icon: TrendingDown, bg: 'bg-red-50 dark:bg-red-500/10',     ic: 'text-red-600 dark:text-red-400'     },
             { label: 'Utilidad bruta',  value: formatCurrency(profitData.grossProfit), icon: TrendingUp,   bg: 'bg-emerald-50 dark:bg-emerald-500/10', ic: 'text-emerald-600 dark:text-emerald-400' },
+            { label: 'Gastos del periodo', value: formatCurrency(profitData.expenses), icon: Receipt,     bg: 'bg-rose-50 dark:bg-rose-500/10',   ic: 'text-rose-600 dark:text-rose-400'   },
             { label: 'Utilidad neta',   value: formatCurrency(profitData.netProfit),   icon: DollarSign,  bg: 'bg-emerald-50 dark:bg-emerald-600/10', ic: 'text-emerald-600 dark:text-emerald-400' },
           ].map((k) => (
             <div key={k.label} className="card p-4 flex gap-3 items-center">
