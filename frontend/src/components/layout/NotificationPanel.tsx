@@ -110,7 +110,8 @@ export function NotificationPanel({ open, onClose, anchorRect }: NotificationPan
           notifications.map((n: any) => {
             const isLowStock = n.data?.kind === 'LOW_STOCK' && n.data?.productId;
             const isCreditOverdue = n.data?.kind === 'CREDIT_OVERDUE' && n.data?.creditId;
-            const isClickable = isLowStock || isCreditOverdue;
+            const isVencimiento = n.data?.kind === 'VENC_ALERTA';
+            const isClickable = isLowStock || isCreditOverdue || isVencimiento;
             return (
               <button
                 type="button"
@@ -119,6 +120,10 @@ export function NotificationPanel({ open, onClose, anchorRect }: NotificationPan
                   if (!n.isRead) markRead.mutate(n.id);
                   if (!isClickable) return;
                   onClose();
+                  if (isVencimiento) {
+                    router.push(n.data?.href || '/contable/vencimientos');
+                    return;
+                  }
                   // Un aviso viejo puede apuntar a un producto/crédito que ya no existe
                   // o ya se saldó — se confirma antes de navegar, en vez de mandar al
                   // usuario a la página para que descubra ahí que no hay nada que ver.
@@ -169,6 +174,11 @@ export function NotificationPanel({ open, onClose, anchorRect }: NotificationPan
                     {isCreditOverdue && (
                       <span className="text-[10px] text-amber-600 dark:text-amber-400 font-medium flex items-center gap-0.5">
                         Ver en créditos <ArrowRight size={9} />
+                      </span>
+                    )}
+                    {isVencimiento && (
+                      <span className="text-[10px] text-amber-600 dark:text-amber-400 font-medium flex items-center gap-0.5">
+                        Ver en agenda <ArrowRight size={9} />
                       </span>
                     )}
                   </div>

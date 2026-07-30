@@ -108,3 +108,52 @@ export async function notifyCreditsOverdueBatch(
     managerIds.forEach((userId) => emitToUser(userId, socketEvents.NEW_NOTIFICATION, payload));
   }
 }
+
+// Notifica a los usuarios de una OFICINA CONTABLE (ADMIN/AUXILIAR) sobre
+// vencimientos que ya vencieron o vencen pronto. Dedup: un vencimiento se notifica
+// UNA sola vez (se salta si ya hay una notificación suya para esos usuarios).
+export async function notifyContableVencimientos(
+  businessId: string,
+  vencimientos: Array<{ id: string; titulo: string; mensaje: string; href: string }>,
+): Promise<number> {
+  if (vencimientos.length === 0) return 0;
+
+  const users = await prisma.user.findMany({
+    where: { branch: { businessId }, role: { in: ['ADMIN', 'AUXILIAR'] }, deletedAt: null, isActive: true },
+    select: { id: true },
+  });
+  if (users.length === 0) return 0;
+  const userIds = users.map((u) => u.id);
+
+  const existentes = await prisma.notification.findMany({
+    where: { userId: { in: userIds }, data: { path: ['kind'], equals: 'VENC_ALERTA' } },
+    select: { data: true },
+  });
+  const yaNotificados = new Set(
+    existentes.map((n) => (n.data as { vencimientoId?: string } | null)?.vencimientoId).filter(Boolean),
+  );
+  const nuevos = vencimientos.filter((v) => !yaNotificados.has(v.id));
+  if (nuevos.length === 0) return 0;
+
+  await prisma.notification.createMany({
+    data: nuevos.flatMap((v) =>
+      userIds.map((userId) => ({
+        userId,
+        title: v.titulo,
+        message: v.mensaje,
+        type: 'WARNING',
+        data: { vencimientoId: v.id, kind: 'VENC_ALERTA', href: v.href } as any,
+      })),
+    ),
+  });
+
+  // El push en vivo por socket es "mejor esfuerzo": si falla, la notificación ya
+  // quedó persistida (se ve al abrir la campanita), así que no debe romper nada.
+  try {
+    for (const v of nuevos) {
+      const payload = { title: v.titulo, message: v.mensaje, type: 'WARNING', data: { vencimientoId: v.id, kind: 'VENC_ALERTA', href: v.href } };
+      userIds.forEach((userId) => emitToUser(userId, socketEvents.NEW_NOTIFICATION, payload));
+    }
+  } catch { /* socket opcional */ }
+  return nuevos.length;
+}

@@ -8,6 +8,7 @@ import { prisma } from './config/database';
 import { redis } from './config/redis';
 import { initSentry } from './config/sentry';
 import { startCreditOverdueJob } from './jobs/creditOverdue.job';
+import { startContableVencimientosJob } from './jobs/contableVencimientos.job';
 
 // El contenedor de Railway no tiene salida IPv6 funcional — Node por defecto
 // intenta conectar por IPv6 primero cuando el host (ej. smtp.gmail.com) tiene
@@ -41,6 +42,7 @@ async function bootstrap() {
     });
 
     startCreditOverdueJob();
+    startContableVencimientosJob();
   } catch (error) {
     logger.error('Failed to start server:', error);
     process.exit(1);
