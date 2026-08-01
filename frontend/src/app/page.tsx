@@ -203,6 +203,8 @@ export default function LandingPage() {
             </div>
             <p className="lp-hero-login">
               ¿Ya tienes cuenta? <Link href="/login">Iniciar sesión</Link>
+              <br />
+              ¿Eres contador? <Link href="/contable">Ventrix Contable</Link>
             </p>
           </div>
 
