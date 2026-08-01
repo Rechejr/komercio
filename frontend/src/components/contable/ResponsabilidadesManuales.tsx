@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
@@ -12,6 +12,8 @@ import { Plus, Search, Edit, Trash2, X, Loader2, ClipboardList } from 'lucide-re
 
 const inputCls =
   'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[16px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition';
+const filterCls =
+  'px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition';
 
 // Normaliza para buscar sin distinguir tildes ("pena" encuentra "Peña").
 const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
@@ -44,6 +46,8 @@ interface Props {
 export function ResponsabilidadesManuales({ tipo, conceptoLabel, conceptoPlaceholder, emptyHint, nota }: Props) {
   const qc = useQueryClient();
   const [search, setSearch] = useState('');
+  const [fEstado, setFEstado] = useState('');
+  const [fSituacion, setFSituacion] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<RespManual | null>(null);
   const [delTarget, setDelTarget] = useState<RespManual | null>(null);
@@ -65,16 +69,28 @@ export function ResponsabilidadesManuales({ tipo, conceptoLabel, conceptoPlaceho
     enabled: modalOpen && !cliente,
   });
 
-  const visibles = items.filter((r) => {
-    if (!search.trim()) return true;
-    const q = norm(search);
-    // OJO: solo comparar el NIT si el texto trae dígitos. Con letras, replace(/\D/g,'')
-    // da "" y `nit.includes("")` es SIEMPRE true → dejaba pasar todos los registros.
-    const soloDigitos = search.replace(/\D/g, '');
-    return norm(r.taxClient.razonSocial).includes(q)
-      || norm(r.concepto).includes(q)
-      || (soloDigitos.length > 0 && r.taxClient.nit.includes(soloDigitos));
-  });
+  const visibles = useMemo(() => items.filter((r) => {
+    if (fEstado && r.estado !== fEstado) return false;
+    if (fSituacion) {
+      const u = situacionPorFecha(r.fecha, r.estado === 'presentado');
+      if (fSituacion === 'vencida' && !(u && u.vencido)) return false;
+      if (fSituacion === 'por_vencer' && !(u && !u.vencido)) return false;
+    }
+    if (search.trim()) {
+      const q = norm(search);
+      // OJO: solo comparar el NIT si el texto trae dígitos. Con letras, replace(/\D/g,'')
+      // da "" y `nit.includes("")` es SIEMPRE true → dejaba pasar todos los registros.
+      const soloDigitos = search.replace(/\D/g, '');
+      const ok = norm(r.taxClient.razonSocial).includes(q)
+        || norm(r.concepto).includes(q)
+        || (soloDigitos.length > 0 && r.taxClient.nit.includes(soloDigitos));
+      if (!ok) return false;
+    }
+    return true;
+  }), [items, search, fEstado, fSituacion]);
+
+  const hayFiltros = !!(search.trim() || fEstado || fSituacion);
+  const limpiarFiltros = () => { setSearch(''); setFEstado(''); setFSituacion(''); };
 
   const saveMut = useMutation({
     mutationFn: () =>
@@ -158,6 +174,21 @@ export function ResponsabilidadesManuales({ tipo, conceptoLabel, conceptoPlaceho
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por cliente o concepto..." className={cn(inputCls, 'pl-9')} />
         </div>
+        <select value={fEstado} onChange={(e) => setFEstado(e.target.value)} className={filterCls}>
+          <option value="">Todo estado</option>
+          <option value="pendiente">Pendiente</option>
+          <option value="presentado">Presentado</option>
+        </select>
+        <select value={fSituacion} onChange={(e) => setFSituacion(e.target.value)} className={filterCls}>
+          <option value="">Toda situación</option>
+          <option value="por_vencer">Por vencer</option>
+          <option value="vencida">Vencidas</option>
+        </select>
+        {hayFiltros && (
+          <button onClick={limpiarFiltros} className="text-sm text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 underline underline-offset-2">
+            Limpiar
+          </button>
+        )}
         <button onClick={openNew} className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2.5 rounded-xl text-sm transition-colors">
           <Plus size={16} /> Nuevo registro
         </button>
@@ -192,7 +223,7 @@ export function ResponsabilidadesManuales({ tipo, conceptoLabel, conceptoPlaceho
               ) : visibles.length === 0 ? (
                 <tr><td colSpan={6} className="px-4 py-12 text-center text-slate-400 dark:text-slate-500">
                   <ClipboardList size={30} className="mx-auto mb-2" strokeWidth={1.5} />
-                  <p className="text-sm">{search ? `Sin resultados para "${search}"` : emptyHint}</p>
+                  <p className="text-sm">{hayFiltros ? 'Sin resultados para los filtros.' : emptyHint}</p>
                 </td></tr>
               ) : (
                 visibles.map((r) => (

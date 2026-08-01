@@ -750,7 +750,7 @@ export const contableController = {
       }
       const items = await prisma.resolucionDian.findMany({
         where,
-        include: { taxClient: { select: { id: true, razonSocial: true } } },
+        include: { taxClient: { select: { id: true, razonSocial: true, nit: true, dv: true } } },
         orderBy: { fechaVigencia: 'asc' },
         take: LIST_CAP,
       });

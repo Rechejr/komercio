@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
@@ -8,10 +8,15 @@ import toast from 'react-hot-toast';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Portal } from '@/components/ui/Portal';
 import { formatNit, formatFecha, situacionPorFecha } from '@/lib/contable';
-import { Plus, Trash2, X, Loader2, FileText } from 'lucide-react';
+import { Plus, Search, Trash2, X, Loader2, FileText } from 'lucide-react';
 
 const inputCls =
   'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[16px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition';
+const filterCls =
+  'px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition';
+
+// Normaliza para buscar sin distinguir tildes ("pena" encuentra "Peña").
+const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 
 const TIPOS = [
   { codigo: 'factura_electronica', label: 'Factura Electrónica' },
@@ -29,7 +34,7 @@ const CLASE_LABEL: Record<string, string> = Object.fromEntries(CLASES.map((c) =>
 interface Resolucion {
   id: string; tipo: string; clase: string | null; numero: string; fechaExpedicion: string; fechaVigencia: string;
   prefijo: string | null;
-  taxClient: { id: string; razonSocial: string };
+  taxClient: { id: string; razonSocial: string; nit: string; dv: number };
 }
 
 export default function ResolucionesPage() {
@@ -37,10 +42,39 @@ export default function ResolucionesPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [delTarget, setDelTarget] = useState<Resolucion | null>(null);
 
+  // Filtros (del lado del cliente: el volumen por oficina es pequeño).
+  const [search, setSearch] = useState('');
+  const [fTipo, setFTipo] = useState('');
+  const [fClase, setFClase] = useState('');
+  const [fSituacion, setFSituacion] = useState('');
+
   const { data: resoluciones = [], isLoading } = useQuery<Resolucion[]>({
     queryKey: ['contable-resoluciones'],
     queryFn: () => api.get('/contable/resoluciones').then((r) => r.data.data),
   });
+
+  const visibles = useMemo(() => resoluciones.filter((r) => {
+    if (fTipo && r.tipo !== fTipo) return false;
+    if (fClase && r.clase !== fClase) return false;
+    if (fSituacion) {
+      const u = situacionPorFecha(r.fechaVigencia, false);
+      if (fSituacion === 'vencida' && !(u && u.vencido)) return false;
+      if (fSituacion === 'por_vencer' && !(u && !u.vencido)) return false;
+    }
+    if (search.trim()) {
+      const q = norm(search);
+      const soloDigitos = search.replace(/\D/g, '');
+      const numeroFull = `${r.prefijo ?? ''} ${r.numero}`;
+      const ok = norm(r.taxClient.razonSocial).includes(q)
+        || norm(numeroFull).includes(q)
+        || (soloDigitos.length > 0 && r.taxClient.nit.includes(soloDigitos));
+      if (!ok) return false;
+    }
+    return true;
+  }), [resoluciones, search, fTipo, fClase, fSituacion]);
+
+  const hayFiltros = !!(search.trim() || fTipo || fClase || fSituacion);
+  const limpiarFiltros = () => { setSearch(''); setFTipo(''); setFClase(''); setFSituacion(''); };
 
   const delMut = useMutation({
     mutationFn: (id: string) => api.delete(`/contable/resoluciones/${id}`),
@@ -64,6 +98,32 @@ export default function ResolucionesPage() {
         </button>
       </div>
 
+      {/* Búsqueda y filtros */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative flex-1 min-w-[220px]">
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por cliente, cédula/NIT o número..." className={cn(inputCls, 'pl-9')} />
+        </div>
+        <select value={fTipo} onChange={(e) => setFTipo(e.target.value)} className={filterCls}>
+          <option value="">Todo tipo</option>
+          {TIPOS.map((t) => <option key={t.codigo} value={t.codigo}>{t.label}</option>)}
+        </select>
+        <select value={fClase} onChange={(e) => setFClase(e.target.value)} className={filterCls}>
+          <option value="">Toda clase</option>
+          {CLASES.map((c) => <option key={c.codigo} value={c.codigo}>{c.label}</option>)}
+        </select>
+        <select value={fSituacion} onChange={(e) => setFSituacion(e.target.value)} className={filterCls}>
+          <option value="">Toda situación</option>
+          <option value="por_vencer">Por vencer</option>
+          <option value="vencida">Vencidas</option>
+        </select>
+        {hayFiltros && (
+          <button onClick={limpiarFiltros} className="text-sm text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 underline underline-offset-2">
+            Limpiar
+          </button>
+        )}
+      </div>
+
       <div className="card overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -71,6 +131,7 @@ export default function ResolucionesPage() {
               <tr className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
                 <th className="px-4 py-3 font-semibold">Cliente</th>
                 <th className="px-4 py-3 font-semibold">Tipo</th>
+                <th className="px-4 py-3 font-semibold">Clase</th>
                 <th className="px-4 py-3 font-semibold">Número</th>
                 <th className="px-4 py-3 font-semibold">Vigencia</th>
                 <th className="px-4 py-3 font-semibold">Situación</th>
@@ -80,22 +141,27 @@ export default function ResolucionesPage() {
             <tbody className="divide-y divide-slate-100 dark:divide-white/[0.06]">
               {isLoading ? (
                 [...Array(4)].map((_, i) => (
-                  <tr key={i}>{[...Array(6)].map((_, j) => (
+                  <tr key={i}>{[...Array(7)].map((_, j) => (
                     <td key={j} className="px-4 py-3"><div className="h-4 bg-slate-100 dark:bg-slate-800 rounded animate-pulse" /></td>
                   ))}</tr>
                 ))
-              ) : resoluciones.length === 0 ? (
-                <tr><td colSpan={6} className="px-4 py-12 text-center text-slate-400 dark:text-slate-500">
+              ) : visibles.length === 0 ? (
+                <tr><td colSpan={7} className="px-4 py-12 text-center text-slate-400 dark:text-slate-500">
                   <FileText size={30} className="mx-auto mb-2" strokeWidth={1.5} />
-                  <p className="text-sm">Aún no hay resoluciones registradas.</p>
+                  <p className="text-sm">{hayFiltros ? 'Sin resultados para los filtros.' : 'Aún no hay resoluciones registradas.'}</p>
                 </td></tr>
               ) : (
-                resoluciones.map((r) => (
+                visibles.map((r) => (
                   <tr key={r.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
-                    <td className="px-4 py-3 font-medium text-slate-900 dark:text-white">{r.taxClient.razonSocial}</td>
-                    <td className="px-4 py-3 text-slate-600 dark:text-slate-300">
-                      {TIPO_LABEL[r.tipo] ?? r.tipo}
-                      {r.clase && <span className="block text-xs text-slate-400">{CLASE_LABEL[r.clase] ?? r.clase}</span>}
+                    <td className="px-4 py-3">
+                      <p className="font-medium text-slate-900 dark:text-white">{r.taxClient.razonSocial}</p>
+                      <p className="text-xs text-slate-400 tabular">{formatNit(r.taxClient.nit, r.taxClient.dv)}</p>
+                    </td>
+                    <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{TIPO_LABEL[r.tipo] ?? r.tipo}</td>
+                    <td className="px-4 py-3">
+                      {r.clase
+                        ? <span className="inline-block text-xs font-semibold px-2 py-1 rounded-lg whitespace-nowrap bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">{CLASE_LABEL[r.clase] ?? r.clase}</span>
+                        : <span className="text-xs text-slate-300 dark:text-slate-600">—</span>}
                     </td>
                     <td className="px-4 py-3 text-slate-600 dark:text-slate-300">
                       {r.prefijo ? `${r.prefijo} · ` : ''}{r.numero}

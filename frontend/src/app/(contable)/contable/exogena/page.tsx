@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
@@ -15,6 +15,8 @@ import { Plus, Search, Trash2, X, Loader2, FileSpreadsheet, Sparkles } from 'luc
 
 const inputCls =
   'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[16px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition';
+const filterCls =
+  'px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition';
 
 interface VencExogena {
   id: string; periodo: string; fecha: string;
@@ -25,6 +27,8 @@ interface VencExogena {
 export default function ExogenaPage() {
   const qc = useQueryClient();
   const [search, setSearch] = useState('');
+  const [fEstado, setFEstado] = useState('');
+  const [fSituacion, setFSituacion] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [delTarget, setDelTarget] = useState<VencExogena | null>(null);
 
@@ -34,6 +38,21 @@ export default function ExogenaPage() {
     queryFn: () =>
       api.get(`/contable/vencimientos?obligacion=exogena&search=${encodeURIComponent(search)}`).then((r) => r.data.data),
   });
+
+  // Estado (dato) y Situación (por vencer/vencida, calculada de la fecha) se
+  // filtran en el cliente sobre lo que ya trajo el backend.
+  const visibles = useMemo(() => items.filter((v) => {
+    if (fEstado && estadoManual(v.estado) !== fEstado) return false;
+    if (fSituacion) {
+      const u = urgenciaVencimiento(v.fecha, v.estado);
+      if (fSituacion === 'vencida' && !(u && u.vencido)) return false;
+      if (fSituacion === 'por_vencer' && !(u && !u.vencido)) return false;
+    }
+    return true;
+  }), [items, fEstado, fSituacion]);
+
+  const hayFiltros = !!(search.trim() || fEstado || fSituacion);
+  const limpiarFiltros = () => { setSearch(''); setFEstado(''); setFSituacion(''); };
 
   const invalidar = () => {
     qc.invalidateQueries({ queryKey: ['contable-exogena'] });
@@ -74,6 +93,20 @@ export default function ExogenaPage() {
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por cliente o identificación..." className={cn(inputCls, 'pl-9')} />
         </div>
+        <select value={fEstado} onChange={(e) => setFEstado(e.target.value)} className={filterCls}>
+          <option value="">Todo estado</option>
+          {ESTADOS_MANUALES.map((s) => <option key={s.codigo} value={s.codigo}>{s.label}</option>)}
+        </select>
+        <select value={fSituacion} onChange={(e) => setFSituacion(e.target.value)} className={filterCls}>
+          <option value="">Toda situación</option>
+          <option value="por_vencer">Por vencer</option>
+          <option value="vencida">Vencidas</option>
+        </select>
+        {hayFiltros && (
+          <button onClick={limpiarFiltros} className="text-sm text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 underline underline-offset-2">
+            Limpiar
+          </button>
+        )}
         <button onClick={() => setModalOpen(true)} className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2.5 rounded-xl text-sm transition-colors">
           <Plus size={16} /> Generar exógena
         </button>
@@ -99,15 +132,15 @@ export default function ExogenaPage() {
                     <td key={j} className="px-4 py-3"><div className="h-4 bg-slate-100 dark:bg-slate-800 rounded animate-pulse" /></td>
                   ))}</tr>
                 ))
-              ) : items.length === 0 ? (
+              ) : visibles.length === 0 ? (
                 <tr><td colSpan={6} className="px-4 py-12 text-center text-slate-400 dark:text-slate-500">
                   <FileSpreadsheet size={30} className="mx-auto mb-2" strokeWidth={1.5} />
                   <p className="text-sm">
-                    {search ? 'No hay exógena que coincida con la búsqueda.' : 'Aún no has generado exógena. Usa “Generar exógena”.'}
+                    {hayFiltros ? 'No hay exógena que coincida con los filtros.' : 'Aún no has generado exógena. Usa “Generar exógena”.'}
                   </p>
                 </td></tr>
               ) : (
-                items.map((v) => (
+                visibles.map((v) => (
                   <tr key={v.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
                     <td className="px-4 py-3">
                       <p className="font-medium text-slate-900 dark:text-white">{v.taxClient.razonSocial}</p>
