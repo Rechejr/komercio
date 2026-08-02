@@ -1,11 +1,12 @@
 'use client';
 
+import { useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { api } from '@/lib/api';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '@/store/auth.store';
-import { Loader2, Building2, Lock } from 'lucide-react';
+import { Loader2, Building2, Lock, ImagePlus, Trash2 } from 'lucide-react';
 
 const inputCls =
   'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[16px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition';
@@ -26,6 +27,42 @@ export default function ConfiguracionContablePage() {
   const { user, setUser } = useAuthStore();
   const qc = useQueryClient();
   const esAdmin = user?.role === 'ADMIN';
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+
+  async function handleLogoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) { toast.error('La imagen no puede superar 2 MB'); return; }
+    setUploadingLogo(true);
+    try {
+      const form = new FormData();
+      form.append('images', file);
+      const upload = await api.post('/uploads/images', form, { headers: { 'Content-Type': 'multipart/form-data' } });
+      const logoUrl: string = upload.data.data.urls[0];
+      await api.put('/business/me', { logo: logoUrl });
+      qc.invalidateQueries({ queryKey: ['business'] });
+      toast.success('Logo actualizado');
+    } catch {
+      toast.error('Error al subir el logo');
+    } finally {
+      setUploadingLogo(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  }
+
+  async function handleRemoveLogo() {
+    setUploadingLogo(true);
+    try {
+      await api.put('/business/me', { logo: null });
+      qc.invalidateQueries({ queryKey: ['business'] });
+      toast.success('Logo eliminado');
+    } catch {
+      toast.error('Error al eliminar el logo');
+    } finally {
+      setUploadingLogo(false);
+    }
+  }
 
   const { data: business } = useQuery({
     queryKey: ['business'],
@@ -78,6 +115,40 @@ export default function ConfiguracionContablePage() {
             <h2 className="text-[14px] font-semibold text-slate-800 dark:text-white">Información de la oficina</h2>
           </div>
           <form onSubmit={handleBiz((d: any) => bizMut.mutate(d))} className="p-6 space-y-4">
+            {/* Logo de la oficina */}
+            <div className="flex items-center gap-4 pb-4 border-b border-slate-100 dark:border-white/[0.06]">
+              <div className="w-16 h-16 rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center flex-shrink-0">
+                {business?.logo
+                  ? <img src={business.logo} alt="Logo" className="w-full h-full object-cover" />
+                  : <Building2 size={22} className="text-slate-300 dark:text-slate-600" />}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[13px] font-medium text-slate-700 dark:text-slate-300">Logo de la oficina</p>
+                <p className="text-[12px] text-slate-500 dark:text-slate-400 mb-2">PNG o JPG, máximo 2 MB.</p>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploadingLogo}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-[12px] font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-60 transition"
+                  >
+                    {uploadingLogo ? <Loader2 size={13} className="animate-spin" /> : <ImagePlus size={13} />} Subir logo
+                  </button>
+                  {business?.logo && (
+                    <button
+                      type="button"
+                      onClick={handleRemoveLogo}
+                      disabled={uploadingLogo}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-60 transition"
+                    >
+                      <Trash2 size={13} /> Quitar
+                    </button>
+                  )}
+                </div>
+                <input ref={fileInputRef} type="file" accept="image/*" onChange={handleLogoChange} className="hidden" />
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {OFICINA_FIELDS.map((f) => (
                 <div key={f.name} className={f.col === 2 ? 'sm:col-span-2' : ''}>

@@ -117,6 +117,12 @@ export default function VencimientosPage() {
     };
 
     return [...arr].sort((a, b) => {
+      // Criterio primario (lo pidió el contador): las declaraciones ya
+      // presentadas/pagadas van SIEMPRE al final, sin importar la columna de
+      // orden, para que arriba se vean los próximos vencimientos.
+      const ra = resuelto(a) ? 1 : 0, rb = resuelto(b) ? 1 : 0;
+      if (ra !== rb) return ra - rb;
+
       const va = val(a), vb = val(b);
       const cmp = typeof va === 'number' && typeof vb === 'number'
         ? va - vb
