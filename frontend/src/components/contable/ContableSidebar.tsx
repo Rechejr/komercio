@@ -9,7 +9,7 @@ import { useAuthStore } from '@/store/auth.store';
 import { Tooltip } from '@/components/ui/Tooltip';
 import {
   LayoutDashboard, Users, CalendarClock, FileText, FileSpreadsheet, ClipboardList,
-  ShieldCheck, ChevronLeft, ChevronRight, LogOut, X, KeyRound,
+  ShieldCheck, ChevronLeft, ChevronRight, LogOut, X, KeyRound, Settings,
 } from 'lucide-react';
 
 // Navegación de Ventrix Contable. Solo dos roles la ven: ADMIN (el contador,
@@ -23,6 +23,7 @@ const NAV_ITEMS = [
   { href: '/contable/exogena',      icon: FileSpreadsheet, label: 'Información Exógena', roles: ['ADMIN', 'AUXILIAR'] },
   { href: '/contable/otras-responsabilidades', icon: ClipboardList, label: 'Otras Responsabilidades', roles: ['ADMIN', 'AUXILIAR'] },
   { href: '/contable/credenciales',            icon: KeyRound,      label: 'Usuarios y Contraseñas', roles: ['ADMIN', 'AUXILIAR'] },
+  { href: '/contable/configuracion',           icon: Settings,      label: 'Configuración',          roles: ['ADMIN', 'AUXILIAR'] },
 ] as const;
 
 interface ContableSidebarProps {
