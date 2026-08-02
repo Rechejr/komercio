@@ -6,7 +6,8 @@ import { useForm } from 'react-hook-form';
 import { api } from '@/lib/api';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '@/store/auth.store';
-import { Loader2, Building2, Lock, ImagePlus, Trash2 } from 'lucide-react';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { Loader2, Building2, Lock, ImagePlus, Trash2, CalendarClock } from 'lucide-react';
 
 const inputCls =
   'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[16px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition';
@@ -29,6 +30,18 @@ export default function ConfiguracionContablePage() {
   const esAdmin = user?.role === 'ADMIN';
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [confirmRegen, setConfirmRegen] = useState(false);
+
+  const regenMut = useMutation({
+    mutationFn: () => api.post('/contable/vencimientos/regenerar-todos').then((r) => r.data),
+    onSuccess: (res: any) => {
+      qc.invalidateQueries({ queryKey: ['contable-vencimientos'] });
+      qc.invalidateQueries({ queryKey: ['contable-panel'] });
+      toast.success(res?.message || 'Agenda regenerada');
+      setConfirmRegen(false);
+    },
+    onError: (err: any) => toast.error(err.response?.data?.error || 'No se pudo regenerar la agenda'),
+  });
 
   async function handleLogoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -179,6 +192,44 @@ export default function ConfiguracionContablePage() {
           </form>
         </div>
       )}
+
+      {/* ── Agenda del año: regenerar vencimientos de todos los clientes ───── */}
+      {esAdmin && (
+        <div className="card overflow-hidden">
+          <div className="px-6 py-4 border-b border-slate-100 dark:border-white/[0.06] flex items-center gap-2.5">
+            <div className="w-7 h-7 bg-emerald-50 dark:bg-emerald-500/10 rounded-lg flex items-center justify-center">
+              <CalendarClock size={14} className="text-emerald-600 dark:text-emerald-400" />
+            </div>
+            <h2 className="text-[14px] font-semibold text-slate-800 dark:text-white">Agenda del año</h2>
+          </div>
+          <div className="p-6 space-y-3">
+            <p className="text-[13px] text-slate-600 dark:text-slate-400 leading-relaxed">
+              Genera la agenda tributaria del año en curso para <b>todos tus clientes activos</b>,
+              según sus responsabilidades (renta, IVA, retención, etc.). Útil al iniciar un nuevo año
+              (tras cargar el calendario nuevo) o después de agregar varios clientes.
+              No duplica ni borra lo que ya esté registrado.
+            </p>
+            <button
+              onClick={() => setConfirmRegen(true)}
+              disabled={regenMut.isPending}
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[13px] font-semibold disabled:opacity-60 transition"
+            >
+              {regenMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <CalendarClock size={15} />}
+              Regenerar agenda del año
+            </button>
+          </div>
+        </div>
+      )}
+
+      <ConfirmDialog
+        open={confirmRegen}
+        onOpenChange={(o) => !o && setConfirmRegen(false)}
+        title="¿Regenerar la agenda del año?"
+        description="Se generarán los vencimientos del año en curso para todos tus clientes activos, según sus responsabilidades. No se duplica ni se borra nada de lo ya registrado."
+        confirmLabel="Regenerar"
+        loading={regenMut.isPending}
+        onConfirm={() => regenMut.mutate()}
+      />
 
       {/* ── Cambiar contraseña (todos los roles: es su propia clave) ───────── */}
       <div className="card overflow-hidden">

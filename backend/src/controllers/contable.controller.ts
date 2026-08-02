@@ -16,8 +16,13 @@ import {
   parseTipoPersona, parseCalidades, parseIvaPeriodicidad,
 } from '../utils/contableImport';
 
-// El calendario sembrado hoy es solo 2026 (cada año se siembra el decreto nuevo).
-const ANIO_CALENDARIO = 2026;
+// Año del calendario tributario en uso. Cada año la DIAN publica un decreto
+// nuevo: se siembra ese calendario (ver seedCalendario.ts) y se apunta aquí el
+// año — configurable por env para NO tocar código cada año. Default 2026, el
+// único sembrado hoy. Al pasar a 2027: sembrar el calendario 2027 (con periodos
+// que incluyan el año para no chocar con los bimestres 2026 en el índice único
+// [taxClientId, obligacion, periodo]) y setear ANIO_CALENDARIO=2027 en el env.
+const ANIO_CALENDARIO = Number(process.env.ANIO_CALENDARIO) || 2026;
 
 /** Confirma que un TaxClient existe y pertenece a ESTA oficina. Devuelve el
  *  cliente o lanza 404 — nunca revela la existencia de clientes de otra oficina. */
@@ -689,6 +694,35 @@ export const contableController = {
           ? 'Todos los vencimientos ya estaban registrados'
           : 'Este cliente no tiene obligaciones de calendario para generar';
       return success(res, { creados, existentes, sinCalendario }, msg);
+    } catch (err) { next(err); }
+  },
+
+  /** Regenera en LOTE la agenda tributaria (obligaciones derivadas de las
+   *  calidades) del año en curso para TODOS los clientes activos. Idempotente
+   *  (generarAgendaBatch usa skipDuplicates): no duplica lo ya generado. Pensado
+   *  para el inicio de cada año — al sembrar el calendario nuevo y apuntar
+   *  ANIO_CALENDARIO, un clic reactiva la agenda de todos los clientes. PILA y
+   *  exógena no entran (tienen su propio flujo manual). */
+  async regenerarAgendaTodos(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const businessId = req.user!.businessId!;
+      const clientes = await prisma.taxClient.findMany({
+        where: { businessId, activo: true },
+        select: { id: true, nit: true, tipoPersona: true, ivaPeriodicidad: true, responsabilidades: true },
+      });
+      const creados = await generarAgendaBatch(
+        clientes.map((c) => ({
+          taxClientId: c.id,
+          nit: c.nit,
+          tipoPersona: c.tipoPersona,
+          ivaPeriodicidad: c.ivaPeriodicidad,
+          responsabilidades: c.responsabilidades as Calidad[],
+        })),
+      );
+      const msg = creados > 0
+        ? `Se generaron ${creados} vencimiento${creados === 1 ? '' : 's'} del año ${ANIO_CALENDARIO} para ${clientes.length} cliente${clientes.length === 1 ? '' : 's'}.`
+        : `No había vencimientos nuevos por generar del año ${ANIO_CALENDARIO}; ya estaban registrados.`;
+      return success(res, { creados, clientes: clientes.length, anio: ANIO_CALENDARIO }, msg);
     } catch (err) { next(err); }
   },
 
