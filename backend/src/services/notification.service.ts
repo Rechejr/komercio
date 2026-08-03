@@ -70,6 +70,45 @@ export async function notifyLowStock(businessId: string, product: { id: string; 
   await notifyLowStockBatch(businessId, [product]);
 }
 
+// Depura (borra) las notificaciones de "Stock bajo" del usuario que ya no son
+// ciertas: producto eliminado, o producto que ya se resurtió por encima del
+// mínimo. Así la campanita se mantiene al día sin alertas de productos que ya no
+// existen (al hacer clic daban "producto no encontrado"). Best-effort: se llama
+// al listar notificaciones / contar no leídas.
+export async function pruneStaleLowStockNotifications(userId: string): Promise<void> {
+  const lowStock = await prisma.notification.findMany({
+    where: { userId, data: { path: ['kind'], equals: 'LOW_STOCK' } },
+    select: { id: true, data: true },
+  });
+  if (lowStock.length === 0) return;
+
+  const notifsPorProducto = new Map<string, string[]>();
+  for (const n of lowStock) {
+    const productId = (n.data as { productId?: string } | null)?.productId;
+    if (!productId) continue;
+    const arr = notifsPorProducto.get(productId) ?? [];
+    arr.push(n.id);
+    notifsPorProducto.set(productId, arr);
+  }
+  const productIds = [...notifsPorProducto.keys()];
+  if (productIds.length === 0) return;
+
+  // Productos que aún justifican la alerta: existen (no borrados) y siguen bajo mínimo.
+  const vigentes = await prisma.product.findMany({
+    where: { id: { in: productIds }, deletedAt: null },
+    select: { id: true, stock: true, minStock: true },
+  });
+  const sigueBajo = new Set(vigentes.filter((p) => p.stock < p.minStock).map((p) => p.id));
+
+  const obsoletas = [...notifsPorProducto.entries()]
+    .filter(([productId]) => !sigueBajo.has(productId))
+    .flatMap(([, ids]) => ids);
+
+  if (obsoletas.length > 0) {
+    await prisma.notification.deleteMany({ where: { id: { in: obsoletas } } });
+  }
+}
+
 // Batch variant para créditos recién marcados como vencidos — mismo patrón que
 // notifyLowStockBatch: una sola consulta de administradores y un solo INSERT.
 export async function notifyCreditsOverdueBatch(

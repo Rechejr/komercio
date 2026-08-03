@@ -3,12 +3,16 @@ import { prisma } from '../config/database';
 import { authenticate } from '../middlewares/auth';
 import { success, paginated } from '../utils/response';
 import { getPagination } from '../utils/pagination';
+import { pruneStaleLowStockNotifications } from '../services/notification.service';
 
 const router = Router();
 router.use(authenticate);
 
 router.get('/unread-count', async (req: any, res, next) => {
   try {
+    // Mantiene la campanita al día: quita alertas de stock bajo de productos ya
+    // borrados o que ya se resurtieron, para no contar notificaciones obsoletas.
+    await pruneStaleLowStockNotifications(req.user.userId).catch(() => {});
     const count = await prisma.notification.count({
       where: { userId: req.user.userId, isRead: false },
     });
@@ -18,6 +22,7 @@ router.get('/unread-count', async (req: any, res, next) => {
 
 router.get('/', async (req: any, res, next) => {
   try {
+    await pruneStaleLowStockNotifications(req.user.userId).catch(() => {});
     const { page, limit, skip } = getPagination(req);
     const [notifications, total] = await Promise.all([
       prisma.notification.findMany({

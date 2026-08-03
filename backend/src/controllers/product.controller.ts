@@ -428,6 +428,13 @@ export const productController = {
       await cache.del(`product:${req.user!.businessId}:${id}`);
       await cache.del(`dashboard:${req.user!.businessId}`).catch(() => {});
 
+      // Limpia las notificaciones (de todos los usuarios) que apuntaban a este
+      // producto — p.ej. alertas de "Stock bajo" — para que no queden apuntando a
+      // un producto que ya no existe (al hacer clic daban "producto no encontrado").
+      await prisma.notification.deleteMany({
+        where: { data: { path: ['productId'], equals: id } },
+      }).catch((err) => logger.error(`Fallo al limpiar notificaciones del producto ${id}: ${err?.message || err}`));
+
       // No hay endpoint de restauración — una vez borrado, el producto es
       // inalcanzable para siempre, así que sus imágenes en Cloudinary quedarían
       // huérfanas si no se limpian aquí (best-effort, no bloquea la respuesta).
