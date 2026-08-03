@@ -20,6 +20,7 @@ jest.mock('../../config/database', () => ({
       update: jest.fn(),
     },
     branch: { findFirst: jest.fn(), findMany: jest.fn() },
+    notification: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
     $transaction: jest.fn(),
     $queryRaw: jest.fn(),
     $queryRawUnsafe: jest.fn(),
