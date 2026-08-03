@@ -18,7 +18,7 @@ const inputCls =
 // Entidades frecuentes de un contador — se eligen de la lista y rellenan el link.
 // En orden alfabético. La opción "Otra" permite escribir una nueva.
 const PORTALES = [
-  { nombre: 'Alcaldía Municipal', link: '' },
+  { nombre: 'Alcaldía Municipal', link: 'https://mocoa-putumayo.gov.co/Paginas/Inicio.aspx' },
   { nombre: 'Aportes en Línea',   link: 'https://www.aportesenlinea.com/' },
   { nombre: 'Asopagos',           link: 'https://www.asopagos.com/' },
   { nombre: 'Cámara de Comercio', link: 'https://www.rues.org.co/' },
