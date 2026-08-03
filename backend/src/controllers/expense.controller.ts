@@ -75,7 +75,11 @@ export const expenseController = {
       const base = {
         description,
         amount: parseFloat(amount),
-        date: date ? new Date(date) : new Date(),
+        // La fecha del formulario (input type="date" → "YYYY-MM-DD") se guarda a
+        // medianoche de COLOMBIA, no UTC: con `new Date(date)` (UTC) el gasto se
+        // mostraba y filtraba un día antes en Colombia (UTC-5). parseBogotaBoundary
+        // devuelve, para "YYYY-MM-DD", el inicio de ese día en Bogotá.
+        date: date ? (parseBogotaBoundary(date, 'start') ?? new Date(date)) : new Date(),
         categoryId: categoryId || null,
         notes: notes || null,
         paymentMethod: pay.paymentMethod,
@@ -161,7 +165,8 @@ export const expenseController = {
       const base = {
         description,
         amount: amount !== undefined ? parseFloat(amount) : undefined,
-        date: date !== undefined ? new Date(date) : undefined,
+        // Ver create(): la fecha se guarda a medianoche de Colombia, no UTC.
+        date: date !== undefined ? (parseBogotaBoundary(date, 'start') ?? new Date(date)) : undefined,
         categoryId: categoryId !== undefined ? (categoryId || null) : undefined,
         notes,
         paymentMethod: resolvedMethod,
