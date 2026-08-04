@@ -477,6 +477,8 @@ router.put('/:id',
   productController.update,
 );
 router.delete('/:id', authorize('ADMIN', 'SUPERVISOR'), productController.delete);
+// Vaciar todo el catálogo (soft-delete masivo) — solo el dueño, con confirmación en el frontend.
+router.post('/clear-catalog', authorize('ADMIN'), productController.clearCatalog);
 router.post('/:id/duplicate', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE'), planLimit.products(), productController.duplicate);
 router.patch('/:id/adjust-stock',
   authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE'),

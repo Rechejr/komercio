@@ -448,6 +448,48 @@ export const productController = {
     }
   },
 
+  // "Vaciar catálogo": oculta (soft-delete) TODOS los productos activos del
+  // negocio de un solo golpe, para cambiar de rubro e importar uno nuevo. NO
+  // borra de verdad — las ventas, compras y reportes que apuntan a estos
+  // productos siguen intactos; solo dejan de aparecer en inventario y POS. Solo
+  // el dueño (ADMIN), con confirmación en el frontend.
+  async clearCatalog(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const businessId = req.user!.businessId!;
+      const products = await prisma.product.findMany({
+        where: { businessId, deletedAt: null },
+        select: { id: true },
+      });
+      if (products.length === 0) return success(res, { count: 0 }, 'No hay productos para vaciar');
+      const ids = products.map((p) => p.id);
+
+      await prisma.product.updateMany({
+        where: { id: { in: ids }, businessId },
+        data: { deletedAt: new Date() },
+      });
+
+      // Al ocultarse todo el catálogo, las alertas de stock bajo del negocio ya
+      // no aplican — se limpian (también lo haría la purga perezosa al listar).
+      const managers = await prisma.user.findMany({
+        where: { branch: { businessId } },
+        select: { id: true },
+      });
+      if (managers.length > 0) {
+        await prisma.notification.deleteMany({
+          where: { userId: { in: managers.map((m) => m.id) }, data: { path: ['kind'], equals: 'LOW_STOCK' } },
+        }).catch(() => {});
+      }
+
+      await cache.del(`dashboard:${businessId}`).catch(() => {});
+      await Promise.all(ids.map((id) => cache.del(`product:${businessId}:${id}`).catch(() => {})));
+
+      logger.info(`Catálogo vaciado: ${ids.length} productos ocultados (businessId=${businessId})`);
+      return success(res, { count: ids.length }, `Se ocultaron ${ids.length} producto${ids.length === 1 ? '' : 's'}`);
+    } catch (err) {
+      next(err);
+    }
+  },
+
   async adjustStock(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const { id } = req.params;

@@ -11,6 +11,7 @@ import { useSoundStore } from '@/store/sound.store';
 import { useUpgradeStore } from '@/store/upgrade.store';
 import { sounds } from '@/lib/sounds';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { Portal } from '@/components/ui/Portal';
 
 const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[16px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition';
 
@@ -87,6 +88,10 @@ export default function ConfiguracionPage() {
   const [editPayAcct, setEditPayAcct] = useState<any>(null);
   const [deletePayAcctTarget, setDeletePayAcctTarget] = useState<any>(null);
 
+  // Vaciar catálogo
+  const [showClearCatalog, setShowClearCatalog] = useState(false);
+  const [clearConfirm, setClearConfirm] = useState('');
+
   const { data: business } = useQuery({
     queryKey: ['business'],
     queryFn: () => api.get('/business/me').then((r) => r.data.data),
@@ -110,6 +115,12 @@ export default function ConfiguracionPage() {
     enabled: user?.role === 'ADMIN',
   });
 
+  const { data: productCount = 0 } = useQuery({
+    queryKey: ['product-count'],
+    queryFn: () => api.get('/products?limit=1').then((r) => r.data.pagination?.total ?? 0),
+    enabled: user?.role === 'ADMIN',
+  });
+
   const employees = usersData?.data || [];
   const branches: any[] = branchesData || [];
   const paymentAccounts: any[] = payAcctsData || [];
@@ -130,6 +141,19 @@ export default function ConfiguracionPage() {
     mutationFn: (data: any) => api.patch('/auth/change-password', data),
     onSuccess: () => { toast.success('Contraseña actualizada'); resetPwd(); },
     onError: (err: any) => toast.error(err.response?.data?.error || 'Error al cambiar contraseña'),
+  });
+
+  const clearCatalogMutation = useMutation({
+    mutationFn: () => api.post('/products/clear-catalog'),
+    onSuccess: (res: any) => {
+      qc.invalidateQueries({ queryKey: ['products'] });
+      qc.invalidateQueries({ queryKey: ['product-count'] });
+      qc.invalidateQueries({ queryKey: ['dashboard'] });
+      toast.success(res?.data?.message || 'Catálogo vaciado');
+      setShowClearCatalog(false);
+      setClearConfirm('');
+    },
+    onError: (err: any) => toast.error(err.response?.data?.error || 'No se pudo vaciar el catálogo'),
   });
 
   const saveEmpMutation = useMutation({
@@ -608,6 +632,80 @@ export default function ConfiguracionPage() {
             ))}
           </div>
         </div>
+      )}
+
+      {/* ── Vaciar catálogo (solo ADMIN) ──────────────────────────────────── */}
+      {user?.role === 'ADMIN' && (
+        <div className="card overflow-hidden">
+          <div className="px-6 py-4 border-b border-slate-100 dark:border-white/[0.06] flex items-center gap-2.5">
+            <div className="w-7 h-7 bg-amber-50 dark:bg-amber-500/10 rounded-lg flex items-center justify-center">
+              <Trash2 size={14} className="text-amber-600 dark:text-amber-400" />
+            </div>
+            <h2 className="text-[14px] font-semibold text-slate-800 dark:text-white">Vaciar catálogo</h2>
+          </div>
+          <div className="px-6 py-5 space-y-3">
+            <p className="text-[13px] text-slate-600 dark:text-slate-400 leading-relaxed">
+              Oculta <strong>todos tus productos</strong> de una vez, para empezar un catálogo nuevo
+              (por ejemplo si cambiaste de rubro). Tus <strong>ventas, clientes, caja y gastos NO se tocan</strong> y
+              tus reportes siguen intactos. Después puedes cargar el catálogo nuevo con la importación por Excel.
+            </p>
+            <p className="text-[12px] text-slate-500 dark:text-slate-400">
+              Actualmente tienes <strong>{productCount}</strong> producto{productCount === 1 ? '' : 's'}.
+            </p>
+            <button
+              onClick={() => { setClearConfirm(''); setShowClearCatalog(true); }}
+              disabled={productCount === 0}
+              className="px-4 py-2.5 rounded-xl border border-amber-300 dark:border-amber-800 text-[13px] font-semibold text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-900/20 disabled:opacity-50 transition"
+            >
+              Vaciar catálogo
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showClearCatalog && (
+        <Portal>
+          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4" onClick={() => setShowClearCatalog(false)}>
+            <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" />
+            <div className="relative bg-white dark:bg-slate-900 rounded-2xl shadow-modal w-full max-w-md animate-scale-in" onClick={(e) => e.stopPropagation()}>
+              <div className="px-6 pt-5 pb-4 flex items-center gap-2.5 border-b border-slate-100 dark:border-white/[0.06]">
+                <div className="w-8 h-8 bg-amber-50 dark:bg-amber-500/10 rounded-lg flex items-center justify-center">
+                  <AlertTriangle size={16} className="text-amber-600 dark:text-amber-400" />
+                </div>
+                <h2 className="text-[15px] font-bold text-slate-900 dark:text-white">Vaciar catálogo</h2>
+              </div>
+              <div className="px-6 py-5 space-y-3">
+                <p className="text-[13px] text-slate-600 dark:text-slate-300">
+                  Vas a ocultar <strong>{productCount}</strong> producto{productCount === 1 ? '' : 's'}. Dejarán de aparecer
+                  en el inventario y en el POS. Tus ventas y reportes no se afectan.
+                </p>
+                <p className="text-[12px] text-slate-500 dark:text-slate-400">
+                  Para confirmar, escribe <strong>VACIAR</strong>:
+                </p>
+                <input
+                  value={clearConfirm}
+                  onChange={(e) => setClearConfirm(e.target.value)}
+                  placeholder="VACIAR"
+                  className={inputCls}
+                  autoFocus
+                />
+              </div>
+              <div className="px-6 py-4 border-t border-slate-100 dark:border-white/[0.06] flex gap-2">
+                <button onClick={() => setShowClearCatalog(false)} className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-[13px] font-medium text-slate-600 dark:text-slate-300">
+                  Cancelar
+                </button>
+                <button
+                  onClick={() => clearCatalogMutation.mutate()}
+                  disabled={clearConfirm.trim().toUpperCase() !== 'VACIAR' || clearCatalogMutation.isPending}
+                  className="flex-1 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-[13px] font-semibold flex items-center justify-center gap-2 disabled:opacity-50 transition"
+                >
+                  {clearCatalogMutation.isPending && <Loader2 size={14} className="animate-spin" />}
+                  Vaciar catálogo
+                </button>
+              </div>
+            </div>
+          </div>
+        </Portal>
       )}
 
       {/* ── Cambiar contraseña ────────────────────────────────────────────── */}
