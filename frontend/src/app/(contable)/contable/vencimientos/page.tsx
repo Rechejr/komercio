@@ -12,7 +12,17 @@ import {
   urgenciaVencimiento, diasHastaVencimiento, formatNit, formatFecha,
   type Obligacion, type EstadoVencimiento,
 } from '@/lib/contable';
-import { Plus, Search, Trash2, X, Loader2, CalendarClock, Sparkles, ArrowUp, ArrowDown, ChevronsUpDown } from 'lucide-react';
+import { Plus, Search, Trash2, X, Loader2, CalendarClock, Sparkles, ArrowUp, ArrowDown, ChevronsUpDown, MessageCircle } from 'lucide-react';
+
+// Recordatorio de renta por WhatsApp (botón en la pestaña de Renta).
+const RENTA_MSG = 'Se acerca su vencimiento de declaración de renta. Favor estar al día con los documentos para presentar de manera oportuna su declaración de renta.';
+function waLinkRenta(celular: string | null): string | null {
+  const digits = (celular || '').replace(/\D/g, '');
+  if (!digits) return null;
+  // Colombia: si ya trae indicativo 57 (12 dígitos) se usa tal cual; si no, se antepone.
+  const num = digits.length === 12 && digits.startsWith('57') ? digits : `57${digits}`;
+  return `https://wa.me/${num}?text=${encodeURIComponent(RENTA_MSG)}`;
+}
 
 type SortKey = 'cliente' | 'obligacion' | 'periodo' | 'fecha' | 'situacion' | 'estado';
 const ESTADO_ORDEN: Record<EstadoVencimiento, number> = {
@@ -25,7 +35,7 @@ const inputCls =
 interface Vencimiento {
   id: string; obligacion: Obligacion; periodo: string; fecha: string;
   estado: EstadoVencimiento; monto: string | null;
-  taxClient: { id: string; razonSocial: string; nit: string; dv: number; tipoPersona: 'natural' | 'juridica' };
+  taxClient: { id: string; razonSocial: string; nit: string; dv: number; tipoPersona: 'natural' | 'juridica'; celular: string | null };
 }
 
 export default function VencimientosPage() {
@@ -277,9 +287,33 @@ export default function VencimientosPage() {
                       </select>
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <button onClick={() => setDelTarget(v)} className="p-1.5 text-slate-400 hover:text-red-600 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20" aria-label="Eliminar">
-                        <Trash2 size={15} />
-                      </button>
+                      <div className="inline-flex items-center gap-1">
+                        {v.obligacion === 'renta' && (() => {
+                          const link = waLinkRenta(v.taxClient.celular);
+                          return link ? (
+                            <a
+                              href={link}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="p-1.5 text-emerald-600 hover:text-emerald-700 rounded-lg hover:bg-emerald-50 dark:hover:bg-emerald-900/20 inline-flex"
+                              aria-label="Recordar renta por WhatsApp"
+                              title="Enviar recordatorio de renta por WhatsApp"
+                            >
+                              <MessageCircle size={15} />
+                            </a>
+                          ) : (
+                            <span
+                              className="p-1.5 text-slate-300 dark:text-slate-600 inline-flex cursor-not-allowed"
+                              title="Este cliente no tiene celular registrado"
+                            >
+                              <MessageCircle size={15} />
+                            </span>
+                          );
+                        })()}
+                        <button onClick={() => setDelTarget(v)} className="p-1.5 text-slate-400 hover:text-red-600 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20" aria-label="Eliminar">
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))

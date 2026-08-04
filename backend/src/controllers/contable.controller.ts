@@ -609,7 +609,7 @@ export const contableController = {
 
       const items = await prisma.vencimiento.findMany({
         where,
-        include: { taxClient: { select: { id: true, razonSocial: true, nit: true, dv: true, tipoPersona: true } } },
+        include: { taxClient: { select: { id: true, razonSocial: true, nit: true, dv: true, tipoPersona: true, celular: true } } },
         // Ascendente: lo más próximo a vencer (y lo ya vencido) queda arriba.
         orderBy: { fecha: 'asc' },
         take: LIST_CAP,
