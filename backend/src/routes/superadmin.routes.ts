@@ -6,6 +6,7 @@ import { authenticate } from '../middlewares/auth';
 import { AppError, success, paginated } from '../utils/response';
 import { getPagination } from '../utils/pagination';
 import { AuthRequest } from '../middlewares/auth';
+import { PLAN_PRICES, CONTABLE_ANNUAL_PRICE } from '../controllers/payment.controller';
 
 const router = Router();
 
@@ -52,6 +53,39 @@ router.get('/stats', async (_req, res, next) => {
       }),
     ]);
 
+    // ── Métricas de negocio (suscripciones) ──
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const in7 = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+    const [proActive, proExpiring7, consumedLinks] = await Promise.all([
+      // Pro vigentes: plan pro y no vencidos (o sin fecha = vitalicio).
+      prisma.business.count({ where: { deletedAt: null, plan: 'pro', OR: [{ planExpiresAt: null }, { planExpiresAt: { gt: now } }] } }),
+      // Pro que vencen en los próximos 7 días (oportunidad de retención).
+      prisma.business.count({ where: { deletedAt: null, plan: 'pro', planExpiresAt: { gte: now, lte: in7 } } }),
+      // Pagos consumidos (para ingresos). El precio se deriva del periodo y el
+      // tipo de negocio (contable = plan anual único).
+      prisma.paymentLink.findMany({
+        where: { consumedAt: { not: null } },
+        select: { period: true, consumedAt: true, business: { select: { name: true, type: true } } },
+        orderBy: { consumedAt: 'desc' },
+      }),
+    ]);
+
+    const priceOf = (period: string, type: string) => type === 'contable' ? CONTABLE_ANNUAL_PRICE : (PLAN_PRICES[period] || 0);
+    let revenueTotal = 0, revenueMonth = 0;
+    for (const l of consumedLinks) {
+      const amt = priceOf(l.period, l.business.type);
+      revenueTotal += amt;
+      if (l.consumedAt && l.consumedAt >= monthStart) revenueMonth += amt;
+    }
+    const recentPayments = consumedLinks.slice(0, 8).map((l) => ({
+      business: l.business.name, type: l.business.type, period: l.period,
+      amount: priceOf(l.period, l.business.type), date: l.consumedAt,
+    }));
+
+    const conversion = totalBusinesses > 0 ? Math.round((proActive / totalBusinesses) * 100) : 0;
+
     return success(res, {
       totalBusinesses,
       totalUsers,
@@ -59,6 +93,10 @@ router.get('/stats', async (_req, res, next) => {
       types: { pos: posCount, contable: contableCount },
       sales: { total: salesAgg._sum.total || 0, count: salesAgg._count.id },
       recentBusinesses,
+      subscriptions: {
+        revenueTotal, revenueMonth, proActive, proExpiring7, conversion, recentPayments,
+        payingCount: consumedLinks.length,
+      },
     });
   } catch (err) { next(err); }
 });

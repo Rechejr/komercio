@@ -18,7 +18,7 @@ const WOMPI_BASE = isTestMode
 // Precios "ancla" fijos en pesos redondos (no derivados de una fórmula) para que
 // los totales queden limpios en Colombia: mensual $29.900, trimestral $80.700
 // (equivale a $26.900/mes, −10%), anual $287.000 (−20% exacto sobre 358.800).
-const PLAN_PRICES: Record<string, number> = {
+export const PLAN_PRICES: Record<string, number> = {
   monthly:   29900,
   quarterly: 80700,
   annual:    287000,
@@ -38,7 +38,7 @@ const PERIOD_LABELS: Record<string, string> = {
 
 // Ventrix Contable: plan anual por oficina (contador + hasta 3 auxiliares).
 // Debe coincidir con PRECIO_ANUAL del landing (frontend app/contable/page.tsx).
-const CONTABLE_ANNUAL_PRICE = 120000;
+export const CONTABLE_ANNUAL_PRICE = 120000;
 const CONTABLE_ANNUAL_MONTHS = 12;
 
 function wompiPost(path: string, body: unknown): Promise<{ ok: boolean; status: number; data: any }> {

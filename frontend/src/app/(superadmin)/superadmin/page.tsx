@@ -7,8 +7,10 @@ import toast from 'react-hot-toast';
 import {
   Building2, Users, ShoppingCart, Zap, Search,
   ChevronLeft, ChevronRight, X, CheckCircle, Ban, Loader2, Trash2, AlertTriangle, KeyRound,
-  Store, Calculator,
+  Store, Calculator, DollarSign, TrendingUp, Percent, Clock, CreditCard,
 } from 'lucide-react';
+
+const PERIODO_LABEL: Record<string, string> = { monthly: 'Mensual', quarterly: 'Trimestral', annual: 'Anual' };
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 interface Business {
@@ -434,6 +436,55 @@ export default function SuperAdminPage() {
           icon={Zap} color="bg-amber-600"
         />
       </div>
+
+      {/* Métricas de suscripciones */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard
+          label="Ingresos (suscripciones)" value={stats ? fmt(stats.subscriptions?.revenueTotal ?? 0) : '—'}
+          sub={`${stats?.subscriptions?.payingCount ?? 0} pagos en total`}
+          icon={DollarSign} color="bg-emerald-600"
+        />
+        <StatCard
+          label="Ingresos este mes" value={stats ? fmt(stats.subscriptions?.revenueMonth ?? 0) : '—'}
+          sub="pagos del mes actual"
+          icon={TrendingUp} color="bg-emerald-600"
+        />
+        <StatCard
+          label="Conversión a Pro" value={stats ? `${stats.subscriptions?.conversion ?? 0}%` : '—'}
+          sub={`${stats?.subscriptions?.proActive ?? 0} Pro vigentes`}
+          icon={Percent} color="bg-violet-600"
+        />
+        <StatCard
+          label="Por vencer (7 días)" value={stats?.subscriptions?.proExpiring7 ?? '—'}
+          sub="planes Pro que expiran pronto"
+          icon={Clock} color="bg-amber-600"
+        />
+      </div>
+
+      {/* Pagos recientes */}
+      {stats?.subscriptions?.recentPayments?.length > 0 && (
+        <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+          <div className="p-4 border-b border-gray-800">
+            <h2 className="text-[14px] font-bold text-white flex items-center gap-2">
+              <CreditCard size={15} className="text-emerald-400" /> Pagos recientes
+            </h2>
+          </div>
+          <div className="divide-y divide-gray-800">
+            {stats.subscriptions.recentPayments.map((p: any, i: number) => (
+              <div key={i} className="flex items-center justify-between px-4 py-2.5">
+                <div className="min-w-0">
+                  <p className="text-[13px] text-white truncate">{p.business}</p>
+                  <p className="text-[11px] text-gray-500">
+                    {p.type === 'contable' ? 'Contable' : 'POS'} · {PERIODO_LABEL[p.period] ?? p.period}
+                    {p.date && ` · ${new Date(p.date).toLocaleDateString('es-CO')}`}
+                  </p>
+                </div>
+                <span className="text-[13px] font-semibold text-emerald-400 tabular-nums flex-none ml-3">{fmt(p.amount)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Businesses table */}
       <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
