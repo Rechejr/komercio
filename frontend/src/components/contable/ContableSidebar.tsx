@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth.store';
 import { Tooltip } from '@/components/ui/Tooltip';
 import {
-  LayoutDashboard, Users, CalendarClock, FileText, FileSpreadsheet, ClipboardList,
+  LayoutDashboard, Users, CalendarClock, CalendarDays, FileText, FileSpreadsheet, ClipboardList,
   ShieldCheck, ChevronLeft, ChevronRight, LogOut, X, KeyRound, Settings, Receipt,
 } from 'lucide-react';
 
@@ -18,6 +18,7 @@ const NAV_ITEMS = [
   { href: '/contable/panel',        icon: LayoutDashboard, label: 'Panel',            roles: ['ADMIN', 'AUXILIAR'] },
   { href: '/contable/clientes',     icon: Users,           label: 'Clientes',         roles: ['ADMIN', 'AUXILIAR'] },
   { href: '/contable/vencimientos', icon: CalendarClock,   label: 'Vencimientos',     roles: ['ADMIN', 'AUXILIAR'] },
+  { href: '/contable/calendario',   icon: CalendarDays,    label: 'Calendario',       roles: ['ADMIN', 'AUXILIAR'] },
   { href: '/contable/pila',         icon: ShieldCheck,     label: 'PILA',             roles: ['ADMIN', 'AUXILIAR'] },
   { href: '/contable/nomina',       icon: Receipt,         label: 'Nómina',           roles: ['ADMIN', 'AUXILIAR'] },
   { href: '/contable/resoluciones', icon: FileText,        label: 'Resoluciones DIAN', roles: ['ADMIN', 'AUXILIAR'] },
