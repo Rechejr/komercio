@@ -476,10 +476,24 @@ export default function POSPage() {
 
           {showScanner && (
             <BarcodeScanner
-              onScan={(code) => {
+              onScan={async (code) => {
                 play('scan');
-                setSearch(code);
                 setShowScanner(false);
+                // Si el código coincide EXACTO con un solo producto, se agrega
+                // directo al carrito (sin el clic extra). Si hay 0 o varias
+                // coincidencias, se muestra en el buscador para elegir a mano.
+                try {
+                  const res = await api.get(
+                    `/products?search=${encodeURIComponent(code)}&limit=8&isActive=true${branchId ? `&branchId=${branchId}` : ''}`,
+                  );
+                  const exact = (res.data.data as any[]).filter((p) => p.barcode === code || p.code === code);
+                  if (exact.length === 1) {
+                    handleAddProduct(exact[0]);
+                    setSearch('');
+                    return;
+                  }
+                } catch { /* si la búsqueda falla, cae al comportamiento normal */ }
+                setSearch(code);
                 setTimeout(() => searchRef.current?.focus(), 100);
               }}
               onClose={() => setShowScanner(false)}
