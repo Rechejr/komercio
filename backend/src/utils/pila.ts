@@ -124,3 +124,18 @@ export function periodosPila(nit: string, year: number): PeriodoPila[] {
   }
   return periodos;
 }
+
+/** Los 12 vencimientos mensuales de la NÓMINA ELECTRÓNICA de un año: cada mes se
+ *  reporta dentro de los primeros 10 días HÁBILES del mes SIGUIENTE. El período
+ *  se rotula por el mes reportado; la fecha es el 10° día hábil del mes siguiente
+ *  (para diciembre cae en enero del año siguiente). Igual para todos los NIT: no
+ *  hay escalonamiento por dígito (a diferencia de PILA). */
+export function periodosNomina(year: number): PeriodoPila[] {
+  const periodos: PeriodoPila[] = [];
+  for (let mes = 1; mes <= 12; mes++) {
+    const mesSiguiente = mes === 12 ? 1 : mes + 1;
+    const anioVenc = mes === 12 ? year + 1 : year;
+    periodos.push({ periodo: `${MESES[mes - 1]} ${year}`, fecha: nthDiaHabil(anioVenc, mesSiguiente, 10) });
+  }
+  return periodos;
+}

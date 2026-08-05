@@ -10,7 +10,7 @@ export type Calidad =
   | 'rst';
 
 export type Obligacion =
-  | 'renta' | 'iva' | 'retefuente' | 'ica' | 'exogena' | 'pila' | 'impoconsumo' | 'simple';
+  | 'renta' | 'iva' | 'retefuente' | 'ica' | 'exogena' | 'pila' | 'impoconsumo' | 'simple' | 'nomina';
 
 export type EstadoVencimiento = 'pendiente' | 'en_proceso' | 'presentada' | 'pagada' | 'vencida';
 
@@ -44,6 +44,7 @@ export const OBLIGACIONES: { codigo: Obligacion; label: string }[] = [
   { codigo: 'pila',        label: 'PILA' },
   { codigo: 'impoconsumo', label: 'Impoconsumo' },
   { codigo: 'simple',      label: 'Régimen Simple' },
+  { codigo: 'nomina',      label: 'Nómina electrónica' },
 ];
 
 export const OBLIGACION_LABEL: Record<Obligacion, string> = Object.fromEntries(

@@ -76,12 +76,12 @@ export default function VencimientosPage() {
     queryKey: ['contable-vencimientos', search],
     queryFn: () => api.get(`/contable/vencimientos?search=${encodeURIComponent(search)}`).then((r) => r.data.data),
   });
-  // PILA y Exógena tienen sus propias secciones independientes (/contable/pila,
-  // /contable/exogena), así que se excluyen de la vista general de Vencimientos
-  // —pestaña, conteos y lista— para no duplicarlos. Los registros siguen intactos
-  // en la tabla y se ven en su sección.
+  // PILA, Exógena y Nómina tienen sus propias secciones independientes
+  // (/contable/pila, /contable/exogena, /contable/nomina), así que se excluyen de
+  // la vista general de Vencimientos —pestaña, conteos y lista— para no
+  // duplicarlos. Los registros siguen intactos y se ven en su sección.
   const vencimientos = useMemo(
-    () => vencimientosRaw.filter((v) => v.obligacion !== 'pila' && v.obligacion !== 'exogena'),
+    () => vencimientosRaw.filter((v) => v.obligacion !== 'pila' && v.obligacion !== 'exogena' && v.obligacion !== 'nomina'),
     [vencimientosRaw],
   );
 

@@ -6,7 +6,7 @@ import { success, created, paginated, AppError } from '../utils/response';
 import { getPagination, getSearch } from '../utils/pagination';
 import { calcularDV, soloDigitos, ultimoDigito, dosUltimosDigitos } from '../utils/nit';
 import { normalizarResponsabilidades, obligacionesSugeridas } from '../utils/calidades';
-import { periodosPila } from '../utils/pila';
+import { periodosPila, periodosNomina } from '../utils/pila';
 import { periodosExogena } from '../utils/exogena';
 import { encrypt, decrypt } from '../utils/crypto';
 import ExcelJS from 'exceljs';
@@ -99,6 +99,7 @@ async function periodosCalendario(obligacion: Obligacion, variante: string | nul
   // PILA no se siembra: se calcula (N-ésimo día hábil del mes según los 2 últimos
   // dígitos). Ver utils/pila.ts — validado vs. miplanilla.com.
   if (obligacion === 'pila') return periodosPila(nit, ANIO_CALENDARIO);
+  if (obligacion === 'nomina') return periodosNomina(ANIO_CALENDARIO);
   // Exógena: un vencimiento anual, fecha por los dos últimos dígitos (util, no tabla).
   if (obligacion === 'exogena') return periodosExogena(nit, ANIO_CALENDARIO);
   if (obligacion === 'renta' && variante === 'natural') {
