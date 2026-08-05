@@ -9,6 +9,7 @@ import { normalizarResponsabilidades, obligacionesSugeridas } from '../utils/cal
 import { periodosPila, periodosNomina } from '../utils/pila';
 import { periodosExogena } from '../utils/exogena';
 import { encrypt, decrypt } from '../utils/crypto';
+import { uploadDocument, deleteImage } from '../config/cloudinary';
 import ExcelJS from 'exceljs';
 import { findDataSheet, findHeaderRow, mapColumns, cellVal, normalizeHeader } from '../utils/excelParser';
 import {
@@ -1078,6 +1079,60 @@ export const contableController = {
       if (!existing) throw new AppError('Credencial no encontrada', 404);
       await prisma.clientCredential.update({ where: { id: existing.id }, data: { deletedAt: new Date() } });
       return success(res, null, 'Credencial eliminada');
+    } catch (err) { next(err); }
+  },
+
+  // ─── BÓVEDA DE DOCUMENTOS ──────────────────────────────────────────────────
+  async listDocumentos(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const businessId = req.user!.businessId!;
+      await getClientOfBusiness(req.params.id, businessId);
+      const docs = await prisma.clientDocument.findMany({
+        where: { taxClientId: req.params.id },
+        orderBy: { createdAt: 'desc' },
+      });
+      return success(res, docs);
+    } catch (err) { next(err); }
+  },
+
+  async uploadDocumento(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const businessId = req.user!.businessId!;
+      await getClientOfBusiness(req.params.id, businessId);
+
+      const file = (req as unknown as { file?: Express.Multer.File }).file;
+      if (!file) throw new AppError('No se envió ningún archivo', 400);
+
+      const { nombre, categoria } = req.body as { nombre?: string; categoria?: string };
+      const url = await uploadDocument(file.buffer).catch(() => {
+        throw new AppError('No se pudo subir el documento. Verifica tu conexión e intenta de nuevo.', 502);
+      });
+
+      const doc = await prisma.clientDocument.create({
+        data: {
+          taxClientId: req.params.id,
+          nombre: (nombre?.trim() || file.originalname || 'Documento').slice(0, 120),
+          categoria: categoria?.trim() || null,
+          url,
+          mimeType: file.mimetype,
+          size: file.size,
+        },
+      });
+      return created(res, doc, 'Documento subido');
+    } catch (err) { next(err); }
+  },
+
+  async deleteDocumento(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const businessId = req.user!.businessId!;
+      const doc = await prisma.clientDocument.findFirst({
+        where: { id: req.params.id, taxClient: { businessId } },
+      });
+      if (!doc) throw new AppError('Documento no encontrado', 404);
+      await prisma.clientDocument.delete({ where: { id: doc.id } });
+      // Limpieza del archivo en Cloudinary (best-effort).
+      deleteImage(doc.url).catch(() => {});
+      return success(res, null, 'Documento eliminado');
     } catch (err) { next(err); }
   },
 };

@@ -24,6 +24,24 @@ export async function deleteImage(url: string): Promise<void> {
   await cloudinary.uploader.destroy(publicId);
 }
 
+// Sube un documento (PDF o imagen) SIN transformar, en su propia carpeta.
+// resource_type 'auto' deja que Cloudinary elija (PDF/imágenes → image; otros → raw).
+export function uploadDocument(buffer: Buffer): Promise<string> {
+  if (!CLOUDINARY_CLOUD_NAME || !CLOUDINARY_API_KEY || !CLOUDINARY_API_SECRET) {
+    return Promise.reject(new Error('Cloudinary no está configurado (faltan variables de entorno)'));
+  }
+  return new Promise((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(
+      { folder: 'komercio/contable-docs', resource_type: 'auto' },
+      (err, result) => {
+        if (err || !result) return reject(err);
+        resolve(result.secure_url);
+      },
+    );
+    stream.end(buffer);
+  });
+}
+
 export function uploadImage(buffer: Buffer): Promise<string> {
   if (!CLOUDINARY_CLOUD_NAME || !CLOUDINARY_API_KEY || !CLOUDINARY_API_SECRET) {
     return Promise.reject(new Error('Cloudinary no está configurado (faltan variables de entorno)'));

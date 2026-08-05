@@ -66,6 +66,19 @@ const xlsxUpload = multer({
   },
 });
 
+// Documentos de la bóveda: PDF e imágenes, hasta 8 MB.
+const docUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 8 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const allowed = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
+    if (!allowed.includes(file.mimetype)) {
+      return cb(new AppError('Solo se permiten archivos PDF o imágenes (JPG, PNG)', 400));
+    }
+    cb(null, true);
+  },
+});
+
 // El AUXILIAR (ayudante) puede ver y gestionar el día a día, pero NO eliminar
 // clientes. Solo el ADMIN (el contador dueño) puede eliminar. El resto de
 // endpoints los comparten ambos roles.
@@ -118,5 +131,10 @@ router.get('/credenciales', VER_Y_GESTIONAR, contableController.listCredenciales
 router.post('/credenciales', ...ESCRIBIR, contableController.createCredencial);
 router.put('/credenciales/:id', ...ESCRIBIR, contableController.updateCredencial);
 router.delete('/credenciales/:id', ...ESCRIBIR, contableController.deleteCredencial);
+
+// ─── Bóveda de documentos (RUT, cámara de comercio, declaraciones…) ────────────
+router.get('/clients/:id/documentos', VER_Y_GESTIONAR, contableController.listDocumentos);
+router.post('/clients/:id/documentos', ...ESCRIBIR, docUpload.single('file'), contableController.uploadDocumento);
+router.delete('/documentos/:id', ...ESCRIBIR, contableController.deleteDocumento);
 
 export default router;

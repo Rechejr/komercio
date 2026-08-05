@@ -13,7 +13,8 @@ import {
   CALIDADES, calcularDV, calidadBloqueada, formatNit, resumenCalidades,
   type TaxClient, type Calidad,
 } from '@/lib/contable';
-import { Plus, Search, Edit, Trash2, X, Loader2, Users, FileUp, FileDown, CheckCircle2, ArrowRight, CalendarClock } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, X, Loader2, Users, FileUp, FileDown, CheckCircle2, ArrowRight, CalendarClock, Paperclip } from 'lucide-react';
+import { DocumentosCliente } from '@/components/contable/DocumentosCliente';
 
 interface PreviewData {
   total: number;
@@ -59,6 +60,7 @@ export default function ClientesPage() {
   const [editing, setEditing] = useState<TaxClient | null>(null);
   const [form, setForm] = useState<FormState>(FORM_VACIO);
   const [delTarget, setDelTarget] = useState<TaxClient | null>(null);
+  const [docsCliente, setDocsCliente] = useState<TaxClient | null>(null);
 
   // ── Importación masiva desde Excel ──────────────────────────────────────────
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -330,6 +332,9 @@ export default function ClientesPage() {
                     <td className="px-4 py-3 text-slate-500 dark:text-slate-400 text-xs">{resumenCalidades(c)}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-1">
+                        <button onClick={() => setDocsCliente(c)} className="p-1.5 text-slate-400 hover:text-emerald-600 rounded-lg hover:bg-emerald-50 dark:hover:bg-emerald-900/20" aria-label="Documentos" title="Documentos">
+                          <Paperclip size={15} />
+                        </button>
                         <button onClick={() => openEdit(c)} className="p-1.5 text-slate-400 hover:text-emerald-600 rounded-lg hover:bg-emerald-50 dark:hover:bg-emerald-900/20" aria-label="Editar">
                           <Edit size={15} />
                         </button>
@@ -656,6 +661,14 @@ export default function ClientesPage() {
         loading={delMut.isPending}
         onConfirm={() => delTarget && delMut.mutate(delTarget.id)}
       />
+
+      {docsCliente && (
+        <DocumentosCliente
+          taxClientId={docsCliente.id}
+          clientName={docsCliente.razonSocial}
+          onClose={() => setDocsCliente(null)}
+        />
+      )}
     </div>
   );
 }

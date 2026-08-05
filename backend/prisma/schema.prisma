@@ -999,6 +999,7 @@ model TaxClient {
   resoluciones      ResolucionDian[]
   respManuales      ResponsabilidadManual[]
   credenciales      ClientCredential[]
+  documentos        ClientDocument[]
   createdAt         DateTime                @default(now())
   updatedAt         DateTime                @updatedAt
 
@@ -1026,6 +1027,25 @@ model ClientCredential {
 
   @@index([taxClientId])
   @@map("client_credentials")
+}
+
+// Bóveda de documentos del cliente (RUT, cámara de comercio, declaraciones…).
+// El archivo se guarda en Cloudinary; aquí solo la referencia. Cascada al borrar
+// el cliente (el archivo en Cloudinary queda huérfano — se limpia best-effort en
+// el borrado explícito).
+model ClientDocument {
+  id          String    @id @default(uuid())
+  taxClientId String
+  taxClient   TaxClient @relation(fields: [taxClientId], references: [id], onDelete: Cascade)
+  nombre      String
+  categoria   String? // "RUT" | "Cámara de comercio" | "Declaración" | "Otro"
+  url         String
+  mimeType    String?
+  size        Int?
+  createdAt   DateTime  @default(now())
+
+  @@index([taxClientId])
+  @@map("client_documents")
 }
 
 // Estas dos son mini-agendas MANUALES para lo que NO está en el calendario DIAN:
