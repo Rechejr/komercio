@@ -26,6 +26,16 @@ interface Business {
   salesLast30?: number;
 }
 
+// Diferencia en días de CALENDARIO en hora de Colombia (no en periodos de 24 h):
+// así un login de anoche muestra "Ayer" aunque no hayan pasado 24 horas todavía.
+function diasCalendarioBogota(iso: string): number {
+  const enBogota = (d: Date) =>
+    new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota', year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
+  const hoy = new Date(`${enBogota(new Date())}T00:00:00Z`).getTime();
+  const dia = new Date(`${enBogota(new Date(iso))}T00:00:00Z`).getTime();
+  return Math.round((hoy - dia) / 86400000);
+}
+
 // Badge de producto (POS vs Contable) — colores distintos para separarlos de un vistazo.
 function TypeBadge({ type }: { type: 'pos' | 'contable' }) {
   const isContable = type === 'contable';
@@ -534,7 +544,7 @@ export default function SuperAdminPage() {
                       <td className="px-4 py-3 text-xs">
                         {(() => {
                           if (!b.lastLogin) return <span className="text-gray-600">Nunca</span>;
-                          const dias = Math.floor((Date.now() - new Date(b.lastLogin).getTime()) / 86400000);
+                          const dias = diasCalendarioBogota(b.lastLogin);
                           const label = dias <= 0 ? 'Hoy' : dias === 1 ? 'Ayer' : `Hace ${dias} días`;
                           const color = dias <= 7 ? 'text-emerald-400' : dias <= 30 ? 'text-amber-400' : 'text-red-400';
                           // Fecha y hora exacta en hora de Colombia, al pasar el mouse.
