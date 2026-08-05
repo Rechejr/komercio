@@ -537,7 +537,11 @@ export default function SuperAdminPage() {
                           const dias = Math.floor((Date.now() - new Date(b.lastLogin).getTime()) / 86400000);
                           const label = dias <= 0 ? 'Hoy' : dias === 1 ? 'Ayer' : `Hace ${dias} días`;
                           const color = dias <= 7 ? 'text-emerald-400' : dias <= 30 ? 'text-amber-400' : 'text-red-400';
-                          return <span className={color}>{label}</span>;
+                          // Fecha y hora exacta en hora de Colombia, al pasar el mouse.
+                          const exacta = new Intl.DateTimeFormat('es-CO', {
+                            dateStyle: 'medium', timeStyle: 'short', timeZone: 'America/Bogota',
+                          }).format(new Date(b.lastLogin));
+                          return <span className={`${color} cursor-help`} title={`${exacta} (hora Colombia)`}>{label}</span>;
                         })()}
                       </td>
                       <td className="px-4 py-3 text-center text-xs">
