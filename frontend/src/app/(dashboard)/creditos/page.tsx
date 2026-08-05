@@ -9,9 +9,21 @@ import { api } from '@/lib/api';
 import { formatCurrency, formatDate, formatDateTime, statusColor, statusLabel } from '@/lib/utils';
 import { usePaymentAccounts, labelPago } from '@/lib/usePaymentAccounts';
 import toast from 'react-hot-toast';
-import { CreditCard, X, Loader2, Plus, DollarSign, ChevronRight, Clock, Search, Ban } from 'lucide-react';
+import { CreditCard, X, Loader2, Plus, DollarSign, ChevronRight, Clock, Search, Ban, MessageCircle } from 'lucide-react';
 import { useAuthStore } from '@/store/auth.store';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+
+// Recordatorio de fiado por WhatsApp: arma el enlace wa.me con el saldo y un
+// mensaje amable. Devuelve null si el cliente no tiene teléfono registrado.
+function waLinkFiado(phone: string | null | undefined, nombre: string | null | undefined, saldo: number | string, negocio?: string | null): string | null {
+  const digits = (phone || '').replace(/\D/g, '');
+  if (!digits) return null;
+  const num = digits.length === 12 && digits.startsWith('57') ? digits : `57${digits}`;
+  const monto = `$${Math.round(Number(saldo) || 0).toLocaleString('es-CO')}`;
+  const saludo = nombre ? `Hola ${nombre}, ` : 'Hola, ';
+  const msg = `${saludo}le recordamos que tiene un saldo pendiente de fiado por ${monto}${negocio ? ` en ${negocio}` : ''}. Le agradecemos acercarse a cancelarlo cuando pueda. ¡Muchas gracias!`;
+  return `https://wa.me/${num}?text=${encodeURIComponent(msg)}`;
+}
 
 const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[16px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition';
 
@@ -51,6 +63,7 @@ export default function CreditosPage() {
   // El backend ya rechaza anular para roles distintos de ADMIN/SUPERVISOR — esto
   // solo evita mostrar un botón que de todas formas fallaría con 403.
   const role = useAuthStore((s) => s.user?.role);
+  const businessName = useAuthStore((s) => s.user?.businessName);
   const canCancel = role === 'ADMIN' || role === 'SUPERVISOR';
 
   const { data: filterCustomers } = useQuery({
@@ -275,6 +288,28 @@ export default function CreditosPage() {
                           <Plus size={11} /> Abonar
                         </button>
                       )}
+                      {c.status !== 'PAID' && c.status !== 'CANCELLED' && (() => {
+                        const link = waLinkFiado(c.customer?.phone, c.customer?.name, c.balance, businessName);
+                        return link ? (
+                          <a
+                            href={link}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title="Recordar el fiado por WhatsApp"
+                            aria-label="Recordar el fiado por WhatsApp"
+                            className="w-7 h-7 flex items-center justify-center rounded-lg text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 transition"
+                          >
+                            <MessageCircle size={14} />
+                          </a>
+                        ) : (
+                          <span
+                            title="El cliente no tiene teléfono registrado"
+                            className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-300 dark:text-slate-600 cursor-not-allowed"
+                          >
+                            <MessageCircle size={14} />
+                          </span>
+                        );
+                      })()}
                       {canCancelCredit(c) && (
                         <button
                           type="button"
