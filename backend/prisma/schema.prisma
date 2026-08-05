@@ -151,6 +151,7 @@ model Business {
   // Ventrix Contable: los clientes tributarios de una oficina contable. Solo se
   // usan cuando type == "contable"; en una cuenta POS la relación queda vacía.
   taxClients        TaxClient[]
+  quotes            Quote[]
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
   deletedAt         DateTime?
@@ -848,6 +849,35 @@ model SaleNumberCounter {
 
   @@id([branchId, dayPrefix])
   @@map("sale_number_counters")
+}
+
+// ─── Cotización / proforma (documento previo a la venta) ───────────────────────
+// Los ítems se guardan como JSON (snapshot): una cotización es un documento y no
+// se consulta por ítem, así se evita una tabla puente y sobrevive a cambios del
+// producto. customerId/branchId/createdById son ids sueltos (sin FK) a propósito.
+model Quote {
+  id             String    @id @default(uuid())
+  businessId     String
+  business       Business  @relation(fields: [businessId], references: [id])
+  branchId       String?
+  number         String
+  customerId     String?
+  customerName   String?
+  items          Json
+  subtotal       Decimal
+  taxAmount      Decimal   @default(0)
+  discountAmount Decimal   @default(0)
+  total          Decimal
+  notes          String?
+  validUntil     DateTime? @db.Date
+  status         String    @default("PENDING") // PENDING | CONVERTED
+  createdById    String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  @@index([businessId])
+  @@map("quotes")
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════

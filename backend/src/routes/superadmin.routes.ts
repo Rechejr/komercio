@@ -299,6 +299,8 @@ router.delete('/businesses/:id', deleteBusinessLimiter, async (req: AuthRequest,
       // credenciales (onDelete: Cascade). Sin esto, NINGÚN negocio contable con
       // clientes se podía borrar (500).
       await tx.taxClient.deleteMany({ where: { businessId } });
+      // 14.8. Cotizaciones — FK RESTRICT hacia businesses.
+      await tx.quote.deleteMany({ where: { businessId } });
       // 15. Negocio (libera FK Business.ownerId → User)
       await tx.business.delete({ where: { id: businessId } });
       // 16. Owner
