@@ -22,6 +22,8 @@ interface Business {
   deletedAt?: string | null;
   owner: { name: string; email: string };
   _count: { branches: number };
+  lastLogin?: string | null;
+  salesLast30?: number;
 }
 
 // Badge de producto (POS vs Contable) — colores distintos para separarlos de un vistazo.
@@ -469,6 +471,8 @@ export default function SuperAdminPage() {
                 <th className="text-left px-4 py-3 font-medium">Vence</th>
                 <th className="text-left px-4 py-3 font-medium">Bodegas</th>
                 <th className="text-left px-4 py-3 font-medium">Registrado</th>
+                <th className="text-left px-4 py-3 font-medium">Última actividad</th>
+                <th className="text-left px-4 py-3 font-medium">Ventas 30d</th>
                 <th className="text-left px-4 py-3 font-medium">Estado</th>
                 <th className="text-left px-4 py-3 font-medium">Acciones</th>
               </tr>
@@ -477,7 +481,7 @@ export default function SuperAdminPage() {
               {isLoading ? (
                 [...Array(5)].map((_, i) => (
                   <tr key={i}>
-                    {[...Array(9)].map((__, j) => (
+                    {[...Array(11)].map((__, j) => (
                       <td key={j} className="px-4 py-3">
                         <div className="h-4 bg-gray-800 rounded animate-pulse" />
                       </td>
@@ -486,7 +490,7 @@ export default function SuperAdminPage() {
                 ))
               ) : businesses.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="px-4 py-8 text-center text-gray-500">
+                  <td colSpan={11} className="px-4 py-8 text-center text-gray-500">
                     {search || planFilter || typeFilter ? 'Sin resultados para los filtros aplicados' : 'No hay negocios registrados'}
                   </td>
                 </tr>
@@ -526,6 +530,18 @@ export default function SuperAdminPage() {
                       </td>
                       <td className="px-4 py-3 text-gray-400 text-xs">
                         {new Date(b.createdAt).toLocaleDateString('es-CO')}
+                      </td>
+                      <td className="px-4 py-3 text-xs">
+                        {(() => {
+                          if (!b.lastLogin) return <span className="text-gray-600">Nunca</span>;
+                          const dias = Math.floor((Date.now() - new Date(b.lastLogin).getTime()) / 86400000);
+                          const label = dias <= 0 ? 'Hoy' : dias === 1 ? 'Ayer' : `Hace ${dias} días`;
+                          const color = dias <= 7 ? 'text-emerald-400' : dias <= 30 ? 'text-amber-400' : 'text-red-400';
+                          return <span className={color}>{label}</span>;
+                        })()}
+                      </td>
+                      <td className="px-4 py-3 text-center text-xs">
+                        <span className={(b.salesLast30 ?? 0) > 0 ? 'text-gray-300' : 'text-gray-600'}>{b.salesLast30 ?? 0}</span>
                       </td>
                       <td className="px-4 py-3">
                         {isActive ? (

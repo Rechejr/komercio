@@ -89,7 +89,50 @@ router.get('/businesses', async (req: AuthRequest, res, next) => {
       prisma.business.count({ where }),
     ]);
 
-    return paginated(res, businesses, total, page, limit);
+    // Actividad por negocio (para ver cuáles se usan a diario y cuáles están
+    // dormidas): última conexión de cualquier usuario + ventas de los últimos
+    // 30 días. Se calcula en lote para la página actual (pocas consultas extra).
+    const bizIds = businesses.map((b) => b.id);
+    const branches = await prisma.branch.findMany({
+      where: { businessId: { in: bizIds } },
+      select: { id: true, businessId: true },
+    });
+    const branchToBiz = new Map(branches.map((br) => [br.id, br.businessId]));
+
+    const users = await prisma.user.findMany({
+      where: { branch: { businessId: { in: bizIds } }, lastLogin: { not: null } },
+      select: { lastLogin: true, branch: { select: { businessId: true } } },
+    });
+    const lastLoginByBiz = new Map<string, Date>();
+    for (const u of users) {
+      const bid = u.branch?.businessId;
+      if (!bid || !u.lastLogin) continue;
+      const cur = lastLoginByBiz.get(bid);
+      if (!cur || u.lastLogin > cur) lastLoginByBiz.set(bid, u.lastLogin);
+    }
+
+    const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const salesGrouped = branches.length > 0
+      ? await prisma.sale.groupBy({
+          by: ['branchId'],
+          where: { branchId: { in: branches.map((b) => b.id) }, createdAt: { gte: since }, deletedAt: null },
+          _count: { id: true },
+        })
+      : [];
+    const salesByBiz = new Map<string, number>();
+    for (const s of salesGrouped) {
+      const bid = branchToBiz.get(s.branchId);
+      if (!bid) continue;
+      salesByBiz.set(bid, (salesByBiz.get(bid) || 0) + s._count.id);
+    }
+
+    const enriched = businesses.map((b) => ({
+      ...b,
+      lastLogin: lastLoginByBiz.get(b.id) ?? null,
+      salesLast30: salesByBiz.get(b.id) ?? 0,
+    }));
+
+    return paginated(res, enriched, total, page, limit);
   } catch (err) { next(err); }
 });
 
