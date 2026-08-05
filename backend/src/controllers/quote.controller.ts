@@ -70,7 +70,14 @@ export const quoteController = {
       const businessId = req.user!.businessId!;
       const quote = await prisma.quote.findFirst({ where: { id: req.params.id, businessId, deletedAt: null } });
       if (!quote) throw new AppError('Cotización no encontrada', 404);
-      return success(res, quote);
+      // Teléfono del cliente (para el envío por WhatsApp). customerId es id suelto,
+      // sin relación Prisma, así que se resuelve en un query aparte.
+      let customerPhone: string | null = null;
+      if (quote.customerId) {
+        const cust = await prisma.customer.findFirst({ where: { id: quote.customerId, businessId }, select: { phone: true } });
+        customerPhone = cust?.phone ?? null;
+      }
+      return success(res, { ...quote, customerPhone });
     } catch (err) { next(err); }
   },
 

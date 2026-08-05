@@ -10,14 +10,28 @@ import { useAuthStore } from '@/store/auth.store';
 import { useCartStore } from '@/store/cart.store';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Portal } from '@/components/ui/Portal';
-import { FileText, Plus, Search, Trash2, X, Loader2, ShoppingCart, Eye, CheckCircle } from 'lucide-react';
+import { FileText, Plus, Search, Trash2, X, Loader2, ShoppingCart, Eye, CheckCircle, MessageCircle } from 'lucide-react';
 
 const inputCls =
   'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[16px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition';
 
 interface QItem { productId?: string; productVariantId?: string; name: string; code?: string; quantity: number; unitPrice: number; discountPct?: number; taxRate?: number; variantLabel?: string }
 interface QuoteRow { id: string; number: string; customerName: string | null; total: string; status: string; validUntil: string | null; createdAt: string; itemCount: number }
-interface QuoteFull extends QuoteRow { items: QItem[]; notes: string | null; customerId: string | null; subtotal: string; taxAmount: string; discountAmount: string }
+interface QuoteFull extends QuoteRow { items: QItem[]; notes: string | null; customerId: string | null; customerPhone: string | null; subtotal: string; taxAmount: string; discountAmount: string }
+
+const money = (n: number) => `$${Math.round(n).toLocaleString('es-CO')}`;
+function waCotizacion(q: QuoteFull, negocio?: string | null): string {
+  const lineas = q.items.map((it) => `• ${it.quantity} × ${it.name} — ${money(lineTotal(it))}`).join('\n');
+  const vig = q.validUntil ? `\nVálida hasta: ${fmtVigencia(q.validUntil)}` : '';
+  const msg = `*Cotización ${q.number}*${negocio ? ` — ${negocio}` : ''}\n\n${lineas}\n\n*Total: ${money(Number(q.total))}*${vig}\n\n_Gracias por su interés._`;
+  const digits = (q.customerPhone || '').replace(/\D/g, '');
+  // Con teléfono → chat directo del cliente; sin teléfono → WhatsApp abre para elegir contacto.
+  if (digits) {
+    const num = digits.length === 12 && digits.startsWith('57') ? digits : `57${digits}`;
+    return `https://wa.me/${num}?text=${encodeURIComponent(msg)}`;
+  }
+  return `https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`;
+}
 
 // Fecha de vigencia (@db.Date) en UTC para no correrse un día en Colombia.
 const fmtVigencia = (iso: string | null) => iso ? new Intl.DateTimeFormat('es-CO', { dateStyle: 'medium', timeZone: 'UTC' }).format(new Date(iso)) : '—';
@@ -259,6 +273,7 @@ function NuevaCotizacionModal({ onClose }: { onClose: () => void }) {
 function DetalleModal({ id, onClose }: { id: string; onClose: () => void }) {
   const qc = useQueryClient();
   const router = useRouter();
+  const businessName = useAuthStore((s) => s.user?.businessName);
   const clear = useCartStore((s) => s.clear);
   const addItem = useCartStore((s) => s.addItem);
   const setCustomer = useCartStore((s) => s.setCustomer);
@@ -315,11 +330,21 @@ function DetalleModal({ id, onClose }: { id: string; onClose: () => void }) {
                 </div>
                 {q.notes && <p className="text-[12px] text-slate-500 dark:text-slate-400 pt-1">{q.notes}</p>}
               </div>
-              <div className="px-6 py-4 border-t border-slate-100 dark:border-white/[0.06]">
-                <button onClick={convertir} className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold flex items-center justify-center gap-2">
-                  <ShoppingCart size={16} /> Convertir a venta
-                </button>
-                {q.status === 'CONVERTED' && <p className="text-[11px] text-center text-emerald-600 dark:text-emerald-400 mt-2">Ya fue convertida antes — puedes volver a cargarla.</p>}
+              <div className="px-6 py-4 border-t border-slate-100 dark:border-white/[0.06] space-y-2">
+                <div className="flex gap-2">
+                  <a
+                    href={waCotizacion(q, businessName)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex-1 py-2.5 rounded-xl border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 text-sm font-semibold flex items-center justify-center gap-2 transition"
+                  >
+                    <MessageCircle size={16} /> WhatsApp
+                  </a>
+                  <button onClick={convertir} className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold flex items-center justify-center gap-2">
+                    <ShoppingCart size={16} /> Convertir a venta
+                  </button>
+                </div>
+                {q.status === 'CONVERTED' && <p className="text-[11px] text-center text-emerald-600 dark:text-emerald-400">Ya fue convertida antes — puedes volver a cargarla.</p>}
               </div>
             </>
           )}
