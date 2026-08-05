@@ -234,6 +234,11 @@ router.delete('/businesses/:id', deleteBusinessLimiter, async (req: AuthRequest,
       // 10. Gastos
       await tx.expense.deleteMany({ where: { businessId } });
       await tx.expenseCategory.deleteMany({ where: { businessId } });
+      // 10.5. Medios de pago (PaymentAccount) — FK RESTRICT hacia businesses.
+      // Los backfilleó una migración para TODOS los negocios, así que sin esto el
+      // borrado fallaba (500) para prácticamente cualquier cuenta. Va DESPUÉS de
+      // ventas/gastos/caja, que son los que referencian paymentAccountId.
+      await tx.paymentAccount.deleteMany({ where: { businessId } });
       // 11. Clientes, proveedores, categorías, marcas
       await tx.customer.deleteMany({ where: { businessId } });
       await tx.supplier.deleteMany({ where: { businessId } });
@@ -251,10 +256,21 @@ router.delete('/businesses/:id', deleteBusinessLimiter, async (req: AuthRequest,
       await tx.paymentLink.deleteMany({ where: { businessId } });
       // 14.6. Resúmenes semanales con IA — mismo FK RESTRICT.
       await tx.aiWeeklySummary.deleteMany({ where: { businessId } });
+      // 14.7. Contable: clientes del contador — FK RESTRICT hacia businesses. Al
+      // borrarlos, cascadean sus vencimientos, resoluciones, responsabilidades y
+      // credenciales (onDelete: Cascade). Sin esto, NINGÚN negocio contable con
+      // clientes se podía borrar (500).
+      await tx.taxClient.deleteMany({ where: { businessId } });
       // 15. Negocio (libera FK Business.ownerId → User)
       await tx.business.delete({ where: { id: businessId } });
       // 16. Owner
       await tx.user.delete({ where: { id: business.ownerId } });
+    }, {
+      // El borrado hace ~25 operaciones en cadena; con el timeout por defecto
+      // (5 s) una cuenta con historial —o algo de latencia hacia la base— hacía
+      // rollback con P2028 ("Transaction already closed"). Se amplía el margen.
+      timeout: 60_000,
+      maxWait: 10_000,
     });
 
     return success(res, null, `Negocio "${business.name}" eliminado permanentemente`);

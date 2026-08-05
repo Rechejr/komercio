@@ -61,6 +61,7 @@ describe('DELETE /api/v1/superadmin/businesses/:id', () => {
       product: { deleteMany: jest.fn().mockResolvedValue({}) },
       expense: { deleteMany: jest.fn().mockResolvedValue({}) },
       expenseCategory: { deleteMany: jest.fn().mockResolvedValue({}) },
+      paymentAccount: { deleteMany: jest.fn().mockResolvedValue({}) },
       customer: { deleteMany: jest.fn().mockResolvedValue({}) },
       supplier: { deleteMany: jest.fn().mockResolvedValue({}) },
       category: { deleteMany: jest.fn().mockResolvedValue({}) },
@@ -70,6 +71,7 @@ describe('DELETE /api/v1/superadmin/businesses/:id', () => {
       branch: { deleteMany: jest.fn().mockResolvedValue({}) },
       paymentLink: { deleteMany: jest.fn().mockResolvedValue({}) },
       aiWeeklySummary: { deleteMany: jest.fn().mockResolvedValue({}) },
+      taxClient: { deleteMany: jest.fn().mockResolvedValue({}) },
       business: { delete: jest.fn().mockResolvedValue({}) },
     };
     (mockPrisma.$transaction as jest.Mock).mockImplementation(async (fn: any) => fn(tx));
