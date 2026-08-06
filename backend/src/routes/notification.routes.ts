@@ -4,7 +4,7 @@ import { authenticate } from '../middlewares/auth';
 import { success, paginated, AppError } from '../utils/response';
 import { getPagination } from '../utils/pagination';
 import { pruneStaleLowStockNotifications } from '../services/notification.service';
-import { getVapidPublicKey } from '../config/webpush';
+import { getVapidPublicKey, sendPushToUsers, pushEnabled } from '../config/webpush';
 
 const router = Router();
 router.use(authenticate);
@@ -28,6 +28,25 @@ router.post('/subscribe', async (req: any, res, next) => {
       update: { p256dh: keys.p256dh, auth: keys.auth, userId: req.user.userId },
     });
     return success(res, null, 'Notificaciones activadas');
+  } catch (err) { next(err); }
+});
+
+// Envía un push de PRUEBA a los dispositivos suscritos del usuario. Sirve para
+// que confirme, en un toque, que las notificaciones le llegan al celular.
+router.post('/test', async (req: any, res, next) => {
+  try {
+    if (!pushEnabled) throw new AppError('El servidor aún no tiene las notificaciones configuradas.', 503);
+    const count = await prisma.pushSubscription.count({ where: { userId: req.user.userId } });
+    if (count === 0) {
+      return success(res, { sent: 0 }, 'Este dispositivo no está suscrito. Activa los avisos y vuelve a intentar.');
+    }
+    await sendPushToUsers([req.user.userId], {
+      title: 'Ventrix Contable · Prueba',
+      body: '✅ Las notificaciones funcionan. Así te avisaremos de tus vencimientos.',
+      url: '/contable/panel',
+      tag: 'test-push',
+    });
+    return success(res, { sent: count }, `Notificación de prueba enviada a ${count} dispositivo(s).`);
   } catch (err) { next(err); }
 });
 

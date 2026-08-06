@@ -10,6 +10,7 @@ import {
 } from '@/lib/contable';
 import { Bell, BellRing, AlertTriangle, X, ArrowRight } from 'lucide-react';
 import { subscribeToPush } from '@/lib/push';
+import toast from 'react-hot-toast';
 
 interface Prioritario {
   id: string; obligacion: Obligacion; periodo: string; fecha: string;
@@ -22,7 +23,23 @@ interface Prioritario {
 export function AgendaAlertas() {
   const [oculto, setOculto] = useState(false);
   const [permiso, setPermiso] = useState<NotificationPermission>('default');
+  const [probando, setProbando] = useState(false);
   const yaDisparado = useRef(false);
+
+  // Manda un push de prueba a este dispositivo para confirmar que llega al móvil.
+  async function enviarPrueba() {
+    setProbando(true);
+    try {
+      // Asegura que este dispositivo esté suscrito antes de pedir la prueba.
+      await subscribeToPush();
+      const { data } = await api.post('/notifications/test');
+      toast.success(data?.message || 'Notificación de prueba enviada.');
+    } catch (e: any) {
+      toast.error(e?.response?.data?.error || 'No se pudo enviar la prueba.');
+    } finally {
+      setProbando(false);
+    }
+  }
 
   const { data: items = [] } = useQuery<Prioritario[]>({
     queryKey: ['contable-prioritarios'],
@@ -146,6 +163,13 @@ export function AgendaAlertas() {
             {permiso === 'granted' && (
               <span className="inline-flex items-center gap-1 text-[12px] text-emerald-600 dark:text-emerald-400">
                 <BellRing size={13} /> Avisos del sistema activos
+                <button
+                  onClick={enviarPrueba}
+                  disabled={probando}
+                  className="ml-1 text-slate-500 dark:text-slate-400 hover:text-emerald-700 dark:hover:text-emerald-300 underline disabled:opacity-50"
+                >
+                  {probando ? 'enviando…' : 'Enviar prueba'}
+                </button>
               </span>
             )}
             {permiso === 'denied' && (
