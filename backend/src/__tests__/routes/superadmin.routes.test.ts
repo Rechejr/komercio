@@ -6,7 +6,7 @@ import * as jwtUtils from '../../utils/jwt';
 
 jest.mock('../../config/database', () => ({
   prisma: {
-    business: { findUnique: jest.fn(), delete: jest.fn() },
+    business: { findUnique: jest.fn(), findFirst: jest.fn(), delete: jest.fn() },
     user: { findUnique: jest.fn(), findMany: jest.fn(), delete: jest.fn() },
     $transaction: jest.fn(),
   },

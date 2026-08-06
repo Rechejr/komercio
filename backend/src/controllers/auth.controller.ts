@@ -13,6 +13,158 @@ import { emailService } from '../config/email';
 // extiende planExpiresAt como en el POS). Cambiar aquí ajusta la prueba.
 const DIAS_PRUEBA_CONTABLE = 7;
 
+// ── Cuentas del usuario (POS + Contable bajo un mismo login) ──────────────────
+// Un usuario dueño puede tener varios negocios (POS y Contable). Un empleado
+// tiene solo el de su sucursal. Cada "cuenta" resuelve a qué sucursal se ancla
+// el token: el aislamiento multi-tenant viaja SIEMPRE en el token, así que basta
+// con reemitirlo apuntando a otro negocio para "cambiar de cuenta".
+type Account = { businessId?: string; branchId?: string; businessName?: string; businessType: string; plan: string };
+
+const USER_ACCOUNTS_INCLUDE = {
+  branch: { select: { id: true, businessId: true, business: { select: { id: true, name: true, plan: true, type: true } } } },
+  businesses: {
+    where: { deletedAt: null },
+    select: {
+      id: true, name: true, plan: true, type: true,
+      branches: { select: { id: true }, orderBy: { createdAt: 'asc' as const }, take: 1 },
+    },
+    orderBy: { createdAt: 'asc' as const },
+  },
+} as const;
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function buildAccounts(user: any): Account[] {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const owned: Account[] = (user.businesses || []).map((b: any) => ({
+    businessId: b.id,
+    // El negocio de su sucursal asignada usa esa misma sucursal; los demás
+    // (p. ej. la cuenta Contable) usan su Bodega Principal como ancla técnica.
+    branchId: b.id === user.branch?.businessId ? (user.branchId ?? undefined) : b.branches[0]?.id,
+    businessName: b.name,
+    businessType: b.type || 'pos',
+    plan: b.plan || 'free',
+  }));
+  if (owned.length > 0) return owned;
+  // Empleado (no es dueño de ningún negocio): su único acceso es el de su sucursal.
+  if (user.branch?.businessId) {
+    return [{
+      businessId: user.branch.businessId,
+      branchId: user.branchId ?? undefined,
+      businessName: user.branch.business?.name,
+      businessType: user.branch.business?.type || 'pos',
+      plan: user.branch.business?.plan || 'free',
+    }];
+  }
+  return [];
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function defaultAccount(user: any, accounts: Account[]): Account | undefined {
+  // Preferir el negocio de la sucursal asignada (su "casa"); si no, el primero.
+  return accounts.find((a) => a.businessId === user.branch?.businessId) || accounts[0];
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function userResponse(user: any, account?: Account) {
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    avatar: user.avatar,
+    branchId: account?.branchId,
+    businessId: account?.businessId,
+    businessName: account?.businessName,
+    isEmailVerified: user.isEmailVerified,
+    plan: account?.plan || 'free',
+    // Producto de la cuenta ACTIVA: "pos" o "contable". El frontend redirige con esto.
+    businessType: account?.businessType || 'pos',
+  };
+}
+
+// Lista pública de cuentas para el selector del frontend (sin datos internos).
+function publicAccounts(accounts: Account[]) {
+  return accounts.map((a) => ({ businessId: a.businessId, businessType: a.businessType, businessName: a.businessName, plan: a.plan }));
+}
+
+// Emite una sesión (access + refresh + cookie) apuntando a un negocio concreto.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function issueSession(res: Response, user: any, account: Account): Promise<string> {
+  const payload = {
+    userId: user.id,
+    email: user.email,
+    role: user.role,
+    businessId: account.businessId,
+    branchId: account.branchId,
+  };
+  const accessToken = generateAccessToken(payload);
+  const refreshToken = generateRefreshToken(payload);
+  const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
+  await prisma.refreshToken.create({
+    data: { token: refreshToken, userId: user.id, expiresAt: new Date(Date.now() + THIRTY_DAYS) },
+  });
+  res.cookie('refreshToken', refreshToken, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'strict',
+    maxAge: THIRTY_DAYS,
+  });
+  return accessToken;
+}
+
+// Crea un negocio (POS o Contable) para un dueño, con su Bodega Principal y —solo
+// en POS— las categorías de gasto y medios de pago por defecto. Reutilizado por
+// el registro (assignBranch: true, el usuario nuevo se ancla a esta sucursal) y
+// por "activar producto" (assignBranch: false, conserva su sucursal principal).
+async function createBusinessForOwner(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  client: any,
+  opts: { userId: string; businessName: string; businessType: string; businessCategory?: string | null; assignBranch: boolean },
+) {
+  const { userId, businessName, businessType, businessCategory, assignBranch } = opts;
+  const trialExpiresAt = businessType === 'contable'
+    ? new Date(Date.now() + DIAS_PRUEBA_CONTABLE * 24 * 60 * 60 * 1000)
+    : null;
+
+  const business = await client.business.create({
+    data: {
+      name: businessName,
+      type: businessType,
+      category: businessCategory || null,
+      planExpiresAt: trialExpiresAt,
+      ownerId: userId,
+      branches: { create: { name: 'Bodega Principal', createdById: userId } },
+    },
+    include: { branches: true },
+  });
+
+  if (assignBranch) {
+    await client.user.update({ where: { id: userId }, data: { branchId: business.branches[0].id } });
+  }
+
+  if (businessType !== 'contable') {
+    const defaultCategories = [
+      'Arriendo', 'Servicios públicos', 'Nómina', 'Transporte',
+      'Publicidad', 'Insumos', 'Mantenimiento', 'Otros',
+    ];
+    await client.expenseCategory.createMany({
+      data: defaultCategories.map((name) => ({ name, businessId: business.id })),
+    });
+    await client.paymentAccount.createMany({
+      data: [
+        { name: 'Efectivo',      type: 'CASH',  legacyEnum: 'CASH',      order: 0 },
+        { name: 'Transferencia', type: 'BANK',  legacyEnum: 'TRANSFER',  order: 1 },
+        { name: 'Nequi',         type: 'OTHER', legacyEnum: 'NEQUI',     order: 2 },
+        { name: 'Daviplata',     type: 'OTHER', legacyEnum: 'DAVIPLATA', order: 3 },
+        { name: 'Tarjeta',       type: 'BANK',  legacyEnum: 'CARD',      order: 4 },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ].map((a) => ({ ...a, type: a.type as any, legacyEnum: a.legacyEnum as any, businessId: business.id })),
+    });
+  }
+
+  return business;
+}
+
 export const authController = {
   async register(req: Request, res: Response, next: NextFunction) {
     try {
@@ -48,53 +200,12 @@ export const authController = {
         });
 
         if (businessName) {
-          // Una cuenta contable arranca con la prueba gratis: planExpiresAt en el
-          // futuro habilita la escritura; al pasar, la agenda pasa a solo-lectura.
-          // El POS no usa esto (queda null, comportamiento de siempre).
-          const trialExpiresAt = businessType === 'contable'
-            ? new Date(Date.now() + DIAS_PRUEBA_CONTABLE * 24 * 60 * 60 * 1000)
-            : null;
-
-          const business = await tx.business.create({
-            data: {
-              name: businessName,
-              type: businessType,
-              category: businessCategory || null,
-              planExpiresAt: trialExpiresAt,
-              ownerId: newUser.id,
-              // La sucursal existe en ambos productos porque toda la cadena de
-              // identidad (businessId) cuelga de user.branch. En una cuenta
-              // contable es solo un ancla técnica: nunca se muestra en su UI.
-              branches: { create: { name: 'Bodega Principal', createdById: newUser.id } },
-            },
-            include: { branches: true },
+          // Crea el negocio + Bodega Principal (ancla técnica del businessId) y
+          // ancla al usuario recién creado a esa sucursal. Contable arranca con
+          // la prueba gratis; POS siembra categorías de gasto y medios de pago.
+          await createBusinessForOwner(tx, {
+            userId: newUser.id, businessName, businessType, businessCategory, assignBranch: true,
           });
-          // Vincular el usuario a la sucursal recién creada
-          await tx.user.update({
-            where: { id: newUser.id },
-            data: { branchId: business.branches[0].id },
-          });
-          // Las categorías de gasto son del POS; una cuenta contable no las usa.
-          if (businessType !== 'contable') {
-            const defaultCategories = [
-              'Arriendo', 'Servicios públicos', 'Nómina', 'Transporte',
-              'Publicidad', 'Insumos', 'Mantenimiento', 'Otros',
-            ];
-            await tx.expenseCategory.createMany({
-              data: defaultCategories.map((name) => ({ name, businessId: business.id })),
-            });
-            // Medios de pago por defecto (los mismos que sembró el backfill a los
-            // negocios existentes). Solo Efectivo es CASH → alimenta la caja física.
-            await tx.paymentAccount.createMany({
-              data: [
-                { name: 'Efectivo',      type: 'CASH',  legacyEnum: 'CASH',      order: 0 },
-                { name: 'Transferencia', type: 'BANK',  legacyEnum: 'TRANSFER',  order: 1 },
-                { name: 'Nequi',         type: 'OTHER', legacyEnum: 'NEQUI',     order: 2 },
-                { name: 'Daviplata',     type: 'OTHER', legacyEnum: 'DAVIPLATA', order: 3 },
-                { name: 'Tarjeta',       type: 'BANK',  legacyEnum: 'CARD',      order: 4 },
-              ].map((a) => ({ ...a, type: a.type as any, legacyEnum: a.legacyEnum as any, businessId: business.id })),
-            });
-          }
         }
 
         return newUser;
@@ -163,9 +274,7 @@ export const authController = {
 
       const user = await prisma.user.findUnique({
         where: { email, deletedAt: null },
-        include: {
-          branch: { select: { id: true, businessId: true, business: { select: { id: true, name: true, plan: true, type: true } } } },
-        },
+        include: USER_ACCOUNTS_INCLUDE,
       });
 
       if (!user || !(await bcrypt.compare(password, user.password))) {
@@ -175,25 +284,12 @@ export const authController = {
       if (!user.isActive) throw new AppError('Cuenta desactivada. Contacta al administrador.', 403);
       if (!user.isEmailVerified) throw new AppError('Verifica tu correo electrónico antes de iniciar sesión.', 403);
 
-      const payload = {
-        userId: user.id,
-        email: user.email,
-        role: user.role,
-        businessId: user.branch?.businessId,
-        branchId: user.branchId ?? undefined,
-      };
+      // Cuentas a las que puede entrar este correo (POS y/o Contable). Se abre la
+      // sesión en la de por defecto; si hay varias, el frontend muestra el selector.
+      const accounts = buildAccounts(user);
+      const account = defaultAccount(user, accounts) || ({ businessType: 'pos', plan: 'free' } as Account);
 
-      const accessToken = generateAccessToken(payload);
-      const refreshToken = generateRefreshToken(payload);
-
-      const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
-      await prisma.refreshToken.create({
-        data: {
-          token: refreshToken,
-          userId: user.id,
-          expiresAt: new Date(Date.now() + THIRTY_DAYS),
-        },
-      });
+      const accessToken = await issueSession(res, user, account);
 
       // Opportunistic cleanup of expired tokens — keeps the table from growing unbounded.
       // Fire-and-forget; login must not fail because of cleanup.
@@ -206,30 +302,11 @@ export const authController = {
         data: { lastLogin: new Date() },
       });
 
-      res.cookie('refreshToken', refreshToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'strict',
-        maxAge: THIRTY_DAYS,
-      });
-
       return success(res, {
         accessToken,
-        user: {
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          role: user.role,
-          avatar: user.avatar,
-          branchId: user.branchId ?? undefined,
-          businessId: user.branch?.businessId ?? undefined,
-          businessName: user.branch?.business?.name ?? undefined,
-          isEmailVerified: user.isEmailVerified,
-          plan: user.branch?.business?.plan || 'free',
-          // Producto de la cuenta: "pos" o "contable". El frontend decide con
-          // esto a qué tablero redirigir tras el login.
-          businessType: user.branch?.business?.type || 'pos',
-        },
+        user: userResponse(user, account),
+        // Todas las cuentas del correo. Si son >1, el frontend deja elegir a cuál entrar.
+        accounts: publicAccounts(accounts),
       }, 'Sesión iniciada');
     } catch (err) {
       next(err);
@@ -246,15 +323,14 @@ export const authController = {
         throw new AppError('Refresh token inválido o expirado', 401);
       }
 
-      // Verify JWT signature before touching DB
-      verifyRefreshToken(token);
+      // Verify JWT signature before touching DB. Se conserva el negocio activo
+      // que traía el token (si el usuario cambió de cuenta, no se debe "resetear").
+      const oldPayload = verifyRefreshToken(token);
 
       // Revalidate user: isActive, role, businessId (can change after token was issued)
       const user = await prisma.user.findUnique({
         where: { id: stored.userId },
-        include: {
-          branch: { select: { businessId: true } },
-        },
+        include: USER_ACCOUNTS_INCLUDE,
       });
 
       if (!user || !user.isActive || user.deletedAt) {
@@ -262,12 +338,19 @@ export const authController = {
         throw new AppError('Cuenta desactivada o eliminada', 401);
       }
 
+      // Mantener la cuenta activa del token; si ya no tiene acceso (negocio
+      // borrado, dejó de ser dueño), caer a la de por defecto.
+      const accounts = buildAccounts(user);
+      const account = accounts.find((a) => a.businessId === oldPayload.businessId)
+        || defaultAccount(user, accounts)
+        || ({ businessType: 'pos', plan: 'free' } as Account);
+
       const payload = {
         userId: user.id,
         email: user.email,
         role: user.role,
-        businessId: user.branch?.businessId,
-        branchId: user.branchId ?? undefined,
+        businessId: account.businessId,
+        branchId: account.branchId,
       };
 
       // Rotation: delete old token, issue a new one
@@ -370,22 +453,103 @@ export const authController = {
 
   async me(req: AuthRequest, res: Response, next: NextFunction) {
     try {
+      // La cuenta ACTIVA vive en el token (branchId/businessId), no en la sucursal
+      // asignada del usuario: así, tras "cambiar de cuenta", /me refleja el negocio
+      // correcto. Se carga la sucursal activa aparte para traer currency/logo.
+      const [user, activeBranch] = await Promise.all([
+        prisma.user.findFirst({
+          where: { id: req.user!.userId, isActive: true, deletedAt: null },
+          select: {
+            id: true, name: true, email: true, phone: true,
+            role: true, avatar: true, isEmailVerified: true,
+            branchId: true, lastLogin: true,
+            ...USER_ACCOUNTS_INCLUDE,
+          },
+        }),
+        req.user!.branchId
+          ? prisma.branch.findUnique({
+              where: { id: req.user!.branchId },
+              select: {
+                id: true, name: true,
+                business: { select: { id: true, name: true, currency: true, logo: true, plan: true, type: true } },
+              },
+            })
+          : Promise.resolve(null),
+      ]);
+      if (!user) throw new AppError('Usuario no encontrado', 404);
+
+      const accounts = buildAccounts(user);
+      // Se sustituye la sucursal asignada por la ACTIVA (la del token) y se expone
+      // la lista de cuentas para el selector del menú.
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { businesses, branch, ...rest } = user as any;
+      return success(res, {
+        ...rest,
+        branchId: activeBranch?.id ?? rest.branchId,
+        branch: activeBranch,
+        accounts: publicAccounts(accounts),
+      });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  // Cambia la cuenta activa (POS ↔ Contable) del mismo correo: reemite el token
+  // apuntando al negocio elegido. Todo el aislamiento va en el token, así que
+  // con esto el resto del sistema opera sobre el negocio nuevo sin más cambios.
+  async switchBusiness(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const { businessId } = req.body;
+      if (!businessId) throw new AppError('businessId requerido', 400);
+
       const user = await prisma.user.findFirst({
         where: { id: req.user!.userId, isActive: true, deletedAt: null },
-        select: {
-          id: true, name: true, email: true, phone: true,
-          role: true, avatar: true, isEmailVerified: true,
-          branchId: true, lastLogin: true,
-          branch: {
-            select: {
-              id: true, name: true,
-              business: { select: { id: true, name: true, currency: true, logo: true, plan: true, type: true } },
-            },
-          },
-        },
+        include: USER_ACCOUNTS_INCLUDE,
       });
       if (!user) throw new AppError('Usuario no encontrado', 404);
-      return success(res, user);
+
+      const accounts = buildAccounts(user);
+      const account = accounts.find((a) => a.businessId === businessId);
+      if (!account) throw new AppError('No tienes acceso a esa cuenta', 403);
+
+      const accessToken = await issueSession(res, user, account);
+      return success(res, {
+        accessToken,
+        user: userResponse(user, account),
+        accounts: publicAccounts(accounts),
+      }, 'Cuenta cambiada');
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  // Activa el otro producto (POS o Contable) bajo el MISMO login: crea el negocio
+  // hermano sin pedir otro correo ni otra clave. Solo el dueño (ADMIN) puede.
+  async activarProducto(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const userId = req.user!.userId;
+      const { businessName, businessCategory } = req.body;
+      const businessType = req.body.businessType === 'contable' ? 'contable' : 'pos';
+      if (!businessName || !String(businessName).trim()) {
+        throw new AppError('El nombre del negocio es obligatorio', 400);
+      }
+
+      const already = await prisma.business.count({ where: { ownerId: userId, type: businessType, deletedAt: null } });
+      if (already > 0) {
+        throw new AppError(`Ya tienes una cuenta ${businessType === 'contable' ? 'de Contador' : 'de POS'} con este correo`, 409);
+      }
+
+      const business = await prisma.$transaction((tx) =>
+        createBusinessForOwner(tx, {
+          userId, businessName: String(businessName).trim(), businessType, businessCategory, assignBranch: false,
+        }),
+      );
+
+      return created(res, {
+        businessId: business.id,
+        businessType,
+        businessName: business.name,
+      }, 'Producto activado. Ya puedes cambiar a esta cuenta desde el menú.');
     } catch (err) {
       next(err);
     }

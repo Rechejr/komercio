@@ -10,6 +10,7 @@ import { useAuthStore } from '@/store/auth.store';
 import { useUpgradeStore } from '@/store/upgrade.store';
 import { api } from '@/lib/api';
 import { Tooltip } from '@/components/ui/Tooltip';
+import { AccountSwitcher } from '@/components/layout/AccountSwitcher';
 import {
   LayoutDashboard, Package, ShoppingCart, Users, Truck,
   Receipt, CreditCard, TrendingUp, Settings,
@@ -347,6 +348,9 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
               Actualizar a Pro
             </button>
           )}
+
+          {/* Cambiar de cuenta / activar otro producto (POS ↔ Contable) */}
+          <AccountSwitcher collapsed={collapsed} />
 
           {/* Logout */}
           <Tooltip content={collapsed ? 'Cerrar sesión' : ''} side="right">

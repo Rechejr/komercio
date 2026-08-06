@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { body } from 'express-validator';
 import { rateLimit } from 'express-rate-limit';
 import { authController } from '../controllers/auth.controller';
-import { authenticate, requireCsrfHeader } from '../middlewares/auth';
+import { authenticate, authorize, requireCsrfHeader } from '../middlewares/auth';
 import { validate } from '../middlewares/validate';
 
 const loginLimiter = rateLimit({
@@ -70,6 +70,27 @@ router.post('/resend-verification',
 );
 
 router.get('/me', authenticate, authController.me);
+
+// Cambiar de cuenta (POS ↔ Contable) del mismo correo. Auth por Bearer token, así
+// que no necesita el header anti-CSRF (un atacante no puede forjar el Bearer).
+router.post('/switch-business',
+  authenticate,
+  [body('businessId').notEmpty()],
+  validate,
+  authController.switchBusiness,
+);
+
+// Activar el otro producto bajo el mismo login (solo el dueño).
+router.post('/activar-producto',
+  authenticate,
+  authorize('ADMIN', 'SUPER_ADMIN'),
+  [
+    body('businessName').trim().notEmpty().withMessage('El nombre del negocio es requerido'),
+    body('businessType').optional().isIn(['pos', 'contable']),
+  ],
+  validate,
+  authController.activarProducto,
+);
 
 router.patch('/change-password',
   authenticate,

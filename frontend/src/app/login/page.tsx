@@ -9,8 +9,9 @@ import toast from 'react-hot-toast';
 import Link from 'next/link';
 import { GoogleOAuthProvider, useGoogleLogin } from '@react-oauth/google';
 import { api } from '@/lib/api';
-import { useAuthStore } from '@/store/auth.store';
-import { Eye, EyeOff, Loader2, ArrowRight, Zap, Shield, BarChart3 } from 'lucide-react';
+import { useAuthStore, type Account } from '@/store/auth.store';
+import { switchToAccount, homeForBusinessType } from '@/lib/accounts';
+import { Eye, EyeOff, Loader2, ArrowRight, Zap, Shield, BarChart3, Store, Calculator } from 'lucide-react';
 import '../auth.css';
 
 // ── Schemas ───────────────────────────────────────────────────────────────────
@@ -203,25 +204,56 @@ function LoginForm() {
     resolver: zodResolver(loginSchema),
   });
 
-  const handleAuthSuccess = (user: any, accessToken: string) => {
-    login(user, accessToken, rememberMe);
+  // Correo con acceso a POS y Contable a la vez: se muestra el selector antes de
+  // redirigir. La sesión ya quedó abierta en la cuenta por defecto.
+  const [chooser, setChooser] = useState<{ user: any; accounts: Account[] } | null>(null);
+  const [switching, setSwitching] = useState<string | null>(null);
+
+  const enterAccount = (user: any, accessToken: string, accounts?: Account[]) => {
+    login(user, accessToken, rememberMe, accounts);
     toast.success(`¡Bienvenido, ${user.name}!`);
     // El tablero por defecto depende del producto de la cuenta. Un contador va a
     // /contable; un comercio a /dashboard, como siempre. Si venía de una ruta
     // protegida (?redirect=), se respeta — las guardas de cada grupo rebotan si
     // el destino no corresponde a su tipo de cuenta.
-    const home = user.businessType === 'contable' ? '/contable/panel' : '/dashboard';
+    const home = homeForBusinessType(user.businessType);
     const raw = searchParams.get('redirect') || home;
     const safeRedirect = raw.startsWith('/') && !raw.startsWith('//') ? raw : home;
     const dest = user.role === 'SUPER_ADMIN' ? '/superadmin' : safeRedirect;
     router.replace(dest);
   };
 
+  const handleAuthSuccess = (user: any, accessToken: string, accounts?: Account[]) => {
+    // Si el correo tiene los dos productos, dejar elegir a cuál entrar.
+    if (user.role !== 'SUPER_ADMIN' && accounts && accounts.length > 1) {
+      login(user, accessToken, rememberMe, accounts); // sesión en la cuenta por defecto
+      setChooser({ user, accounts });
+      return;
+    }
+    enterAccount(user, accessToken, accounts);
+  };
+
+  const pickAccount = async (acc: Account) => {
+    if (!chooser) return;
+    // La cuenta por defecto ya tiene su sesión activa: solo redirige.
+    if (acc.businessType === chooser.user.businessType) {
+      router.replace(homeForBusinessType(acc.businessType));
+      return;
+    }
+    setSwitching(acc.businessId);
+    try {
+      await switchToAccount(acc.businessId); // reemite token y redirige con recarga
+    } catch {
+      toast.error('No se pudo entrar a esa cuenta');
+      setSwitching(null);
+    }
+  };
+
   const onSubmit = async (data: LoginForm) => {
     try {
       const res = await api.post('/auth/login', data);
-      const { user, accessToken } = res.data.data;
-      handleAuthSuccess(user, accessToken);
+      const { user, accessToken, accounts } = res.data.data;
+      handleAuthSuccess(user, accessToken, accounts);
     } catch (err: any) {
       toast.error(err.response?.data?.error || 'Error al iniciar sesión');
     }
@@ -235,6 +267,46 @@ function LoginForm() {
     'placeholder:text-slate-400 dark:placeholder:text-slate-500',
     'focus:outline-none focus:ring-2 focus:ring-[#0DA06A]/25 focus:border-[#0DA06A]',
   ].join(' ');
+
+  if (chooser) {
+    const productMeta = (t: string) => t === 'contable'
+      ? { label: 'Ventrix Contable', desc: 'Agenda tributaria', Icon: Calculator }
+      : { label: 'Ventrix POS', desc: 'Punto de venta', Icon: Store };
+    return (
+      <div className="animate-fade-up">
+        <div className="mb-5 text-center">
+          <h2 className="text-lg font-bold text-slate-900 dark:text-white">Hola, {chooser.user.name.split(' ')[0]}</h2>
+          <p className="text-sm text-slate-500 dark:text-slate-400">¿A cuál cuenta quieres entrar?</p>
+        </div>
+        <div className="space-y-2.5">
+          {chooser.accounts.map((acc) => {
+            const m = productMeta(acc.businessType);
+            const busy = switching === acc.businessId;
+            return (
+              <button
+                key={acc.businessId}
+                onClick={() => pickAccount(acc)}
+                disabled={!!switching}
+                className="w-full flex items-center gap-3 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-700 hover:border-[#0DA06A] hover:bg-[#0DA06A]/[0.04] transition text-left disabled:opacity-60"
+              >
+                <div className="w-11 h-11 rounded-xl bg-[#0DA06A]/10 flex items-center justify-center flex-none">
+                  <m.Icon size={20} className="text-[#0DA06A]" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[14px] font-semibold text-slate-900 dark:text-white truncate">{acc.businessName || m.label}</p>
+                  <p className="text-[12px] text-slate-500 dark:text-slate-400">{m.label} · {m.desc}</p>
+                </div>
+                {busy
+                  ? <Loader2 size={18} className="animate-spin text-[#0DA06A] flex-none" />
+                  : <ArrowRight size={18} className="text-slate-300 dark:text-slate-600 flex-none" />}
+              </button>
+            );
+          })}
+        </div>
+        <p className="mt-4 text-center text-[12px] text-slate-400">Podrás cambiar de cuenta cuando quieras desde el menú.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="animate-fade-up">

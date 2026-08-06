@@ -17,14 +17,27 @@ interface User {
   isEmailVerified?: boolean;
 }
 
+// Una "cuenta" a la que puede entrar este correo. Un mismo login puede tener POS
+// y Contable a la vez; el selector del login y el switcher del menú usan esta lista.
+export interface Account {
+  businessId: string;
+  businessType: string;
+  businessName?: string;
+  plan?: string;
+}
+
 interface AuthState {
   user: User | null;
   accessToken: string | null;
   isAuthenticated: boolean;
+  // Todas las cuentas del correo (POS y/o Contable). Se persiste para que el
+  // switcher del menú aparezca también al recargar la página.
+  accounts: Account[];
   setUser: (user: User) => void;
   setAccessToken: (token: string) => void;
-  login: (user: User, token: string, rememberMe?: boolean) => void;
-  restoreSession: (user: User, accessToken: string) => void;
+  setAccounts: (accounts: Account[]) => void;
+  login: (user: User, token: string, rememberMe?: boolean, accounts?: Account[]) => void;
+  restoreSession: (user: User, accessToken: string, accounts?: Account[]) => void;
   logout: () => void;
 }
 
@@ -60,9 +73,11 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       accessToken: null,
       isAuthenticated: false,
+      accounts: [],
       setUser: (user) => set({ user }),
       setAccessToken: (accessToken) => set({ accessToken }),
-      login: (user, accessToken, rememberMe = false) => {
+      setAccounts: (accounts) => set({ accounts: accounts ?? [] }),
+      login: (user, accessToken, rememberMe = false, accounts) => {
         if (typeof window !== 'undefined') {
           localStorage.setItem(REMEMBER_KEY, String(rememberMe));
           // Non-sensitive flag cookie so Next.js middleware can redirect unauthenticated users
@@ -70,12 +85,13 @@ export const useAuthStore = create<AuthState>()(
           const maxAge = rememberMe ? 60 * 60 * 24 * 30 : 0; // 30 days or session
           document.cookie = `logged_in=1; path=/; SameSite=Lax${maxAge ? `; max-age=${maxAge}` : ''}`;
         }
-        set({ user, accessToken, isAuthenticated: true });
+        set({ user, accessToken, isAuthenticated: true, accounts: accounts ?? [] });
       },
       // Used on page load to restore session without touching the rememberMe preference
-      restoreSession: (user, accessToken) => set({ user, accessToken, isAuthenticated: true }),
+      restoreSession: (user, accessToken, accounts) =>
+        set({ user, accessToken, isAuthenticated: true, ...(accounts ? { accounts } : {}) }),
       logout: () => {
-        set({ user: null, accessToken: null, isAuthenticated: false });
+        set({ user: null, accessToken: null, isAuthenticated: false, accounts: [] });
         if (typeof window !== 'undefined') {
           localStorage.removeItem(REMEMBER_KEY);
           document.cookie = 'logged_in=; path=/; max-age=0';
@@ -102,7 +118,7 @@ export const useAuthStore = create<AuthState>()(
       name: 'ventrix-auth',
       storage: createJSONStorage(() => smartStorage),
       // accessToken is intentionally excluded — it lives in memory only (never in localStorage/sessionStorage)
-      partialize: (state) => ({ user: state.user, isAuthenticated: state.isAuthenticated }),
+      partialize: (state) => ({ user: state.user, isAuthenticated: state.isAuthenticated, accounts: state.accounts }),
     },
   ),
 );

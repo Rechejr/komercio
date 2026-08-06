@@ -75,7 +75,9 @@ model User {
   avatar               String?
   lastLogin            DateTime?
   refreshTokens        RefreshToken[]
-  business             Business?       @relation("BusinessOwner")
+  // Un usuario puede ser dueño de varios negocios: así un mismo correo/clave
+  // tiene POS y Contable a la vez y elige a cuál entrar tras iniciar sesión.
+  businesses           Business[]      @relation("BusinessOwner")
   branchId             String?
   branch               Branch?         @relation(fields: [branchId], references: [id])
   createdBranches      Branch[]        @relation("BranchCreator")
@@ -128,7 +130,7 @@ model Business {
   logo              String?
   currency          String            @default("COP")
   taxRate           Decimal           @default(0)
-  ownerId           String            @unique
+  ownerId           String
   owner             User              @relation("BusinessOwner", fields: [ownerId], references: [id])
   branches          Branch[]
   categories        Category[]
@@ -156,6 +158,7 @@ model Business {
   updatedAt         DateTime          @updatedAt
   deletedAt         DateTime?
 
+  @@index([ownerId])
   @@map("businesses")
 }
 

@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth.store';
 import { Tooltip } from '@/components/ui/Tooltip';
+import { AccountSwitcher } from '@/components/layout/AccountSwitcher';
 import {
   LayoutDashboard, Users, CalendarClock, CalendarDays, FileText, FileSpreadsheet, ClipboardList,
   ShieldCheck, ChevronLeft, ChevronRight, LogOut, X, KeyRound, Settings, Receipt,
@@ -154,6 +155,9 @@ export function ContableSidebar({ mobileOpen, onMobileClose }: ContableSidebarPr
         {/* Acciones inferiores. El estado de la prueba/suscripción se muestra en
             el Panel, no aquí, para no repetir con lenguaje del POS. */}
         <div className="sidebar-bottom-border flex-shrink-0 px-2 pb-2 pt-1 space-y-[2px]">
+          {/* Cambiar de cuenta / activar otro producto (Contable ↔ POS) */}
+          <AccountSwitcher collapsed={collapsed} />
+
           <Tooltip content={collapsed ? 'Cerrar sesión' : ''} side="right">
             <button
               type="button"

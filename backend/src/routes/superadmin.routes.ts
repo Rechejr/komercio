@@ -238,6 +238,15 @@ router.delete('/businesses/:id', deleteBusinessLimiter, async (req: AuthRequest,
       : [];
     const allUserIds = [...staffUsers.map((u) => u.id), business.ownerId];
 
+    // El dueño puede tener OTRO negocio (POS + Contable con el mismo login). Si es
+    // así, no se borra su usuario: solo se le mueve la sucursal asignada al otro
+    // negocio (para no violar el FK al borrar las sucursales de este) y conserva
+    // su otra cuenta intacta.
+    const ownerOtherBusiness = await prisma.business.findFirst({
+      where: { ownerId: business.ownerId, id: { not: businessId }, deletedAt: null },
+      select: { branches: { select: { id: true }, orderBy: { createdAt: 'asc' }, take: 1 } },
+    });
+
     await prisma.$transaction(async (tx) => {
       // 1. Pagos de créditos
       await tx.creditPayment.deleteMany({ where: { credit: { customer: { businessId } } } });
@@ -288,6 +297,11 @@ router.delete('/businesses/:id', deleteBusinessLimiter, async (req: AuthRequest,
       if (branchIds.length > 0) {
         await tx.user.deleteMany({ where: { branchId: { in: branchIds }, id: { not: business.ownerId } } });
       }
+      // 13.5. Si el dueño conserva otro negocio, mover su sucursal asignada a ese
+      // otro (evita el FK users.branchId → branches al borrar las de este negocio).
+      if (ownerOtherBusiness?.branches[0]) {
+        await tx.user.update({ where: { id: business.ownerId }, data: { branchId: ownerOtherBusiness.branches[0].id } });
+      }
       // 14. Sucursales
       await tx.branch.deleteMany({ where: { businessId } });
       // 14.5. Links de pago (Wompi) — FK RESTRICT hacia businesses.
@@ -303,8 +317,10 @@ router.delete('/businesses/:id', deleteBusinessLimiter, async (req: AuthRequest,
       await tx.quote.deleteMany({ where: { businessId } });
       // 15. Negocio (libera FK Business.ownerId → User)
       await tx.business.delete({ where: { id: businessId } });
-      // 16. Owner
-      await tx.user.delete({ where: { id: business.ownerId } });
+      // 16. Owner — solo si NO conserva otro negocio bajo el mismo login.
+      if (!ownerOtherBusiness) {
+        await tx.user.delete({ where: { id: business.ownerId } });
+      }
     }, {
       // El borrado hace ~25 operaciones en cadena; con el timeout por defecto
       // (5 s) una cuenta con historial —o algo de latencia hacia la base— hacía

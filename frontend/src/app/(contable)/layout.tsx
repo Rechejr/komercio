@@ -52,7 +52,7 @@ export default function ContableLayout({ children }: { children: React.ReactNode
             businessName: userData.branch?.business?.name,
             plan: userData.branch?.business?.plan || 'free',
             businessType: userData.branch?.business?.type || 'pos',
-          }, newToken);
+          }, newToken, userData.accounts);
         }
       })
       .catch(() => logout())
