@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils';
 import { OBLIGACION_LABEL, ESTADO_COLOR, formatNit, formatFecha, diasHastaVencimiento, type EstadoVencimiento, type Obligacion } from '@/lib/contable';
 import { CalendarClock, FileText, Users, AlertTriangle, Clock, ArrowRight } from 'lucide-react';
 import { ActivarPlanButton } from '@/components/contable/ActivarPlanButton';
+import { OnboardingChecklist } from '@/components/onboarding/OnboardingChecklist';
 
 interface PanelData {
   proximosVencimientos: Array<{
@@ -41,6 +42,9 @@ export default function ContablePanelPage() {
         </h1>
         <p className="text-slate-500 dark:text-slate-400 mt-1">Tu agenda tributaria al día.</p>
       </div>
+
+      {/* Primeros pasos (se oculta solo cuando ya están completos) */}
+      <OnboardingChecklist />
 
       {/* Aviso de suscripción / prueba */}
       {sus && !sus.activa && (

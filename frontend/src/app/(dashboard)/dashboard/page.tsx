@@ -16,6 +16,7 @@ import Link from 'next/link';
 import { Tooltip as InfoTooltip } from '@/components/ui/Tooltip';
 import { CountUp } from '@/components/ui/CountUp';
 import { AiSummaryCard } from '@/components/dashboard/AiSummaryCard';
+import { OnboardingChecklist } from '@/components/onboarding/OnboardingChecklist';
 
 // ── Trend badge ───────────────────────────────────────────────────────────────
 function TrendBadge({ current, prev }: { current: number; prev?: number }) {
@@ -145,6 +146,9 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-5 animate-fade-up">
+
+      {/* ── Primeros pasos (se oculta solo cuando ya están completos) ───────── */}
+      <OnboardingChecklist />
 
       {/* ── KPI cards ──────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
