@@ -86,6 +86,7 @@ model User {
   sales                Sale[]
   auditLogs            AuditLog[]
   notifications        Notification[]
+  pushSubscriptions    PushSubscription[]
   createdAt            DateTime        @default(now())
   updatedAt            DateTime        @updatedAt
   deletedAt            DateTime?
@@ -868,6 +869,23 @@ model Notification {
   @@index([isRead])
   @@index([userId, isRead])
   @@map("notifications")
+}
+
+// Suscripción de Web Push de un dispositivo/navegador. Permite enviar la alerta
+// de vencimientos al móvil aunque la app esté cerrada. Un usuario puede tener
+// varias (celular, PC…). Se limpia sola: al fallar el envío (endpoint expirado)
+// se borra, y cascada al borrar el usuario.
+model PushSubscription {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("push_subscriptions")
 }
 
 // ─── AUDIT LOGS ───────────────────────────────────────────────────────────────

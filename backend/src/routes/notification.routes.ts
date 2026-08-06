@@ -1,12 +1,46 @@
 import { Router } from 'express';
 import { prisma } from '../config/database';
 import { authenticate } from '../middlewares/auth';
-import { success, paginated } from '../utils/response';
+import { success, paginated, AppError } from '../utils/response';
 import { getPagination } from '../utils/pagination';
 import { pruneStaleLowStockNotifications } from '../services/notification.service';
+import { getVapidPublicKey } from '../config/webpush';
 
 const router = Router();
 router.use(authenticate);
+
+// ─── Web Push (notificaciones al móvil con la app cerrada) ────────────────────
+// Clave pública VAPID que el navegador necesita para suscribirse. Pública por
+// definición; se sirve desde el backend para no depender de una env del frontend.
+router.get('/vapid-public-key', (_req, res) => {
+  return success(res, { key: getVapidPublicKey() });
+});
+
+// Guarda (o actualiza) la suscripción push de este dispositivo para el usuario.
+router.post('/subscribe', async (req: any, res, next) => {
+  try {
+    const { endpoint, keys } = req.body || {};
+    if (!endpoint || !keys?.p256dh || !keys?.auth) throw new AppError('Suscripción inválida', 400);
+    await prisma.pushSubscription.upsert({
+      where: { endpoint },
+      create: { endpoint, p256dh: keys.p256dh, auth: keys.auth, userId: req.user.userId },
+      // Si el mismo endpoint cambia de dueño (ej. otra sesión en el equipo), se reasigna.
+      update: { p256dh: keys.p256dh, auth: keys.auth, userId: req.user.userId },
+    });
+    return success(res, null, 'Notificaciones activadas');
+  } catch (err) { next(err); }
+});
+
+// Elimina la suscripción de este dispositivo (al desactivar avisos).
+router.post('/unsubscribe', async (req: any, res, next) => {
+  try {
+    const { endpoint } = req.body || {};
+    if (endpoint) {
+      await prisma.pushSubscription.deleteMany({ where: { endpoint, userId: req.user.userId } });
+    }
+    return success(res, null, 'Notificaciones desactivadas');
+  } catch (err) { next(err); }
+});
 
 router.get('/unread-count', async (req: any, res, next) => {
   try {

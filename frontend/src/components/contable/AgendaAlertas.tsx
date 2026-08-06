@@ -9,6 +9,7 @@ import {
   type Obligacion, type EstadoVencimiento,
 } from '@/lib/contable';
 import { Bell, BellRing, AlertTriangle, X, ArrowRight } from 'lucide-react';
+import { subscribeToPush } from '@/lib/push';
 
 interface Prioritario {
   id: string; obligacion: Obligacion; periodo: string; fecha: string;
@@ -32,6 +33,10 @@ export function AgendaAlertas() {
   useEffect(() => {
     if (typeof window !== 'undefined' && 'Notification' in window) {
       setPermiso(Notification.permission);
+      // Si ya dio permiso antes, aseguramos que este dispositivo esté suscrito a
+      // Web Push (nuevo celular, o suscripción perdida) para recibir las alertas
+      // con la app cerrada.
+      if (Notification.permission === 'granted') subscribeToPush();
     }
   }, []);
 
@@ -84,10 +89,14 @@ export function AgendaAlertas() {
     if (!('Notification' in window)) return;
     const p = await Notification.requestPermission();
     setPermiso(p);
-    if (p === 'granted' && items.length > 0) {
-      sessionStorage.setItem('agenda-toasts-fired', '1');
-      yaDisparado.current = true;
-      dispararToasts(items);
+    if (p === 'granted') {
+      // Suscribe el dispositivo para recibir avisos con la app cerrada (push).
+      subscribeToPush();
+      if (items.length > 0) {
+        sessionStorage.setItem('agenda-toasts-fired', '1');
+        yaDisparado.current = true;
+        dispararToasts(items);
+      }
     }
   }
 

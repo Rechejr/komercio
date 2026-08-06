@@ -1,5 +1,6 @@
 import { prisma } from '../config/database';
 import { emitToUser, socketEvents } from '../config/socket';
+import { sendPushToUsers } from '../config/webpush';
 
 interface NotifyOptions {
   title: string;
@@ -194,5 +195,19 @@ export async function notifyContableVencimientos(
       userIds.forEach((userId) => emitToUser(userId, socketEvents.NEW_NOTIFICATION, payload));
     }
   } catch { /* socket opcional */ }
+
+  // Web Push: una notificación-resumen que llega al MÓVIL aunque la app esté
+  // cerrada (best-effort, no lanza). Un solo push por corrida en vez de N para
+  // no saturar; el detalle está en la campanita al abrir.
+  const pushBody = nuevos.length === 1
+    ? nuevos[0].mensaje
+    : `${nuevos.length} obligaciones vencidas o por vencer requieren tu atención.`;
+  await sendPushToUsers(userIds, {
+    title: 'Ventrix Contable · Vencimientos',
+    body: pushBody,
+    url: '/contable/panel',
+    tag: 'venc-alerta',
+  });
+
   return nuevos.length;
 }
