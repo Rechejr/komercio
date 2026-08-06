@@ -7,8 +7,9 @@ import { api } from '@/lib/api';
 import { formatCurrency, formatDateTime, statusColor, statusLabel } from '@/lib/utils';
 import { usePaymentAccounts, labelPago } from '@/lib/usePaymentAccounts';
 import toast from 'react-hot-toast';
-import { Search, X, ShoppingCart, Ban, ChevronRight, FileDown, Loader2, AlertTriangle, Trash2, Printer } from 'lucide-react';
+import { Search, X, ShoppingCart, Ban, ChevronRight, FileDown, Loader2, AlertTriangle, Trash2, Printer, RotateCcw } from 'lucide-react';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { ReturnModal } from '@/components/ventas/ReturnModal';
 import { StaggerList, StaggerItem } from '@/components/ui/StaggerList';
 import { WhatsAppIcon } from '@/components/ui/WhatsAppIcon';
 import Link from 'next/link';
@@ -35,6 +36,7 @@ export default function VentasPage() {
   const [selected, setSelected] = useState<any>(null);
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showReturnModal, setShowReturnModal] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
   const [sharingWhatsApp, setSharingWhatsApp] = useState(false);
 
@@ -136,6 +138,7 @@ export default function VentasPage() {
         >
           <option value="">Todos los estados</option>
           <option value="COMPLETED">Completadas</option>
+          <option value="REFUNDED">Devueltas</option>
           <option value="CANCELLED">Anuladas</option>
         </select>
         <Link
@@ -281,7 +284,7 @@ export default function VentasPage() {
     </div>
 
       {/* ── Detail Modal ─────────────────────────────────────────────────────── */}
-      {selected && detail && !showCancelModal && !showDeleteModal && (
+      {selected && detail && !showCancelModal && !showDeleteModal && !showReturnModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-[2px] z-50 flex items-center justify-center p-4">
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/[0.08] rounded-2xl shadow-modal w-full max-w-lg max-h-[90vh] flex flex-col animate-scale-in">
 
@@ -291,6 +294,15 @@ export default function VentasPage() {
                 <p className="text-[12px] text-slate-400 mt-0.5">{formatDateTime(detail.createdAt)}</p>
               </div>
               <div className="flex items-center gap-2">
+                {detail.status === 'COMPLETED' && canCancel && (
+                  <button
+                    type="button"
+                    onClick={() => setShowReturnModal(true)}
+                    className="flex items-center gap-1 px-3 py-1.5 text-[12px] text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/30 rounded-lg hover:bg-emerald-50 dark:hover:bg-emerald-500/10 transition"
+                  >
+                    <RotateCcw size={12} /> Devolver
+                  </button>
+                )}
                 {detail.status === 'COMPLETED' && canCancel && (
                   <button
                     type="button"
@@ -399,6 +411,27 @@ export default function VentasPage() {
                 </button>
               </div>
 
+              {/* Devoluciones (notas crédito) hechas sobre esta venta */}
+              {detail.returns && detail.returns.length > 0 && (
+                <div className="print-hide border-t border-slate-100 dark:border-white/[0.06] pt-3 space-y-2">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 flex items-center gap-1.5">
+                    <RotateCcw size={12} /> Devoluciones
+                  </p>
+                  {detail.returns.map((r: any) => (
+                    <div key={r.id} className="flex items-center justify-between gap-3 px-3 py-2 rounded-xl bg-slate-50 dark:bg-white/[0.03]">
+                      <div className="min-w-0">
+                        <p className="text-[12px] font-medium text-slate-700 dark:text-slate-200 font-mono">{r.returnNumber}</p>
+                        <p className="text-[11px] text-slate-400">
+                          {(r.details || []).reduce((s: number, d: any) => s + d.quantity, 0)} und
+                          {r.reason ? ` · ${r.reason}` : ''}{!r.restock ? ' · sin reponer' : ''}
+                        </p>
+                      </div>
+                      <span className="text-[13px] font-semibold text-slate-700 dark:text-slate-200 tabular-nums flex-none">{formatCurrency(r.total)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               {detail.notes && (
                 <p className="print-hide text-[12px] text-slate-400 border-t border-slate-100 dark:border-white/[0.06] pt-3 italic">
                   Nota: {detail.notes}
@@ -407,6 +440,15 @@ export default function VentasPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* ── Return Modal ─────────────────────────────────────────────────────── */}
+      {showReturnModal && detail && (
+        <ReturnModal
+          sale={detail}
+          onClose={() => setShowReturnModal(false)}
+          onDone={() => { setShowReturnModal(false); setSelected(null); }}
+        />
       )}
 
       {/* ── Cancel Modal ─────────────────────────────────────────────────────── */}

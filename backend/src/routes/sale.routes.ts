@@ -10,6 +10,8 @@ router.use(authenticate);
 
 router.get('/', saleController.list);
 router.get('/summary/daily', saleController.getDailySummary);
+// Historial de devoluciones (va antes de '/:id' para que no lo capture).
+router.get('/returns/list', saleController.listReturns);
 router.get('/:id', saleController.getOne);
 
 router.post('/',
@@ -37,6 +39,20 @@ router.patch('/:id/cancel',
   [body('reason').optional().trim()],
   validate,
   saleController.cancel,
+);
+
+// Devolución / nota crédito (total o parcial). Solo ADMIN y Supervisor.
+router.post('/:id/return',
+  authorize('ADMIN', 'SUPERVISOR'),
+  [
+    body('items').isArray({ min: 1 }).withMessage('Selecciona al menos un producto para devolver'),
+    body('items.*.saleDetailId').isUUID().withMessage('saleDetailId inválido'),
+    body('items.*.quantity').isFloat({ min: 0.001 }).withMessage('La cantidad debe ser mayor a 0'),
+    body('restock').optional().isBoolean(),
+    body('reason').optional().trim(),
+  ],
+  validate,
+  saleController.createReturn,
 );
 
 router.delete('/:id',

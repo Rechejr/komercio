@@ -260,6 +260,11 @@ router.delete('/businesses/:id', deleteBusinessLimiter, async (req: AuthRequest,
       }
       // 6. Movimientos de inventario (FK productId requerido sin cascade)
       await tx.inventoryMovement.deleteMany({ where: { product: { businessId } } });
+      // 6.5. Devoluciones (nota crédito) — FK RESTRICT hacia sales; deben irse antes
+      // que las ventas. Sus return_details caen en cascada.
+      if (branchIds.length > 0) {
+        await tx.return.deleteMany({ where: { branchId: { in: branchIds } } });
+      }
       // 7. Ventas (SaleDetail.productId FK requerido sin cascade → antes de productos)
       if (branchIds.length > 0) {
         await tx.saleDetail.deleteMany({ where: { sale: { branchId: { in: branchIds } } } });

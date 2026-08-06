@@ -177,6 +177,7 @@ export const saleController = {
             include: { product: { select: { id: true, name: true, code: true, unit: true } } },
           },
           credit: true,
+          returns: { include: { details: true }, orderBy: { createdAt: 'desc' } },
         },
       });
       if (!sale) throw new AppError('Venta no encontrada', 404);
@@ -738,6 +739,202 @@ export const saleController = {
       await cache.del(`dashboard:${req.user!.businessId}`);
 
       return success(res, null, 'Venta anulada');
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  // Devolución / nota crédito: revierte por la porción devuelta (total o parcial)
+  // el stock, la caja y/o el crédito, siguiendo el mismo patrón que cancel().
+  async createReturn(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const { id } = req.params;
+      const { items, reason } = req.body;
+      const restock = req.body.restock !== false; // por defecto se repone el inventario
+
+      if (!Array.isArray(items) || items.length === 0) {
+        throw new AppError('Selecciona al menos un producto para devolver', 400);
+      }
+
+      const sale = await prisma.sale.findFirst({
+        where: { id, deletedAt: null, branch: { businessId: req.user!.businessId } },
+        include: {
+          details: { include: { product: { select: { name: true } } } },
+          returns: { include: { details: true } },
+        },
+      });
+      if (!sale) throw new AppError('Venta no encontrada', 404);
+      if (sale.status === 'CANCELLED') throw new AppError('No se puede devolver una venta anulada', 400);
+
+      // Cantidad ya devuelta por cada línea de la venta (devoluciones previas).
+      const returnedByDetail = new Map<string, number>();
+      for (const r of sale.returns) {
+        for (const d of r.details) {
+          if (d.saleDetailId) returnedByDetail.set(d.saleDetailId, (returnedByDetail.get(d.saleDetailId) || 0) + d.quantity);
+        }
+      }
+
+      const detailById = new Map(sale.details.map((d) => [d.id, d]));
+      const lines: Array<{ detail: typeof sale.details[number]; qty: number; perUnit: number; lineTotal: number }> = [];
+      for (const it of items) {
+        const detail = detailById.get(it.saleDetailId);
+        if (!detail) throw new AppError('Uno de los ítems no pertenece a esta venta', 400);
+        const qty = Number(it.quantity);
+        if (!(qty > 0)) throw new AppError('La cantidad a devolver debe ser mayor a 0', 400);
+        const maxReturnable = detail.quantity - (returnedByDetail.get(detail.id) || 0);
+        if (qty > maxReturnable + 1e-9) {
+          throw new AppError(`No puedes devolver más de ${maxReturnable} de "${detail.product?.name ?? 'producto'}"`, 400);
+        }
+        // Precio efectivo por unidad = total de la línea (con su descuento/IVA) / cantidad.
+        const perUnit = roundCOP(Number(detail.total) / detail.quantity);
+        lines.push({ detail, qty, perUnit, lineTotal: roundCOP(perUnit * qty) });
+      }
+      const returnTotal = lines.reduce((s, l) => s + l.lineTotal, 0);
+
+      // Reintentos por colisión del correlativo NC (unique [branchId, returnNumber]).
+      let newReturn: Awaited<ReturnType<typeof prisma.return.create>> | null = null;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          newReturn = await prisma.$transaction(async (tx) => {
+            const count = await tx.return.count({ where: { branchId: sale.branchId } });
+            const returnNumber = `NC-${String(count + 1).padStart(4, '0')}`;
+
+            // 1. Reponer stock a la bodega donde se vendió (si aplica).
+            if (restock) {
+              for (const { detail, qty } of lines) {
+                const [locked] = await tx.$queryRawUnsafe<Array<{ id: string; stock: number }>>(
+                  'SELECT id, stock FROM products WHERE id::text = $1 FOR UPDATE', detail.productId,
+                );
+                if (!locked) continue;
+                const newStock = locked.stock + qty;
+                await tx.product.update({ where: { id: detail.productId }, data: { stock: { increment: qty } } });
+                if (detail.productVariantId) {
+                  await tx.$executeRawUnsafe(
+                    `INSERT INTO product_variant_stocks (id, "variantId", "branchId", stock, "createdAt", "updatedAt")
+                     VALUES ($1, $2, $3, $4, now(), now())
+                     ON CONFLICT ("variantId", "branchId") DO UPDATE SET stock = product_variant_stocks.stock + $4, "updatedAt" = now()`,
+                    randomUUID(), detail.productVariantId, sale.branchId, qty,
+                  );
+                } else {
+                  await tx.$executeRawUnsafe(
+                    `INSERT INTO product_stocks (id, "productId", "branchId", stock, "createdAt", "updatedAt")
+                     VALUES ($1, $2, $3, $4, now(), now())
+                     ON CONFLICT ("productId", "branchId") DO UPDATE SET stock = product_stocks.stock + $4, "updatedAt" = now()`,
+                    randomUUID(), detail.productId, sale.branchId, qty,
+                  );
+                }
+                await tx.inventoryMovement.create({
+                  data: {
+                    productId: detail.productId, type: 'IN', quantity: qty,
+                    previousStock: locked.stock, newStock,
+                    reason: `Devolución ${returnNumber} (venta ${sale.invoiceNumber})`,
+                    referenceId: id, referenceType: 'SALE_RETURN',
+                    unitCost: detail.costPrice, totalCost: Number(detail.costPrice) * qty,
+                    branchId: sale.branchId,
+                  },
+                });
+              }
+            }
+
+            // 2. Reembolso: primero baja el saldo del fiado (si hay), el resto es efectivo.
+            let creditReversal = 0;
+            const [credit] = await tx.$queryRawUnsafe<Array<{ id: string; customerId: string; balance: string; paidAmount: string; status: string }>>(
+              'SELECT * FROM credits WHERE "saleId"::text = $1 FOR UPDATE', id,
+            );
+            if (credit && credit.status !== 'CANCELLED' && Number(credit.balance) > 0) {
+              creditReversal = Math.min(returnTotal, Number(credit.balance));
+              const newBalance = Number(credit.balance) - creditReversal;
+              await tx.customer.update({
+                where: { id: credit.customerId },
+                data: { currentDebt: { decrement: creditReversal } },
+              });
+              await tx.credit.update({
+                where: { id: credit.id },
+                data: {
+                  balance: newBalance,
+                  status: newBalance <= 0 ? (Number(credit.paidAmount) > 0 ? 'PAID' : 'CANCELLED') : credit.status as never,
+                },
+              });
+            }
+            const cashRefund = returnTotal - creditReversal;
+
+            // 3. Salida de caja por la porción en efectivo (si hay caja abierta).
+            let cashApplied = 0;
+            if (sale.branchId && cashRefund > 0) {
+              const openRegister = await tx.cashRegister.findFirst({ where: { branchId: sale.branchId, status: 'OPEN' } });
+              if (openRegister) {
+                await tx.cashMovement.create({
+                  data: {
+                    cashRegisterId: openRegister.id, type: 'OUT', amount: cashRefund,
+                    description: `Devolución ${returnNumber} (venta ${sale.invoiceNumber})`,
+                    referenceId: id, createdById: req.user!.userId,
+                  },
+                });
+                cashApplied = cashRefund;
+              }
+            }
+
+            const refundMethod = creditReversal > 0 && cashApplied > 0 ? 'MIXED'
+              : creditReversal > 0 ? 'CREDIT'
+              : cashApplied > 0 ? 'CASH' : 'NONE';
+
+            // 4. Registrar la nota crédito con su detalle.
+            const rec = await tx.return.create({
+              data: {
+                returnNumber, saleId: id, branchId: sale.branchId, userId: req.user!.userId,
+                customerId: sale.customerId, total: returnTotal, reason: reason || null,
+                refundMethod, restock,
+                details: {
+                  create: lines.map((l) => ({
+                    saleDetailId: l.detail.id, productId: l.detail.productId,
+                    productVariantId: l.detail.productVariantId, productName: l.detail.product?.name ?? 'Producto',
+                    quantity: l.qty, unitPrice: l.perUnit, total: l.lineTotal,
+                  })),
+                },
+              },
+              include: { details: true },
+            });
+
+            // 5. Si con esta devolución se devolvió TODA la venta, marcarla REFUNDED.
+            const afterReturned = new Map(returnedByDetail);
+            for (const l of lines) afterReturned.set(l.detail.id, (afterReturned.get(l.detail.id) || 0) + l.qty);
+            const fullyReturned = sale.details.every((d) => (afterReturned.get(d.id) || 0) >= d.quantity - 1e-9);
+            if (fullyReturned && sale.status !== 'REFUNDED') {
+              await tx.sale.update({ where: { id }, data: { status: 'REFUNDED' } });
+            }
+
+            return rec;
+          }, { timeout: 30000 });
+          break; // éxito
+        } catch (e) {
+          if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002' && attempt < 2) continue;
+          throw e;
+        }
+      }
+
+      await cache.del(`dashboard:${req.user!.businessId}`);
+      return created(res, newReturn, 'Devolución registrada');
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  // Listado de devoluciones del negocio (para la vista de historial).
+  async listReturns(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const { page, limit, skip } = getPagination(req);
+      const where: Prisma.ReturnWhereInput = { sale: { branch: { businessId: req.user!.businessId } } };
+      const [returns, total] = await Promise.all([
+        prisma.return.findMany({
+          where, skip, take: limit, orderBy: { createdAt: 'desc' },
+          include: {
+            details: true,
+            sale: { select: { invoiceNumber: true, customer: { select: { name: true } } } },
+          },
+        }),
+        prisma.return.count({ where }),
+      ]);
+      return paginated(res, returns, total, page, limit);
     } catch (err) {
       next(err);
     }

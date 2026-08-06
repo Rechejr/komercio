@@ -538,6 +538,7 @@ model Sale {
   notes            String?
   details          SaleDetail[]
   credit           Credit?
+  returns          Return[]
   createdAt        DateTime        @default(now())
   updatedAt        DateTime        @updatedAt
   deletedAt        DateTime?
@@ -577,6 +578,52 @@ model SaleDetail {
   @@index([productId])
   @@index([productVariantId])
   @@map("sale_details")
+}
+
+// Devolución / nota crédito de una venta. Puede ser total o parcial (por ítem y
+// cantidad). Revierte stock, caja y/o crédito igual que la anulación, pero por la
+// porción devuelta. branchId/userId/customerId/productId van como columnas (sin
+// FK), igual que InventoryMovement, para no atar el borrado a estas tablas.
+model Return {
+  id           String         @id @default(uuid())
+  returnNumber String         // Correlativo NC-0001 por sucursal
+  saleId       String
+  sale         Sale           @relation(fields: [saleId], references: [id])
+  branchId     String
+  userId       String         // Quién registró la devolución
+  customerId   String?
+  total        Decimal        @default(0) // Monto total reembolsado
+  reason       String?
+  // Cómo se reembolsó: CASH (salida de caja), CREDIT (baja saldo del fiado),
+  // MIXED (ambos) o NONE (monto 0 / sin movimiento).
+  refundMethod String         @default("NONE")
+  restock      Boolean        @default(true) // Si repuso el inventario
+  createdAt    DateTime       @default(now())
+  details      ReturnDetail[]
+
+  @@unique([branchId, returnNumber])
+  @@index([saleId])
+  @@index([branchId])
+  @@index([createdAt])
+  @@map("returns")
+}
+
+model ReturnDetail {
+  id               String   @id @default(uuid())
+  returnId         String
+  return           Return   @relation(fields: [returnId], references: [id], onDelete: Cascade)
+  saleDetailId     String?  // Línea original de la venta
+  productId        String
+  productVariantId String?
+  productName      String   // Snapshot del nombre para el historial
+  quantity         Float
+  unitPrice        Decimal  // Precio efectivo por unidad reembolsado
+  total            Decimal
+  createdAt        DateTime @default(now())
+
+  @@index([returnId])
+  @@index([productId])
+  @@map("return_details")
 }
 
 // ─── PURCHASES ────────────────────────────────────────────────────────────────
