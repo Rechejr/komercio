@@ -51,15 +51,19 @@ export function ConfirmDialog({
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 bg-black/50 z-50 animate-fade-in" />
+        {/* Centrado con flex (no con translate): la animación scale-in termina en
+            `transform: none`, que borraría un -translate-x/y-1/2 y dejaría el
+            diálogo salido de la pantalla en móvil. El flex es inmune a eso. */}
         <Dialog.Content
-          className={cn(
-            'fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50',
-            'bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/[0.08] rounded-2xl shadow-modal w-full max-w-sm p-0',
-            'animate-scale-in',
-          )}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 outline-none"
           onEscapeKeyDown={() => !loading && onOpenChange(false)}
-          onPointerDownOutside={() => !loading && onOpenChange(false)}
+          onInteractOutside={() => !loading && onOpenChange(false)}
+          onClick={(e) => { if (e.target === e.currentTarget && !loading) onOpenChange(false); }}
         >
+          <div className={cn(
+            'bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/[0.08] rounded-2xl shadow-modal',
+            'w-full max-w-sm max-h-[90vh] overflow-y-auto animate-scale-in',
+          )}>
           <div className="px-6 py-5">
             <div className="flex items-start gap-4">
               <div className={cn('w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0', iconBg[variant])}>
@@ -101,6 +105,7 @@ export function ConfirmDialog({
               {loading && <Loader2 size={14} className="animate-spin" />}
               {confirmLabel}
             </button>
+          </div>
           </div>
         </Dialog.Content>
       </Dialog.Portal>
