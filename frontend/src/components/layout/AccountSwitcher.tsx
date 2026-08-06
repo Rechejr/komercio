@@ -60,13 +60,12 @@ export function AccountSwitcher({ collapsed = false }: { collapsed?: boolean }) 
     if (!activating || !newName.trim()) return;
     setBusy(true);
     try {
-      await activarProducto(newName.trim(), activating);
-      toast.success(`${META[activating].label} activado`);
-      setActivating(null);
-      setNewName('');
+      const created = await activarProducto(newName.trim(), activating);
+      // Entra directo al producto recién activado para empezar a configurarlo
+      // (reemite el token y recarga a su tablero). No hace falta un paso extra.
+      await switchToAccount(created.businessId);
     } catch (e: any) {
       toast.error(e?.response?.data?.error || 'No se pudo activar el producto');
-    } finally {
       setBusy(false);
     }
   };
