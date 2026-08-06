@@ -19,7 +19,7 @@
     "db:seed-calendario": "ts-node prisma/seedCalendario.ts",
     "db:studio": "prisma studio",
     "db:push": "prisma db push",
-    "test": "jest",
+    "test": "jest --forceExit",
     "lint": "eslint src --ext .ts"
   },
   "dependencies": {
