@@ -199,10 +199,48 @@ function LoginForm() {
   const { login }    = useAuthStore();
   const [showPwd, setShowPwd]       = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
+  // Si el usuario marcó "mantener sesión" en un login anterior, al abrir /login
+  // (o la app instalada, cuyo start_url es /login) intentamos revivir la sesión
+  // con la cookie de refresh y entrar directo, sin pedirle la clave otra vez.
+  const [checkingSession, setCheckingSession] = useState(
+    () => typeof window !== 'undefined' && localStorage.getItem('ventrix-remember') === 'true',
+  );
 
   const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<LoginForm>({
     resolver: zodResolver(loginSchema),
   });
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (localStorage.getItem('ventrix-remember') !== 'true') return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await api.post('/auth/refresh-token');
+        const token = data.data.accessToken;
+        const me = await api.get('/auth/me');
+        const u = me.data.data;
+        if (cancelled) return;
+        const user = {
+          ...u,
+          businessId: u.branch?.business?.id,
+          businessName: u.branch?.business?.name,
+          plan: u.branch?.business?.plan || 'free',
+          businessType: u.branch?.business?.type || 'pos',
+        };
+        login(user, token, true, u.accounts);
+        const home = homeForBusinessType(user.businessType);
+        const raw = searchParams.get('redirect') || home;
+        const safe = raw.startsWith('/') && !raw.startsWith('//') ? raw : home;
+        router.replace(user.role === 'SUPER_ADMIN' ? '/superadmin' : safe);
+      } catch {
+        // Sesión no válida (cookie vencida/ausente): mostramos el formulario.
+        if (!cancelled) setCheckingSession(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Correo con acceso a POS y Contable a la vez: se muestra el selector antes de
   // redirigir. La sesión ya quedó abierta en la cuenta por defecto.
@@ -267,6 +305,16 @@ function LoginForm() {
     'placeholder:text-slate-400 dark:placeholder:text-slate-500',
     'focus:outline-none focus:ring-2 focus:ring-[#0DA06A]/25 focus:border-[#0DA06A]',
   ].join(' ');
+
+  // Mientras intenta revivir la sesión guardada, no mostramos el formulario.
+  if (checkingSession) {
+    return (
+      <div className="animate-fade-up flex flex-col items-center justify-center gap-3 py-10 text-slate-500 dark:text-slate-400">
+        <Loader2 size={30} className="animate-spin text-[#0DA06A]" />
+        <p className="text-sm">Reanudando tu sesión…</p>
+      </div>
+    );
+  }
 
   if (chooser) {
     const productMeta = (t: string) => t === 'contable'
