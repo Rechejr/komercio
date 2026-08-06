@@ -118,7 +118,7 @@ export function ContableSidebar({ mobileOpen, onMobileClose }: ContableSidebarPr
         <div className="mx-3 mb-1 h-px bg-white/[0.06] flex-shrink-0" />
 
         {/* Navegación */}
-        <nav className="flex-1 overflow-y-auto scrollbar-thin py-1.5 px-2 space-y-[2px]">
+        <nav className="flex-1 overflow-y-auto sidebar-scroll py-1.5 px-2 space-y-[2px]">
           {visibleItems.map((item) => {
             const active = pathname === item.href || pathname.startsWith(item.href + '/');
 
