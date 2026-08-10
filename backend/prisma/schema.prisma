@@ -155,6 +155,7 @@ model Business {
   // usan cuando type == "contable"; en una cuenta POS la relación queda vacía.
   taxClients        TaxClient[]
   quotes            Quote[]
+  supplierCredits   SupplierCredit[]
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
   deletedAt         DateTime?
@@ -501,15 +502,20 @@ model Supplier {
   contactName String?
   notes       String?
   isActive    Boolean    @default(true)
+  // Lo que el NEGOCIO le debe al proveedor por compras a crédito (espejo de
+  // Customer.currentDebt). Sube al comprar a crédito, baja al abonar.
+  currentDebt Decimal    @default(0)
   products    Product[]
   purchases   Purchase[]
   expenses    Expense[]
+  supplierCredits SupplierCredit[]
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
   deletedAt   DateTime?
 
   @@unique([businessId, document])
   @@index([businessId])
+  @@index([businessId, currentDebt])
   @@map("suppliers")
 }
 
@@ -642,6 +648,12 @@ model Purchase {
   paymentMethod    PaymentMethod    @default(CASH)
   paymentAccountId String?
   paymentAccount   PaymentAccount?  @relation(fields: [paymentAccountId], references: [id])
+  // Pago dividido: monto pagado AHORA (suma de los medios no-crédito) y el
+  // desglose { splits: [{ method, amount, paymentAccountId? }] }. En pago simple
+  // paidAmount = total y paymentDetails queda null (comportamiento de siempre).
+  paidAmount       Decimal          @default(0)
+  paymentDetails   Json?
+  supplierCredit   SupplierCredit?
   invoicePdf       String?
   notes            String?
   purchaseDate     DateTime         @default(now())
@@ -686,6 +698,50 @@ model PurchaseDetail {
   @@index([branchId])
   @@index([productVariantId])
   @@map("purchase_details")
+}
+
+// Crédito a PROVEEDOR: lo que el negocio queda debiendo tras una compra a
+// crédito (espejo de Credit/CreditPayment de clientes). Abonar saca plata de la
+// caja (a diferencia del fiado de cliente, que la mete).
+model SupplierCredit {
+  id          String                  @id @default(uuid())
+  purchaseId  String?                 @unique
+  purchase    Purchase?               @relation(fields: [purchaseId], references: [id])
+  supplierId  String
+  supplier    Supplier                @relation(fields: [supplierId], references: [id])
+  businessId  String
+  business    Business                @relation(fields: [businessId], references: [id])
+  totalAmount Decimal
+  paidAmount  Decimal                 @default(0)
+  balance     Decimal
+  status      CreditStatus            @default(PENDING)
+  dueDate     DateTime?
+  notes       String?
+  payments    SupplierCreditPayment[]
+  createdAt   DateTime                @default(now())
+  updatedAt   DateTime                @updatedAt
+  deletedAt   DateTime?
+
+  @@index([supplierId])
+  @@index([businessId])
+  @@index([businessId, status])
+  @@map("supplier_credits")
+}
+
+model SupplierCreditPayment {
+  id               String          @id @default(uuid())
+  supplierCreditId String
+  supplierCredit   SupplierCredit  @relation(fields: [supplierCreditId], references: [id], onDelete: Cascade)
+  amount           Decimal
+  paymentMethod    PaymentMethod   @default(CASH)
+  paymentAccountId String?
+  paymentAccount   PaymentAccount? @relation(fields: [paymentAccountId], references: [id])
+  notes            String?
+  createdAt        DateTime        @default(now())
+
+  @@index([supplierCreditId])
+  @@index([paymentAccountId])
+  @@map("supplier_credit_payments")
 }
 
 // ─── EXPENSES ─────────────────────────────────────────────────────────────────
@@ -797,6 +853,7 @@ model PaymentAccount {
   purchases      Purchase[]
   expenses       Expense[]
   creditPayments CreditPayment[]
+  supplierCreditPayments SupplierCreditPayment[]
   createdAt      DateTime           @default(now())
   updatedAt      DateTime           @updatedAt
 

@@ -48,6 +48,8 @@ describe('DELETE /api/v1/superadmin/businesses/:id', () => {
     const tx = {
       creditPayment: { deleteMany: jest.fn().mockResolvedValue({}) },
       credit: { deleteMany: jest.fn().mockResolvedValue({}) },
+      supplierCreditPayment: { deleteMany: jest.fn().mockResolvedValue({}) },
+      supplierCredit: { deleteMany: jest.fn().mockResolvedValue({}) },
       cashMovement: { deleteMany: jest.fn().mockResolvedValue({}) },
       cashRegister: { deleteMany: jest.fn().mockResolvedValue({}) },
       saleNumberCounter: { deleteMany: jest.fn().mockResolvedValue({}) },

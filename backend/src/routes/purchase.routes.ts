@@ -23,10 +23,76 @@ const purchaseItemValidators = [
   body('branchId').optional().isUUID().withMessage('branchId inválido'),
   body('invoiceNumber').optional().trim(),
   body('notes').optional().trim(),
-  // MIXED no se ofrece aquí — mismo criterio que el <select> de Gastos.
-  body('paymentMethod').optional().isIn(['CASH', 'TRANSFER', 'NEQUI', 'DAVIPLATA', 'CARD']).withMessage('Método de pago inválido'),
+  body('paymentMethod').optional().isIn(['CASH', 'TRANSFER', 'NEQUI', 'DAVIPLATA', 'CARD', 'MIXED']).withMessage('Método de pago inválido'),
   body('paymentAccountId').optional({ nullable: true }).isString(),
+  // Pago dividido: varias líneas { paymentAccountId, amount } + opción de crédito.
+  body('payments').optional().isArray(),
+  body('payments.*.paymentAccountId').optional({ nullable: true }).isString(),
+  body('payments.*.amount').optional().isFloat({ min: 0 }),
+  body('credit').optional(),
+  body('credit.amount').optional({ nullable: true }).isFloat({ min: 0 }),
+  body('credit.dueDate').optional({ nullable: true, checkFalsy: true }).isISO8601(),
 ];
+
+const roundCOP = (n: number) => Math.round(n);
+
+// Resuelve el pago de una compra: soporta pago simple (paymentMethod/paymentAccountId,
+// como siempre) o pago DIVIDIDO (payments[] + credit). Devuelve todo lo que la
+// compra necesita: método, cuenta, monto pagado, desglose, efectivo para la caja
+// y el monto que queda a crédito con el proveedor.
+async function buildPurchasePayment(body: any, businessId: string, total: number): Promise<{
+  paymentMethod: string; paymentAccountId: string | null; paidAmount: number;
+  paymentDetails: { splits: Array<{ method: string; amount: number; paymentAccountId: string | null }> } | null;
+  cashAmount: number; creditAmount: number; creditDueDate: Date | null;
+}> {
+  const payments: Array<{ paymentAccountId?: string; amount: number | string }> = Array.isArray(body.payments) ? body.payments : [];
+  const hasSplit = payments.length > 0 || (body.credit && Number(body.credit.amount) > 0);
+
+  if (!hasSplit) {
+    // Pago simple (comportamiento de siempre): un solo medio cubre el total.
+    const resolved = await resolvePayment({ paymentAccountId: body.paymentAccountId, paymentMethod: body.paymentMethod }, businessId);
+    return {
+      paymentMethod: resolved.paymentMethod, paymentAccountId: resolved.paymentAccountId,
+      paidAmount: total, paymentDetails: null,
+      cashAmount: resolved.paymentMethod === 'CASH' ? total : 0,
+      creditAmount: 0, creditDueDate: null,
+    };
+  }
+
+  // Pago dividido: resolver cada medio (valida que la cuenta sea del negocio).
+  const splits: Array<{ method: string; amount: number; paymentAccountId: string | null }> = [];
+  for (const p of payments) {
+    const amount = roundCOP(Number(p.amount));
+    if (!(amount > 0)) continue;
+    const resolved = await resolvePayment({ paymentAccountId: p.paymentAccountId }, businessId);
+    splits.push({ method: resolved.paymentMethod, amount, paymentAccountId: resolved.paymentAccountId });
+  }
+  const paidSum = roundCOP(splits.reduce((s, x) => s + x.amount, 0));
+  const creditAmount = body.credit?.amount != null ? roundCOP(Number(body.credit.amount)) : roundCOP(total - paidSum);
+
+  if (paidSum < 0 || creditAmount < 0) throw new AppError('Los montos de pago no pueden ser negativos', 400);
+  if (Math.abs(paidSum + creditAmount - total) > 1) {
+    throw new AppError('La suma de los pagos y el crédito no coincide con el total de la compra', 400);
+  }
+  if (paidSum === 0 && creditAmount === 0) throw new AppError('Indica cómo se paga la compra', 400);
+
+  const cashAmount = roundCOP(splits.filter((s) => s.method === 'CASH').reduce((s, x) => s + x.amount, 0));
+  const creditDueDate = body.credit?.dueDate ? new Date(body.credit.dueDate) : null;
+
+  // Si es un solo medio y sin crédito, se guarda como pago simple (no MIXED) para
+  // que el badge de pago siga mostrando la cuenta, como antes.
+  if (splits.length === 1 && creditAmount === 0) {
+    return {
+      paymentMethod: splits[0].method, paymentAccountId: splits[0].paymentAccountId,
+      paidAmount: total, paymentDetails: null, cashAmount, creditAmount: 0, creditDueDate: null,
+    };
+  }
+
+  return {
+    paymentMethod: 'MIXED', paymentAccountId: null, paidAmount: paidSum,
+    paymentDetails: { splits }, cashAmount, creditAmount, creditDueDate,
+  };
+}
 
 // Compras de antes de esta función quedaron con branchId null — al editarlas o
 // eliminarlas se asume la bodega más antigua del negocio, la misma a la que el
@@ -129,11 +195,17 @@ router.post('/', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE', 'CASHIER'), planL
   [body('supplierId').isUUID().withMessage('Selecciona un proveedor'), ...purchaseItemValidators],
   validate, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const { supplierId, invoiceNumber, items, notes, purchaseDate, branchId, paymentMethod, paymentAccountId } = req.body;
+    const { supplierId, invoiceNumber, items, notes, purchaseDate, branchId } = req.body;
     if (!items?.length) throw new AppError('Se requieren productos', 400);
     const businessId = req.user!.businessId;
-    const resolvedPay = await resolvePayment({ paymentAccountId, paymentMethod }, businessId!);
-    const effectivePaymentMethod = resolvedPay.paymentMethod;
+
+    // Total de la compra (para validar el pago) — mismo cálculo que dentro de la tx.
+    const computedTotal = roundCOP(items.reduce((s: number, it: any) => {
+      const lineSub = parseFloat(it.unitCost) * parseFloat(it.quantity);
+      return s + lineSub + lineSub * ((parseFloat(it.taxRate) || 0) / 100);
+    }, 0));
+    // Resuelve el pago: simple (un medio) o dividido (payments[] + crédito).
+    const pay = await buildPurchasePayment(req.body, businessId!, computedTotal);
 
     // Validate all products belong to this business before starting the transaction.
     // Dedupe primero — con bodega por línea, un mismo producto puede repetirse en
@@ -192,8 +264,10 @@ router.post('/', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE', 'CASHIER'), planL
           subtotal,
           taxAmount,
           total: subtotal + taxAmount,
-          paymentMethod: effectivePaymentMethod,
-          paymentAccountId: resolvedPay.paymentAccountId,
+          paymentMethod: pay.paymentMethod as any,
+          paymentAccountId: pay.paymentAccountId,
+          paidAmount: pay.paidAmount,
+          paymentDetails: (pay.paymentDetails ?? undefined) as any,
           details: { create: details },
           // Valor de referencia/compat: la bodega de la primera línea. No se
           // lee en ningún otro lado del backend — solo sirve de fallback
@@ -262,6 +336,20 @@ router.post('/', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE', 'CASHIER'), planL
           },
         });
       }
+
+      // Parte a crédito: queda debiendo al proveedor. Crea la cuenta por pagar y
+      // sube su deuda (espejo del fiado de cliente, dentro de la misma tx).
+      if (pay.creditAmount > 0) {
+        await tx.supplierCredit.create({
+          data: {
+            purchaseId: newPurchase.id, supplierId, businessId: businessId!,
+            totalAmount: pay.creditAmount, paidAmount: 0, balance: pay.creditAmount,
+            status: 'PENDING', dueDate: pay.creditDueDate,
+          },
+        });
+        await tx.supplier.update({ where: { id: supplierId }, data: { currentDebt: { increment: pay.creditAmount } } });
+      }
+
       return newPurchase;
     });
 
@@ -269,7 +357,9 @@ router.post('/', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE', 'CASHIER'), planL
     // mismo patrón que expense.controller.ts) — la caja a afectar es la del
     // usuario que registra la compra, no la(s) bodega(s) donde entra la
     // mercancía: son dos cosas distintas, igual que ya pasa en Gastos.
-    if (effectivePaymentMethod === 'CASH') {
+    // Solo la PORCIÓN en efectivo sale de la caja (en pago dividido puede ser una
+    // parte del total; el resto —transferencia/crédito— no toca la caja física).
+    if (pay.cashAmount > 0) {
       try {
         const userBranchId = req.user!.branchId;
         if (userBranchId) {
@@ -279,7 +369,7 @@ router.post('/', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE', 'CASHIER'), planL
               data: {
                 cashRegisterId: openRegister.id,
                 type: 'OUT',
-                amount: Number(purchase.total),
+                amount: pay.cashAmount,
                 description: sup?.name ? `Compra a ${sup.name}` : 'Compra de mercancía',
                 referenceId: purchase.id,
                 createdById: req.user!.userId,
@@ -310,9 +400,15 @@ router.put('/:id', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE'), purchaseItemVa
 
     const existing = await prisma.purchase.findFirst({
       where: { id: req.params.id, deletedAt: null, businessId },
-      include: { details: true },
+      include: { details: true, supplierCredit: true },
     });
     if (!existing) throw new AppError('Compra no encontrada', 404);
+
+    // Editar una compra con saldo a crédito reconciliaría deuda del proveedor +
+    // caja + abonos: se prefiere anularla y volver a registrarla (evita descuadres).
+    if (existing.supplierCredit && existing.supplierCredit.status !== 'CANCELLED') {
+      throw new AppError('Esta compra tiene un saldo a crédito con el proveedor. Anúlala y regístrala de nuevo para cambiar el pago.', 400);
+    }
 
     // Validate new items' products belong to this business (dedupe — ver nota
     // equivalente en POST sobre por qué hace falta con bodega por línea).
@@ -550,13 +646,23 @@ router.delete('/:id', authorize('ADMIN', 'SUPERVISOR'), async (req: AuthRequest,
   try {
     const existing = await prisma.purchase.findFirst({
       where: { id: req.params.id, deletedAt: null, businessId: req.user!.businessId },
-      include: { details: true },
+      include: { details: true, supplierCredit: true },
     });
     if (!existing) throw new AppError('Compra no encontrada', 404);
 
     await prisma.$transaction(async (tx) => {
       // Fallback solo para detalles legados sin branchId propio.
       const legacyBranchId = await resolvePurchaseBranchId(tx, req.user!.businessId!, existing.branchId);
+
+      // Si la compra dejó un saldo a crédito con el proveedor, se anula y se baja
+      // su deuda por el SALDO pendiente (los abonos ya hechos son reales y quedan).
+      if (existing.supplierCredit && existing.supplierCredit.status !== 'CANCELLED') {
+        const bal = Number(existing.supplierCredit.balance);
+        if (bal > 0) {
+          await tx.supplier.update({ where: { id: existing.supplierId }, data: { currentDebt: { decrement: bal } } });
+        }
+        await tx.supplierCredit.update({ where: { id: existing.supplierCredit.id }, data: { status: 'CANCELLED', balance: 0 } });
+      }
 
       interface DeleteProductRow { id: string; stock: number; allowNegativeStock: boolean; name: string; }
       for (const detail of existing.details) {

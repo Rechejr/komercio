@@ -252,6 +252,10 @@ router.delete('/businesses/:id', deleteBusinessLimiter, async (req: AuthRequest,
       await tx.creditPayment.deleteMany({ where: { credit: { customer: { businessId } } } });
       // 2. Créditos
       await tx.credit.deleteMany({ where: { customer: { businessId } } });
+      // 2.5. Cuentas por pagar (crédito a proveedor) — FK RESTRICT hacia suppliers/
+      // businesses; van antes que proveedores y compras. Los pagos cascadean.
+      await tx.supplierCreditPayment.deleteMany({ where: { supplierCredit: { businessId } } });
+      await tx.supplierCredit.deleteMany({ where: { businessId } });
       // 3-5. Caja
       if (branchIds.length > 0) {
         await tx.cashMovement.deleteMany({ where: { cashRegister: { branchId: { in: branchIds } } } });

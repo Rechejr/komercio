@@ -12,6 +12,7 @@ import { useAuthStore } from '@/store/auth.store';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { downloadExcel } from '@/lib/exportExcel';
 import { PriceInput } from '@/components/ui/PriceInput';
+import { PurchasePaymentSplit } from '@/components/compras/PurchasePaymentSplit';
 
 const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[16px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition';
 // Igual que inputCls pero sin w-full — para los controles del toolbar de filtros.
@@ -97,7 +98,7 @@ export default function ComprasPage() {
 
   const { active: paymentAccounts, all: allAccounts } = usePaymentAccounts();
   const { register, handleSubmit, control, reset, watch, setValue, formState: { errors } } = useForm({
-    defaultValues: { supplierId: '', invoiceNumber: '', notes: '', purchaseDate: '', paymentAccountId: '', items: [{ productId: '', quantity: 1, unitCost: 0, taxRate: 0, branchId: '' }] },
+    defaultValues: { supplierId: '', invoiceNumber: '', notes: '', purchaseDate: '', paymentAccountId: '', payments: [{ paymentAccountId: '', amount: '' }], credit: false, creditDueDate: '', items: [{ productId: '', quantity: 1, unitCost: 0, taxRate: 0, branchId: '' }] },
   });
 
   const { fields, append, remove } = useFieldArray({ control, name: 'items' });
@@ -133,6 +134,33 @@ export default function ComprasPage() {
   // dueño/administrador no se dio cuenta e intenta subirla de nuevo. Es solo
   // una advertencia (no bloquea): puede haber casos legítimos de continuar.
   async function onSubmit(d: any) {
+    // Al registrar (no editar): arma el pago dividido + crédito. Editar mantiene
+    // el pago simple (paymentAccountId), como antes.
+    if (!editItem) {
+      const payments = (d.payments || [])
+        .filter((p: any) => p.paymentAccountId && parseFloat(p.amount) > 0)
+        .map((p: any) => ({ paymentAccountId: p.paymentAccountId, amount: Math.round(parseFloat(p.amount)) }));
+      const paidSum = payments.reduce((s: number, p: any) => s + p.amount, 0);
+      const creditAmount = d.credit ? Math.max(0, Math.round(total - paidSum)) : 0;
+      if (!d.credit && Math.abs(paidSum - total) > 1) {
+        toast.error('Los pagos deben sumar el total, o marca que queda a crédito.');
+        return;
+      }
+      if (d.credit && creditAmount <= 0) {
+        toast.error('No queda saldo a crédito: los pagos ya cubren el total.');
+        return;
+      }
+      if (payments.length === 0 && creditAmount <= 0) {
+        toast.error('Indica cómo se paga la compra.');
+        return;
+      }
+      d = {
+        supplierId: d.supplierId, invoiceNumber: d.invoiceNumber, notes: d.notes,
+        purchaseDate: d.purchaseDate, items: d.items, payments,
+        ...(d.credit ? { credit: { amount: creditAmount, dueDate: d.creditDueDate || undefined } } : {}),
+      };
+    }
+
     const trimmedInvoice = (d.invoiceNumber || '').trim();
     if (trimmedInvoice && d.supplierId) {
       setCheckingInvoice(true);
@@ -229,7 +257,7 @@ export default function ComprasPage() {
           type="button"
           onClick={() => {
             setEditItem(null);
-            reset({ supplierId: '', invoiceNumber: '', notes: '', purchaseDate: '', paymentAccountId: '', items: [{ productId: '', quantity: 1, unitCost: 0, taxRate: 0, branchId: myBranchId }] });
+            reset({ supplierId: '', invoiceNumber: '', notes: '', purchaseDate: '', paymentAccountId: '', payments: [{ paymentAccountId: '', amount: '' }], credit: false, creditDueDate: '', items: [{ productId: '', quantity: 1, unitCost: 0, taxRate: 0, branchId: myBranchId }] });
             setSelectedSupplierName('');
             setSupplierSearch('');
             setShowForm(true);
@@ -603,13 +631,20 @@ export default function ComprasPage() {
                   <input {...register('notes')} className={inputCls} placeholder="Opcional" />
                 </div>
 
-                {/* Método de pago */}
-                <div>
-                  <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5 block">Medio de pago</label>
-                  <select {...register('paymentAccountId')} className={inputCls}>
-                    {paymentAccounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-                  </select>
-                </div>
+                {/* Pago: al editar se mantiene simple (un medio); al registrar se
+                    puede dividir en varios medios + parte a crédito. */}
+                {editItem ? (
+                  <div>
+                    <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5 block">Medio de pago</label>
+                    <select {...register('paymentAccountId')} className={inputCls}>
+                      {paymentAccounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+                    </select>
+                  </div>
+                ) : (
+                  <div className="sm:col-span-2">
+                    <PurchasePaymentSplit control={control as any} register={register as any} watch={watch as any} setValue={setValue as any} paymentAccounts={paymentAccounts} total={total} />
+                  </div>
+                )}
 
               </div>
 
