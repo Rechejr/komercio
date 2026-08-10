@@ -1,10 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
-import { api } from '@/lib/api';
-import { useAuthStore } from '@/store/auth.store';
+import { useOnboarding } from '@/lib/useOnboarding';
 import { Check, X, Package, ShoppingCart, Users, DollarSign, Settings, Calendar, FileText, Sparkles, ArrowRight } from 'lucide-react';
 
 type StepDef = { key: string; title: string; desc: string; href: string; cta: string; Icon: typeof Package };
@@ -29,20 +26,10 @@ const CONTABLE_STEPS: StepDef[] = [
 // negocio (endpoint /onboarding); no se persiste nada. Se puede ocultar y, al
 // completarse todo, felicita una vez. Sirve para POS y Contable.
 export function OnboardingChecklist() {
-  const businessId = useAuthStore((s) => s.user?.businessId);
-  const dismissKey = `ventrix-onboarding-dismissed-${businessId || ''}`;
-  const [dismissed, setDismissed] = useState(
-    () => typeof window !== 'undefined' && localStorage.getItem(dismissKey) === '1',
-  );
+  const { data, patchState } = useOnboarding();
 
-  const { data } = useQuery({
-    queryKey: ['onboarding', businessId],
-    queryFn: () => api.get('/onboarding').then((r) => r.data.data),
-    enabled: !!businessId,
-    staleTime: 60_000,
-  });
-
-  if (dismissed || !data) return null;
+  // Se oculta cuando el usuario la cierra (guardado en la BD, cross-device).
+  if (!data || data.state?.dismissed) return null;
 
   const steps = data.productType === 'contable' ? CONTABLE_STEPS : POS_STEPS;
   const isDone = (k: string) => !!data.steps?.[k];
@@ -50,10 +37,7 @@ export function OnboardingChecklist() {
   const total = steps.length;
   const allDone = doneCount === total;
 
-  const dismiss = () => {
-    if (typeof window !== 'undefined') localStorage.setItem(dismissKey, '1');
-    setDismissed(true);
-  };
+  const dismiss = () => patchState({ dismissed: true });
 
   if (allDone) {
     return (

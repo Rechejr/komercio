@@ -131,6 +131,11 @@ model Business {
   logo              String?
   currency          String            @default("COP")
   taxRate           Decimal           @default(0)
+  // Estado del onboarding (guía de primeros pasos) — cross-device. JSON flexible:
+  // { welcomeSeenAt, tourDoneAt, dismissedAt, firstSaleAt, legacy }. null = negocio
+  // nuevo (recibe la bienvenida). Los negocios que ya existían al migrar quedan
+  // marcados como vistos (legacy) para no molestar a los usuarios actuales.
+  onboarding        Json?
   ownerId           String
   owner             User              @relation("BusinessOwner", fields: [ownerId], references: [id])
   branches          Branch[]

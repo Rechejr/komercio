@@ -9,6 +9,7 @@ import { AgendaAlertas } from '@/components/contable/AgendaAlertas';
 import { Header } from '@/components/layout/Header';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { InstallAppPrompt } from '@/components/pwa/InstallAppPrompt';
+import { OnboardingWelcome } from '@/components/onboarding/OnboardingWelcome';
 
 /**
  * Layout del tablero de Ventrix Contable.
@@ -95,6 +96,7 @@ export default function ContableLayout({ children }: { children: React.ReactNode
         </div>
         <main className="flex-1 overflow-auto p-4 md:p-6 animate-fade-in">
           <InstallAppPrompt />
+          <OnboardingWelcome />
           <ErrorBoundary>
             <AgendaAlertas />
             {children}
