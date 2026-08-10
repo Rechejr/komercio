@@ -39,6 +39,7 @@ interface AuthState {
   login: (user: User, token: string, rememberMe?: boolean, accounts?: Account[]) => void;
   restoreSession: (user: User, accessToken: string, accounts?: Account[]) => void;
   logout: () => void;
+  expireSession: () => void;
 }
 
 const REMEMBER_KEY = 'ventrix-remember';
@@ -90,6 +91,17 @@ export const useAuthStore = create<AuthState>()(
       // Used on page load to restore session without touching the rememberMe preference
       restoreSession: (user, accessToken, accounts) =>
         set({ user, accessToken, isAuthenticated: true, ...(accounts ? { accounts } : {}) }),
+      // Fallo de refresh (red lenta en el móvil, base fría, etc.): limpia SOLO el
+      // estado local y manda a /login, pero NO llama al backend /logout ni borra
+      // la cookie de refresh ni `ventrix-remember`. Así, si el fallo fue pasajero,
+      // /login revive la sesión con la cookie que sigue vigente en vez de quedar
+      // deslogueado para siempre (que era el bug de "no mantiene la sesión").
+      expireSession: () => {
+        set({ user: null, accessToken: null, isAuthenticated: false, accounts: [] });
+        if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
+          window.location.href = '/login';
+        }
+      },
       logout: () => {
         set({ user: null, accessToken: null, isAuthenticated: false, accounts: [] });
         if (typeof window !== 'undefined') {

@@ -357,8 +357,12 @@ export const authController = {
       const newRefreshToken = generateRefreshToken(payload);
       const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
 
+      // deleteMany (no delete): si dos pestañas/recargas refrescan casi a la vez
+      // con la misma cookie, la segunda encontraría el token ya borrado y `delete`
+      // lanzaría P2025 → 500 → el front deslogueaba. Con deleteMany no lanza y
+      // ambas rotaciones quedan válidas (la sobrante caduca sola).
       await prisma.$transaction([
-        prisma.refreshToken.delete({ where: { token } }),
+        prisma.refreshToken.deleteMany({ where: { token } }),
         prisma.refreshToken.create({
           data: { token: newRefreshToken, userId: user.id, expiresAt: new Date(Date.now() + THIRTY_DAYS) },
         }),

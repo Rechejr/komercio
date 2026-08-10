@@ -13,7 +13,7 @@ import { UpgradeModal } from '@/components/ui/UpgradeModal';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, accessToken, setAccessToken, restoreSession, logout } = useAuthStore();
+  const { isAuthenticated, accessToken, setAccessToken, restoreSession, expireSession } = useAuthStore();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   // Always start in "restoring" state — the effect decides immediately if restore is needed
   const [isRestoring, setIsRestoring] = useState(true);
@@ -33,7 +33,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     // Safety net: if restore takes > 10s something is wrong — redirect to login
     const safetyTimer = setTimeout(() => {
       setIsRestoring(false);
-      logout();
+      expireSession();
     }, 10000);
 
     // No token in memory — try to recover the session via the httpOnly refresh cookie
@@ -56,7 +56,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           }, newToken, userData.accounts);
         }
       })
-      .catch(() => logout())
+      .catch(() => expireSession())
       .finally(() => { clearTimeout(safetyTimer); setIsRestoring(false); });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

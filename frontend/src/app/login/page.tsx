@@ -196,7 +196,7 @@ function MiniAgenda() {
 function LoginForm() {
   const router       = useRouter();
   const searchParams = useSearchParams();
-  const { login }    = useAuthStore();
+  const { login, setAccessToken } = useAuthStore();
   const [showPwd, setShowPwd]       = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   // Si el usuario marcó "mantener sesión" en un login anterior, al abrir /login
@@ -218,6 +218,10 @@ function LoginForm() {
       try {
         const { data } = await api.post('/auth/refresh-token');
         const token = data.data.accessToken;
+        // Fijar el token ANTES de /me: si no, /me sale sin Authorization, da 401
+        // y dispara un segundo refresh por el interceptor (frágil). Con esto es
+        // un solo refresh.
+        setAccessToken(token);
         const me = await api.get('/auth/me');
         const u = me.data.data;
         if (cancelled) return;

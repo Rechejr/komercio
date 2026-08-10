@@ -24,7 +24,10 @@ export function generateAccessToken(payload: TokenPayload): string {
 
 export function generateRefreshToken(payload: TokenPayload): string {
   return jwt.sign(payload, getSecret('JWT_REFRESH_SECRET'), {
-    expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d',
+    // 30d para que coincida con la cookie y el expiresAt de la BD: antes el JWT
+    // caducaba a los 7 días aunque la cookie durara 30 → quien no abría la app en
+    // una semana quedaba deslogueado pese a "mantener sesión".
+    expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '30d',
   } as jwt.SignOptions);
 }
 

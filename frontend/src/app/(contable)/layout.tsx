@@ -18,7 +18,7 @@ import { InstallAppPrompt } from '@/components/pwa/InstallAppPrompt';
  * llegue aquí se rebota a /dashboard. Es la guarda espejo de la del POS.
  */
 export default function ContableLayout({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, accessToken, setAccessToken, restoreSession, logout } = useAuthStore();
+  const { isAuthenticated, accessToken, setAccessToken, restoreSession, expireSession } = useAuthStore();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isRestoring, setIsRestoring] = useState(true);
   const didRestore = useRef(false);
@@ -34,7 +34,7 @@ export default function ContableLayout({ children }: { children: React.ReactNode
 
     const safetyTimer = setTimeout(() => {
       setIsRestoring(false);
-      logout();
+      expireSession();
     }, 10000);
 
     api
@@ -55,7 +55,7 @@ export default function ContableLayout({ children }: { children: React.ReactNode
           }, newToken, userData.accounts);
         }
       })
-      .catch(() => logout())
+      .catch(() => expireSession())
       .finally(() => { clearTimeout(safetyTimer); setIsRestoring(false); });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

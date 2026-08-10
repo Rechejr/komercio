@@ -57,7 +57,10 @@ api.interceptors.response.use(
       return api(original);
     } catch (err) {
       processQueue(err, null);
-      useAuthStore.getState().logout();
+      // NO usar logout() (que borra el refresh token en el servidor): un fallo
+      // pasajero mataría la sesión para siempre. expireSession limpia local y
+      // manda a /login, donde se reintenta revivir con la cookie aún vigente.
+      useAuthStore.getState().expireSession();
       return Promise.reject(err);
     } finally {
       isRefreshing = false;
