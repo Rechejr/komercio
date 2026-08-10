@@ -12,6 +12,7 @@ import { InstallAppPrompt } from '@/components/pwa/InstallAppPrompt';
 import { OnboardingWelcome } from '@/components/onboarding/OnboardingWelcome';
 import { TourOverlay } from '@/components/onboarding/TourOverlay';
 import { HelpCenter } from '@/components/onboarding/HelpCenter';
+import { FirstSaleCelebration } from '@/components/onboarding/FirstSaleCelebration';
 import { UpgradeModal } from '@/components/ui/UpgradeModal';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 
@@ -102,6 +103,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <OnboardingWelcome />
           <TourOverlay />
           <HelpCenter />
+          <FirstSaleCelebration />
           <PlanExpiryBanner />
           <ErrorBoundary>
             {children}

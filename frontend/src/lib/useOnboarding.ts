@@ -5,7 +5,7 @@ import { useAuthStore } from '@/store/auth.store';
 export interface OnboardingData {
   productType: 'pos' | 'contable';
   steps: Record<string, boolean>;
-  state: { welcomeSeen: boolean; tourDone: boolean; dismissed: boolean };
+  state: { welcomeSeen: boolean; tourDone: boolean; dismissed: boolean; firstSale: boolean };
   nextStep: string | null;
 }
 

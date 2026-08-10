@@ -35,6 +35,9 @@ router.get('/', async (req: AuthRequest, res, next) => {
       welcomeSeen: !!onb.welcomeSeenAt,
       tourDone: !!onb.tourDoneAt,
       dismissed: !!onb.dismissedAt,
+      // legacy = negocio que ya existía al migrar → nunca es "primera venta nueva",
+      // así no recibe la celebración de primera venta pese a tener ventas.
+      firstSale: !!onb.firstSaleAt || !!onb.legacy,
     };
 
     let productType: 'pos' | 'contable';

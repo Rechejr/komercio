@@ -24,6 +24,7 @@ import { Receipt, type ReceiptItem } from '@/components/Receipt';
 import { BarcodeScanner } from '@/components/ui/BarcodeScanner';
 import { WhatsAppIcon } from '@/components/ui/WhatsAppIcon';
 import { shareSaleViaWhatsApp } from '@/lib/receiptShare';
+import { PosFirstSaleHint } from '@/components/onboarding/PosFirstSaleHint';
 
 // ── Category color + icon palette (alineado con guía de estilo Ventrix) ──────
 const CAT_MAP: Record<string, { rgb: string; color: string; icon: LucideIcon }> = {
@@ -237,6 +238,8 @@ export default function POSPage() {
       qc.invalidateQueries({ queryKey: ['customers'] });
       qc.invalidateQueries({ queryKey: ['dashboard-summary'] });
       qc.invalidateQueries({ queryKey: ['credits'] });
+      // Refresca el onboarding para disparar la celebración de la primera venta.
+      qc.invalidateQueries({ queryKey: ['onboarding'] });
     },
     onError: (err: any) => {
       const message = err.response?.data?.error || 'Error al procesar la venta. Intenta de nuevo.';
@@ -449,6 +452,7 @@ export default function POSPage() {
 
       {/* ── Left: Products + Cart ─────────────────────────────────────────── */}
       <div className="flex-1 flex flex-col gap-3 lg:overflow-hidden">
+        <PosFirstSaleHint />
 
         {/* Search + categories + grid */}
         <div className="card p-4">
