@@ -10,6 +10,8 @@ import { Header } from '@/components/layout/Header';
 import { PlanExpiryBanner } from '@/components/layout/PlanExpiryBanner';
 import { InstallAppPrompt } from '@/components/pwa/InstallAppPrompt';
 import { OnboardingWelcome } from '@/components/onboarding/OnboardingWelcome';
+import { TourOverlay } from '@/components/onboarding/TourOverlay';
+import { HelpCenter } from '@/components/onboarding/HelpCenter';
 import { UpgradeModal } from '@/components/ui/UpgradeModal';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 
@@ -98,6 +100,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <main className="flex-1 overflow-auto p-4 md:p-6 animate-fade-in">
           <InstallAppPrompt />
           <OnboardingWelcome />
+          <TourOverlay />
+          <HelpCenter />
           <PlanExpiryBanner />
           <ErrorBoundary>
             {children}

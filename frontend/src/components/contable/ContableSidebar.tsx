@@ -126,6 +126,7 @@ export function ContableSidebar({ mobileOpen, onMobileClose }: ContableSidebarPr
               <Tooltip key={item.href} content={item.label} side="right" disabled={!collapsed}>
                 <Link
                   href={item.href}
+                  data-tour={item.href.split('/').pop()}
                   onClick={onMobileClose}
                   className={cn(
                     'group relative flex items-center gap-2.5 rounded-md text-[13px] font-medium transition-all duration-150 px-2.5 py-[7px]',

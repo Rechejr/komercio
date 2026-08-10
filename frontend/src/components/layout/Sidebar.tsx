@@ -254,6 +254,7 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
                         >
                           <Link
                             href={item.href}
+                            data-tour={item.href.replace(/^\//, '')}
                             onClick={(e) => handleNavClick(item, e)}
                             className={cn(
                               'group relative flex items-center gap-2.5 rounded-md text-[13px] font-medium',

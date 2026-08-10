@@ -3,6 +3,8 @@
 import { Portal } from '@/components/ui/Portal';
 import { useAuthStore } from '@/store/auth.store';
 import { useOnboarding } from '@/lib/useOnboarding';
+import { useTourStore } from '@/store/tour.store';
+import { tourFor } from '@/lib/tourSteps';
 import { Sparkles, ArrowRight, Package, ShoppingCart, DollarSign, Users, Calendar, FileText } from 'lucide-react';
 
 // Modal de bienvenida para el PRIMER ingreso de un negocio nuevo. Se muestra una
@@ -11,6 +13,7 @@ import { Sparkles, ArrowRight, Package, ShoppingCart, DollarSign, Users, Calenda
 export function OnboardingWelcome() {
   const name = useAuthStore((s) => s.user?.name);
   const { data, patchState } = useOnboarding();
+  const startTour = useTourStore((s) => s.start);
 
   if (!data || data.state?.welcomeSeen) return null;
   // Si por alguna razón ya completó todo, no tiene sentido la bienvenida.
@@ -33,6 +36,11 @@ export function OnboardingWelcome() {
       ];
 
   const seen = () => patchState({ welcomeSeen: true });
+  const comenzar = () => {
+    patchState({ welcomeSeen: true });
+    // Pequeño delay para que el modal se cierre antes de arrancar el recorrido.
+    setTimeout(() => startTour(tourFor(data.productType)), 250);
+  };
 
   return (
     <Portal>
@@ -69,7 +77,7 @@ export function OnboardingWelcome() {
           {/* Acciones */}
           <div className="px-7 pb-7 pt-2 flex flex-col gap-2">
             <button
-              onClick={seen}
+              onClick={comenzar}
               className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[14px] font-semibold flex items-center justify-center gap-2 transition"
             >
               Comenzar configuración <ArrowRight size={16} />
