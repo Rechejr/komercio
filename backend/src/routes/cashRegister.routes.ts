@@ -92,6 +92,27 @@ router.get('/current', authorize('ADMIN', 'SUPERVISOR', 'CASHIER'), async (req: 
     const totalOut = Number(outAgg._sum.amount || 0);
     const expectedAmount = Number(register.openingAmount) + totalIn - totalOut;
 
+    // Arqueo a ciegas: si el negocio activó `blindCashCount` y quien consulta es
+    // un CAJERO, no le mandamos las cifras que delatan lo que debería haber en la
+    // caja (esperado, totales, apertura, movimientos). Así el conteo físico es
+    // real y el faltante/sobrante honesto. El dueño y los supervisores siguen
+    // viendo todo. Se recorta EN EL SERVIDOR (no solo en la UI) para que no se
+    // pueda espiar por la red.
+    const businessId = req.user.businessId;
+    const business = businessId
+      ? await prisma.business.findUnique({ where: { id: businessId }, select: { settings: true } })
+      : null;
+    const blind = req.user.role === 'CASHIER' && !!(business?.settings as any)?.blindCashCount;
+    if (blind) {
+      return success(res, {
+        id: register.id,
+        status: register.status,
+        openedAt: register.openedAt,
+        branchId: register.branchId,
+        blind: true,
+      });
+    }
+
     return success(res, { ...register, totalIn, totalOut, expectedAmount });
   } catch (err) { next(err); }
 });

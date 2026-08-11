@@ -7,7 +7,7 @@ import { PriceInput } from '@/components/ui/PriceInput';
 import { api } from '@/lib/api';
 import { formatCurrency, formatDateTime } from '@/lib/utils';
 import toast from 'react-hot-toast';
-import { Lock, Unlock, TrendingUp, TrendingDown, Loader2, ArrowUpCircle, ArrowDownCircle, Plus, X, History, Wallet } from 'lucide-react';
+import { Lock, Unlock, TrendingUp, TrendingDown, Loader2, ArrowUpCircle, ArrowDownCircle, Plus, X, History, Wallet, EyeOff } from 'lucide-react';
 import { useAuthStore } from '@/store/auth.store';
 import { HistorialTurnos } from './HistorialTurnos';
 
@@ -17,6 +17,7 @@ export default function CajaPage() {
   const qc = useQueryClient();
   const [showMovement, setShowMovement] = useState(false);
   const [movementType, setMovementType] = useState<'IN' | 'OUT'>('IN');
+  const [closeResult, setCloseResult] = useState<any>(null);
   const role = useAuthStore((s) => s.user?.role);
   const canSeeHistory = role === 'ADMIN' || role === 'SUPERVISOR';
   const [tab, setTab] = useState<'actual' | 'historial'>('actual');
@@ -62,7 +63,14 @@ export default function CajaPage() {
 
   const closeMutation = useMutation({
     mutationFn: ({ id, data }: any) => api.post(`/cash-register/${id}/close`, data),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['cash-register-current'] }); toast.success('Caja cerrada'); },
+    onSuccess: (res: any) => {
+      qc.invalidateQueries({ queryKey: ['cash-register-current'] });
+      toast.success('Caja cerrada');
+      // Muestra el resultado del arqueo (esperado vs contado → diferencia). Es lo
+      // que le revela al cajero el faltante/sobrante que antes no veía a ciegas.
+      setCloseResult(res?.data?.data || null);
+      reset();
+    },
     onError: (err: any) => toast.error(err.response?.data?.error || 'Error'),
   });
 
@@ -92,6 +100,50 @@ export default function CajaPage() {
     );
   }
 
+  /* ── Resultado del arqueo (se muestra tras cerrar, aun en pantalla cerrada) ── */
+  const diff = closeResult ? Number(closeResult.difference ?? 0) : 0;
+  const closeResultModal = closeResult && (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-[2px] z-50 flex items-center justify-center p-4">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/[0.08] rounded-2xl shadow-modal w-full max-w-sm animate-scale-in overflow-hidden">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-white/[0.06]">
+          <h2 className="text-[15px] font-bold text-slate-800 dark:text-white flex items-center gap-2"><Lock size={15} /> Arqueo del turno</h2>
+          <button type="button" aria-label="Cerrar" onClick={() => setCloseResult(null)} className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-white/[0.06]"><X size={16} /></button>
+        </div>
+        <div className="p-6 space-y-3">
+          <div className="flex justify-between text-[13px]">
+            <span className="text-slate-500 dark:text-slate-400">Efectivo esperado</span>
+            <span className="font-semibold text-slate-800 dark:text-white tabular-nums">{formatCurrency(closeResult.expectedAmount ?? 0)}</span>
+          </div>
+          <div className="flex justify-between text-[13px]">
+            <span className="text-slate-500 dark:text-slate-400">Efectivo contado</span>
+            <span className="font-semibold text-slate-800 dark:text-white tabular-nums">{formatCurrency(closeResult.closingAmount ?? 0)}</span>
+          </div>
+          <div className={`rounded-xl px-4 py-3 text-center ${
+            diff === 0
+              ? 'bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-100 dark:border-emerald-500/20'
+              : diff < 0
+                ? 'bg-red-50 dark:bg-red-500/10 border border-red-100 dark:border-red-500/20'
+                : 'bg-amber-50 dark:bg-amber-500/10 border border-amber-100 dark:border-amber-500/20'
+          }`}>
+            <p className={`text-[11px] font-semibold uppercase tracking-wide mb-1 ${
+              diff === 0 ? 'text-emerald-500' : diff < 0 ? 'text-red-500' : 'text-amber-500'
+            }`}>
+              {diff === 0 ? 'Caja cuadrada' : diff < 0 ? 'Faltante' : 'Sobrante'}
+            </p>
+            <p className={`text-[22px] font-bold tabular-nums ${
+              diff === 0 ? 'text-emerald-700 dark:text-emerald-300' : diff < 0 ? 'text-red-700 dark:text-red-300' : 'text-amber-700 dark:text-amber-300'
+            }`}>
+              {diff === 0 ? formatCurrency(0) : formatCurrency(Math.abs(diff))}
+            </p>
+          </div>
+          <button type="button" onClick={() => setCloseResult(null)} className="w-full bg-slate-800 dark:bg-slate-700 hover:bg-slate-900 dark:hover:bg-slate-600 text-white font-semibold py-2.5 rounded-xl text-[13px] transition">
+            Entendido
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
   /* ── Loading ──────────────────────────────────────────────────────────── */
   if (isLoading) return (
     <div className="space-y-4 max-w-2xl animate-fade-up">
@@ -108,6 +160,7 @@ export default function CajaPage() {
   if (!cashRegister) {
     return (
       <div className="max-w-sm mx-auto mt-12 animate-fade-up">
+        {closeResultModal}
         {tabSwitcher}
         <div className="card p-8 text-center space-y-5">
           <div className="w-14 h-14 bg-slate-100 dark:bg-slate-800 rounded-2xl flex items-center justify-center mx-auto">
@@ -141,9 +194,12 @@ export default function CajaPage() {
   const totalIn  = cashRegister.totalIn  ?? cashRegister.movements?.filter((m: any) => m.type === 'IN').reduce((a: number, m: any) => a + Number(m.amount), 0) ?? 0;
   const totalOut = cashRegister.totalOut ?? cashRegister.movements?.filter((m: any) => m.type === 'OUT').reduce((a: number, m: any) => a + Number(m.amount), 0) ?? 0;
   const expected = cashRegister.expectedAmount ?? (cashRegister.openingAmount + totalIn - totalOut);
+  // Arqueo a ciegas (el backend ya recortó las cifras si aplica al cajero).
+  const blind = !!cashRegister.blind;
 
   return (
     <>
+    {closeResultModal}
     <div className="space-y-4 max-w-2xl animate-fade-up">
       {tabSwitcher}
 
@@ -157,29 +213,40 @@ export default function CajaPage() {
           <span className="text-[12px] text-slate-400 dark:text-slate-500">Desde {formatDateTime(cashRegister.openedAt)}</span>
         </div>
 
-        <div className="grid grid-cols-3 gap-3">
-          <div className="bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-100 dark:border-emerald-500/20 rounded-xl p-3.5 text-center">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-500 dark:text-emerald-400 mb-1">Apertura</p>
-            <p className="text-[17px] font-bold text-emerald-700 dark:text-emerald-300 tabular-nums">{formatCurrency(cashRegister.openingAmount)}</p>
-          </div>
-          <div className="bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-100 dark:border-emerald-500/20 rounded-xl p-3.5 text-center">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-600 dark:text-emerald-400 mb-1 flex items-center justify-center gap-1">
-              <TrendingUp size={10} /> Ingresos
+        {blind ? (
+          <div className="px-4 py-3 bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-white/[0.06] rounded-xl flex items-start gap-2.5">
+            <EyeOff size={16} className="text-slate-400 mt-0.5 flex-none" />
+            <p className="text-[12px] text-slate-500 dark:text-slate-400 leading-relaxed">
+              <b className="text-slate-700 dark:text-slate-300">Arqueo a ciegas activo.</b> Cuenta el efectivo físico de la caja y regístralo abajo — al cerrar, el sistema te mostrará si cuadró o hubo diferencia.
             </p>
-            <p className="text-[17px] font-bold text-emerald-700 dark:text-emerald-300 tabular-nums">{formatCurrency(totalIn)}</p>
           </div>
-          <div className="bg-red-50 dark:bg-red-500/10 border border-red-100 dark:border-red-500/20 rounded-xl p-3.5 text-center">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-red-500 dark:text-red-400 mb-1 flex items-center justify-center gap-1">
-              <TrendingDown size={10} /> Egresos
-            </p>
-            <p className="text-[17px] font-bold text-red-700 dark:text-red-300 tabular-nums">{formatCurrency(totalOut)}</p>
-          </div>
-        </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-100 dark:border-emerald-500/20 rounded-xl p-3.5 text-center">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-500 dark:text-emerald-400 mb-1">Apertura</p>
+                <p className="text-[17px] font-bold text-emerald-700 dark:text-emerald-300 tabular-nums">{formatCurrency(cashRegister.openingAmount)}</p>
+              </div>
+              <div className="bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-100 dark:border-emerald-500/20 rounded-xl p-3.5 text-center">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-600 dark:text-emerald-400 mb-1 flex items-center justify-center gap-1">
+                  <TrendingUp size={10} /> Ingresos
+                </p>
+                <p className="text-[17px] font-bold text-emerald-700 dark:text-emerald-300 tabular-nums">{formatCurrency(totalIn)}</p>
+              </div>
+              <div className="bg-red-50 dark:bg-red-500/10 border border-red-100 dark:border-red-500/20 rounded-xl p-3.5 text-center">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-red-500 dark:text-red-400 mb-1 flex items-center justify-center gap-1">
+                  <TrendingDown size={10} /> Egresos
+                </p>
+                <p className="text-[17px] font-bold text-red-700 dark:text-red-300 tabular-nums">{formatCurrency(totalOut)}</p>
+              </div>
+            </div>
 
-        <div className="mt-4 px-4 py-3 bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-white/[0.06] rounded-xl flex justify-between items-center">
-          <span className="text-[13px] text-slate-500 dark:text-slate-400">Efectivo esperado en caja</span>
-          <span className="text-[20px] font-bold text-slate-900 dark:text-white tabular-nums">{formatCurrency(expected)}</span>
-        </div>
+            <div className="mt-4 px-4 py-3 bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-white/[0.06] rounded-xl flex justify-between items-center">
+              <span className="text-[13px] text-slate-500 dark:text-slate-400">Efectivo esperado en caja</span>
+              <span className="text-[20px] font-bold text-slate-900 dark:text-white tabular-nums">{formatCurrency(expected)}</span>
+            </div>
+          </>
+        )}
       </div>
 
       {/* ── Movimiento manual ─────────────────────────────────────────────── */}
@@ -212,7 +279,7 @@ export default function CajaPage() {
           <div>
             <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5 block">Efectivo contado en caja ($)</label>
             <Controller control={control} name="closingAmount" rules={{ required: 'Ingresa el efectivo contado' }} render={({ field }) => (
-              <PriceInput {...field} onChange={(n) => field.onChange(n ?? 0)} className={inputCls} placeholder={String(expected)} />
+              <PriceInput {...field} onChange={(n) => field.onChange(n ?? 0)} className={inputCls} placeholder={blind ? '0' : String(expected)} />
             )} />
             {cajaErrors.closingAmount && <p className="text-[11px] text-red-500 mt-1">{cajaErrors.closingAmount.message as string}</p>}
           </div>
@@ -232,7 +299,7 @@ export default function CajaPage() {
       </div>
 
       {/* ── Movimientos del día ───────────────────────────────────────────── */}
-      {cashRegister.movements?.length > 0 && (
+      {!blind && cashRegister.movements?.length > 0 && (
         <div className="card overflow-hidden">
           <div className="px-5 py-3.5 border-b border-slate-100 dark:border-white/[0.06]">
             <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Movimientos del día</p>
