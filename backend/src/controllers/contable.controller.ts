@@ -661,13 +661,17 @@ export const contableController = {
   async generarVencimientos(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const businessId = req.user!.businessId!;
-      const { taxClientId, obligacion } = req.body as { taxClientId?: string; obligacion?: Obligacion };
+      const { taxClientId, obligacion, periodos: periodosSel } = req.body as { taxClientId?: string; obligacion?: Obligacion; periodos?: string[] };
       if (!taxClientId) throw new AppError('Falta el cliente', 400);
       const client = await getClientOfBusiness(taxClientId, businessId);
 
       const obligaciones: Obligacion[] = obligacion
         ? [obligacion]
         : obligacionesSugeridas(client.responsabilidades as Calidad[], []);
+
+      // Filtro opcional: solo registrar los periodos elegidos por el contador (para
+      // no traer los meses que ya pasaron). Si no viene la lista, se generan todos.
+      const filtro = Array.isArray(periodosSel) && periodosSel.length > 0 ? new Set(periodosSel) : null;
 
       let creados = 0;
       let existentes = 0;
@@ -678,6 +682,7 @@ export const contableController = {
         const periodos = await periodosCalendario(obl, variante, client.nit);
         if (periodos.length === 0) { sinCalendario.push(obl); continue; }
         for (const p of periodos) {
+          if (filtro && !filtro.has(p.periodo)) continue;
           try {
             await prisma.vencimiento.create({
               data: { taxClientId: client.id, obligacion: obl, periodo: p.periodo, fecha: p.fecha },

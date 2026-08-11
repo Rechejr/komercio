@@ -12,6 +12,7 @@ import {
   formatNit, formatFecha, type EstadoVencimiento,
 } from '@/lib/contable';
 import { Plus, Search, Trash2, X, Loader2, Receipt, Sparkles } from 'lucide-react';
+import { GenerarPeriodosModal } from '@/components/contable/GenerarPeriodosModal';
 
 const inputCls =
   'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[16px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition';
@@ -164,100 +165,17 @@ export default function NominaPage() {
 // ─── Modal: generar los 12 meses de nómina de un cliente ───────────────────────
 type ClientePicker = { id: string; razonSocial: string; nit: string; dv: number };
 
+// Usa el modal reutilizable con SELECCIÓN de periodos (no trae los meses que ya
+// pasaron por defecto).
 function GenerarNominaModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
-  const [clienteSearch, setClienteSearch] = useState('');
-  const [cliente, setCliente] = useState<ClientePicker | null>(null);
-
-  const { data: clientes = [] } = useQuery({
-    queryKey: ['contable-clients-picker', clienteSearch],
-    queryFn: () => api.get(`/contable/clients?limit=8&search=${encodeURIComponent(clienteSearch)}`).then((r) => r.data.data),
-    enabled: !cliente,
-  });
-
-  const { data: periodos = [], isFetching: cargando } = useQuery<{ periodo: string; fecha: string }[]>({
-    queryKey: ['contable-periodos', cliente?.id, 'nomina'],
-    queryFn: () => api.get(`/contable/calendario/periodos?taxClientId=${cliente!.id}&obligacion=nomina`).then((r) => r.data.data),
-    enabled: !!cliente,
-  });
-
-  const generarMut = useMutation({
-    mutationFn: () => api.post('/contable/vencimientos/generar', { taxClientId: cliente!.id, obligacion: 'nomina' }).then((r) => r.data),
-    onSuccess: (res: any) => { onDone(); toast.success(res?.message || 'Nómina generada'); onClose(); },
-    onError: (e: any) => toast.error(e.response?.data?.error || 'No se pudo generar la nómina'),
-  });
-
   return (
-    <Portal>
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4" onClick={onClose}>
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" />
-      <div className="relative bg-white dark:bg-slate-900 rounded-2xl shadow-modal w-full max-w-md max-h-[90vh] overflow-hidden flex flex-col animate-scale-in" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-slate-100 dark:border-white/[0.06]">
-          <h2 className="text-lg font-bold text-slate-900 dark:text-white">Generar nómina</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 p-1"><X size={20} /></button>
-        </div>
-
-        <div className="px-6 py-5 overflow-y-auto flex-1 space-y-4">
-          <div>
-            <label className="block text-[13px] font-medium text-slate-700 dark:text-slate-300 mb-1.5">Cliente</label>
-            {cliente ? (
-              <div className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-900/15 border border-emerald-200 dark:border-emerald-800">
-                <span className="text-sm font-medium text-slate-900 dark:text-white">{cliente.razonSocial}</span>
-                <button onClick={() => setCliente(null)} className="text-xs text-emerald-600 hover:underline">Cambiar</button>
-              </div>
-            ) : (
-              <>
-                <input value={clienteSearch} onChange={(e) => setClienteSearch(e.target.value)} placeholder="Buscar cliente..." className={inputCls} autoFocus />
-                {clienteSearch && (
-                  <div className="mt-1 border border-slate-200 dark:border-slate-700 rounded-xl divide-y divide-slate-100 dark:divide-white/[0.06] max-h-40 overflow-y-auto">
-                    {clientes.length === 0 ? (
-                      <p className="px-3 py-2 text-sm text-slate-400">Sin resultados</p>
-                    ) : clientes.map((c: any) => (
-                      <button key={c.id} onClick={() => setCliente(c)} className="w-full text-left px-3 py-2 hover:bg-slate-50 dark:hover:bg-slate-800 text-sm">
-                        <span className="font-medium text-slate-900 dark:text-white">{c.razonSocial}</span>
-                        <span className="text-xs text-slate-400 ml-2 tabular">{formatNit(c.nit, c.dv)}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-
-          {cliente && (
-            cargando ? (
-              <div className="flex items-center gap-2 text-sm text-slate-400 py-2"><Loader2 size={14} className="animate-spin" /> Calculando fechas…</div>
-            ) : (
-              <div>
-                <div className="flex items-center gap-1.5 text-[11px] text-emerald-600 dark:text-emerald-400 mb-1.5">
-                  <Sparkles size={11} /> Se registrarán estos {periodos.length} meses (10º día hábil del mes siguiente)
-                </div>
-                <div className="grid grid-cols-1 gap-1.5 max-h-56 overflow-y-auto">
-                  {periodos.map((p) => (
-                    <div key={p.periodo} className="flex items-center justify-between px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-sm">
-                      <span className="text-slate-700 dark:text-slate-200">{p.periodo}</span>
-                      <span className="text-slate-500 dark:text-slate-400 tabular">{formatFecha(p.fecha)}</span>
-                    </div>
-                  ))}
-                </div>
-                <p className="text-[11px] text-slate-400 mt-1.5">Los que ya existan no se duplican.</p>
-              </div>
-            )
-          )}
-        </div>
-
-        <div className="px-6 py-4 border-t border-slate-100 dark:border-white/[0.06] flex gap-2">
-          <button onClick={onClose} className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-sm font-medium text-slate-600 dark:text-slate-300">Cancelar</button>
-          <button
-            onClick={() => generarMut.mutate()}
-            disabled={!cliente || cargando || generarMut.isPending}
-            className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-60"
-          >
-            {generarMut.isPending ? <Loader2 size={15} className="animate-spin" /> : <Sparkles size={15} />}
-            Registrar {cliente && !cargando ? `${periodos.length} meses` : 'nómina'}
-          </button>
-        </div>
-      </div>
-    </div>
-    </Portal>
+    <GenerarPeriodosModal
+      obligacion="nomina"
+      titulo="Generar nómina"
+      nota="10º día hábil del mes siguiente"
+      botonLabel="nómina"
+      onClose={onClose}
+      onDone={onDone}
+    />
   );
 }
