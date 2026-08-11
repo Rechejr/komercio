@@ -39,10 +39,15 @@ router.put('/me',
     const businessId = req.user.businessId;
     if (!businessId) return success(res, null, 'No tiene negocio asociado');
 
-    const { name, legalName, nit, phone, email, address, city, country, logo, currency, taxRate, settings } = req.body;
+    const { name, legalName, nit, phone, email, address, city, country, logo, currency, taxRate, settings, catalogPaymentLink, catalogPaymentQr } = req.body;
     const business = await prisma.business.update({
       where: { id: businessId },
-      data: { name, legalName, nit, phone, email, address, city, country, logo, currency, taxRate, settings },
+      data: {
+        name, legalName, nit, phone, email, address, city, country, logo, currency, taxRate, settings,
+        // Pago del catálogo: '' llega del formulario para "quitar" → se guarda null.
+        catalogPaymentLink: catalogPaymentLink !== undefined ? (catalogPaymentLink?.trim() || null) : undefined,
+        catalogPaymentQr: catalogPaymentQr !== undefined ? (catalogPaymentQr || null) : undefined,
+      },
     });
     return success(res, business, 'Negocio actualizado');
   } catch (err) { next(err); }

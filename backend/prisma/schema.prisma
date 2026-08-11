@@ -136,6 +136,10 @@ model Business {
   // nuevo (recibe la bienvenida). Los negocios que ya existían al migrar quedan
   // marcados como vistos (legacy) para no molestar a los usuarios actuales.
   onboarding        Json?
+  // Pago en el catálogo público: un link de pago (Wompi/Bold/Nequi…) y/o la
+  // imagen de un QR para que el cliente pague directo al hacer el pedido.
+  catalogPaymentLink String?
+  catalogPaymentQr   String?
   ownerId           String
   owner             User              @relation("BusinessOwner", fields: [ownerId], references: [id])
   branches          Branch[]

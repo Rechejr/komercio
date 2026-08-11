@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useParams } from 'next/navigation';
 import Image from 'next/image';
-import { Search, MapPin, Phone, ShoppingBag, MessageCircle, Plus, Minus, X, Trash2 } from 'lucide-react';
+import { Search, MapPin, Phone, ShoppingBag, MessageCircle, Plus, Minus, X, Trash2, QrCode, CreditCard } from 'lucide-react';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
 
@@ -18,6 +18,7 @@ interface CartLine { key: string; productId: string; name: string; code?: string
 interface Business {
   id: string; name: string; logo?: string;
   city?: string; phone?: string; address?: string; category?: string;
+  catalogPaymentLink?: string | null; catalogPaymentQr?: string | null;
 }
 
 function formatCOP(n: number) {
@@ -67,6 +68,7 @@ export default function CatalogoPage() {
   const [dColor, setDColor] = useState('');
   const [dImg, setDImg]     = useState(0);
   const [cartOpen, setCartOpen] = useState(false);
+  const [showQr, setShowQr] = useState(false);
   const cartCount = cart.reduce((s, l) => s + l.qty, 0);
   const cartTotal = cart.reduce((s, l) => s + l.price * l.qty, 0);
 
@@ -432,7 +434,46 @@ export default function CatalogoPage() {
                 <MessageCircle size={17} /> Hacer pedido por WhatsApp
               </button>
               <p className="text-center text-[11px] text-slate-400">Se abre WhatsApp con tu pedido listo para enviar al vendedor.</p>
+
+              {/* Pago directo: link y/o QR que configuró el negocio. */}
+              {(business.catalogPaymentLink || business.catalogPaymentQr) && (
+                <div className="pt-3 mt-1 border-t border-slate-100 space-y-2">
+                  <p className="text-center text-[11px] font-medium text-slate-400 uppercase tracking-wide">o paga directamente</p>
+                  {business.catalogPaymentLink && (
+                    <a
+                      href={business.catalogPaymentLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="w-full flex items-center justify-center gap-2 border-2 border-[#0DA06A] text-[#0DA06A] font-bold py-2.5 rounded-xl hover:bg-emerald-50 transition-colors"
+                    >
+                      <CreditCard size={16} /> Pagar ahora
+                    </a>
+                  )}
+                  {business.catalogPaymentQr && (
+                    <button
+                      onClick={() => setShowQr(true)}
+                      className="w-full flex items-center justify-center gap-2 border-2 border-slate-200 text-slate-700 font-semibold py-2.5 rounded-xl hover:bg-slate-50 transition-colors"
+                    >
+                      <QrCode size={16} /> Ver QR para pagar
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Visor del QR de pago */}
+      {showQr && business.catalogPaymentQr && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setShowQr(false)}>
+          <div className="absolute inset-0 bg-black/70" />
+          <div className="relative bg-white rounded-2xl p-6 text-center max-w-xs w-full" onClick={(e) => e.stopPropagation()}>
+            <p className="text-[15px] font-bold text-slate-900">Escanea para pagar</p>
+            <p className="text-[12px] text-slate-500 mb-3">{business.name}</p>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={business.catalogPaymentQr} alt="QR de pago" className="w-full max-w-[260px] mx-auto object-contain rounded-lg" />
+            <button onClick={() => setShowQr(false)} className="mt-4 text-[13px] font-medium text-slate-500 hover:text-slate-700">Cerrar</button>
           </div>
         </div>
       )}

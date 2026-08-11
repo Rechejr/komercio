@@ -13,7 +13,7 @@ router.get('/catalogo/:businessId', async (req, res, next) => {
       // deletedAt excluido: un negocio desactivado por el superadmin (borrado
       // suave) no debe seguir mostrando su catálogo público indefinidamente.
       where: { id: businessId, deletedAt: null },
-      select: { id: true, name: true, logo: true, city: true, phone: true, address: true, category: true },
+      select: { id: true, name: true, logo: true, city: true, phone: true, address: true, category: true, catalogPaymentLink: true, catalogPaymentQr: true },
     });
     if (!business) {
       res.status(404).json({ success: false, error: 'Negocio no encontrado' });
