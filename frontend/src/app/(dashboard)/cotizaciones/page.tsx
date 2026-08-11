@@ -172,7 +172,7 @@ function NuevaCotizacionModal({ onClose }: { onClose: () => void }) {
 
   return (
     <Portal>
-      <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4" onClick={onClose}>
+      <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
         <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" />
         <div className="relative bg-white dark:bg-slate-900 rounded-2xl shadow-modal w-full max-w-lg max-h-[92vh] overflow-hidden flex flex-col animate-scale-in" onClick={(e) => e.stopPropagation()}>
           <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-slate-100 dark:border-white/[0.06] flex-shrink-0">
