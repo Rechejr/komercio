@@ -7,6 +7,7 @@ import { success, paginated, AppError } from '../utils/response';
 import { getPagination } from '../utils/pagination';
 import { validate } from '../middlewares/validate';
 import { resolvePayment } from '../utils/paymentAccount';
+import { parseBogotaBoundary } from '../utils/bogotaTime';
 
 // Cuentas por pagar: lo que el negocio le debe a sus proveedores por compras a
 // crédito. Espejo de créditos/fiados de clientes, pero al ABONAR sale plata de
@@ -17,12 +18,17 @@ router.use(authenticate);
 router.get('/', async (req: any, res, next) => {
   try {
     const { page, limit, skip } = getPagination(req);
-    const { status, supplierId } = req.query;
+    const { status, supplierId, startDate, endDate } = req.query;
     const businessId = req.user.businessId;
 
     const where: any = { deletedAt: null, businessId };
     if (status) where.status = status;
     if (supplierId) where.supplierId = supplierId;
+
+    // Rango por día calendario colombiano sobre la fecha de creación.
+    const gte = parseBogotaBoundary(startDate, 'start');
+    const lte = parseBogotaBoundary(endDate, 'end');
+    if (gte || lte) where.createdAt = { ...(gte && { gte }), ...(lte && { lte }) };
 
     const [rows, total] = await Promise.all([
       prisma.supplierCredit.findMany({

@@ -8,7 +8,8 @@ import { api } from '@/lib/api';
 import { formatCurrency, formatDate, formatDateTime, statusColor, statusLabel } from '@/lib/utils';
 import { usePaymentAccounts, labelPago } from '@/lib/usePaymentAccounts';
 import toast from 'react-hot-toast';
-import { HandCoins, X, Loader2, DollarSign, ChevronRight, Search } from 'lucide-react';
+import { HandCoins, X, Loader2, DollarSign, ChevronRight, Search, Download } from 'lucide-react';
+import { downloadCsv } from '@/lib/exportCsv';
 
 const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[16px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition';
 const filterCls = 'px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[16px] sm:text-[13px] focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition';
@@ -17,6 +18,9 @@ export default function CuentasPorPagarPage() {
   const qc = useQueryClient();
   const [statusFilter, setStatusFilter] = useState('');
   const [search, setSearch] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [downloading, setDownloading] = useState(false);
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<any>(null);
   const [showPayment, setShowPayment] = useState(false);
@@ -26,13 +30,57 @@ export default function CuentasPorPagarPage() {
   const { register, handleSubmit, reset, control, formState: { errors: payErrors } } = useForm();
 
   const { data, isLoading } = useQuery({
-    queryKey: ['supplier-credits', statusFilter, page],
+    queryKey: ['supplier-credits', statusFilter, startDate, endDate, page],
     queryFn: () => {
       const params = new URLSearchParams({ page: String(page), limit: '20' });
       if (statusFilter) params.set('status', statusFilter);
+      if (startDate) params.set('startDate', startDate);
+      if (endDate) params.set('endDate', endDate);
       return api.get(`/supplier-credits?${params}`).then((r) => r.data);
     },
   });
+
+  // Descarga TODAS las cuentas por pagar que cumplen los filtros (estado, rango
+  // y el texto de búsqueda) como CSV para Excel — no solo la página visible.
+  async function handleDownload() {
+    if (startDate && endDate && startDate > endDate) {
+      toast.error('La fecha "desde" no puede ser mayor que la de "hasta"');
+      return;
+    }
+    setDownloading(true);
+    const tId = toast.loading('Generando archivo...');
+    try {
+      const params = new URLSearchParams({ page: '1', limit: '5000' });
+      if (statusFilter) params.set('status', statusFilter);
+      if (startDate) params.set('startDate', startDate);
+      if (endDate) params.set('endDate', endDate);
+      const all = await api.get(`/supplier-credits?${params}`).then((r) => r.data.data || []);
+      const list = all.filter((c: any) =>
+        !search || c.supplier?.name?.toLowerCase().includes(search.toLowerCase()) || c.purchase?.invoiceNumber?.toLowerCase().includes(search.toLowerCase()),
+      );
+      if (list.length === 0) { toast.error('No hay cuentas en ese rango', { id: tId }); return; }
+      const suffix = startDate || endDate ? `-${startDate || 'inicio'}-${endDate || 'hoy'}` : `-${new Date().toISOString().slice(0, 10)}`;
+      downloadCsv(
+        `cuentas-por-pagar${suffix}`,
+        ['Proveedor', 'Factura', 'Total', 'Abonado', 'Saldo', 'Estado', 'Vencimiento', 'Fecha'],
+        list.map((c: any) => [
+          c.supplier?.name || '',
+          c.purchase?.invoiceNumber || '',
+          Math.round(Number(c.totalAmount) || 0),
+          Math.round(Number(c.paidAmount) || 0),
+          Math.round(Number(c.balance) || 0),
+          statusLabel(c.status),
+          c.dueDate ? formatDate(c.dueDate) : '',
+          c.createdAt ? formatDate(c.createdAt) : '',
+        ]),
+      );
+      toast.success(`${list.length} cuentas descargadas`, { id: tId });
+    } catch {
+      toast.error('No se pudo generar el archivo', { id: tId });
+    } finally {
+      setDownloading(false);
+    }
+  }
 
   const { data: detail } = useQuery({
     queryKey: ['supplier-credit', selected?.id],
@@ -77,6 +125,27 @@ export default function CuentasPorPagarPage() {
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por proveedor o factura…" className={`${inputCls} pl-9`} />
         </div>
+
+        {/* Rango de fechas */}
+        <div className="flex items-center gap-2">
+          <input type="date" aria-label="Desde" value={startDate} onChange={(e) => { setStartDate(e.target.value); setPage(1); }} className={filterCls} />
+          <span className="text-slate-400 text-sm">→</span>
+          <input type="date" aria-label="Hasta" value={endDate} onChange={(e) => { setEndDate(e.target.value); setPage(1); }} className={filterCls} />
+          {(startDate || endDate) && (
+            <button type="button" aria-label="Limpiar rango de fechas" onClick={() => { setStartDate(''); setEndDate(''); setPage(1); }} className="w-9 h-9 flex items-center justify-center rounded-xl text-slate-400 hover:text-slate-600 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition">
+              <X size={14} />
+            </button>
+          )}
+        </div>
+
+        <button
+          type="button"
+          onClick={handleDownload}
+          disabled={downloading}
+          className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-[13px] font-semibold hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-60 transition"
+        >
+          {downloading ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />} Descargar
+        </button>
       </div>
 
       {/* Tabla */}

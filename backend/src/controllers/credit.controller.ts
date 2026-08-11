@@ -6,18 +6,25 @@ import { getPagination } from '../utils/pagination';
 import { AuthRequest } from '../middlewares/auth';
 import { emitToBusinesss, socketEvents } from '../config/socket';
 import { resolvePayment } from '../utils/paymentAccount';
+import { parseBogotaBoundary } from '../utils/bogotaTime';
 
 export const creditController = {
   async list(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const { page, limit, skip } = getPagination(req);
-      const { status, customerId } = req.query;
+      const { status, customerId, startDate, endDate } = req.query;
 
       const businessId = req.user!.businessId;
 
       const where: any = { deletedAt: null, customer: { businessId } };
       if (status) where.status = status;
       if (customerId) where.customerId = customerId;
+
+      // Rango de fechas por día calendario colombiano (sobre la fecha de creación
+      // del crédito), para descargar/filtrar "del X al Y" sin el corrimiento UTC.
+      const gte = parseBogotaBoundary(startDate, 'start');
+      const lte = parseBogotaBoundary(endDate, 'end');
+      if (gte || lte) where.createdAt = { ...(gte && { gte }), ...(lte && { lte }) };
 
       const [credits, total] = await Promise.all([
         prisma.credit.findMany({

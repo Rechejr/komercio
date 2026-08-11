@@ -15,6 +15,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { WhatsAppIcon } from '@/components/ui/WhatsAppIcon';
 import { EstadoCuentaImage } from '@/components/EstadoCuentaImage';
 import { shareImageWhatsApp, downloadImage } from '@/lib/imageShare';
+import { downloadCsv } from '@/lib/exportCsv';
 
 // Recordatorio de fiado por WhatsApp: arma el enlace wa.me con el saldo y un
 // mensaje amable. Devuelve null si el cliente no tiene teléfono registrado.
@@ -36,6 +37,9 @@ export default function CreditosPage() {
   const [statusFilter, setStatusFilter] = useState('');
   const [customerFilter, setCustomerFilter] = useState('');
   const [customerFilterId, setCustomerFilterId] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [downloading, setDownloading] = useState(false);
   const [page, setPage] = useState(1);
 
   // Créditos no tiene un `search` de texto libre propio — filtra por cliente
@@ -76,14 +80,56 @@ export default function CreditosPage() {
   });
 
   const { data, isLoading } = useQuery({
-    queryKey: ['credits', statusFilter, customerFilterId, page],
+    queryKey: ['credits', statusFilter, customerFilterId, startDate, endDate, page],
     queryFn: () => {
       const params = new URLSearchParams({ page: String(page), limit: '20' });
       if (statusFilter) params.set('status', statusFilter);
       if (customerFilterId) params.set('customerId', customerFilterId);
+      if (startDate) params.set('startDate', startDate);
+      if (endDate) params.set('endDate', endDate);
       return api.get(`/credits?${params}`).then((r) => r.data);
     },
   });
+
+  // Descarga TODOS los créditos que cumplen los filtros actuales (no solo la
+  // página visible) como CSV para abrir en Excel.
+  async function handleDownload() {
+    if (startDate && endDate && startDate > endDate) {
+      toast.error('La fecha "desde" no puede ser mayor que la de "hasta"');
+      return;
+    }
+    setDownloading(true);
+    const tId = toast.loading('Generando archivo...');
+    try {
+      const params = new URLSearchParams({ page: '1', limit: '5000' });
+      if (statusFilter) params.set('status', statusFilter);
+      if (customerFilterId) params.set('customerId', customerFilterId);
+      if (startDate) params.set('startDate', startDate);
+      if (endDate) params.set('endDate', endDate);
+      const list = await api.get(`/credits?${params}`).then((r) => r.data.data || []);
+      if (list.length === 0) { toast.error('No hay créditos en ese rango', { id: tId }); return; }
+      const suffix = startDate || endDate ? `-${startDate || 'inicio'}-${endDate || 'hoy'}` : `-${new Date().toISOString().slice(0, 10)}`;
+      downloadCsv(
+        `creditos-clientes${suffix}`,
+        ['Cliente', 'Factura', 'Total', 'Abonado', 'Saldo', 'Estado', 'Vencimiento', 'Fecha'],
+        list.map((c: any) => [
+          c.customer?.name || '',
+          c.sale?.invoiceNumber || '',
+          Math.round(Number(c.totalAmount) || 0),
+          Math.round(Number(c.paidAmount) || 0),
+          Math.round(Number(c.balance) || 0),
+          statusLabel(c.status),
+          c.dueDate ? formatDate(c.dueDate) : '',
+          c.createdAt ? formatDate(c.createdAt) : '',
+        ]),
+      );
+      toast.success(`${list.length} créditos descargados`, { id: tId });
+    } catch {
+      toast.error('No se pudo generar el archivo', { id: tId });
+    } finally {
+      setDownloading(false);
+    }
+  }
 
   const { data: detail, isLoading: loadingDetail } = useQuery({
     queryKey: ['credit', selected?.id],
@@ -226,6 +272,44 @@ export default function CreditosPage() {
             </button>
           )}
         </div>
+
+        {/* Rango de fechas */}
+        <div className="flex items-center gap-2">
+          <input
+            type="date"
+            aria-label="Desde"
+            value={startDate}
+            onChange={(e) => { setStartDate(e.target.value); setPage(1); }}
+            className="px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition"
+          />
+          <span className="text-slate-400 text-sm">→</span>
+          <input
+            type="date"
+            aria-label="Hasta"
+            value={endDate}
+            onChange={(e) => { setEndDate(e.target.value); setPage(1); }}
+            className="px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition"
+          />
+          {(startDate || endDate) && (
+            <button
+              type="button"
+              aria-label="Limpiar rango de fechas"
+              onClick={() => { setStartDate(''); setEndDate(''); setPage(1); }}
+              className="w-9 h-9 flex items-center justify-center rounded-xl text-slate-400 hover:text-slate-600 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+            >
+              <X size={14} />
+            </button>
+          )}
+        </div>
+
+        <button
+          type="button"
+          onClick={handleDownload}
+          disabled={downloading}
+          className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-sm font-semibold hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-60 transition"
+        >
+          {downloading ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />} Descargar
+        </button>
 
         <button
           type="button"
