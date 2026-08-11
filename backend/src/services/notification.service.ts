@@ -149,6 +149,69 @@ export async function notifyCreditsOverdueBatch(
   }
 }
 
+// Avisa a los administradores del POS que una cuenta por COBRAR (fiado de
+// cliente) o por PAGAR (a proveedor) está próxima a vencer. Deduplica por
+// refId+kind: como el job corre a diario, un mismo crédito/cuenta se avisa UNA
+// sola vez (al entrar a la ventana de 3 días), no todos los días.
+export async function notifyDueSoonBatch(
+  businessId: string,
+  kind: 'CREDIT_DUE_SOON' | 'PAYABLE_DUE_SOON',
+  items: Array<{ refId: string; title: string; message: string; href: string }>,
+): Promise<number> {
+  if (items.length === 0) return 0;
+
+  const managers = await prisma.user.findMany({
+    where: { branch: { businessId }, role: { in: ['ADMIN', 'SUPERVISOR'] }, deletedAt: null, isActive: true },
+    select: { id: true },
+  });
+  if (managers.length === 0) return 0;
+  const managerIds = managers.map((m) => m.id);
+
+  const existentes = await prisma.notification.findMany({
+    where: { userId: { in: managerIds }, data: { path: ['kind'], equals: kind } },
+    select: { data: true },
+  });
+  const yaAvisados = new Set(
+    existentes.map((n) => (n.data as { refId?: string } | null)?.refId).filter(Boolean),
+  );
+  const nuevos = items.filter((it) => !yaAvisados.has(it.refId));
+  if (nuevos.length === 0) return 0;
+
+  await prisma.notification.createMany({
+    data: nuevos.flatMap((it) =>
+      managerIds.map((userId) => ({
+        userId,
+        title: it.title,
+        message: it.message,
+        type: 'WARNING',
+        data: { kind, refId: it.refId, href: it.href } as any,
+      })),
+    ),
+  });
+
+  // Socket en vivo (best-effort): si falla, ya quedó en la campanita.
+  try {
+    for (const it of nuevos) {
+      const payload = { title: it.title, message: it.message, type: 'WARNING', data: { kind, refId: it.refId, href: it.href } };
+      managerIds.forEach((userId) => emitToUser(userId, socketEvents.NEW_NOTIFICATION, payload));
+    }
+  } catch { /* socket opcional */ }
+
+  // Web Push al móvil aunque la app esté cerrada (best-effort; no-op si no hay
+  // suscripciones o VAPID). Un solo push-resumen por corrida para no saturar.
+  const pushBody = nuevos.length === 1
+    ? nuevos[0].message
+    : `${nuevos.length} cuentas están próximas a vencer.`;
+  await sendPushToUsers(managerIds, {
+    title: kind === 'CREDIT_DUE_SOON' ? 'Ventrix · Fiados por vencer' : 'Ventrix · Cuentas por pagar',
+    body: pushBody,
+    url: nuevos.length === 1 ? nuevos[0].href : (kind === 'CREDIT_DUE_SOON' ? '/creditos' : '/cuentas-por-pagar'),
+    tag: `due-soon-${kind}`,
+  });
+
+  return nuevos.length;
+}
+
 // Notifica a los usuarios de una OFICINA CONTABLE (ADMIN/AUXILIAR) sobre
 // vencimientos que ya vencieron o vencen pronto. Dedup: un vencimiento se notifica
 // UNA sola vez (se salta si ya hay una notificación suya para esos usuarios).

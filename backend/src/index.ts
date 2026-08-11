@@ -10,6 +10,7 @@ import { initSentry } from './config/sentry';
 import { startCreditOverdueJob } from './jobs/creditOverdue.job';
 import { startContableVencimientosJob } from './jobs/contableVencimientos.job';
 import { startDowngradeExpiredPlansJob } from './jobs/downgradeExpiredPlans.job';
+import { startDueSoonJob } from './jobs/dueSoon.job';
 
 // El contenedor de Railway no tiene salida IPv6 funcional — Node por defecto
 // intenta conectar por IPv6 primero cuando el host (ej. smtp.gmail.com) tiene
@@ -45,6 +46,7 @@ async function bootstrap() {
     startCreditOverdueJob();
     startContableVencimientosJob();
     startDowngradeExpiredPlansJob();
+    startDueSoonJob();
   } catch (error) {
     logger.error('Failed to start server:', error);
     process.exit(1);
