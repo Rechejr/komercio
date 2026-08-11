@@ -9,9 +9,12 @@ import { api } from '@/lib/api';
 import { formatCurrency, formatDate, formatDateTime, statusColor, statusLabel } from '@/lib/utils';
 import { usePaymentAccounts, labelPago } from '@/lib/usePaymentAccounts';
 import toast from 'react-hot-toast';
-import { CreditCard, X, Loader2, Plus, DollarSign, ChevronRight, Clock, Search, Ban, MessageCircle } from 'lucide-react';
+import { CreditCard, X, Loader2, Plus, DollarSign, ChevronRight, Clock, Search, Ban, MessageCircle, Download } from 'lucide-react';
 import { useAuthStore } from '@/store/auth.store';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { WhatsAppIcon } from '@/components/ui/WhatsAppIcon';
+import { EstadoCuentaImage } from '@/components/EstadoCuentaImage';
+import { shareImageWhatsApp, downloadImage } from '@/lib/imageShare';
 
 // Recordatorio de fiado por WhatsApp: arma el enlace wa.me con el saldo y un
 // mensaje amable. Devuelve null si el cliente no tiene teléfono registrado.
@@ -146,6 +149,25 @@ export default function CreditosPage() {
 
   const credits = data?.data || [];
   const pagination = data?.pagination;
+
+  // Datos del "Estado de cuenta" (para descargar/compartir como imagen).
+  const estadoData = selected ? {
+    negocio: businessName,
+    cliente: selected.customer?.name || 'Cliente',
+    factura: selected.sale?.invoiceNumber || null,
+    total: selected.totalAmount,
+    abonado: selected.paidAmount,
+    saldo: selected.balance,
+    estado: statusLabel(selected.status),
+    fecha: formatDate(new Date().toISOString()),
+    vence: selected.dueDate ? formatDate(selected.dueDate) : null,
+    pagos: (detail?.payments || []).map((p: any) => ({
+      fecha: formatDateTime(p.createdAt),
+      metodo: labelPago(allAccounts, p.paymentAccountId, p.paymentMethod),
+      monto: p.amount,
+    })),
+  } : null;
+  const estadoFile = `estado-cuenta-${(selected?.customer?.name || 'cliente').replace(/\s+/g, '-').toLowerCase()}`;
 
   function openDetail(c: any) { setSelected(c); setShowDetail(true); setShowPayment(false); }
   function openPayment(c: any) { setSelected(c); setShowPayment(true); setShowDetail(false); reset(); }
@@ -357,9 +379,25 @@ export default function CreditosPage() {
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-white/[0.06] flex-shrink-0 bg-white dark:bg-slate-900">
               <div>
                 <h2 className="text-[16px] font-bold text-slate-800 dark:text-white">{selected.customer?.name}</h2>
-                <p className="text-[12px] text-slate-400 mt-0.5 font-mono">{selected.sale?.invoiceNumber || '—'}</p>
+                <p className="text-[12px] text-slate-400 mt-0.5">Estado de cuenta · <span className="font-mono">{selected.sale?.invoiceNumber || '—'}</span></p>
               </div>
               <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  title="Descargar estado de cuenta"
+                  onClick={() => downloadImage('estado-cuenta-content', estadoFile)}
+                  className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-500 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+                >
+                  <Download size={15} />
+                </button>
+                <button
+                  type="button"
+                  title="Compartir por WhatsApp"
+                  onClick={() => shareImageWhatsApp('estado-cuenta-content', estadoFile, selected.customer?.phone)}
+                  className="w-8 h-8 flex items-center justify-center rounded-lg text-white bg-[#25D366] hover:bg-[#1ebe5d] transition"
+                >
+                  <WhatsAppIcon />
+                </button>
                 {selected.status !== 'PAID' && (
                   <button
                     type="button"
@@ -390,6 +428,9 @@ export default function CreditosPage() {
             </div>
 
             <div className="p-6 space-y-5 overflow-y-auto min-h-0 flex-1">
+              {/* Documento oculto para descargar/compartir como imagen */}
+              {estadoData && <EstadoCuentaImage data={estadoData} />}
+
               {/* KPI cards */}
               <div className="grid grid-cols-3 gap-3">
                 <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-white/[0.06] rounded-xl p-3 text-center">
