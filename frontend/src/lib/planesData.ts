@@ -4,6 +4,28 @@
 // negocio y activa el plan de verdad. Por eso aquí ya no hay links sueltos de
 // Wompi: el pago se dispara adentro (ver BuyIntentHandler).
 
+// ─────────────────────────────────────────────────────────────────────────────
+// VENDEDORES  ← AGREGA AQUÍ A CADA VENDEDOR
+// Cada vendedor comparte su propio link: ventrix.lat/planes?v=<slug>. Cuando un
+// prospecto toca "WhatsApp" en la cotización, se abre el chat con ESE vendedor
+// (con el plan ya escrito). Si el link no trae ?v= (o el slug no existe), cae al
+// vendedor por defecto (el dueño). El teléfono va con código de país: 57 + celular.
+// ─────────────────────────────────────────────────────────────────────────────
+export interface Seller { name: string; phone: string }
+
+export const DEFAULT_SELLER: Seller = { name: 'Ventrix', phone: '573102979527' };
+
+export const SELLERS: Record<string, Seller> = {
+  // Ejemplos (agrega a tus vendedores con un slug en minúsculas):
+  // juan:  { name: 'Juan',  phone: '573001112233' },
+  // maria: { name: 'María', phone: '573004445566' },
+};
+
+export function resolveSeller(slug?: string | null): Seller {
+  const key = (slug || '').trim().toLowerCase();
+  return (key && SELLERS[key]) || DEFAULT_SELLER;
+}
+
 export interface PlanTier {
   name: string;
   price: number;          // COP; 0 = gratis

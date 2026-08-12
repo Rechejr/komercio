@@ -1,12 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Bricolage_Grotesque, Instrument_Sans, Space_Mono } from 'next/font/google';
 import { Download, Loader2, FileText, X } from 'lucide-react';
 import { WhatsAppIcon } from '@/components/ui/WhatsAppIcon';
-import { downloadImage, shareImageWhatsApp } from '@/lib/imageShare';
-import { PLANS, TRUST_POINTS, PLANES_FAQ, type PlanTier, type ProductPlan } from '@/lib/planesData';
+import { downloadImage } from '@/lib/imageShare';
+import { PLANS, TRUST_POINTS, PLANES_FAQ, resolveSeller, type PlanTier, type ProductPlan, type Seller } from '@/lib/planesData';
 import '../landing.css';
 
 const bricolage = Bricolage_Grotesque({ subsets: ['latin'], variable: '--font-bric', weight: ['500', '600', '700', '800'], display: 'swap', preload: false });
@@ -31,9 +31,27 @@ interface CotizarState { product: ProductPlan; tier: PlanTier; fecha: string; va
 export default function PlanesPage() {
   const [productKey, setProductKey] = useState<'pos' | 'contable'>('pos');
   const [cotizar, setCotizar] = useState<CotizarState | null>(null);
-  const [busy, setBusy] = useState<'download' | 'share' | null>(null);
+  const [busy, setBusy] = useState(false);
+  // Vendedor según ?v=<slug> en el link que compartió. Se lee en el cliente para
+  // que la página siga siendo estática (sin useSearchParams / Suspense).
+  const [seller, setSeller] = useState<Seller>(() => resolveSeller());
+  useEffect(() => {
+    const slug = new URLSearchParams(window.location.search).get('v');
+    setSeller(resolveSeller(slug));
+  }, []);
 
   const product = PLANS.find((p) => p.key === productKey)!;
+
+  // Chat de WhatsApp con el vendedor, con mensaje ya escrito (opcional: sobre un plan).
+  function waHref(msg: string): string {
+    const digits = seller.phone.replace(/\D/g, '');
+    return `https://wa.me/${digits}?text=${encodeURIComponent(msg)}`;
+  }
+  function waCotizarHref(c: CotizarState): string {
+    const precio = c.tier.price === 0 ? '' : ` (${money(c.tier.price)}${c.tier.period})`;
+    return waHref(`Hola 👋 Vi los planes de Ventrix y me interesa el ${c.product.label} · Plan ${c.tier.name}${precio}. ¿Me ayudas a activarlo?`);
+  }
+  const waGeneralHref = waHref('Hola 👋 Vi los planes de Ventrix y quiero más información.');
 
   function abrirCotizar(p: ProductPlan, tier: PlanTier) {
     const hoy = new Date();
@@ -43,14 +61,9 @@ export default function PlanesPage() {
   }
 
   async function descargar() {
-    setBusy('download');
+    setBusy(true);
     try { await downloadImage('cotizacion-img', `cotizacion-ventrix-${cotizar?.product.key}-${cotizar?.tier.name}`.toLowerCase()); }
-    finally { setBusy(null); }
-  }
-  async function compartir() {
-    setBusy('share');
-    try { await shareImageWhatsApp('cotizacion-img', `cotizacion-ventrix-${cotizar?.product.key}-${cotizar?.tier.name}`.toLowerCase()); }
-    finally { setBusy(null); }
+    finally { setBusy(false); }
   }
 
   return (
@@ -75,6 +88,11 @@ export default function PlanesPage() {
             <div className="lp-sec-eyebrow">Planes y precios</div>
             <h2>Elige tu plan de Ventrix</h2>
             <p style={{ marginInline: 'auto' }}>Dos productos, precios claros y sin letra chiquita. Empieza gratis y paga solo cuando lo necesites.</p>
+            <div style={{ marginTop: '1rem' }}>
+              <a href={waGeneralHref} target="_blank" rel="noopener noreferrer" className="lp-btn planes-btn-wa" style={{ display: 'inline-flex' }}>
+                <WhatsAppIcon /> ¿Dudas? Escríbenos por WhatsApp
+              </a>
+            </div>
           </div>
 
           {/* Selector de producto (POS / Contable) */}
@@ -176,11 +194,11 @@ export default function PlanesPage() {
 
             <div className="planes-cta-group" style={{ marginTop: '1rem' }}>
               <Link href={buyHref(cotizar.product)} className="lp-btn lp-btn-primary">Comprar ahora</Link>
-              <button type="button" onClick={descargar} disabled={busy !== null} className="lp-btn lp-btn-ghost planes-btn-cotizar">
-                {busy === 'download' ? <Loader2 size={15} className="planes-spin" /> : <Download size={15} />} Descargar
-              </button>
-              <button type="button" onClick={compartir} disabled={busy !== null} className="lp-btn planes-btn-wa">
-                {busy === 'share' ? <Loader2 size={15} className="planes-spin" /> : <WhatsAppIcon />} WhatsApp
+              <a href={waCotizarHref(cotizar)} target="_blank" rel="noopener noreferrer" className="lp-btn planes-btn-wa">
+                <WhatsAppIcon /> Escribir por WhatsApp
+              </a>
+              <button type="button" onClick={descargar} disabled={busy} className="lp-btn lp-btn-ghost planes-btn-cotizar">
+                {busy ? <Loader2 size={15} className="planes-spin" /> : <Download size={15} />} Descargar
               </button>
             </div>
 
