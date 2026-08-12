@@ -640,3 +640,103 @@
   border-color: var(--lp-brand);
   box-shadow: var(--lp-shadow-lg), 0 0 0 3px rgba(13,160,106,.12);
 }
+
+/* ── Página de Planes y precios ─────────────────────────────────────────── */
+.planes-tabs {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  margin: 1.5rem auto 0;
+  padding: 6px;
+  background: var(--lp-mint);
+  border: 1px solid var(--lp-mint-line);
+  border-radius: 999px;
+  width: fit-content;
+  max-width: 100%;
+  flex-wrap: wrap;
+}
+.planes-tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 8px 22px;
+  border-radius: 999px;
+  border: none;
+  background: transparent;
+  color: var(--lp-ink-soft);
+  cursor: pointer;
+  transition: background .18s ease, color .18s ease, box-shadow .18s ease;
+}
+.planes-tab.is-active {
+  background: var(--lp-surface);
+  color: var(--lp-ink);
+  box-shadow: var(--lp-shadow);
+}
+.planes-tab-label { font-weight: 700; font-size: .98rem; }
+.planes-tab-tag { font-size: .72rem; color: var(--lp-ink-soft); }
+.planes-tab.is-active .planes-tab-tag { color: var(--lp-brand-deep); }
+
+.planes-note { font-size: .8rem; color: var(--lp-ink-soft); margin: -6px 0 10px; }
+
+.planes-cta-group { display: flex; flex-direction: column; gap: 8px; margin-top: auto; }
+.planes-btn-cotizar,
+.planes-btn-wa { display: inline-flex; align-items: center; justify-content: center; gap: 7px; }
+.planes-btn-wa { background: #25D366; color: #fff; border: none; }
+.planes-btn-wa:hover { background: #1ebe5d; }
+
+.planes-trust {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px 22px;
+  margin: 1.75rem auto 0;
+  max-width: 720px;
+}
+.planes-trust-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: .88rem;
+  color: var(--lp-ink-soft);
+  font-weight: 500;
+}
+.planes-trust-item svg { color: var(--lp-brand); }
+
+/* Modal de cotización */
+.planes-modal-overlay {
+  position: fixed; inset: 0; z-index: 60;
+  background: rgba(16,32,26,.5);
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
+  display: flex; align-items: center; justify-content: center;
+  padding: 16px;
+}
+.planes-modal {
+  position: relative;
+  width: 100%; max-width: 420px;
+  max-height: 92vh; overflow-y: auto;
+  background: var(--lp-surface);
+  border-radius: 20px;
+  box-shadow: var(--lp-shadow-lg);
+  padding: 26px 24px 22px;
+}
+.planes-modal-close {
+  position: absolute; top: 12px; right: 12px;
+  width: 32px; height: 32px;
+  display: flex; align-items: center; justify-content: center;
+  border: none; background: transparent; color: var(--lp-ink-soft);
+  border-radius: 8px; cursor: pointer;
+}
+.planes-modal-close:hover { background: var(--lp-mint); }
+.planes-quote-head { text-align: center; margin-bottom: 6px; }
+.planes-quote-kicker { font-size: .72rem; letter-spacing: .16em; color: var(--lp-brand); font-weight: 700; margin: 0 0 2px; }
+.planes-quote-head h3 { font-size: 1.05rem; font-weight: 800; color: var(--lp-ink); margin: 0; }
+.planes-quote-price { text-align: center; font-size: 2rem; font-weight: 800; color: var(--lp-ink); margin: 6px 0; }
+.planes-quote-price small { font-size: .95rem; font-weight: 600; color: var(--lp-ink-soft); }
+.planes-quote-list { list-style: none; padding: 0; margin: 14px 0; display: flex; flex-direction: column; gap: 9px; }
+.planes-quote-list li { display: flex; align-items: flex-start; gap: 9px; font-size: .92rem; color: var(--lp-ink); }
+.planes-quote-list li svg { color: var(--lp-brand); flex: none; margin-top: 2px; }
+.planes-quote-valid { text-align: center; font-size: .78rem; color: var(--lp-ink-soft); margin: 4px 0 0; }
+.planes-spin { animation: planes-spin 1s linear infinite; }
+@keyframes planes-spin { to { transform: rotate(360deg); } }
