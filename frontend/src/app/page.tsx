@@ -39,8 +39,8 @@ const RECEIPT_ITEMS = [
 ];
 
 const CHIPS    = ['Tiendas de barrio','Minimarkets','Restaurantes','Cafeterías','Papelerías','Licoreras','Fruver'];
-const FREE_FTS = ['Ventas y recibos ilimitados','Control de inventario','Registro de clientes','Sin tarjeta de crédito'];
-const PRO_FTS  = ['Todo lo del plan Gratis','Reportes de ventas y ganancias','Varios usuarios / cajeros','Soporte prioritario'];
+const FREE_FTS = ['Hasta 50 ventas al mes','Hasta 50 productos y 50 clientes','1 usuario y 1 bodega','Sin tarjeta de crédito'];
+const PRO_FTS  = ['Ventas, productos y clientes ilimitados','Varios cajeros con permisos','Fiados y créditos con aviso por WhatsApp','Compras, proveedores y cuentas por pagar','Reportes de ganancias y Excel','Hasta 3 bodegas + transferencias','Resumen de tu negocio con IA','Soporte prioritario'];
 
 const BENEFITS = [
   {
