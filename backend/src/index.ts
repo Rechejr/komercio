@@ -11,6 +11,7 @@ import { startCreditOverdueJob } from './jobs/creditOverdue.job';
 import { startContableVencimientosJob } from './jobs/contableVencimientos.job';
 import { startDowngradeExpiredPlansJob } from './jobs/downgradeExpiredPlans.job';
 import { startDueSoonJob } from './jobs/dueSoon.job';
+import { startLowStockSweepJob } from './jobs/lowStockSweep.job';
 
 // El contenedor de Railway no tiene salida IPv6 funcional — Node por defecto
 // intenta conectar por IPv6 primero cuando el host (ej. smtp.gmail.com) tiene
@@ -47,6 +48,7 @@ async function bootstrap() {
     startContableVencimientosJob();
     startDowngradeExpiredPlansJob();
     startDueSoonJob();
+    startLowStockSweepJob();
   } catch (error) {
     logger.error('Failed to start server:', error);
     process.exit(1);

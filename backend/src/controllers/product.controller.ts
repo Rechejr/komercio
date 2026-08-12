@@ -15,6 +15,33 @@ import { resolveEffectiveBranchId } from '../utils/resolveBranch';
 
 const CACHE_TTL = 300;
 
+// Sincroniza la alerta de "Stock bajo" de un producto tras crearlo o editarlo.
+// Antes la alerta solo se disparaba cuando una VENTA o un ajuste hacían cruzar
+// el mínimo — un producto creado ya bajo, o al que recién se le pone un mínimo,
+// nunca avisaba. Usa la misma bandera `lowStockNotifiedAt` que el resto del
+// flujo, así no se duplica y se resetea al reabastecer. Best-effort: nunca
+// rompe el crear/editar.
+async function syncLowStockAlert(
+  businessId: string,
+  p: { id: string; name: string; stock: unknown; minStock: unknown; lowStockNotifiedAt: Date | null },
+) {
+  try {
+    const stock = Number(p.stock);
+    const min = Number(p.minStock);
+    const isLow = min > 0 && stock <= min;
+    if (isLow && !p.lowStockNotifiedAt) {
+      await prisma.product.update({ where: { id: p.id }, data: { lowStockNotifiedAt: new Date() } });
+      await notifyLowStock(businessId, { id: p.id, name: p.name, stock, minStock: min });
+    } else if (!isLow && p.lowStockNotifiedAt) {
+      // Se reabasteció por encima del mínimo → limpia la bandera para poder
+      // volver a alertar la próxima vez que caiga.
+      await prisma.product.update({ where: { id: p.id }, data: { lowStockNotifiedAt: null } });
+    }
+  } catch (err) {
+    logger.error(`Fallo al sincronizar alerta de stock bajo (product=${p.id}): ${(err as any)?.message || err}`);
+  }
+}
+
 export const productController = {
   async list(req: AuthRequest, res: Response, next: NextFunction) {
     try {
@@ -259,6 +286,8 @@ export const productController = {
 
       if (businessId) {
         emitToBusinesss(businessId, socketEvents.INVENTORY_UPDATED, { type: 'created', product });
+        // Si nace en o por debajo de su mínimo, avisa de una vez (no espera a una venta).
+        await syncLowStockAlert(businessId, product as any);
       }
       await cache.del(`dashboard:${businessId}`).catch(() => {});
 
@@ -399,6 +428,10 @@ export const productController = {
 
       if (businessId) {
         emitToBusinesss(businessId, socketEvents.INVENTORY_UPDATED, { type: 'updated', product });
+        // Al editar puede cambiar el mínimo y quedar en rojo — se re-evalúa con el
+        // registro ya guardado para avisar al instante (usa la misma bandera de
+        // dedup, así no repite si ya se había avisado).
+        await syncLowStockAlert(businessId, product as any);
       }
 
       // Limpieza best-effort de imágenes reemplazadas/quitadas — de lo contrario
