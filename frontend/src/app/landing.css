@@ -105,10 +105,43 @@
   box-shadow: 0 4px 10px -2px rgba(13,160,106,.55);
   flex-shrink: 0;
 }
-.lp-nav-actions { display: flex; align-items: center; gap: 14px; }
-.lp-nav-login { font-weight: 500; color: var(--lp-ink-soft); font-size: .95rem; white-space: nowrap; }
-.lp-nav-login:hover { color: var(--lp-brand-deep); }
-@media (max-width: 640px) { .lp-nav-login { display: none; } }
+.lp-nav-actions { display: flex; align-items: center; gap: 4px; }
+.lp-nav-login {
+  position: relative;
+  font-weight: 600;
+  color: var(--lp-ink-soft);
+  font-size: .93rem;
+  white-space: nowrap;
+  padding: 8px 13px;
+  border-radius: 10px;
+  transition: color .18s ease, background-color .18s ease;
+}
+/* Subrayado que crece desde el centro al pasar el mouse (detalle premium). */
+.lp-nav-login::after {
+  content: '';
+  position: absolute;
+  left: 13px; right: 13px; bottom: 5px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--lp-brand);
+  transform: scaleX(0);
+  transform-origin: center;
+  transition: transform .22s cubic-bezier(.4,0,.2,1);
+}
+.lp-nav-login:hover { color: var(--lp-brand-deep); background: var(--lp-mint); }
+.lp-nav-login:hover::after { transform: scaleX(1); }
+/* Divisor fino que separa los enlaces del botón de acción. */
+.lp-nav-sep {
+  width: 1px;
+  height: 20px;
+  background: var(--lp-mint-line);
+  margin: 0 8px;
+  flex-shrink: 0;
+}
+.lp-nav-actions .lp-btn-primary { margin-left: 4px; }
+@media (max-width: 640px) {
+  .lp-nav-login, .lp-nav-sep { display: none; }
+}
 
 /* link "Ya tengo cuenta" debajo del CTA en hero (solo mobile) */
 .lp-hero-login {

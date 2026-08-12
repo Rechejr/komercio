@@ -62,6 +62,7 @@ export default function PlanesPage() {
           <Link href="/" className="lp-logo"><span className="lp-logo-mark">V</span> Ventrix</Link>
           <nav className="lp-nav-actions">
             <Link href="/login" className="lp-nav-login">Ya tengo cuenta</Link>
+            <span className="lp-nav-sep" aria-hidden="true" />
             <Link href="/register" className="lp-btn lp-btn-primary">Crear cuenta</Link>
           </nav>
         </div>

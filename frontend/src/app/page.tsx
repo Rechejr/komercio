@@ -172,6 +172,7 @@ export default function LandingPage() {
             <Link href="/planes" className="lp-nav-login">Planes y precios</Link>
             <Link href="/contable" className="lp-nav-login">Para contadores</Link>
             <Link href="/login" className="lp-nav-login">Ya tengo cuenta</Link>
+            <span className="lp-nav-sep" aria-hidden="true" />
             <Link href="/register" className="lp-btn lp-btn-primary">Crear cuenta gratis</Link>
           </nav>
         </div>

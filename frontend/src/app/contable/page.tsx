@@ -98,6 +98,7 @@ export default function ContableLanding() {
             <Link href="/planes" className="lp-nav-login">Planes y precios</Link>
             <Link href="/" className="lp-nav-login">Para comercios</Link>
             <Link href="/login?tipo=contable" className="lp-nav-login">Ya tengo cuenta</Link>
+            <span className="lp-nav-sep" aria-hidden="true" />
             <Link href="/register?tipo=contable" className="lp-btn lp-btn-primary">Empieza gratis</Link>
           </nav>
         </div>
