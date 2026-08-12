@@ -176,12 +176,15 @@ function RegisterForm() {
   useEffect(() => {
     if (intentPro && typeof window !== 'undefined') {
       localStorage.setItem('ventrix-buy-intent', 'pro');
+      // Qué producto quiere comprar (pos/contable) — para activarlo si su correo
+      // ya existe pero con el otro producto.
+      localStorage.setItem('ventrix-buy-product', businessType);
       // Periodo elegido en /planes (mensual/trimestral/anual) para cobrar el correcto.
       if (intentPeriod && ['monthly', 'quarterly', 'annual'].includes(intentPeriod)) {
         localStorage.setItem('ventrix-buy-period', intentPeriod);
       }
     }
-  }, [intentPro, intentPeriod]);
+  }, [intentPro, intentPeriod, businessType]);
 
   // Título de la pestaña acorde al producto (el layout raíz pone el del POS).
   useEffect(() => {
@@ -225,6 +228,17 @@ function RegisterForm() {
       // Un contador vuelve al login con la cara de la agenda (no la del POS).
       router.push(esContable ? '/login?tipo=contable' : '/login');
     } catch (err: any) {
+      // Correo ya registrado (409): no es un callejón sin salida. Si viene a
+      // comprar, lo mandamos a iniciar sesión para AGREGAR el producto a su cuenta
+      // (la intención queda guardada y se activa al entrar). Si no, igual lo
+      // guiamos al login, que es el único camino con un correo existente.
+      if (err.response?.status === 409) {
+        toast(intentPro
+          ? `Ya tienes una cuenta con este correo. Inicia sesión para agregar tu ${esContable ? 'Contable' : 'POS'}.`
+          : 'Ya tienes una cuenta con este correo. Inicia sesión para continuar.');
+        router.push(`/login?tipo=${businessType}`);
+        return;
+      }
       toast.error(err.response?.data?.error || 'Error al crear la cuenta');
     } finally {
       setLoading(false);
@@ -300,6 +314,10 @@ function RegisterForm() {
               <div className="mb-5 rounded-xl border border-emerald-200 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-900/20 px-4 py-3">
                 <p className="text-[12.5px] text-emerald-800 dark:text-emerald-200 leading-relaxed">
                   ⚡ Estás a un paso de activar el plan <b>Pro</b>. Crea tu cuenta y verifica tu correo — apenas inicies sesión podrás pagar y activarlo al instante.
+                </p>
+                <p className="text-[12px] text-emerald-700 dark:text-emerald-300 mt-1.5">
+                  ¿Ya tienes cuenta con otro producto?{' '}
+                  <Link href={`/login?tipo=${businessType}`} className="font-semibold underline">Inicia sesión para agregar tu {esContable ? 'Contable' : 'POS'}</Link>
                 </p>
               </div>
             )}
