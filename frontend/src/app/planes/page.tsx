@@ -48,18 +48,24 @@ export default function PlanesPage() {
   const periodOf = (tier: PlanTier): BillingPeriod | undefined =>
     tier.periods?.find((p) => p.key === posPeriod) ?? tier.periods?.[0];
 
-  // Chat de WhatsApp con el vendedor, con mensaje ya escrito (opcional: sobre un plan).
-  function waHref(msg: string): string {
-    const digits = seller.phone.replace(/\D/g, '');
-    return `https://wa.me/${digits}?text=${encodeURIComponent(msg)}`;
-  }
-  function waCotizarHref(c: CotizarState): string {
+  // Chat de WhatsApp con el vendedor, con mensaje ya escrito. `waHref` usa el
+  // vendedor ya resuelto (para el href inicial). `liveWaUrl` RE-lee el ?v= en el
+  // momento del clic — así siempre abre el número correcto aunque el JS aún no
+  // haya terminado de hidratar (antes podía quedarse con el número por defecto).
+  const GENERAL_MSG = 'Hola 👋 Vi los planes de Ventrix y quiero más información.';
+  function cotizarMsg(c: CotizarState): string {
     const total = c.period ? c.period.total : c.tier.price;
     const unit = c.period ? c.period.unit : c.tier.period;
     const precio = total === 0 ? '' : ` (${money(total)}${unit})`;
-    return waHref(`Hola 👋 Vi los planes de Ventrix y me interesa el ${c.product.label} · Plan ${c.tier.name}${precio}. ¿Me ayudas a activarlo?`);
+    return `Hola 👋 Vi los planes de Ventrix y me interesa el ${c.product.label} · Plan ${c.tier.name}${precio}. ¿Me ayudas a activarlo?`;
   }
-  const waGeneralHref = waHref('Hola 👋 Vi los planes de Ventrix y quiero más información.');
+  function waHref(msg: string): string {
+    return `https://wa.me/${seller.phone.replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`;
+  }
+  function liveWaUrl(msg: string): string {
+    const slug = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('v') : null;
+    return `https://wa.me/${resolveSeller(slug).phone.replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`;
+  }
 
   function abrirCotizar(p: ProductPlan, tier: PlanTier, period?: BillingPeriod) {
     const hoy = new Date();
@@ -97,7 +103,11 @@ export default function PlanesPage() {
             <h2>Elige tu plan de Ventrix</h2>
             <p style={{ marginInline: 'auto' }}>Dos productos, precios claros y sin letra chiquita. Empieza gratis y paga solo cuando lo necesites.</p>
             <div style={{ marginTop: '1rem' }}>
-              <a href={waGeneralHref} target="_blank" rel="noopener noreferrer" className="lp-btn planes-btn-wa" style={{ display: 'inline-flex' }}>
+              <a
+                href={waHref(GENERAL_MSG)}
+                onClick={(e) => { e.currentTarget.href = liveWaUrl(GENERAL_MSG); }}
+                target="_blank" rel="noopener noreferrer" className="lp-btn planes-btn-wa" style={{ display: 'inline-flex' }}
+              >
                 <WhatsAppIcon /> ¿Dudas? Escríbenos por WhatsApp
               </a>
             </div>
@@ -230,7 +240,11 @@ export default function PlanesPage() {
 
             <div className="planes-cta-group" style={{ marginTop: '1rem' }}>
               <Link href={buyHref(cotizar.product, cotizar.period?.key)} className="lp-btn lp-btn-primary">Comprar ahora</Link>
-              <a href={waCotizarHref(cotizar)} target="_blank" rel="noopener noreferrer" className="lp-btn planes-btn-wa">
+              <a
+                href={waHref(cotizarMsg(cotizar))}
+                onClick={(e) => { e.currentTarget.href = liveWaUrl(cotizarMsg(cotizar)); }}
+                target="_blank" rel="noopener noreferrer" className="lp-btn planes-btn-wa"
+              >
                 <WhatsAppIcon /> Escribir por WhatsApp
               </a>
               <button type="button" onClick={descargar} disabled={busy} className="lp-btn lp-btn-ghost planes-btn-cotizar">
