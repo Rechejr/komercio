@@ -172,9 +172,16 @@ function RegisterForm() {
   // Intención de compra desde /planes (?intent=pro): se guarda para que, al
   // entrar por primera vez, la app abra el pago y active el plan (BuyIntentHandler).
   const intentPro = searchParams.get('intent') === 'pro';
+  const intentPeriod = searchParams.get('periodo');
   useEffect(() => {
-    if (intentPro && typeof window !== 'undefined') localStorage.setItem('ventrix-buy-intent', 'pro');
-  }, [intentPro]);
+    if (intentPro && typeof window !== 'undefined') {
+      localStorage.setItem('ventrix-buy-intent', 'pro');
+      // Periodo elegido en /planes (mensual/trimestral/anual) para cobrar el correcto.
+      if (intentPeriod && ['monthly', 'quarterly', 'annual'].includes(intentPeriod)) {
+        localStorage.setItem('ventrix-buy-period', intentPeriod);
+      }
+    }
+  }, [intentPro, intentPeriod]);
 
   // Título de la pestaña acorde al producto (el layout raíz pone el del POS).
   useEffect(() => {

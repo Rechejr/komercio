@@ -6,7 +6,7 @@ import { Bricolage_Grotesque, Instrument_Sans, Space_Mono } from 'next/font/goog
 import { Download, Loader2, FileText, X } from 'lucide-react';
 import { WhatsAppIcon } from '@/components/ui/WhatsAppIcon';
 import { downloadImage } from '@/lib/imageShare';
-import { PLANS, TRUST_POINTS, PLANES_FAQ, resolveSeller, type PlanTier, type ProductPlan, type Seller } from '@/lib/planesData';
+import { PLANS, TRUST_POINTS, PLANES_FAQ, resolveSeller, type PlanTier, type ProductPlan, type Seller, type BillingPeriod } from '@/lib/planesData';
 import '../landing.css';
 
 const bricolage = Bricolage_Grotesque({ subsets: ['latin'], variable: '--font-bric', weight: ['500', '600', '700', '800'], display: 'swap', preload: false });
@@ -21,12 +21,13 @@ const money = (n: number) => `$${n.toLocaleString('es-CO')}`;
 
 // "Comprar ahora" → crear la cuenta con intención de comprar. Al entrar por
 // primera vez, la app abre el pago (que sí activa el plan). Ver BuyIntentHandler.
-function buyHref(product: ProductPlan): string {
+function buyHref(product: ProductPlan, periodKey?: string): string {
   const tipo = product.key === 'contable' ? 'contable' : 'pos';
-  return `/register?tipo=${tipo}&intent=pro`;
+  const per = periodKey ? `&periodo=${periodKey}` : '';
+  return `/register?tipo=${tipo}&intent=pro${per}`;
 }
 
-interface CotizarState { product: ProductPlan; tier: PlanTier; fecha: string; validez: string }
+interface CotizarState { product: ProductPlan; tier: PlanTier; period?: BillingPeriod; fecha: string; validez: string }
 
 export default function PlanesPage() {
   const [productKey, setProductKey] = useState<'pos' | 'contable'>('pos');
@@ -42,22 +43,29 @@ export default function PlanesPage() {
 
   const product = PLANS.find((p) => p.key === productKey)!;
 
+  // Periodo de facturación elegido (para planes con mensual/trimestral/anual).
+  const [posPeriod, setPosPeriod] = useState<'monthly' | 'quarterly' | 'annual'>('monthly');
+  const periodOf = (tier: PlanTier): BillingPeriod | undefined =>
+    tier.periods?.find((p) => p.key === posPeriod) ?? tier.periods?.[0];
+
   // Chat de WhatsApp con el vendedor, con mensaje ya escrito (opcional: sobre un plan).
   function waHref(msg: string): string {
     const digits = seller.phone.replace(/\D/g, '');
     return `https://wa.me/${digits}?text=${encodeURIComponent(msg)}`;
   }
   function waCotizarHref(c: CotizarState): string {
-    const precio = c.tier.price === 0 ? '' : ` (${money(c.tier.price)}${c.tier.period})`;
+    const total = c.period ? c.period.total : c.tier.price;
+    const unit = c.period ? c.period.unit : c.tier.period;
+    const precio = total === 0 ? '' : ` (${money(total)}${unit})`;
     return waHref(`Hola 👋 Vi los planes de Ventrix y me interesa el ${c.product.label} · Plan ${c.tier.name}${precio}. ¿Me ayudas a activarlo?`);
   }
   const waGeneralHref = waHref('Hola 👋 Vi los planes de Ventrix y quiero más información.');
 
-  function abrirCotizar(p: ProductPlan, tier: PlanTier) {
+  function abrirCotizar(p: ProductPlan, tier: PlanTier, period?: BillingPeriod) {
     const hoy = new Date();
     const vence = new Date(hoy.getTime() + 30 * 24 * 60 * 60 * 1000);
     const fmt = (d: Date) => d.toLocaleDateString('es-CO', { day: '2-digit', month: 'long', year: 'numeric' });
-    setCotizar({ product: p, tier, fecha: fmt(hoy), validez: fmt(vence) });
+    setCotizar({ product: p, tier, period, fecha: fmt(hoy), validez: fmt(vence) });
   }
 
   async function descargar() {
@@ -113,18 +121,42 @@ export default function PlanesPage() {
 
           {/* Tarjetas de plan */}
           <div className="lp-pricing" style={{ marginTop: '1.75rem' }}>
-            {product.tiers.map((tier) => (
+            {product.tiers.map((tier) => {
+              const bp = periodOf(tier);
+              const price = bp ? bp.total : tier.price;
+              const unit = bp ? bp.unit : tier.period;
+              return (
               <div key={tier.name} className={`lp-plan${tier.featured ? ' lp-featured' : ''}`}>
                 {tier.featured && <span className="lp-plan-tag">Recomendado</span>}
                 <h3>{tier.name}</h3>
-                <div className="lp-price">{tier.price === 0 ? 'Gratis' : money(tier.price)}<small> {tier.period}</small></div>
+
+                {/* Selector de periodo (mensual / trimestral / anual) */}
+                {tier.periods && (
+                  <div className="planes-period" role="tablist" aria-label="Periodo de pago">
+                    {tier.periods.map((p) => (
+                      <button
+                        key={p.key}
+                        role="tab"
+                        aria-selected={posPeriod === p.key}
+                        onClick={() => setPosPeriod(p.key)}
+                        className={`planes-period-btn${posPeriod === p.key ? ' is-active' : ''}`}
+                      >
+                        {p.label}
+                        {p.save ? <span className="planes-period-save">-{p.save}%</span> : null}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                <div className="lp-price">{price === 0 ? 'Gratis' : money(price)}<small> {unit}</small></div>
+                {bp?.perMonth && <p className="planes-permonth">{bp.perMonth}</p>}
                 {tier.note && <p className="planes-note">{tier.note}</p>}
                 <ul>{tier.features.map((f) => <li key={f}><CheckIcon />{f}</li>)}</ul>
 
                 {tier.cta === 'buy' ? (
                   <div className="planes-cta-group">
-                    <Link href={buyHref(product)} className="lp-btn lp-btn-primary">Comprar ahora</Link>
-                    <button type="button" onClick={() => abrirCotizar(product, tier)} className="lp-btn lp-btn-ghost planes-btn-cotizar">
+                    <Link href={buyHref(product, bp?.key)} className="lp-btn lp-btn-primary">Comprar ahora</Link>
+                    <button type="button" onClick={() => abrirCotizar(product, tier, bp)} className="lp-btn lp-btn-ghost planes-btn-cotizar">
                       <FileText size={15} /> Cotizar
                     </button>
                   </div>
@@ -132,7 +164,8 @@ export default function PlanesPage() {
                   <Link href={product.registerHref} className="lp-btn lp-btn-ghost">Empezar gratis</Link>
                 )}
               </div>
-            ))}
+              );
+            })}
           </div>
 
           {/* Franja de confianza */}
@@ -183,17 +216,18 @@ export default function PlanesPage() {
             {/* Resumen visible */}
             <div className="planes-quote-head">
               <p className="planes-quote-kicker">Cotización</p>
-              <h3>{cotizar.product.label} · Plan {cotizar.tier.name}</h3>
+              <h3>{cotizar.product.label} · Plan {cotizar.tier.name}{cotizar.period ? ` · ${cotizar.period.label}` : ''}</h3>
             </div>
             <div className="planes-quote-price">
-              {cotizar.tier.price === 0 ? 'Gratis' : money(cotizar.tier.price)}<small> {cotizar.tier.period}</small>
+              {(cotizar.period ? cotizar.period.total : cotizar.tier.price) === 0 ? 'Gratis' : money(cotizar.period ? cotizar.period.total : cotizar.tier.price)}<small> {cotizar.period ? cotizar.period.unit : cotizar.tier.period}</small>
             </div>
+            {cotizar.period?.perMonth && <p className="planes-permonth" style={{ textAlign: 'center' }}>{cotizar.period.perMonth}</p>}
             {cotizar.tier.note && <p className="planes-note" style={{ textAlign: 'center' }}>{cotizar.tier.note}</p>}
             <ul className="planes-quote-list">{cotizar.tier.features.map((f) => <li key={f}><CheckIcon />{f}</li>)}</ul>
             <p className="planes-quote-valid">Cotización válida hasta el {cotizar.validez}</p>
 
             <div className="planes-cta-group" style={{ marginTop: '1rem' }}>
-              <Link href={buyHref(cotizar.product)} className="lp-btn lp-btn-primary">Comprar ahora</Link>
+              <Link href={buyHref(cotizar.product, cotizar.period?.key)} className="lp-btn lp-btn-primary">Comprar ahora</Link>
               <a href={waCotizarHref(cotizar)} target="_blank" rel="noopener noreferrer" className="lp-btn planes-btn-wa">
                 <WhatsAppIcon /> Escribir por WhatsApp
               </a>
@@ -212,9 +246,10 @@ export default function PlanesPage() {
                 </div>
                 <p style={{ fontSize: 11, letterSpacing: '.16em', color: '#0DA06A', fontWeight: 700, margin: '0 0 4px' }}>COTIZACIÓN</p>
                 <h2 style={{ fontSize: 19, fontWeight: 800, margin: '0 0 2px' }}>{cotizar.product.label}</h2>
-                <p style={{ fontSize: 13, color: '#64748b', margin: '0 0 14px' }}>Plan {cotizar.tier.name} · {cotizar.product.tagline}</p>
+                <p style={{ fontSize: 13, color: '#64748b', margin: '0 0 14px' }}>Plan {cotizar.tier.name}{cotizar.period ? ` · ${cotizar.period.label}` : ''} · {cotizar.product.tagline}</p>
                 <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 12, padding: '14px 16px', marginBottom: 14 }}>
-                  <div style={{ fontSize: 26, fontWeight: 800, color: '#065f46' }}>{cotizar.tier.price === 0 ? 'Gratis' : money(cotizar.tier.price)} <span style={{ fontSize: 13, fontWeight: 600, color: '#059669' }}>{cotizar.tier.period}</span></div>
+                  <div style={{ fontSize: 26, fontWeight: 800, color: '#065f46' }}>{(cotizar.period ? cotizar.period.total : cotizar.tier.price) === 0 ? 'Gratis' : money(cotizar.period ? cotizar.period.total : cotizar.tier.price)} <span style={{ fontSize: 13, fontWeight: 600, color: '#059669' }}>{cotizar.period ? cotizar.period.unit : cotizar.tier.period}</span></div>
+                  {cotizar.period?.perMonth && <div style={{ fontSize: 12, color: '#047857', marginTop: 2 }}>{cotizar.period.perMonth}</div>}
                   {cotizar.tier.note && <div style={{ fontSize: 12, color: '#047857', marginTop: 2 }}>{cotizar.tier.note}</div>}
                 </div>
                 <p style={{ fontSize: 12, fontWeight: 700, color: '#334155', margin: '0 0 8px' }}>Incluye:</p>

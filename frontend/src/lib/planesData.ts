@@ -26,14 +26,25 @@ export function resolveSeller(slug?: string | null): Seller {
   return (key && SELLERS[key]) || DEFAULT_SELLER;
 }
 
+// Periodo de facturación (para planes con mensual/trimestral/anual).
+export interface BillingPeriod {
+  key: 'monthly' | 'quarterly' | 'annual';
+  label: string;          // 'Mensual', 'Trimestral', 'Anual'
+  total: number;          // lo que se cobra en ese periodo (COP)
+  unit: string;           // '/mes', '/trimestre', '/año'
+  perMonth?: string;      // 'Equivale a $26.900/mes'
+  save?: number;          // % de ahorro vs mensual (para el badge)
+}
+
 export interface PlanTier {
   name: string;
-  price: number;          // COP; 0 = gratis
+  price: number;          // COP; 0 = gratis (precio por defecto / mensual)
   period: string;         // '/mes', '/año', '/siempre', 'por 7 días'
   note?: string;          // línea pequeña bajo el precio
   features: string[];
   featured?: boolean;     // resalta la tarjeta ("Recomendado")
   cta: 'register' | 'buy';
+  periods?: BillingPeriod[]; // si existe, la tarjeta muestra un selector de periodo
 }
 
 export interface ProductPlan {
@@ -72,6 +83,11 @@ export const PLANS: ProductPlan[] = [
         note: 'Todo lo de Gratis SIN límites, y las herramientas para crecer',
         featured: true,
         cta: 'buy',
+        periods: [
+          { key: 'monthly',   label: 'Mensual',    total: 29900,  unit: '/mes' },
+          { key: 'quarterly', label: 'Trimestral', total: 80700,  unit: '/trimestre', perMonth: 'Equivale a $26.900/mes', save: 10 },
+          { key: 'annual',    label: 'Anual',      total: 287000, unit: '/año',       perMonth: 'Equivale a $23.917/mes', save: 20 },
+        ],
         features: [
           'Ventas, productos y clientes ILIMITADOS',
           'Varios cajeros, cada uno con su usuario y permisos',

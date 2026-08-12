@@ -712,6 +712,48 @@
 
 .planes-note { font-size: .8rem; color: var(--lp-ink-soft); margin: -6px 0 10px; }
 
+/* Selector de periodo (mensual / trimestral / anual) dentro de la tarjeta Pro */
+.planes-period {
+  display: flex;
+  gap: 3px;
+  padding: 4px;
+  margin: 4px 0 14px;
+  background: var(--lp-mint);
+  border: 1px solid var(--lp-mint-line);
+  border-radius: 12px;
+}
+.planes-period-btn {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 7px 6px;
+  border: none;
+  background: transparent;
+  border-radius: 9px;
+  font-size: .82rem;
+  font-weight: 600;
+  color: var(--lp-ink-soft);
+  cursor: pointer;
+  transition: background-color .16s ease, color .16s ease, box-shadow .16s ease;
+}
+.planes-period-btn.is-active {
+  background: var(--lp-surface);
+  color: var(--lp-ink);
+  box-shadow: var(--lp-shadow);
+}
+.planes-period-save {
+  font-size: .68rem;
+  font-weight: 800;
+  color: #fff;
+  background: var(--lp-brand);
+  padding: 1px 5px;
+  border-radius: 999px;
+  line-height: 1.4;
+}
+.planes-permonth { font-size: .8rem; font-weight: 600; color: var(--lp-brand-deep); margin: -4px 0 8px; }
+
 .planes-cta-group { display: flex; flex-direction: column; gap: 8px; margin-top: auto; }
 .planes-btn-cotizar,
 .planes-btn-wa { display: inline-flex; align-items: center; justify-content: center; gap: 7px; }
