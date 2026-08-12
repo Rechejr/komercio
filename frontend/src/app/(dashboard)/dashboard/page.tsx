@@ -17,6 +17,7 @@ import { Tooltip as InfoTooltip } from '@/components/ui/Tooltip';
 import { CountUp } from '@/components/ui/CountUp';
 import { AiSummaryCard } from '@/components/dashboard/AiSummaryCard';
 import { OnboardingChecklist } from '@/components/onboarding/OnboardingChecklist';
+import { PosPushPrompt } from '@/components/PosPushPrompt';
 
 // ── Trend badge ───────────────────────────────────────────────────────────────
 function TrendBadge({ current, prev }: { current: number; prev?: number }) {
@@ -149,6 +150,9 @@ export default function DashboardPage() {
 
       {/* ── Primeros pasos (se oculta solo cuando ya están completos) ───────── */}
       <OnboardingChecklist />
+
+      {/* ── Activar notificaciones al celular (Web Push) ───────────────────── */}
+      <PosPushPrompt />
 
       {/* ── KPI cards ──────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">

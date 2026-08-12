@@ -40,10 +40,15 @@ router.post('/test', async (req: any, res, next) => {
     if (count === 0) {
       return success(res, { sent: 0 }, 'Este dispositivo no está suscrito. Activa los avisos y vuelve a intentar.');
     }
+    // El botón manda de qué producto viene, para que la prueba abra la pantalla
+    // correcta al tocarla (el POS no debe llevar al panel contable, y viceversa).
+    const isPos = req.body?.product === 'pos';
     await sendPushToUsers([req.user.userId], {
-      title: 'Ventrix Contable · Prueba',
-      body: '✅ Las notificaciones funcionan. Así te avisaremos de tus vencimientos.',
-      url: '/contable/panel',
+      title: isPos ? 'Ventrix · Prueba' : 'Ventrix Contable · Prueba',
+      body: isPos
+        ? '✅ Las notificaciones funcionan. Así te avisaremos de stock bajo y cuentas por vencer.'
+        : '✅ Las notificaciones funcionan. Así te avisaremos de tus vencimientos.',
+      url: isPos ? '/dashboard' : '/contable/panel',
       tag: 'test-push',
     });
     return success(res, { sent: count }, `Notificación de prueba enviada a ${count} dispositivo(s).`);

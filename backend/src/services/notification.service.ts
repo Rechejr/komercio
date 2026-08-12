@@ -65,6 +65,18 @@ export async function notifyLowStockBatch(
     };
     managerIds.forEach((userId) => emitToUser(userId, socketEvents.NEW_NOTIFICATION, payload));
   }
+
+  // Web Push al móvil aunque la app esté cerrada (best-effort; no-op sin VAPID o
+  // sin suscripciones). Un solo push-resumen por lote para no saturar.
+  const pushBody = products.length === 1
+    ? `${products[0].name} tiene ${products[0].stock} unidades — por debajo del mínimo.`
+    : `${products.length} productos están por debajo de su stock mínimo.`;
+  await sendPushToUsers(managerIds, {
+    title: 'Ventrix · Stock bajo',
+    body: pushBody,
+    url: '/inventario',
+    tag: 'low-stock',
+  });
 }
 
 export async function notifyLowStock(businessId: string, product: { id: string; name: string; stock: number; minStock: number }) {
