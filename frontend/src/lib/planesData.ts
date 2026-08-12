@@ -18,8 +18,7 @@ export const DEFAULT_SELLER: Seller = { name: 'Ventrix', phone: '573102979527' }
 export const SELLERS: Record<string, Seller> = {
   franklin: { name: 'Franklin Vargas', phone: '573225338424' }, // ventrix.lat/planes?v=franklin
   lina:     { name: 'Lina Pantoja',    phone: '573156132525' }, // ventrix.lat/planes?v=lina
-  // Tercer vendedor pendiente (agregar cuando llegue el número):
-  // slug:  { name: 'Nombre', phone: '57XXXXXXXXXX' },
+  viviana:  { name: 'Viviana Ortega',  phone: '573152393608' }, // ventrix.lat/planes?v=viviana
 };
 
 export function resolveSeller(slug?: string | null): Seller {
