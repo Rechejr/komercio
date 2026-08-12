@@ -16,9 +16,10 @@ export interface Seller { name: string; phone: string }
 export const DEFAULT_SELLER: Seller = { name: 'Ventrix', phone: '573102979527' };
 
 export const SELLERS: Record<string, Seller> = {
-  // Ejemplos (agrega a tus vendedores con un slug en minúsculas):
-  // juan:  { name: 'Juan',  phone: '573001112233' },
-  // maria: { name: 'María', phone: '573004445566' },
+  franklin: { name: 'Franklin Vargas', phone: '573225338424' }, // ventrix.lat/planes?v=franklin
+  lina:     { name: 'Lina Pantoja',    phone: '573156132525' }, // ventrix.lat/planes?v=lina
+  // Tercer vendedor pendiente (agregar cuando llegue el número):
+  // slug:  { name: 'Nombre', phone: '57XXXXXXXXXX' },
 };
 
 export function resolveSeller(slug?: string | null): Seller {
