@@ -1,14 +1,8 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// LINKS DE PAGO WOMPI  ← PEGA AQUÍ LOS LINKS
-// Uno por plan de pago. Cuando el prospecto toca "Comprar ahora", se abre este
-// link de Wompi. Si un link queda vacío (''), el botón manda a "Crear cuenta"
-// (/register) como respaldo, para no quedar sin acción mientras consigues el link.
-// Puedes cambiarlos aquí sin tocar el diseño de la página.
-// ─────────────────────────────────────────────────────────────────────────────
-export const PAYMENT_LINKS: Record<string, string> = {
-  posPro: 'https://checkout.wompi.co/l/J8algP',   // POS Pro — $29.900/mes (uso múltiple)
-  contable: 'https://checkout.wompi.co/l/YmJRDH', // Contable — $120.000/año (uso múltiple)
-};
+// Flujo de compra: "Comprar ahora" lleva a crear la cuenta (POS o Contable) y,
+// al entrar, se activa el plan pagando por Wompi DENTRO de la app (endpoint
+// /payments/create-link), que es el único flujo que empareja el pago con el
+// negocio y activa el plan de verdad. Por eso aquí ya no hay links sueltos de
+// Wompi: el pago se dispara adentro (ver BuyIntentHandler).
 
 export interface PlanTier {
   name: string;
@@ -18,7 +12,6 @@ export interface PlanTier {
   features: string[];
   featured?: boolean;     // resalta la tarjeta ("Recomendado")
   cta: 'register' | 'buy';
-  payKey?: string;        // clave en PAYMENT_LINKS (solo cta 'buy')
 }
 
 export interface ProductPlan {
@@ -54,7 +47,6 @@ export const PLANS: ProductPlan[] = [
         period: '/mes',
         featured: true,
         cta: 'buy',
-        payKey: 'posPro',
         features: [
           'Todo lo del plan Gratis',
           'Reportes de ventas y ganancias',
@@ -90,7 +82,6 @@ export const PLANS: ProductPlan[] = [
         note: 'Una oficina: contador + hasta 3 auxiliares',
         featured: true,
         cta: 'buy',
-        payKey: 'contable',
         features: [
           'Agenda tributaria DIAN 2026 completa',
           'La fecha de cada obligación se calcula sola por el NIT',

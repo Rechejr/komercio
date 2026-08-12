@@ -12,6 +12,7 @@ import { InstallAppPrompt } from '@/components/pwa/InstallAppPrompt';
 import { OnboardingWelcome } from '@/components/onboarding/OnboardingWelcome';
 import { TourOverlay } from '@/components/onboarding/TourOverlay';
 import { HelpCenter } from '@/components/onboarding/HelpCenter';
+import { BuyIntentHandler } from '@/components/BuyIntentHandler';
 
 /**
  * Layout del tablero de Ventrix Contable.
@@ -107,6 +108,7 @@ export default function ContableLayout({ children }: { children: React.ReactNode
           </ErrorBoundary>
         </main>
       </div>
+      <BuyIntentHandler />
     </div>
   );
 }

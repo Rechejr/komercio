@@ -169,6 +169,13 @@ function RegisterForm() {
   );
   const esContable = businessType === 'contable';
 
+  // Intención de compra desde /planes (?intent=pro): se guarda para que, al
+  // entrar por primera vez, la app abra el pago y active el plan (BuyIntentHandler).
+  const intentPro = searchParams.get('intent') === 'pro';
+  useEffect(() => {
+    if (intentPro && typeof window !== 'undefined') localStorage.setItem('ventrix-buy-intent', 'pro');
+  }, [intentPro]);
+
   // Título de la pestaña acorde al producto (el layout raíz pone el del POS).
   useEffect(() => {
     document.title = esContable ? 'Crea tu cuenta | Ventrix Contable' : 'Crea tu cuenta | Ventrix';
@@ -280,6 +287,15 @@ function RegisterForm() {
         {/* ── Right panel ───────────────────────────────────────────────── */}
         <div className="flex-1 flex items-center justify-center p-6 lg:p-10 bg-white dark:bg-[#064e3b] min-h-screen lg:min-h-0">
           <div className="w-full max-w-[380px]">
+
+            {/* Viene de "Comprar ahora" en /planes */}
+            {intentPro && (
+              <div className="mb-5 rounded-xl border border-emerald-200 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-900/20 px-4 py-3">
+                <p className="text-[12.5px] text-emerald-800 dark:text-emerald-200 leading-relaxed">
+                  ⚡ Estás a un paso de activar el plan <b>Pro</b>. Crea tu cuenta y verifica tu correo — apenas inicies sesión podrás pagar y activarlo al instante.
+                </p>
+              </div>
+            )}
 
             {/* Mobile header */}
             <div className="flex items-center justify-between mb-8 lg:hidden">

@@ -14,6 +14,7 @@ import { TourOverlay } from '@/components/onboarding/TourOverlay';
 import { HelpCenter } from '@/components/onboarding/HelpCenter';
 import { FirstSaleCelebration } from '@/components/onboarding/FirstSaleCelebration';
 import { UpgradeModal } from '@/components/ui/UpgradeModal';
+import { BuyIntentHandler } from '@/components/BuyIntentHandler';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -111,6 +112,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </main>
       </div>
       <UpgradeModal />
+      <BuyIntentHandler />
     </div>
   );
 }

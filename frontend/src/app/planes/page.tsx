@@ -6,7 +6,7 @@ import { Bricolage_Grotesque, Instrument_Sans, Space_Mono } from 'next/font/goog
 import { Download, Loader2, FileText, X } from 'lucide-react';
 import { WhatsAppIcon } from '@/components/ui/WhatsAppIcon';
 import { downloadImage, shareImageWhatsApp } from '@/lib/imageShare';
-import { PLANS, PAYMENT_LINKS, TRUST_POINTS, PLANES_FAQ, type PlanTier, type ProductPlan } from '@/lib/planesData';
+import { PLANS, TRUST_POINTS, PLANES_FAQ, type PlanTier, type ProductPlan } from '@/lib/planesData';
 import '../landing.css';
 
 const bricolage = Bricolage_Grotesque({ subsets: ['latin'], variable: '--font-bric', weight: ['500', '600', '700', '800'], display: 'swap', preload: false });
@@ -19,10 +19,11 @@ const CheckIcon = () => (
 
 const money = (n: number) => `$${n.toLocaleString('es-CO')}`;
 
-// Link de "Comprar ahora": el de Wompi si está configurado, si no cae a registro.
-function buyHref(tier: PlanTier, product: ProductPlan): string {
-  const link = tier.payKey ? PAYMENT_LINKS[tier.payKey] : '';
-  return link && link.trim() ? link : product.registerHref;
+// "Comprar ahora" → crear la cuenta con intención de comprar. Al entrar por
+// primera vez, la app abre el pago (que sí activa el plan). Ver BuyIntentHandler.
+function buyHref(product: ProductPlan): string {
+  const tipo = product.key === 'contable' ? 'contable' : 'pos';
+  return `/register?tipo=${tipo}&intent=pro`;
 }
 
 interface CotizarState { product: ProductPlan; tier: PlanTier; fecha: string; validez: string }
@@ -103,7 +104,7 @@ export default function PlanesPage() {
 
                 {tier.cta === 'buy' ? (
                   <div className="planes-cta-group">
-                    <a href={buyHref(tier, product)} target="_blank" rel="noopener noreferrer" className="lp-btn lp-btn-primary">Comprar ahora</a>
+                    <Link href={buyHref(product)} className="lp-btn lp-btn-primary">Comprar ahora</Link>
                     <button type="button" onClick={() => abrirCotizar(product, tier)} className="lp-btn lp-btn-ghost planes-btn-cotizar">
                       <FileText size={15} /> Cotizar
                     </button>
@@ -173,7 +174,7 @@ export default function PlanesPage() {
             <p className="planes-quote-valid">Cotización válida hasta el {cotizar.validez}</p>
 
             <div className="planes-cta-group" style={{ marginTop: '1rem' }}>
-              <a href={buyHref(cotizar.tier, cotizar.product)} target="_blank" rel="noopener noreferrer" className="lp-btn lp-btn-primary">Comprar ahora</a>
+              <Link href={buyHref(cotizar.product)} className="lp-btn lp-btn-primary">Comprar ahora</Link>
               <button type="button" onClick={descargar} disabled={busy !== null} className="lp-btn lp-btn-ghost planes-btn-cotizar">
                 {busy === 'download' ? <Loader2 size={15} className="planes-spin" /> : <Download size={15} />} Descargar
               </button>
