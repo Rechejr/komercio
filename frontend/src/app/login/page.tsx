@@ -11,7 +11,7 @@ import { GoogleOAuthProvider, useGoogleLogin } from '@react-oauth/google';
 import { api } from '@/lib/api';
 import { useAuthStore, type Account } from '@/store/auth.store';
 import { switchToAccount, homeForBusinessType } from '@/lib/accounts';
-import { Eye, EyeOff, Loader2, ArrowRight, Zap, Shield, BarChart3, Store, Calculator } from 'lucide-react';
+import { Eye, EyeOff, Loader2, ArrowRight, Zap, Shield, BarChart3, Store, Calculator, MailWarning } from 'lucide-react';
 import '../auth.css';
 
 // ── Schemas ───────────────────────────────────────────────────────────────────
@@ -199,6 +199,12 @@ function LoginForm() {
   const { login, setAccessToken } = useAuthStore();
   const [showPwd, setShowPwd]       = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
+  // Reenvío de verificación: si el login falla porque el correo no está
+  // verificado, guardamos ese correo para ofrecer reenviar el enlace. El cooldown
+  // (segundos) evita que se manden muchos correos seguidos.
+  const [needsVerify, setNeedsVerify]     = useState<string | null>(null);
+  const [resending, setResending]         = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
   // Si el usuario marcó "mantener sesión" en un login anterior, al abrir /login
   // (o la app instalada, cuyo start_url es /login) intentamos revivir la sesión
   // con la cookie de refresh y entrar directo, sin pedirle la clave otra vez.
@@ -246,6 +252,13 @@ function LoginForm() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Cuenta regresiva del cooldown de reenvío (1s a 1s hasta 0).
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const t = setTimeout(() => setResendCooldown((s) => s - 1), 1000);
+    return () => clearTimeout(t);
+  }, [resendCooldown]);
+
   // Correo con acceso a POS y Contable a la vez: se muestra el selector antes de
   // redirigir. La sesión ya quedó abierta en la cuenta por defecto.
   const [chooser, setChooser] = useState<{ user: any; accounts: Account[] } | null>(null);
@@ -292,12 +305,37 @@ function LoginForm() {
   };
 
   const onSubmit = async (data: LoginForm) => {
+    setNeedsVerify(null);
     try {
       const res = await api.post('/auth/login', data);
       const { user, accessToken, accounts } = res.data.data;
       handleAuthSuccess(user, accessToken, accounts);
     } catch (err: any) {
-      toast.error(err.response?.data?.error || 'Error al iniciar sesión');
+      const msg = err.response?.data?.error || 'Error al iniciar sesión';
+      // Caso "correo sin verificar" → mostramos la tarjeta para reenviar el enlace
+      // en vez de solo un aviso rojo que no da salida.
+      if (err.response?.status === 403 && /verifica tu correo/i.test(msg)) {
+        setNeedsVerify(data.email);
+        return;
+      }
+      toast.error(msg);
+    }
+  };
+
+  // Reenvía el correo de verificación al correo con el que se intentó entrar.
+  // Reusa el endpoint existente; su respuesta es neutra (no revela si el correo
+  // existe), así que el mensaje al usuario es siempre el mismo.
+  const resendVerification = async () => {
+    if (!needsVerify || resending || resendCooldown > 0) return;
+    setResending(true);
+    try {
+      await api.post('/auth/resend-verification', { email: needsVerify });
+      toast.success('Te reenviamos el correo. Revisa tu bandeja y la carpeta de spam.');
+      setResendCooldown(60);
+    } catch {
+      toast.error('No se pudo reenviar. Intenta de nuevo en un momento.');
+    } finally {
+      setResending(false);
     }
   };
 
@@ -427,6 +465,30 @@ function LoginForm() {
           {isSubmitting ? 'Ingresando...' : 'Iniciar sesión'}
         </button>
       </form>
+
+      {/* Correo sin verificar → reenviar el enlace de verificación */}
+      {needsVerify && (
+        <div className="mt-4 rounded-xl border border-amber-200 dark:border-amber-800/70 bg-amber-50/80 dark:bg-amber-900/15 p-4">
+          <div className="flex items-start gap-2.5">
+            <MailWarning size={18} className="text-amber-500 flex-none mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="text-[13px] font-semibold text-amber-700 dark:text-amber-300">Tu correo no está verificado</p>
+              <p className="text-[12px] text-slate-600 dark:text-slate-400 mt-0.5">
+                Te enviamos un enlace a <b className="break-all">{needsVerify}</b>. Revisa tu bandeja de entrada y la carpeta de spam.
+              </p>
+              <button
+                type="button"
+                onClick={resendVerification}
+                disabled={resending || resendCooldown > 0}
+                className="mt-3 inline-flex items-center gap-2 px-3.5 py-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-[12px] font-semibold transition disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {resending && <Loader2 size={13} className="animate-spin" />}
+                {resendCooldown > 0 ? `Espera ${resendCooldown}s…` : 'Reenviar correo de verificación'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Social divider */}
       <div className="flex items-center gap-3 my-5">
