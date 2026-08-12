@@ -51,6 +51,7 @@ export interface ProductPlan {
   key: 'pos' | 'contable';
   label: string;
   tagline: string;
+  hook?: string;          // frase-gancho bajo las pestañas (por producto)
   registerHref: string;
   tiers: PlanTier[];
 }
@@ -60,6 +61,7 @@ export const PLANS: ProductPlan[] = [
     key: 'pos',
     label: 'Ventrix POS',
     tagline: 'Para tu negocio',
+    hook: 'Todo sin límites, y las herramientas para vender más.',
     registerHref: '/register',
     tiers: [
       {
@@ -106,32 +108,34 @@ export const PLANS: ProductPlan[] = [
     key: 'contable',
     label: 'Ventrix Contable',
     tagline: 'Para contadores',
+    hook: 'Una sola sanción evitada paga tu año de Ventrix Contable.',
     registerHref: '/register',
     tiers: [
       {
         name: 'Prueba',
         price: 0,
         period: 'por 7 días',
-        note: 'Sin tarjeta de crédito',
+        note: '7 días · sin tarjeta de crédito',
         cta: 'register',
         features: [
           'Acceso completo por 7 días',
-          'Agenda tributaria DIAN 2026',
-          'Vencimientos calculados por NIT',
+          'Pruébalo con tus clientes reales',
+          'Sin tarjeta de crédito',
         ],
       },
       {
         name: 'Anual',
         price: 120000,
         period: '/año',
-        note: 'Una oficina: contador + hasta 3 auxiliares',
+        note: '≈ $10.000/mes · menos que una sola sanción de la DIAN',
         featured: true,
         cta: 'buy',
         features: [
-          'Agenda tributaria DIAN 2026 completa',
+          'Nunca más una declaración tarde — te avisamos antes (app y celular)',
           'La fecha de cada obligación se calcula sola por el NIT',
-          'Alertas de vencimiento (app y celular)',
-          'Bóveda de documentos y credenciales por cliente',
+          'Todos tus clientes y sus calidades del RUT en un solo lugar',
+          'Bóveda de documentos y contraseñas por cliente (cifrada)',
+          'Agenda tributaria DIAN 2026 completa, lista para usar',
           'Contador + hasta 3 auxiliares incluidos',
         ],
       },

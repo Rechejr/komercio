@@ -712,6 +712,17 @@
 
 .planes-note { font-size: .8rem; color: var(--lp-ink-soft); margin: -6px 0 10px; }
 
+/* Frase-gancho por producto, bajo las pestañas */
+.planes-hook {
+  text-align: center;
+  max-width: 560px;
+  margin: 1.1rem auto 0;
+  font-size: 1.02rem;
+  font-weight: 700;
+  color: var(--lp-brand-deep);
+  letter-spacing: -.01em;
+}
+
 /* Selector de periodo (mensual / trimestral / anual) dentro de la tarjeta Pro */
 .planes-period {
   display: flex;

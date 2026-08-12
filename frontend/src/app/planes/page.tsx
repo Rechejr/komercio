@@ -119,6 +119,8 @@ export default function PlanesPage() {
             ))}
           </div>
 
+          {product.hook && <p className="planes-hook">{product.hook}</p>}
+
           {/* Tarjetas de plan */}
           <div className="lp-pricing" style={{ marginTop: '1.75rem' }}>
             {product.tiers.map((tier) => {
