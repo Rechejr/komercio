@@ -6,8 +6,8 @@
 // Puedes cambiarlos aquí sin tocar el diseño de la página.
 // ─────────────────────────────────────────────────────────────────────────────
 export const PAYMENT_LINKS: Record<string, string> = {
-  posPro: 'https://checkout.wompi.co/l/04QWAh',   // POS Pro — $29.900/mes
-  contable: 'https://checkout.wompi.co/l/8NLtiI', // Contable — $120.000/año
+  posPro: 'https://checkout.wompi.co/l/J8algP',   // POS Pro — $29.900/mes (uso múltiple)
+  contable: 'https://checkout.wompi.co/l/YmJRDH', // Contable — $120.000/año (uso múltiple)
 };
 
 export interface PlanTier {
