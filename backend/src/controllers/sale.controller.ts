@@ -199,7 +199,12 @@ export const saleController = {
         notes,
         isCredit = false,
         paidAmount,
+        priceList = 'retail',
       } = req.body;
+
+      // Lista de precios de la venta: 'wholesale' usa el precio mayorista de cada
+      // producto (si tiene y es > 0; si no, cae al precio de venta normal).
+      const useWholesale = priceList === 'wholesale';
 
       if (!items || items.length === 0) throw new AppError('La venta debe tener productos', 400);
       if (isCredit && !customerId) throw new AppError('Se requiere un cliente para registrar una venta a crédito', 400);
@@ -300,7 +305,7 @@ export const saleController = {
         // large sales (many products) need more headroom than the 5s default.
         interface LockedProduct {
           id: string; stock: number; name: string; allowNegativeStock: boolean;
-          salePrice: number; costPrice: number; taxRate: number; minStock: number;
+          salePrice: number; wholesalePrice: number | null; costPrice: number; taxRate: number; minStock: number;
           lowStockNotifiedAt: Date | null; hasVariants: boolean;
         }
         // Lock each row individually (sorted order prevents deadlocks).
@@ -316,7 +321,7 @@ export const saleController = {
         for (const pid of [...productIds].sort()) {
           const rows = await tx.$queryRawUnsafe<any[]>(
             `SELECT id, stock, name, "allowNegativeStock",
-                    "salePrice", "costPrice", "taxRate", "minStock", "lowStockNotifiedAt", "hasVariants"
+                    "salePrice", "wholesalePrice", "costPrice", "taxRate", "minStock", "lowStockNotifiedAt", "hasVariants"
              FROM products
              WHERE id::text = $1
                AND "deletedAt" IS NULL AND "isActive" = true
@@ -331,6 +336,7 @@ export const saleController = {
               name: r.name,
               allowNegativeStock: r.allowNegativeStock,
               salePrice: Number(r.salePrice),
+              wholesalePrice: r.wholesalePrice != null ? Number(r.wholesalePrice) : null,
               costPrice: Number(r.costPrice),
               taxRate: Number(r.taxRate),
               minStock: Number(r.minStock),
@@ -431,7 +437,12 @@ export const saleController = {
         const saleDetails = items.map((item: any) => {
           const product = productMap.get(item.productId)!;
 
-          const lineSubtotal = product.salePrice * item.quantity;
+          // Precio efectivo según la lista elegida (mayorista con fallback a detal).
+          const unit = useWholesale && product.wholesalePrice != null && product.wholesalePrice > 0
+            ? product.wholesalePrice
+            : product.salePrice;
+
+          const lineSubtotal = unit * item.quantity;
           const lineDiscount = lineSubtotal * ((item.discountPct || 0) / 100);
           const lineNet = roundCOP(lineSubtotal - lineDiscount);
           const lineTax = roundCOP(lineNet * (product.taxRate / 100));
@@ -443,7 +454,7 @@ export const saleController = {
             productId: product.id,
             productVariantId: item.productVariantId || null,
             quantity: item.quantity,
-            unitPrice: product.salePrice,
+            unitPrice: unit,
             costPrice: product.costPrice,
             discountPct: item.discountPct || 0,
             taxRate: product.taxRate,

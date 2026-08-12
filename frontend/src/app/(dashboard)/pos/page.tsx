@@ -82,7 +82,7 @@ const inputCls = [
 
 export default function POSPage() {
   const qc = useQueryClient();
-  const { items, addItem, updateQty, updateDiscount, removeItem, clear, totals, customerId, setCustomer } = useCartStore();
+  const { items, addItem, updateQty, updateDiscount, removeItem, clear, totals, customerId, setCustomer, setGlobalDiscount, priceList, setPriceList } = useCartStore();
   const plan       = useAuthStore((s) => s.user?.plan);
   const cashierName = useAuthStore((s) => s.user?.name);
   const branchId   = useAuthStore((s) => s.user?.branchId);
@@ -112,6 +112,10 @@ export default function POSPage() {
   const [splitMethod, setSplitMethod]         = useState('CASH');
   const [splitAmount, setSplitAmount]         = useState('');
   const [saleNotes, setSaleNotes]             = useState('');
+  // Descuento global sobre el total: el cajero escribe un monto ($) o un % y el
+  // sistema calcula el valor a descontar (además del DESC% por línea).
+  const [discMode, setDiscMode]               = useState<'amount' | 'pct'>('amount');
+  const [discInput, setDiscInput]             = useState('');
   const [showCreditPayment, setShowCreditPayment] = useState(false);
   const [selectedCreditId, setSelectedCreditId]   = useState<string | null>(null);
   const [creditPayAmount, setCreditPayAmount] = useState('');
@@ -231,6 +235,7 @@ export default function POSPage() {
       setSplitMethod(paymentAccounts[0]?.id || '');
       setSaleNotes('');
       setPaidAmount('');
+      setDiscInput('');
       toast.success('¡Venta registrada!');
       qc.invalidateQueries({ queryKey: ['sales'] });
       qc.invalidateQueries({ queryKey: ['products'] });
@@ -263,6 +268,16 @@ export default function POSPage() {
   });
 
   const { subtotal, taxes, discount, total } = totals();
+
+  // Calcula el descuento global desde el campo (monto o %) y lo sincroniza con el
+  // carrito. Se recalcula si cambia el campo, el modo, o la base (subtotal+imp).
+  useEffect(() => {
+    const base = subtotal + taxes;
+    const raw = Number(discInput) || 0;
+    const amount = discMode === 'pct' ? Math.round((base * raw) / 100) : Math.round(raw);
+    setGlobalDiscount(Math.max(0, Math.min(amount, base)));
+  }, [discInput, discMode, subtotal, taxes, setGlobalDiscount]);
+
   const change         = Math.max(0, parseFloat(paidAmount || '0') - total);
   const mixedTotal     = mixedPayments.reduce((sum, p) => sum + p.amount, 0);
   const mixedRemaining = Math.max(0, total - mixedTotal);
@@ -308,7 +323,8 @@ export default function POSPage() {
     play('add');
     addItem({
       productId: product.id, name: product.name, code: product.code,
-      unitPrice: product.salePrice, quantity: 1, discountPct: 0, taxRate: product.taxRate || 0,
+      salePrice: product.salePrice, wholesalePrice: product.wholesalePrice ?? null,
+      quantity: 1, discountPct: 0, taxRate: product.taxRate || 0,
     });
     setSearch('');
     // Solo refocalizar en escritorio — en móvil abre el teclado de forma inesperada
@@ -331,7 +347,8 @@ export default function POSPage() {
       productId: product.id, productVariantId: variant.id,
       variantLabel: [variant.talla, variant.color].filter(Boolean).join(' · '),
       name: product.name, code: product.code,
-      unitPrice: product.salePrice, quantity: 1, discountPct: 0, taxRate: product.taxRate || 0,
+      salePrice: product.salePrice, wholesalePrice: product.wholesalePrice ?? null,
+      quantity: 1, discountPct: 0, taxRate: product.taxRate || 0,
     });
     setVariantPicker(null);
   }
@@ -353,7 +370,7 @@ export default function POSPage() {
         ? { paymentMethod: 'MIXED', paymentDetails: { splits: mixedPayments } }
         : { paymentAccountId: paymentMethod }),
       paidAmount: paid,
-      discountAmount: discount, isCredit,
+      discountAmount: discount, isCredit, priceList,
       notes: saleNotes.trim() || undefined,
     });
   }
@@ -567,6 +584,8 @@ export default function POSPage() {
                   const CatIcon = cs.icon;
                   const outOfStock  = p.stock <= 0 && !p.allowNegativeStock;
                   const lowStock    = p.minStock > 0 && p.stock > 0 && p.stock <= p.minStock;
+                  const hasWholesale = p.wholesalePrice != null && p.wholesalePrice > 0;
+                  const effPrice    = priceList === 'wholesale' && hasWholesale ? p.wholesalePrice : p.salePrice;
 
                   return (
                     <motion.button
@@ -614,8 +633,11 @@ export default function POSPage() {
                           {p.name}
                         </p>
                         <div className="flex items-center justify-between gap-1">
-                          <span className="text-[15px] font-black text-[rgb(var(--text-primary))] tabular-nums leading-none">
-                            {formatCurrency(p.salePrice)}
+                          <span className="text-[15px] font-black text-[rgb(var(--text-primary))] tabular-nums leading-none flex items-center gap-1">
+                            {formatCurrency(effPrice)}
+                            {priceList === 'wholesale' && hasWholesale && (
+                              <span className="text-[8px] font-bold px-1 py-0.5 rounded bg-amber-500/15 text-amber-500 leading-none uppercase">May.</span>
+                            )}
                           </span>
                           {!outOfStock && (
                             <div className="w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center flex-shrink-0">
@@ -654,7 +676,7 @@ export default function POSPage() {
               )}
             </h3>
             {items.length > 0 && (
-              <button type="button" onClick={clear} className="text-[12px] text-red-500 hover:text-red-700 hover:underline transition-colors">
+              <button type="button" onClick={() => { clear(); setDiscInput(''); }} className="text-[12px] text-red-500 hover:text-red-700 hover:underline transition-colors">
                 Limpiar
               </button>
             )}
@@ -841,7 +863,26 @@ export default function POSPage() {
 
         {/* Totals */}
         <div className="card p-4 space-y-2.5">
-          <h3 className="text-[13px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Resumen</h3>
+          <div className="flex items-center justify-between">
+            <h3 className="text-[13px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Resumen</h3>
+            {/* Lista de precios: detal ↔ mayorista para toda la venta */}
+            <div className="flex items-center gap-0.5 p-0.5 bg-slate-100 dark:bg-slate-800 rounded-lg">
+              <button
+                type="button"
+                onClick={() => setPriceList('retail')}
+                className={cn('px-2.5 py-1 rounded-md text-[11px] font-semibold transition', priceList === 'retail' ? 'bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-sm' : 'text-slate-500 dark:text-slate-400')}
+              >
+                Detal
+              </button>
+              <button
+                type="button"
+                onClick={() => setPriceList('wholesale')}
+                className={cn('px-2.5 py-1 rounded-md text-[11px] font-semibold transition', priceList === 'wholesale' ? 'bg-amber-500 text-white shadow-sm' : 'text-slate-500 dark:text-slate-400')}
+              >
+                Mayorista
+              </button>
+            </div>
+          </div>
           <div className="space-y-1.5 text-[13px]">
             <div className="flex justify-between text-slate-600 dark:text-slate-400">
               <span>Subtotal</span><span className="tabular">{formatCurrency(subtotal)}</span>
@@ -851,9 +892,26 @@ export default function POSPage() {
                 <span>Impuestos</span><span className="tabular">{formatCurrency(taxes)}</span>
               </div>
             )}
+            {/* Casilla de descuento global (monto $ o %) */}
+            <div className="flex items-center justify-between gap-2 pt-0.5">
+              <span className="text-slate-600 dark:text-slate-400">Descuento</span>
+              <div className="flex items-center gap-1.5">
+                <div className="flex p-0.5 bg-slate-100 dark:bg-slate-800 rounded-md">
+                  <button type="button" onClick={() => setDiscMode('amount')} className={cn('px-2 py-0.5 rounded text-[11px] font-bold transition', discMode === 'amount' ? 'bg-white dark:bg-slate-700 text-emerald-600 dark:text-emerald-400 shadow-sm' : 'text-slate-400')}>$</button>
+                  <button type="button" onClick={() => setDiscMode('pct')} className={cn('px-2 py-0.5 rounded text-[11px] font-bold transition', discMode === 'pct' ? 'bg-white dark:bg-slate-700 text-emerald-600 dark:text-emerald-400 shadow-sm' : 'text-slate-400')}>%</button>
+                </div>
+                <input
+                  value={discInput}
+                  onChange={(e) => setDiscInput(e.target.value.replace(/[^0-9.]/g, ''))}
+                  inputMode="numeric"
+                  placeholder="0"
+                  className="w-20 text-right px-2 py-1 rounded-lg text-[13px] tabular bg-slate-50 border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white"
+                />
+              </div>
+            </div>
             {discount > 0 && (
               <div className="flex justify-between text-emerald-600 dark:text-emerald-400">
-                <span>Descuento</span><span className="tabular">-{formatCurrency(discount)}</span>
+                <span>Descuento aplicado</span><span className="tabular">-{formatCurrency(discount)}</span>
               </div>
             )}
             <div className="flex justify-between font-bold text-[18px] text-slate-900 dark:text-white border-t border-slate-100 dark:border-white/[0.06] pt-2.5 mt-1">

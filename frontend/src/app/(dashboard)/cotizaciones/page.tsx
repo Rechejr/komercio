@@ -287,7 +287,7 @@ function DetalleModal({ id, onClose }: { id: string; onClose: () => void }) {
     if (!q) return;
     clear();
     for (const it of q.items) {
-      addItem({ productId: it.productId || '', productVariantId: it.productVariantId, name: it.name, code: it.code || '', unitPrice: Number(it.unitPrice), quantity: Number(it.quantity), discountPct: Number(it.discountPct || 0), taxRate: Number(it.taxRate || 0) });
+      addItem({ productId: it.productId || '', productVariantId: it.productVariantId, name: it.name, code: it.code || '', salePrice: Number(it.unitPrice), wholesalePrice: null, quantity: Number(it.quantity), discountPct: Number(it.discountPct || 0), taxRate: Number(it.taxRate || 0) });
     }
     if (q.customerId) setCustomer(q.customerId);
     api.patch(`/quotes/${q.id}/converted`).then(() => qc.invalidateQueries({ queryKey: ['quotes'] })).catch(() => {});

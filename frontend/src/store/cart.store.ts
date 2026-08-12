@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 
+export type PriceList = 'retail' | 'wholesale';
+
 export interface CartItem {
   productId: string;
   // Variante (ropa): cuando el producto maneja tallas/colores. La identidad de la
@@ -10,6 +12,11 @@ export interface CartItem {
   variantLabel?: string; // ej. "M · Navy" (solo para mostrar)
   name: string;
   code: string;
+  // Ambos precios del producto se guardan por línea para poder cambiar de lista
+  // (detal ↔ mayorista) sin volver a consultar el catálogo. `unitPrice` es el
+  // precio EFECTIVO según la lista activa (lo que se cobra y se muestra).
+  salePrice: number;
+  wholesalePrice: number | null;
   unitPrice: number;
   quantity: number;
   discountPct: number;
@@ -25,21 +32,33 @@ interface CartState {
   items: CartItem[];
   customerId: string | null;
   discount: number;
-  addItem: (item: Omit<CartItem, 'subtotal' | 'total'>) => void;
+  priceList: PriceList;
+  addItem: (item: Omit<CartItem, 'subtotal' | 'total' | 'unitPrice'>) => void;
   updateQty: (key: string, qty: number) => void;
   updateDiscount: (key: string, pct: number) => void;
   removeItem: (key: string) => void;
   setCustomer: (id: string | null) => void;
   setGlobalDiscount: (amount: number) => void;
+  setPriceList: (list: PriceList) => void;
   clear: () => void;
   totals: () => { subtotal: number; taxes: number; discount: number; total: number };
 }
 
-function calcItem(item: Omit<CartItem, 'subtotal' | 'total'>): CartItem {
-  const sub = item.unitPrice * item.quantity;
+// Precio efectivo según la lista: mayorista si hay y está activa, si no el de venta.
+// Tolera líneas viejas persistidas en sessionStorage (sin salePrice) cayendo a su
+// unitPrice previo, para no romper un carrito abierto durante un deploy.
+function effectivePrice(item: { salePrice?: number; wholesalePrice?: number | null; unitPrice?: number }, list: PriceList): number {
+  const retail = item.salePrice ?? item.unitPrice ?? 0;
+  if (list === 'wholesale' && item.wholesalePrice != null && item.wholesalePrice > 0) return item.wholesalePrice;
+  return retail;
+}
+
+function calcItem(item: Omit<CartItem, 'subtotal' | 'total' | 'unitPrice'>, list: PriceList): CartItem {
+  const unitPrice = effectivePrice(item, list);
+  const sub = unitPrice * item.quantity;
   const discounted = sub * (1 - item.discountPct / 100);
   const tax = discounted * (item.taxRate / 100);
-  return { ...item, subtotal: discounted, total: discounted + tax };
+  return { ...item, unitPrice, subtotal: discounted, total: discounted + tax };
 }
 
 export const useCartStore = create<CartState>()(
@@ -48,21 +67,23 @@ export const useCartStore = create<CartState>()(
       items: [],
       customerId: null,
       discount: 0,
+      priceList: 'retail',
 
       addItem(item) {
         const key = lineKey(item);
+        const list = get().priceList;
         set((state) => {
           const existing = state.items.find((i) => lineKey(i) === key);
           if (existing) {
             return {
               items: state.items.map((i) =>
                 lineKey(i) === key
-                  ? calcItem({ ...i, quantity: i.quantity + item.quantity })
+                  ? calcItem({ ...i, quantity: i.quantity + item.quantity }, list)
                   : i,
               ),
             };
           }
-          return { items: [...state.items, calcItem(item)] };
+          return { items: [...state.items, calcItem(item, list)] };
         });
       },
 
@@ -71,14 +92,16 @@ export const useCartStore = create<CartState>()(
           get().removeItem(key);
           return;
         }
+        const list = get().priceList;
         set((state) => ({
-          items: state.items.map((i) => lineKey(i) === key ? calcItem({ ...i, quantity: qty }) : i),
+          items: state.items.map((i) => lineKey(i) === key ? calcItem({ ...i, quantity: qty }, list) : i),
         }));
       },
 
       updateDiscount(key, pct) {
+        const list = get().priceList;
         set((state) => ({
-          items: state.items.map((i) => lineKey(i) === key ? calcItem({ ...i, discountPct: pct }) : i),
+          items: state.items.map((i) => lineKey(i) === key ? calcItem({ ...i, discountPct: pct }, list) : i),
         }));
       },
 
@@ -88,7 +111,17 @@ export const useCartStore = create<CartState>()(
 
       setCustomer(customerId) { set({ customerId }); },
       setGlobalDiscount(discount) { set({ discount }); },
-      clear() { set({ items: [], customerId: null, discount: 0 }); },
+
+      // Cambiar de lista de precios recalcula TODAS las líneas del carrito con el
+      // precio efectivo de la nueva lista (mayorista → detal o viceversa).
+      setPriceList(priceList) {
+        set((state) => ({
+          priceList,
+          items: state.items.map((i) => calcItem(i, priceList)),
+        }));
+      },
+
+      clear() { set({ items: [], customerId: null, discount: 0, priceList: 'retail' }); },
 
       totals() {
         const { items, discount } = get();
@@ -101,7 +134,7 @@ export const useCartStore = create<CartState>()(
       name: 'ventrix-pos-cart',
       storage: createJSONStorage(() => sessionStorage),
       // Functions aren't serializable — only persist the cart data itself
-      partialize: (state) => ({ items: state.items, customerId: state.customerId, discount: state.discount }),
+      partialize: (state) => ({ items: state.items, customerId: state.customerId, discount: state.discount, priceList: state.priceList }),
     },
   ),
 );
