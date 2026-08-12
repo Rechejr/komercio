@@ -13,7 +13,7 @@ import {
   Plus, Search, Edit, Trash2, Package, AlertTriangle,
   X, Loader2, Barcode, FileUp, FileDown, CheckCircle2,
   ArrowRight, Lock, ArrowUpDown, Share2, ScanLine, Warehouse, Download,
-  PackagePlus,
+  PackagePlus, Bell,
 } from 'lucide-react';
 import { BarcodeScanner } from '@/components/ui/BarcodeScanner';
 import { useAuthStore } from '@/store/auth.store';
@@ -1079,12 +1079,19 @@ export default function InventarioPage() {
                   </div>
                   )}
                   <div>
-                    <label className="block text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5">Cantidad mínima</label>
+                    <label className="block text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5">Cantidad mínima <span className="text-slate-400 font-normal">· aviso de stock</span></label>
                     <input
                       {...register('minStock', { valueAsNumber: true, min: { value: 0, message: 'No puede ser negativo' } })}
                       type="number" inputMode="numeric" min="0" placeholder="5" className={inputCls}
                     />
-                    {errors.minStock && <p className="text-[11px] text-red-500 mt-1">{errors.minStock.message as string}</p>}
+                    {errors.minStock ? (
+                      <p className="text-[11px] text-red-500 mt-1">{errors.minStock.message as string}</p>
+                    ) : (
+                      <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1 leading-snug flex items-start gap-1">
+                        <Bell size={11} className="mt-[1px] flex-none" />
+                        <span>Es el tope bajo del producto: te avisamos cuando el stock llegue a este número o menos. Déjalo en 0 si no quieres aviso.</span>
+                      </p>
+                    )}
                   </div>
                 </div>
 
