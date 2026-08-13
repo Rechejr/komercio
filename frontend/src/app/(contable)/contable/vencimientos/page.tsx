@@ -14,8 +14,18 @@ import {
 } from '@/lib/contable';
 import { Plus, Search, Trash2, X, Loader2, CalendarClock, Sparkles, ArrowUp, ArrowDown, ChevronsUpDown, MessageCircle } from 'lucide-react';
 
-// Recordatorio de renta por WhatsApp (botón en la pestaña de Renta).
-const RENTA_MSG = 'Se acerca su vencimiento de declaración de renta. Favor estar al día con los documentos para presentar de manera oportuna su declaración de renta.';
+// Recordatorio de renta por WhatsApp (botón en la pestaña de Renta). Se codifica
+// con encodeURIComponent al armar el enlace wa.me, así que los emojis viajan
+// correctamente y WhatsApp los muestra bien (no como "?").
+const RENTA_MSG = [
+  '⏰ ¡RECUERDA! SE ACERCA EL VENCIMIENTO DE TU DECLARACIÓN DE RENTA',
+  '',
+  '📌 No dejes este trámite para última hora. Asegúrate de entregar oportunamente a tu contador todos los documentos y soportes requeridos para la elaboración y presentación de tu declaración.',
+  '',
+  '⏰ ¡El tiempo corre! Organiza desde ahora tu documentación y cumple oportunamente con tus obligaciones tributarias.',
+  '',
+  'Tu tranquilidad también depende de presentar a tiempo.',
+].join('\n');
 function waLinkRenta(celular: string | null): string | null {
   const digits = (celular || '').replace(/\D/g, '');
   if (!digits) return null;
