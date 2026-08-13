@@ -3,8 +3,9 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { sellerFetch, getSellerToken, clearSellerToken } from '@/lib/sellerApi';
-import { Loader2, UserPlus, LogOut, Copy, Check, Store, Calculator, RefreshCw } from 'lucide-react';
+import { Loader2, UserPlus, LogOut, Copy, Check, Store, Calculator, RefreshCw, Download } from 'lucide-react';
 import { WhatsAppIcon } from '@/components/ui/WhatsAppIcon';
+import { downloadCsv } from '@/lib/exportCsv';
 import toast from 'react-hot-toast';
 
 type Period = 'monthly' | 'quarterly' | 'annual';
@@ -12,6 +13,26 @@ interface ProvisionResult { name: string; email: string; password: string; busin
 interface Account { id: string; name: string; type: string; plan: string; planExpiresAt: string | null; createdAt: string; owner: { name: string; email: string } }
 
 const PERIOD_LABEL: Record<Period, string> = { monthly: 'Mensual', quarterly: 'Trimestral', annual: 'Anual' };
+
+// Comisión: 30% del primer pago, con tope de $40.000 en planes anuales. Se deriva
+// el plan/periodo de cada cuenta a partir de su duración (planExpiresAt-createdAt).
+const COMMISSION_RATE = 0.30;
+const ANNUAL_CAP = 40000;
+const money = (n: number) => `$${Math.round(n).toLocaleString('es-CO')}`;
+
+function planInfo(a: Account): { periodLabel: string; price: number; commission: number } {
+  const created = new Date(a.createdAt).getTime();
+  const expires = a.planExpiresAt ? new Date(a.planExpiresAt).getTime() : created;
+  const months = Math.max(1, Math.round((expires - created) / (30 * 24 * 60 * 60 * 1000)));
+  let price: number; let periodLabel: string; let isAnnual = false;
+  if (a.type === 'contable') { price = 120000; periodLabel = 'Anual'; isAnnual = true; }
+  else if (months >= 12) { price = 287000; periodLabel = 'Anual'; isAnnual = true; }
+  else if (months >= 3) { price = 80700; periodLabel = 'Trimestral'; }
+  else { price = 29900; periodLabel = 'Mensual'; }
+  let commission = Math.round(price * COMMISSION_RATE);
+  if (isAnnual) commission = Math.min(commission, ANNUAL_CAP);
+  return { periodLabel, price, commission };
+}
 
 export default function VendedorPortalPage() {
   const router = useRouter();
@@ -42,6 +63,30 @@ export default function VendedorPortalPage() {
   }, [router, loadAccounts]);
 
   function logout() { clearSellerToken(); router.replace('/vendedor/login'); }
+
+  const totalComision = accounts.reduce((s, a) => s + planInfo(a).commission, 0);
+  function descargarComisiones() {
+    if (accounts.length === 0) { toast.error('Aún no hay cuentas para descargar'); return; }
+    const rows = accounts.map((a) => {
+      const p = planInfo(a);
+      return [
+        a.owner?.name || '',
+        a.owner?.email || '',
+        a.type === 'contable' ? 'Contable' : 'POS',
+        p.periodLabel,
+        new Date(a.createdAt).toLocaleDateString('es-CO'),
+        Math.round(p.price),
+        Math.round(p.commission),
+      ];
+    });
+    const totalPrecio = accounts.reduce((s, a) => s + planInfo(a).price, 0);
+    rows.push(['', '', '', '', 'TOTAL', Math.round(totalPrecio), Math.round(totalComision)]);
+    downloadCsv(
+      `comisiones-${seller?.slug || 'vendedora'}-${new Date().toISOString().slice(0, 10)}`,
+      ['Cliente', 'Correo', 'Producto', 'Plan', 'Fecha', 'Precio pagado', 'Comisión (30%)'],
+      rows,
+    );
+  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -188,26 +233,43 @@ export default function VendedorPortalPage() {
           )}
         </div>
 
-        {/* Cuentas creadas */}
+        {/* Cuentas creadas + comisiones */}
         <div className="bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-2xl p-6">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-[15px] font-bold text-slate-800 dark:text-white">Cuentas que has creado</h2>
-            <button onClick={loadAccounts} className="text-slate-400 hover:text-emerald-600 transition" title="Actualizar"><RefreshCw size={15} /></button>
+          <div className="flex items-center justify-between mb-1">
+            <h2 className="text-[15px] font-bold text-slate-800 dark:text-white">Cuentas creadas y comisiones</h2>
+            <div className="flex items-center gap-2">
+              <button onClick={descargarComisiones} className="flex items-center gap-1.5 text-[12.5px] font-semibold px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white transition"><Download size={14} /> Descargar</button>
+              <button onClick={loadAccounts} className="text-slate-400 hover:text-emerald-600 transition p-1.5" title="Actualizar"><RefreshCw size={15} /></button>
+            </div>
           </div>
+          <p className="text-[12px] text-slate-500 dark:text-slate-400 mb-3">Comisión: 30% del primer pago (tope $40.000 en planes anuales).</p>
+
           {accounts.length === 0 ? (
             <p className="text-[13px] text-slate-400 py-6 text-center">Aún no has creado cuentas.</p>
           ) : (
-            <div className="divide-y divide-slate-100 dark:divide-slate-700">
-              {accounts.map((a) => (
-                <div key={a.id} className="flex items-center justify-between py-2.5">
-                  <div className="min-w-0">
-                    <p className="text-[13.5px] font-medium text-slate-800 dark:text-white truncate">{a.owner?.name} <span className="text-slate-400 font-normal">· {a.owner?.email}</span></p>
-                    <p className="text-[12px] text-slate-500 dark:text-slate-400">{a.type === 'contable' ? 'Contable' : 'POS'} · {a.name}</p>
-                  </div>
-                  <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 flex-none">{a.plan === 'pro' ? 'Pro' : 'Free'}</span>
-                </div>
-              ))}
-            </div>
+            <>
+              <div className="flex items-center justify-between rounded-xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-100 dark:border-emerald-500/20 px-4 py-2.5 mb-3">
+                <span className="text-[13px] font-medium text-emerald-800 dark:text-emerald-300">Total en comisiones ({accounts.length} {accounts.length === 1 ? 'cuenta' : 'cuentas'})</span>
+                <span className="text-[16px] font-bold text-emerald-700 dark:text-emerald-300 tabular-nums">{money(totalComision)}</span>
+              </div>
+              <div className="divide-y divide-slate-100 dark:divide-slate-700">
+                {accounts.map((a) => {
+                  const p = planInfo(a);
+                  return (
+                    <div key={a.id} className="flex items-center justify-between gap-3 py-2.5">
+                      <div className="min-w-0">
+                        <p className="text-[13.5px] font-medium text-slate-800 dark:text-white truncate">{a.owner?.name} <span className="text-slate-400 font-normal">· {a.owner?.email}</span></p>
+                        <p className="text-[12px] text-slate-500 dark:text-slate-400">{a.type === 'contable' ? 'Contable' : 'POS'} · {p.periodLabel} · {new Date(a.createdAt).toLocaleDateString('es-CO')}</p>
+                      </div>
+                      <div className="text-right flex-none">
+                        <p className="text-[13px] font-bold text-emerald-700 dark:text-emerald-400 tabular-nums">{money(p.commission)}</p>
+                        <p className="text-[11px] text-slate-400">de {money(p.price)}</p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
           )}
         </div>
       </main>
