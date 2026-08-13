@@ -116,7 +116,7 @@ async function issueSession(res: Response, user: any, account: Account): Promise
 // en POS— las categorías de gasto y medios de pago por defecto. Reutilizado por
 // el registro (assignBranch: true, el usuario nuevo se ancla a esta sucursal) y
 // por "activar producto" (assignBranch: false, conserva su sucursal principal).
-async function createBusinessForOwner(
+export async function createBusinessForOwner(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   client: any,
   opts: { userId: string; businessName: string; businessType: string; businessCategory?: string | null; assignBranch: boolean },

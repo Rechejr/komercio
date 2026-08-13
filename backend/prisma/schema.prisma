@@ -154,6 +154,9 @@ model Business {
   stockTransfers    StockTransfer[]
   plan              String            @default("free")
   planExpiresAt     DateTime?
+  // Vendedora que creó esta cuenta desde su portal (si aplica). Sirve para que
+  // cada vendedora vea "sus" cuentas y el dueño sepa quién provisionó cada una.
+  createdBySellerId String?
   settings          Json?
   paymentLinks      PaymentLink[]
   aiWeeklySummaries AiWeeklySummary[]
@@ -170,7 +173,26 @@ model Business {
   deletedAt         DateTime?
 
   @@index([ownerId])
+  @@index([createdBySellerId])
   @@map("businesses")
+}
+
+// ─── SELLERS ───────────────────────────────────────────────────────────────────
+// Vendedoras que provisionan cuentas de clientes desde su propio portal
+// (/vendedor): el cliente paga por su link de Wompi y la vendedora le crea la
+// cuenta ya lista (verificada, en Pro, con clave) para enviársela por WhatsApp.
+// El `slug` coincide con /planes?v=<slug> para atar el lead al vendedor.
+model Seller {
+  id        String   @id @default(uuid())
+  name      String
+  email     String   @unique
+  password  String
+  slug      String   @unique
+  phone     String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@map("sellers")
 }
 
 // ─── AI WEEKLY SUMMARY ─────────────────────────────────────────────────────────

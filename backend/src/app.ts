@@ -55,6 +55,7 @@ import publicRoutes from './routes/public.routes';
 import searchRoutes from './routes/search.routes';
 import onboardingRoutes from './routes/onboarding.routes';
 import supplierCreditRoutes from './routes/supplierCredit.routes';
+import sellerRoutes from './routes/seller.routes';
 
 const app = express();
 
@@ -213,6 +214,7 @@ app.use(`${apiPrefix}/public`, publicCatalogLimiter, publicRoutes);
 app.use(`${apiPrefix}/search`, searchRoutes);
 app.use(`${apiPrefix}/onboarding`, onboardingRoutes);
 app.use(`${apiPrefix}/supplier-credits`, supplierCreditRoutes);
+app.use(`${apiPrefix}/seller`, moderateAuthLimiter, sellerRoutes);
 
 // Error handling
 app.use(notFound);
