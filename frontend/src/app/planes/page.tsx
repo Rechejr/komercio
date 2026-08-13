@@ -6,7 +6,7 @@ import { Bricolage_Grotesque, Instrument_Sans, Space_Mono } from 'next/font/goog
 import { Download, Loader2, FileText, X } from 'lucide-react';
 import { WhatsAppIcon } from '@/components/ui/WhatsAppIcon';
 import { downloadImage } from '@/lib/imageShare';
-import { PLANS, TRUST_POINTS, PLANES_FAQ, resolveSeller, type PlanTier, type ProductPlan, type Seller, type BillingPeriod } from '@/lib/planesData';
+import { PLANS, TRUST_POINTS, PLANES_FAQ, resolveSeller, DEFAULT_SELLER, type PlanTier, type ProductPlan, type Seller, type BillingPeriod } from '@/lib/planesData';
 import '../landing.css';
 
 const bricolage = Bricolage_Grotesque({ subsets: ['latin'], variable: '--font-bric', weight: ['500', '600', '700', '800'], display: 'swap', preload: false });
@@ -52,7 +52,14 @@ export default function PlanesPage() {
   // vendedor ya resuelto (para el href inicial). `liveWaUrl` RE-lee el ?v= en el
   // momento del clic — así siempre abre el número correcto aunque el JS aún no
   // haya terminado de hidratar (antes podía quedarse con el número por defecto).
+  // Link de vendedor (?v=): saludamos con su nombre y hacemos obvia la "compra
+  // con asesor" — para el cliente que no quiere registrarse solo.
+  const isAssisted = seller.phone !== DEFAULT_SELLER.phone;
+  const firstName = seller.name.split(' ')[0];
   const GENERAL_MSG = 'Hola 👋 Vi los planes de Ventrix y quiero más información.';
+  const heroMsg = isAssisted
+    ? `Hola ${firstName} 👋 Quiero comprar ${product.label}. ¿Me ayudas a activarlo?`
+    : GENERAL_MSG;
   function cotizarMsg(c: CotizarState): string {
     const total = c.period ? c.period.total : c.tier.price;
     const unit = c.period ? c.period.unit : c.tier.period;
@@ -102,14 +109,20 @@ export default function PlanesPage() {
             <div className="lp-sec-eyebrow">Planes y precios</div>
             <h2>Elige tu plan de Ventrix</h2>
             <p style={{ marginInline: 'auto' }}>Dos productos, precios claros y sin letra chiquita. Empieza gratis y paga solo cuando lo necesites.</p>
-            <div style={{ marginTop: '1rem' }}>
+
+            {isAssisted && <div className="planes-advisor">👋 Te atiende <b>{seller.name}</b> — te ayuda a comprar y activar tu cuenta, sin complicaciones.</div>}
+
+            <div style={{ marginTop: isAssisted ? '.75rem' : '1rem' }}>
               <a
-                href={waHref(GENERAL_MSG)}
-                onClick={(e) => { e.currentTarget.href = liveWaUrl(GENERAL_MSG); }}
-                target="_blank" rel="noopener noreferrer" className="lp-btn planes-btn-wa" style={{ display: 'inline-flex' }}
+                href={waHref(heroMsg)}
+                onClick={(e) => { e.currentTarget.href = liveWaUrl(heroMsg); }}
+                target="_blank" rel="noopener noreferrer"
+                className={`lp-btn ${isAssisted ? 'lp-btn-primary planes-btn-buy' : 'planes-btn-wa'}`}
+                style={{ display: 'inline-flex' }}
               >
-                <WhatsAppIcon /> ¿Dudas? Escríbenos por WhatsApp
+                <WhatsAppIcon /> {isAssisted ? `Comprar con ${firstName} por WhatsApp` : '¿Dudas? Escríbenos por WhatsApp'}
               </a>
+              {isAssisted && <p className="planes-advisor-alt">¿Prefieres hacerlo tú? Usa “Comprar ahora” en tu plan.</p>}
             </div>
           </div>
 
@@ -245,7 +258,7 @@ export default function PlanesPage() {
                 onClick={(e) => { e.currentTarget.href = liveWaUrl(cotizarMsg(cotizar)); }}
                 target="_blank" rel="noopener noreferrer" className="lp-btn planes-btn-wa"
               >
-                <WhatsAppIcon /> Escribir por WhatsApp
+                <WhatsAppIcon /> {isAssisted ? `Comprar con ${firstName}` : 'Escribir por WhatsApp'}
               </a>
               <button type="button" onClick={descargar} disabled={busy} className="lp-btn lp-btn-ghost planes-btn-cotizar">
                 {busy ? <Loader2 size={15} className="planes-spin" /> : <Download size={15} />} Descargar
