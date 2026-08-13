@@ -71,6 +71,34 @@ function wompiPost(path: string, body: unknown): Promise<{ ok: boolean; status: 
   });
 }
 
+// Consulta una transacción de Wompi por id (para verificar un pago antes de
+// provisionar una cuenta desde el portal de vendedoras). Usa la misma base/llave.
+export function getWompiTransaction(id: string): Promise<{ ok: boolean; status: number; data: any }> {
+  return new Promise((resolve, reject) => {
+    const options: https.RequestOptions = {
+      hostname: WOMPI_BASE,
+      path: `/v1/transactions/${encodeURIComponent(id)}`,
+      method: 'GET',
+      headers: { 'Authorization': `Bearer ${WOMPI_PRIVATE_KEY}` },
+    };
+    const req = https.request(options, (res) => {
+      let raw = '';
+      res.on('data', (chunk) => { raw += chunk; });
+      res.on('end', () => {
+        try {
+          resolve({ ok: (res.statusCode ?? 0) >= 200 && (res.statusCode ?? 0) < 300, status: res.statusCode ?? 0, data: JSON.parse(raw) });
+        } catch (e) {
+          reject(e);
+        }
+      });
+    });
+    req.on('error', reject);
+    req.end();
+  });
+}
+
+export const WOMPI_CONFIGURED = WOMPI_PRIVATE_KEY.length > 0;
+
 // Resuelve una ruta "a.b.c" dentro de un objeto (para las signature.properties
 // de Wompi, que son rutas relativas al objeto `data` del evento).
 function resolvePath(obj: any, path: string): any {

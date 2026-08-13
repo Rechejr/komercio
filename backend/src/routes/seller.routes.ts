@@ -8,6 +8,7 @@ import { success, created, AppError } from '../utils/response';
 import { validate } from '../middlewares/validate';
 import { logger } from '../config/logger';
 import { createBusinessForOwner } from '../controllers/auth.controller';
+import { getWompiTransaction, WOMPI_CONFIGURED, PLAN_PRICES, CONTABLE_ANNUAL_PRICE } from '../controllers/payment.controller';
 
 // Portal de vendedoras (/seller): cada vendedora inicia sesión y crea cuentas de
 // clientes ya listas (verificadas, en Pro, con clave) para enviarlas por WhatsApp.
@@ -95,11 +96,13 @@ router.post('/provision',
     body('businessType').isIn(['pos', 'contable']).withMessage('Producto inválido'),
     body('businessName').optional().trim(),
     body('period').optional().isIn(['monthly', 'quarterly', 'annual']),
+    body('transactionId').trim().notEmpty().withMessage('Falta el número de transacción de Wompi'),
   ],
   validate,
   async (req: any, res: any, next: any) => {
     try {
       const { name, email, businessType } = req.body;
+      const transactionId: string = (req.body.transactionId || '').trim();
       const period: string = req.body.period || (businessType === 'contable' ? 'annual' : 'monthly');
       const businessName = (req.body.businessName || '').trim()
         || (businessType === 'contable' ? `Contabilidad de ${name}` : `Negocio de ${name}`);
@@ -107,21 +110,44 @@ router.post('/provision',
       const existing = await prisma.user.findUnique({ where: { email } });
       if (existing) throw new AppError('Ese correo ya tiene una cuenta en Ventrix', 409);
 
+      // ── SEGURO: el pago debe estar hecho y APROBADO en Wompi (tu cuenta) ──────
+      if (!WOMPI_CONFIGURED) throw new AppError('La verificación de pagos no está configurada en el servidor.', 503);
+      // Ese pago no puede haberse usado ya para crear otra cuenta.
+      const yaUsado = await prisma.business.findUnique({ where: { paymentRef: transactionId } });
+      if (yaUsado) throw new AppError('Ese pago ya se usó para crear una cuenta.', 409);
+
+      let tx;
+      try {
+        const resp = await getWompiTransaction(transactionId);
+        tx = resp.data?.data;
+      } catch {
+        throw new AppError('No se pudo verificar el pago con Wompi. Revisa el número e intenta de nuevo.', 502);
+      }
+      if (!tx || !tx.status) throw new AppError('No se encontró esa transacción en Wompi. Revisa el número.', 404);
+      if (tx.status !== 'APPROVED') throw new AppError(`El pago no está aprobado (estado: ${tx.status}). No se puede crear la cuenta.`, 402);
+
+      // El monto pagado debe coincidir con el del producto/periodo elegido.
+      const esperado = businessType === 'contable' ? CONTABLE_ANNUAL_PRICE : (PLAN_PRICES[period] || 0);
+      const pagado = Math.round((tx.amount_in_cents || 0) / 100);
+      if (esperado > 0 && pagado !== esperado) {
+        throw new AppError(`El monto pagado ($${pagado.toLocaleString('es-CO')}) no coincide con el plan elegido ($${esperado.toLocaleString('es-CO')}).`, 409);
+      }
+
       const months = businessType === 'contable' ? 12 : (PLAN_MONTHS[period] || 1);
       const planExpiresAt = new Date(Date.now() + months * 30 * 24 * 60 * 60 * 1000);
       const plainPassword = genPassword();
       const hashed = await bcrypt.hash(plainPassword, 12);
 
-      const business = await prisma.$transaction(async (tx) => {
-        const user = await tx.user.create({
+      const business = await prisma.$transaction(async (dbtx) => {
+        const user = await dbtx.user.create({
           // Verificada de una vez: la vendedora responde por el cliente, así el
           // cliente no tiene que verificar correo para entrar.
           data: { name, email, password: hashed, role: 'ADMIN', isEmailVerified: true },
         });
-        const biz = await createBusinessForOwner(tx, { userId: user.id, businessName, businessType, assignBranch: true });
-        await tx.business.update({
+        const biz = await createBusinessForOwner(dbtx, { userId: user.id, businessName, businessType, assignBranch: true });
+        await dbtx.business.update({
           where: { id: biz.id },
-          data: { plan: 'pro', planExpiresAt, createdBySellerId: req.seller.id },
+          data: { plan: 'pro', planExpiresAt, createdBySellerId: req.seller.id, paymentRef: transactionId },
         });
         return biz;
       });

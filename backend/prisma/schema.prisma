@@ -157,6 +157,9 @@ model Business {
   // Vendedora que creó esta cuenta desde su portal (si aplica). Sirve para que
   // cada vendedora vea "sus" cuentas y el dueño sepa quién provisionó cada una.
   createdBySellerId String?
+  // Referencia de la transacción de Wompi con la que se pagó esta cuenta (cuando
+  // la creó una vendedora). @unique = un mismo pago no puede crear dos cuentas.
+  paymentRef        String?           @unique
   settings          Json?
   paymentLinks      PaymentLink[]
   aiWeeklySummaries AiWeeklySummary[]

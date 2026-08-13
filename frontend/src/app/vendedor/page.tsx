@@ -23,6 +23,7 @@ export default function VendedorPortalPage() {
   const [phone, setPhone] = useState('');
   const [product, setProduct] = useState<'pos' | 'contable'>('pos');
   const [period, setPeriod] = useState<Period>('monthly');
+  const [transactionId, setTransactionId] = useState('');
   const [saving, setSaving] = useState(false);
   const [result, setResult] = useState<ProvisionResult | null>(null);
   const [copied, setCopied] = useState(false);
@@ -49,10 +50,10 @@ export default function VendedorPortalPage() {
     try {
       const data = await sellerFetch<ProvisionResult>('/provision', {
         method: 'POST',
-        body: JSON.stringify({ name, email, businessType: product, period: product === 'contable' ? 'annual' : period }),
+        body: JSON.stringify({ name, email, businessType: product, period: product === 'contable' ? 'annual' : period, transactionId: transactionId.trim() }),
       });
       setResult(data);
-      setName(''); setEmail('');
+      setName(''); setEmail(''); setTransactionId('');
       loadAccounts();
       toast.success('Cuenta creada');
     } catch (err: any) {
@@ -107,7 +108,7 @@ export default function VendedorPortalPage() {
         {/* Crear cuenta */}
         <div className="bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-2xl p-6">
           <h2 className="text-[15px] font-bold text-slate-800 dark:text-white flex items-center gap-2 mb-1"><UserPlus size={17} className="text-emerald-600" /> Crear cuenta de cliente</h2>
-          <p className="text-[13px] text-slate-500 dark:text-slate-400 mb-4">El cliente paga por tu link de Wompi; aquí le creas la cuenta lista y se la envías por WhatsApp.</p>
+          <p className="text-[13px] text-slate-500 dark:text-slate-400 mb-4">El cliente paga por tu link de Wompi; con el n.° de la transacción, el sistema <b>verifica el pago</b> y crea la cuenta lista para enviársela por WhatsApp.</p>
 
           <form onSubmit={onSubmit} className="space-y-4">
             <div className="grid sm:grid-cols-2 gap-3">
@@ -146,6 +147,14 @@ export default function VendedorPortalPage() {
                 </div>
               </div>
             )}
+
+            <div>
+              <label className="block text-[13px] font-medium text-slate-600 dark:text-slate-300 mb-1.5">N.° de transacción de Wompi <span className="text-red-500">*</span></label>
+              <input value={transactionId} onChange={(e) => setTransactionId(e.target.value)} className={input} placeholder="Ej: 01-1700000000-12345" required />
+              <p className="text-[11.5px] text-slate-500 dark:text-slate-400 mt-1 leading-snug">
+                El del comprobante que te envía el cliente tras pagar. La cuenta <b>solo se crea si ese pago está aprobado</b> y por el monto del plan.
+              </p>
+            </div>
 
             <div>
               <label className="block text-[13px] font-medium text-slate-600 dark:text-slate-300 mb-1.5">WhatsApp del cliente <span className="text-slate-400 font-normal">(opcional, para enviarle las claves)</span></label>
