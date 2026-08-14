@@ -129,6 +129,18 @@ export function periodosPila(nit: string, year: number): PeriodoPila[] {
   return periodos;
 }
 
+/** Cálculo ANTERIOR de PILA, cuando el vencimiento se ponía en el MISMO mes del
+ *  período. Ya no se usa para generar: se conserva para RECONOCER las fechas que
+ *  quedaron guardadas con la regla vieja y corregirlas sin pisar las que el
+ *  contador editó a mano. Ver config/fixPilaDates.ts. */
+export function periodosPilaLegacy(nit: string, year: number): PeriodoPila[] {
+  const diaHabil = diaHabilPila(dosUltimosDigitos(nit));
+  return MESES.map((mes, i) => ({
+    periodo: `${mes} ${year}`,
+    fecha: nthDiaHabil(year, i + 1, diaHabil),
+  }));
+}
+
 /** Los 12 vencimientos mensuales de la NÓMINA ELECTRÓNICA de un año: cada mes se
  *  reporta dentro de los primeros 10 días HÁBILES del mes SIGUIENTE. El período
  *  se rotula por el mes reportado; la fecha es el 10° día hábil del mes siguiente

@@ -1,4 +1,4 @@
-import { festivosColombia, nthDiaHabil, diaHabilPila, periodosPila } from '../../utils/pila';
+import { festivosColombia, nthDiaHabil, diaHabilPila, periodosPila, periodosPilaLegacy } from '../../utils/pila';
 
 const iso = (d: Date) => d.toISOString().slice(0, 10);
 
@@ -57,5 +57,18 @@ describe('pila — periodosPila', () => {
     // Diciembre vence en enero del AÑO SIGUIENTE.
     expect(p[11].periodo).toBe('Diciembre 2026');
     expect(iso(p[11].fecha)).toBe(iso(nthDiaHabil(2027, 1, 2)));
+  });
+});
+
+describe('pila — periodosPilaLegacy (regla vieja, solo para reconocer datos)', () => {
+  it('deja el vencimiento en el MISMO mes del período', () => {
+    const viejo = periodosPilaLegacy('900123400', 2026);
+    const nuevo = periodosPila('900123400', 2026);
+    expect(iso(viejo[7].fecha)).toBe(iso(nthDiaHabil(2026, 8, 2))); // Agosto → agosto
+    // Y sirve para distinguir: la vieja y la nueva nunca coinciden.
+    viejo.forEach((v, i) => {
+      expect(v.periodo).toBe(nuevo[i].periodo);
+      expect(iso(v.fecha)).not.toBe(iso(nuevo[i].fecha));
+    });
   });
 });
