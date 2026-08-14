@@ -20,6 +20,7 @@ const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,
 
 const TIPOS = [
   { codigo: 'factura_electronica', label: 'Factura Electrónica' },
+  { codigo: 'pos_electronico', label: 'POS Electrónico' },
   { codigo: 'documento_soporte', label: 'Documento Soporte' },
   { codigo: 'otra', label: 'Otra' },
 ];

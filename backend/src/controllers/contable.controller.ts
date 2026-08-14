@@ -805,7 +805,7 @@ export const contableController = {
       const { taxClientId, tipo, clase, numero, fechaExpedicion, fechaVigencia, prefijo, rangoDesde, rangoHasta, modalidad, notas } = req.body;
 
       await getClientOfBusiness(taxClientId, businessId);
-      const TIPOS = ['factura_electronica', 'documento_soporte', 'otra'];
+      const TIPOS = ['factura_electronica', 'pos_electronico', 'documento_soporte', 'otra'];
       if (!TIPOS.includes(tipo)) throw new AppError('Tipo de resolución inválido', 400);
       if (!numero?.trim()) throw new AppError('El número es requerido', 400);
       if (!fechaExpedicion || !fechaVigencia) throw new AppError('Las fechas son requeridas', 400);
