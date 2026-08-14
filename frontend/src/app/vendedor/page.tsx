@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { sellerFetch, getSellerToken, clearSellerToken } from '@/lib/sellerApi';
-import { Loader2, UserPlus, LogOut, Copy, Check, Store, Calculator, RefreshCw, Download } from 'lucide-react';
+import { Loader2, UserPlus, LogOut, Copy, Check, Store, Calculator, RefreshCw, Download, KeyRound, X } from 'lucide-react';
 import { WhatsAppIcon } from '@/components/ui/WhatsAppIcon';
 import { downloadCsv } from '@/lib/exportCsv';
 import toast from 'react-hot-toast';
@@ -51,6 +51,12 @@ export default function VendedorPortalPage() {
 
   const [accounts, setAccounts] = useState<Account[]>([]);
 
+  // Cambiar contraseña
+  const [showPwd, setShowPwd] = useState(false);
+  const [newPwd, setNewPwd] = useState('');
+  const [newPwd2, setNewPwd2] = useState('');
+  const [changingPwd, setChangingPwd] = useState(false);
+
   const loadAccounts = useCallback(() => {
     sellerFetch<Account[]>('/accounts').then(setAccounts).catch(() => {});
   }, []);
@@ -63,6 +69,22 @@ export default function VendedorPortalPage() {
   }, [router, loadAccounts]);
 
   function logout() { clearSellerToken(); router.replace('/vendedor/login'); }
+
+  async function changePassword(e: React.FormEvent) {
+    e.preventDefault();
+    if (newPwd.length < 8) { toast.error('La contraseña debe tener mínimo 8 caracteres'); return; }
+    if (newPwd !== newPwd2) { toast.error('Las contraseñas no coinciden'); return; }
+    setChangingPwd(true);
+    try {
+      await sellerFetch('/change-password', { method: 'POST', body: JSON.stringify({ newPassword: newPwd }) });
+      toast.success('Contraseña actualizada');
+      setShowPwd(false); setNewPwd(''); setNewPwd2('');
+    } catch (err: any) {
+      toast.error(err.message || 'No se pudo cambiar la contraseña');
+    } finally {
+      setChangingPwd(false);
+    }
+  }
 
   const totalComision = accounts.reduce((s, a) => s + planInfo(a).commission, 0);
   function descargarComisiones() {
@@ -145,9 +167,35 @@ export default function VendedorPortalPage() {
               <p className="text-[12px] text-slate-500 dark:text-slate-400">Hola, {seller?.name} · tu link: ventrix.lat/planes?v={seller?.slug}</p>
             </div>
           </div>
-          <button onClick={logout} className="flex items-center gap-1.5 text-[13px] text-slate-500 hover:text-red-600 dark:text-slate-400 transition"><LogOut size={15} /> Salir</button>
+          <div className="flex items-center gap-3">
+            <button onClick={() => { setShowPwd(true); setNewPwd(''); setNewPwd2(''); }} className="flex items-center gap-1.5 text-[13px] text-slate-500 hover:text-emerald-600 dark:text-slate-400 transition"><KeyRound size={15} /> <span className="hidden sm:inline">Cambiar clave</span></button>
+            <button onClick={logout} className="flex items-center gap-1.5 text-[13px] text-slate-500 hover:text-red-600 dark:text-slate-400 transition"><LogOut size={15} /> Salir</button>
+          </div>
         </div>
       </header>
+
+      {/* Modal cambiar contraseña */}
+      {showPwd && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-[2px] flex items-center justify-center p-4" onClick={() => setShowPwd(false)}>
+          <form onClick={(e) => e.stopPropagation()} onSubmit={changePassword} className="w-full max-w-sm bg-white dark:bg-slate-800 rounded-2xl shadow-modal p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-[15px] font-bold text-slate-800 dark:text-white flex items-center gap-2"><KeyRound size={16} className="text-emerald-600" /> Cambiar contraseña</h3>
+              <button type="button" onClick={() => setShowPwd(false)} className="text-slate-400 hover:text-slate-600 p-1"><X size={16} /></button>
+            </div>
+            <div>
+              <label className="block text-[13px] font-medium text-slate-600 dark:text-slate-300 mb-1.5">Nueva contraseña</label>
+              <input type="password" value={newPwd} onChange={(e) => setNewPwd(e.target.value)} className={input} placeholder="Mínimo 8 caracteres" autoComplete="new-password" required />
+            </div>
+            <div>
+              <label className="block text-[13px] font-medium text-slate-600 dark:text-slate-300 mb-1.5">Repite la contraseña</label>
+              <input type="password" value={newPwd2} onChange={(e) => setNewPwd2(e.target.value)} className={input} placeholder="••••••••" autoComplete="new-password" required />
+            </div>
+            <button type="submit" disabled={changingPwd} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold disabled:opacity-60 transition">
+              {changingPwd ? <Loader2 size={16} className="animate-spin" /> : <KeyRound size={15} />} Guardar
+            </button>
+          </form>
+        </div>
+      )}
 
       <main className="max-w-3xl mx-auto px-4 py-6 space-y-6">
         {/* Crear cuenta */}
