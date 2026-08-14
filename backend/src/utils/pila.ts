@@ -113,14 +113,18 @@ const MESES = [
   'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
 ];
 
-/** Los 12 vencimientos mensuales de PILA de un año para un NIT: el período se
- *  rotula por el mes de pago (como lo publica el operador PILA) y la fecha es el
- *  día hábil que le corresponde a ese documento. */
+/** Los 12 vencimientos mensuales de PILA de un año para un NIT. El período se
+ *  rotula por el mes de COTIZACIÓN (los aportes de ese mes) y vence en el mes
+ *  SIGUIENTE, en el día hábil que le corresponde al documento (Decreto 1990 de
+ *  2016). Ej.: los aportes de AGOSTO vencen en SEPTIEMBRE. Para diciembre, el
+ *  vencimiento cae en enero del año siguiente. */
 export function periodosPila(nit: string, year: number): PeriodoPila[] {
   const diaHabil = diaHabilPila(dosUltimosDigitos(nit));
   const periodos: PeriodoPila[] = [];
   for (let mes = 1; mes <= 12; mes++) {
-    periodos.push({ periodo: `${MESES[mes - 1]} ${year}`, fecha: nthDiaHabil(year, mes, diaHabil) });
+    const mesSiguiente = mes === 12 ? 1 : mes + 1;
+    const anioVenc = mes === 12 ? year + 1 : year;
+    periodos.push({ periodo: `${MESES[mes - 1]} ${year}`, fecha: nthDiaHabil(anioVenc, mesSiguiente, diaHabil) });
   }
   return periodos;
 }

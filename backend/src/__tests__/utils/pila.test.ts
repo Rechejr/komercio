@@ -44,15 +44,18 @@ describe('pila — N-ésimo día hábil de julio 2026 (validado vs. miplanilla.c
 });
 
 describe('pila — periodosPila', () => {
-  it('genera 12 meses y la fecha de julio corresponde al día hábil del NIT', () => {
-    // NIT terminado en 00 → 2° día hábil → 2-jul-2026.
+  it('rotula el período por el mes de cotización y vence el mes SIGUIENTE', () => {
+    // NIT terminado en 00 → 2° día hábil del MES SIGUIENTE.
     const p = periodosPila('900123400', 2026);
     expect(p).toHaveLength(12);
+    // Los aportes de julio vencen en agosto (2° día hábil de agosto para este NIT).
     expect(p[6].periodo).toBe('Julio 2026');
-    expect(iso(p[6].fecha)).toBe('2026-07-02');
-
-    // NIT terminado en 55 → 9° día hábil → 14-jul-2026.
-    const p2 = periodosPila('12345655', 2026);
-    expect(iso(p2[6].fecha)).toBe('2026-07-14');
+    expect(iso(p[6].fecha)).toBe(iso(nthDiaHabil(2026, 8, 2)));
+    // Los aportes de agosto vencen en septiembre.
+    expect(p[7].periodo).toBe('Agosto 2026');
+    expect(iso(p[7].fecha)).toBe(iso(nthDiaHabil(2026, 9, 2)));
+    // Diciembre vence en enero del AÑO SIGUIENTE.
+    expect(p[11].periodo).toBe('Diciembre 2026');
+    expect(iso(p[11].fecha)).toBe(iso(nthDiaHabil(2027, 1, 2)));
   });
 });
