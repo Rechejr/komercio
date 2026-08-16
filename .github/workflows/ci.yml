@@ -91,5 +91,10 @@ jobs:
       - name: Verificar tipos
         run: cd frontend && npx tsc --noEmit
 
+      # Vitest + Testing Library sobre jsdom (segundos). Los flujos completos
+      # contra el navegador siguen en /e2e con Playwright, fuera del CI.
+      - name: Tests
+        run: cd frontend && npm test
+
       - name: Compilar
         run: cd frontend && npm run build

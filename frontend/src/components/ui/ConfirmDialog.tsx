@@ -56,8 +56,11 @@ export function ConfirmDialog({
             diálogo salido de la pantalla en móvil. El flex es inmune a eso. */}
         <Dialog.Content
           className="fixed inset-0 z-50 flex items-center justify-center p-4 outline-none"
-          onEscapeKeyDown={() => !loading && onOpenChange(false)}
-          onInteractOutside={() => !loading && onOpenChange(false)}
+          // Radix cierra solo con Escape / clic afuera: para NO cerrar mientras
+          // la operación está en curso hay que cancelar el evento. Devolver
+          // `!loading && onOpenChange(false)` no lo impedía — cerraba igual.
+          onEscapeKeyDown={(e) => { if (loading) e.preventDefault(); }}
+          onInteractOutside={(e) => { if (loading) e.preventDefault(); }}
           onClick={(e) => { if (e.target === e.currentTarget && !loading) onOpenChange(false); }}
         >
           <div className={cn(
