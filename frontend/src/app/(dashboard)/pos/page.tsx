@@ -8,6 +8,7 @@ import { useCartStore, lineKey } from '@/store/cart.store';
 import { useAuthStore } from '@/store/auth.store';
 import { useUpgradeStore } from '@/store/upgrade.store';
 import { formatCurrency, formatDate, statusColor, statusLabel, cn } from '@/lib/utils';
+import { calcularDescuentoGlobal, calcularCambio, faltantePorPagar, sumarPagos, puedeConfirmarVenta, montoPagado } from '@/lib/pos';
 import { usePaymentAccounts, labelPago } from '@/lib/usePaymentAccounts';
 import { EASE, DUR } from '@/lib/motion';
 import { useSound } from '@/lib/useSound';
@@ -272,15 +273,12 @@ export default function POSPage() {
   // Calcula el descuento global desde el campo (monto o %) y lo sincroniza con el
   // carrito. Se recalcula si cambia el campo, el modo, o la base (subtotal+imp).
   useEffect(() => {
-    const base = subtotal + taxes;
-    const raw = Number(discInput) || 0;
-    const amount = discMode === 'pct' ? Math.round((base * raw) / 100) : Math.round(raw);
-    setGlobalDiscount(Math.max(0, Math.min(amount, base)));
+    setGlobalDiscount(calcularDescuentoGlobal(discInput, discMode, subtotal + taxes));
   }, [discInput, discMode, subtotal, taxes, setGlobalDiscount]);
 
-  const change         = Math.max(0, parseFloat(paidAmount || '0') - total);
-  const mixedTotal     = mixedPayments.reduce((sum, p) => sum + p.amount, 0);
-  const mixedRemaining = Math.max(0, total - mixedTotal);
+  const change         = calcularCambio(paidAmount, total);
+  const mixedTotal     = sumarPagos(mixedPayments);
+  const mixedRemaining = faltantePorPagar(total, mixedTotal);
 
   function addSplitPayment() {
     const amount = parseFloat(splitAmount);
@@ -358,9 +356,7 @@ export default function POSPage() {
     if (items.length === 0) { toast.error('Agrega productos'); return; }
     if (isCredit && !customerId) { toast.error('Selecciona un cliente para registrar un fiado'); return; }
     if (paymentMethod === 'MIXED' && mixedPayments.length === 0) { toast.error('Agrega al menos un método de pago'); return; }
-    const paid = paymentMethod === 'MIXED'
-      ? mixedTotal
-      : isCredit ? parseFloat(paidAmount || '0') : parseFloat(paidAmount || String(total));
+    const paid = montoPagado({ paymentMethod, paidAmount, total, mixedTotal, isCredit });
     saleMutation.mutate({
       customerId: customerId || undefined,
       items: items.map((i) => ({ productId: i.productId, productVariantId: i.productVariantId, quantity: i.quantity, discountPct: i.discountPct })),
@@ -1122,11 +1118,10 @@ export default function POSPage() {
             <button
               type="button"
               onClick={handleSale}
-              disabled={
-                saleMutation.isPending ||
-                (paymentMethod === 'MIXED' && mixedTotal < total && !isCredit) ||
-                (paymentMethod !== 'MIXED' && !isCredit && parseFloat(paidAmount || String(total)) < total)
-              }
+              disabled={!puedeConfirmarVenta({
+                paymentMethod, paidAmount, total, mixedTotal, isCredit,
+                enviando: saleMutation.isPending,
+              })}
               className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-bold py-3 rounded-xl transition-colors flex items-center justify-center gap-2 shadow-sm shadow-emerald-600/25"
             >
               {saleMutation.isPending ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle size={16} />}
