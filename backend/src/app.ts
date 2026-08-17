@@ -56,6 +56,7 @@ import searchRoutes from './routes/search.routes';
 import onboardingRoutes from './routes/onboarding.routes';
 import supplierCreditRoutes from './routes/supplierCredit.routes';
 import sellerRoutes from './routes/seller.routes';
+import docsRoutes from './routes/docs.routes';
 
 const app = express();
 
@@ -215,6 +216,9 @@ app.use(`${apiPrefix}/search`, searchRoutes);
 app.use(`${apiPrefix}/onboarding`, onboardingRoutes);
 app.use(`${apiPrefix}/supplier-credits`, supplierCreditRoutes);
 app.use(`${apiPrefix}/seller`, moderateAuthLimiter, sellerRoutes);
+// Documentación de la API (Swagger UI). Abierta en desarrollo; en producción
+// solo existe si se define DOCS_TOKEN. Ver docs.routes.ts.
+app.use(apiPrefix, docsRoutes);
 
 // Error handling
 app.use(notFound);

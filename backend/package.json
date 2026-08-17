@@ -21,7 +21,8 @@
     "db:studio": "prisma studio",
     "db:push": "prisma db push",
     "test": "jest --forceExit",
-    "lint": "eslint src --ext .ts"
+    "lint": "eslint src --ext .ts",
+    "docs:openapi": "ts-node scripts/generateOpenapi.ts"
   },
   "dependencies": {
     "@google/genai": "^2.12.0",
@@ -65,6 +66,7 @@
     "resend": "^6.17.2",
     "sharp": "^0.33.2",
     "socket.io": "^4.7.4",
+    "swagger-ui-express": "^5.0.1",
     "typescript": "^5.4.2",
     "uuid": "^14.0.1",
     "web-push": "^3.6.7",
@@ -73,6 +75,7 @@
   "devDependencies": {
     "@types/jest": "^29.5.12",
     "@types/supertest": "^7.2.0",
+    "@types/swagger-ui-express": "^4.1.8",
     "@types/web-push": "^3.6.4",
     "@typescript-eslint/eslint-plugin": "^7.2.0",
     "@typescript-eslint/parser": "^7.2.0",
