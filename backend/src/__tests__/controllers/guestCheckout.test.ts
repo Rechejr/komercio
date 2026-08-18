@@ -9,6 +9,9 @@ import { emailService } from '../../config/email';
 // correo ya registrado no se pise, y que las credenciales salgan por correo.
 
 jest.mock('https', () => ({ request: jest.fn() }));
+// bcrypt real con 12 rondas tarda ~1s por llamada: con la suite completa en
+// paralelo eso hacía intermitentes estas pruebas. El hash no es lo que se prueba.
+jest.mock('bcryptjs', () => ({ hash: jest.fn().mockResolvedValue('$2a$12$hash-de-prueba') }));
 
 jest.mock('../../config/database', () => ({
   prisma: {

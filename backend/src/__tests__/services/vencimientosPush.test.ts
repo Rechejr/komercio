@@ -188,10 +188,12 @@ describe('las tres franjas del día dicen cosas distintas', () => {
   });
 
   it('cada franja suena una vez: la de la tarde no repite la de la mañana', async () => {
-    // Ya se envió a las 7am de hoy.
-    const hoy7am = new Date();
-    hoy7am.setHours(7, 5, 0, 0);
-    mockPrisma.business.findUnique.mockResolvedValue({ lastVencPushAt: hoy7am });
+    // Reloj fijo: el runner del CI corre en UTC y la máquina de desarrollo en
+    // hora de Colombia. Sin fijarlo, "las 7am" significaba cosas distintas en
+    // cada lado y la prueba pasaba aquí pero fallaba en el CI.
+    jest.useFakeTimers().setSystemTime(new Date('2026-08-18T15:00:00Z')); // 10am Bogotá
+    const hoy7amBogota = new Date('2026-08-18T12:05:00Z');
+    mockPrisma.business.findUnique.mockResolvedValue({ lastVencPushAt: hoy7amBogota });
 
     // A las 7 otra vez (un reinicio del servidor): no debe sonar.
     await notifyContableVencimientos('biz-1', [hoyMismo], 'panorama', 7);
@@ -200,5 +202,7 @@ describe('las tres franjas del día dicen cosas distintas', () => {
     // A las 2pm sí, es otra franja.
     await notifyContableVencimientos('biz-1', [hoyMismo], 'pendientes', 14);
     expect(sendPushToUsers).toHaveBeenCalledTimes(1);
+
+    jest.useRealTimers();
   });
 });
