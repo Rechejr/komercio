@@ -63,7 +63,8 @@ const makeReq = (body: Record<string, unknown>) => ({ body, params: {}, query: {
 
 const datos = {
   productType: 'pos', period: 'monthly',
-  name: 'Cristian', lastName: 'Rojas', document: '1085123456', email: 'nuevo@cliente.com',
+  name: 'Cristian', lastName: 'Rojas', document: '1085123456',
+  email: 'nuevo@cliente.com', phone: '3102979527',
 };
 
 describe('checkout sin cuenta — abrir el pago', () => {
@@ -83,6 +84,7 @@ describe('checkout sin cuenta — abrir el pago', () => {
       amount: 29900, months: 1, buyerEmail: 'nuevo@cliente.com',
       sellerSlug: 'lina', // normalizado a minúsculas
       buyerDoc: '1085123456',
+      buyerPhone: '3102979527',
     });
   });
 
@@ -114,6 +116,9 @@ describe('checkout sin cuenta — abrir el pago', () => {
       { ...datos, lastName: '' },
       { ...datos, document: '12' },
       { ...datos, email: 'no-es-correo' },
+      // Sin celular la vendedora no puede avisarle si el correo se va a spam.
+      { ...datos, phone: '' },
+      { ...datos, phone: '31029' },
     ];
     for (const malo of malos) {
       (next as jest.Mock).mockClear();
@@ -135,7 +140,7 @@ describe('checkout sin cuenta — abrir el pago', () => {
 describe('tras el pago — crear la cuenta y mandar las claves', () => {
   const compra = {
     id: 'g-1', buyerName: 'Cristian', buyerLastName: 'Rojas', buyerEmail: 'nuevo@cliente.com',
-    productType: 'pos', months: 1, amount: 29900, sellerSlug: 'lina',
+    buyerPhone: '3102979527', productType: 'pos', months: 1, amount: 29900, sellerSlug: 'lina',
   };
 
   beforeEach(() => {
@@ -147,6 +152,12 @@ describe('tras el pago — crear la cuenta y mandar las claves', () => {
     mockPrisma.business.update.mockResolvedValue({});
     mockPrisma.guestCheckout.update.mockResolvedValue({});
     mockPrisma.seller.findFirst.mockResolvedValue({ id: 'seller-1' });
+  });
+
+  it('guarda el celular en la cuenta, para poder contactarlo después', async () => {
+    await provisionarCompraInvitado({ ...compra, buyerPhone: '3102979527' }, { id: 'tx-1', amount_in_cents: 2990000 });
+    expect(mockPrisma.user.create.mock.calls[0][0].data.phone).toBe('3102979527');
+    expect(mockPrisma.business.update.mock.calls[0][0].data.phone).toBe('3102979527');
   });
 
   it('crea el usuario ya verificado y con el plan pagado', async () => {

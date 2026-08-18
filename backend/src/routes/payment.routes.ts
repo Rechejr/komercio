@@ -27,6 +27,7 @@ router.post(
     body('lastName').trim().notEmpty().withMessage('Escribe tus apellidos'),
     body('document').trim().notEmpty().withMessage('Escribe tu número de cédula'),
     body('email').isEmail().normalizeEmail().withMessage('Escribe un correo válido'),
+    body('phone').trim().notEmpty().withMessage('Escribe tu número de celular'),
     body('sellerSlug').optional({ nullable: true }).trim(),
   ],
   validate,

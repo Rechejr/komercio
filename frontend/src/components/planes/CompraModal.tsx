@@ -28,6 +28,7 @@ export function CompraModal({ product, tier, period, sellerSlug, onClose }: Prop
   const [lastName, setLastName] = useState('');
   const [documento, setDocumento] = useState('');
   const [email, setEmail] = useState('');
+  const [celular, setCelular] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -49,6 +50,7 @@ export function CompraModal({ product, tier, period, sellerSlug, onClose }: Prop
           lastName: lastName.trim(),
           document: documento.trim(),
           email: email.trim(),
+          phone: celular.trim(),
           sellerSlug,
         }),
       });
@@ -82,8 +84,11 @@ export function CompraModal({ product, tier, period, sellerSlug, onClose }: Prop
             onChange={(e) => setDocumento(e.target.value.replace(/\D/g, ''))} required />
           <input className="planes-input" placeholder="Correo electrónico" type="email" value={email}
             onChange={(e) => setEmail(e.target.value)} required />
+          <input className="planes-input" placeholder="Celular (WhatsApp)" value={celular} inputMode="tel"
+            onChange={(e) => setCelular(e.target.value.replace(/[^\d+ ]/g, ''))} required />
           <p style={{ fontSize: 12, color: '#64748b', margin: '.1rem 0 .2rem' }}>
-            A este correo te enviamos tu usuario y contraseña apenas confirmemos el pago.
+            Al correo te enviamos tu usuario y contraseña apenas confirmemos el pago
+            (revisa también la carpeta de spam). Al celular te escribimos si algo no llega.
           </p>
 
           {error && (

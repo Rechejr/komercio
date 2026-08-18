@@ -169,4 +169,24 @@ router.get('/accounts', authSeller, async (req: any, res: any, next: any) => {
   } catch (err) { next(err); }
 });
 
+// GET /seller/compras → compras hechas por SU link (?v=slug), con el celular del
+// cliente para poder escribirle. El correo con las credenciales se va a spam más
+// seguido de lo que uno quisiera: sin un teléfono, la vendedora no tiene cómo
+// avisarle al cliente que su cuenta ya está lista.
+router.get('/compras', authSeller, async (req: any, res: any, next: any) => {
+  try {
+    const compras = await prisma.guestCheckout.findMany({
+      where: { sellerSlug: req.seller.slug },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+      select: {
+        id: true, buyerName: true, buyerLastName: true, buyerEmail: true, buyerPhone: true,
+        productType: true, period: true, amount: true, status: true, errorMessage: true,
+        createdAt: true, provisionedAt: true,
+      },
+    });
+    return success(res, compras);
+  } catch (err) { next(err); }
+});
+
 export default router;

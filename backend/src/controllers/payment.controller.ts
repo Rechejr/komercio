@@ -220,12 +220,15 @@ export const paymentController = {
       const apellidos = String(req.body.lastName || '').trim();
       const documento = String(req.body.document || '').replace(/\D/g, '');
       const email = String(req.body.email || '').trim().toLowerCase();
+      // Se guarda solo con dígitos para poder armar el enlace de WhatsApp.
+      const celular = String(req.body.phone || '').replace(/\D/g, '');
       const sellerSlug = req.body.sellerSlug ? String(req.body.sellerSlug).trim().toLowerCase().slice(0, 40) : null;
 
       if (!WOMPI_CONFIGURED) throw new AppError('Los pagos no están habilitados en este momento.', 503);
       if (!nombre || !apellidos) throw new AppError('Escribe tu nombre y tus apellidos', 400);
       if (documento.length < 5) throw new AppError('Escribe tu número de cédula', 400);
       if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new AppError('Escribe un correo válido', 400);
+      if (celular.length < 10) throw new AppError('Escribe tu número de celular (con WhatsApp)', 400);
 
       // Si ya tiene cuenta, el pago no debe hacerse por aquí: adentro de la app
       // el pago SÍ se empareja con su negocio y le extiende el plan.
@@ -252,7 +255,7 @@ export const paymentController = {
         collect_shipping: false,
         currency: 'COP',
         amount_in_cents: amountCOP * 100,
-        redirect_url: `${frontendUrl}/payment-result?nuevo=1`,
+        redirect_url: `${frontendUrl}/payment-result?nuevo=1${sellerSlug ? `&v=${encodeURIComponent(sellerSlug)}` : ''}`,
       });
       if (!wompiRes.ok) {
         logger.error(`Wompi checkoutInvitado HTTP ${wompiRes.status}: ${JSON.stringify(wompiRes.data)}`);
@@ -265,7 +268,7 @@ export const paymentController = {
           paymentLinkId: linkId,
           productType, period: esContable ? 'annual' : period, months, amount: amountCOP,
           buyerName: nombre.slice(0, 80), buyerLastName: apellidos.slice(0, 80),
-          buyerDoc: documento.slice(0, 20), buyerEmail: email, sellerSlug,
+          buyerDoc: documento.slice(0, 20), buyerEmail: email, buyerPhone: celular.slice(0, 20), sellerSlug,
         },
       });
 
@@ -400,7 +403,7 @@ export const paymentController = {
 // con un pago barato. Es idempotente: la fila queda en "provisioned" y un webhook
 // repetido no crea una segunda cuenta.
 export async function provisionarCompraInvitado(
-  guest: { id: string; buyerName: string; buyerLastName: string; buyerEmail: string; productType: string; months: number; amount: number; sellerSlug: string | null },
+  guest: { id: string; buyerName: string; buyerLastName: string; buyerEmail: string; buyerPhone?: string; productType: string; months: number; amount: number; sellerSlug: string | null },
   tx: { id?: string; amount_in_cents?: number },
 ) {
   const pagado = Math.round((tx.amount_in_cents || 0) / 100);
@@ -437,14 +440,18 @@ export async function provisionarCompraInvitado(
       const user = await dbtx.user.create({
         // Verificada: el pago ya confirma que el correo es suyo, y pedirle
         // verificar antes de entrar sería una fricción de más tras haber pagado.
-        data: { name: nombreCompleto, email: guest.buyerEmail, password: hashed, role: 'ADMIN', isEmailVerified: true },
+        data: { name: nombreCompleto, email: guest.buyerEmail, password: hashed, role: 'ADMIN', isEmailVerified: true, phone: guest.buyerPhone || null },
       });
       const biz = await createBusinessForOwner(dbtx, {
         userId: user.id, businessName: nombreNegocio, businessType: guest.productType, assignBranch: true,
       });
       await dbtx.business.update({
         where: { id: biz.id },
-        data: { plan: 'pro', planExpiresAt, paymentRef: tx.id || null, ...(seller ? { createdBySellerId: seller.id } : {}) },
+        data: {
+          plan: 'pro', planExpiresAt, paymentRef: tx.id || null,
+          ...(guest.buyerPhone ? { phone: guest.buyerPhone } : {}),
+          ...(seller ? { createdBySellerId: seller.id } : {}),
+        },
       });
       return biz;
     });

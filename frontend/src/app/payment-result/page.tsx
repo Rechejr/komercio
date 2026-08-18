@@ -6,6 +6,7 @@ import { CheckCircle, XCircle, Loader2 } from 'lucide-react';
 import { Suspense } from 'react';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth.store';
+import { resolveSeller } from '@/lib/planesData';
 
 function PaymentResultContent() {
   const searchParams = useSearchParams();
@@ -18,6 +19,9 @@ function PaymentResultContent() {
   // cuenta la crea el webhook y le llegan las claves por correo. No hay plan que
   // refrescar ni dashboard al que mandarlo.
   const esCompraNueva = searchParams.get('nuevo') === '1';
+  // Vendedora que acompañó la venta: si el correo se demora o cae en spam, el
+  // cliente tiene a quién escribirle de una vez, sin buscar el número.
+  const vendedora = resolveSeller(searchParams.get('v'));
 
   // Destino según el producto de la cuenta: un contador vuelve a su agenda, un
   // comercio a su dashboard. Se lee del store al momento de redirigir (el plan y
@@ -92,11 +96,18 @@ function PaymentResultContent() {
               <p className="text-slate-600 dark:text-slate-300 text-sm mb-3">
                 Estamos creando tu cuenta. En unos minutos te llega a tu correo el <strong>usuario y la contraseña</strong> para entrar.
               </p>
-              <p className="text-slate-400 dark:text-slate-500 text-xs mb-6">
-                Si no lo ves, revisa la carpeta de spam o correo no deseado.
+              <p className="text-slate-400 dark:text-slate-500 text-xs mb-5">
+                Si no lo ves en unos minutos, revisa la carpeta de <strong>spam</strong> o correo no deseado.
               </p>
               <a href="/login" className="block w-full py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 transition-colors">
                 Ir a iniciar sesión
+              </a>
+              <a
+                href={`https://wa.me/${vendedora.phone}?text=${encodeURIComponent('Hola, acabo de pagar mi plan de Ventrix y quiero confirmar mis datos de acceso.')}`}
+                target="_blank" rel="noopener noreferrer"
+                className="mt-3 flex items-center justify-center gap-2 w-full py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-sm font-semibold hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+              >
+                ¿No te llegó? Escríbele a {vendedora.name.split(' ')[0]}
               </a>
             </>
           ) : (

@@ -5242,6 +5242,10 @@
                     "format": "email",
                     "description": "Escribe un correo válido"
                   },
+                  "phone": {
+                    "type": "string",
+                    "description": "Escribe tu número de celular"
+                  },
                   "sellerSlug": {
                     "type": "string"
                   }
@@ -5250,7 +5254,8 @@
                   "name",
                   "lastName",
                   "document",
-                  "email"
+                  "email",
+                  "phone"
                 ]
               }
             }
@@ -7644,6 +7649,41 @@
                 "required": [
                   "newPassword"
                 ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/seller/compras": {
+      "get": {
+        "tags": [
+          "seller"
+        ],
+        "summary": "GET /seller/compras → compras hechas por SU link (?v=slug), con el celular del cliente para poder escribirle. El correo con las credenciales se va a spam más seguido de lo que uno quisiera: sin un teléfono, la vendedora no tiene cómo avisarle al cliente que su cuenta ya está lista.",
+        "security": [
+          {
+            "sellerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operación exitosa",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespuestaOk"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sin sesión o token vencido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
               }
             }
           }

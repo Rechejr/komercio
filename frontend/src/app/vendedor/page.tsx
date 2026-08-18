@@ -11,6 +11,13 @@ import toast from 'react-hot-toast';
 type Period = 'monthly' | 'quarterly' | 'annual';
 interface ProvisionResult { name: string; email: string; password: string; businessType: string; businessName: string; loginUrl: string }
 interface Account { id: string; name: string; type: string; plan: string; planExpiresAt: string | null; createdAt: string; owner: { name: string; email: string } }
+// Compra hecha por el link de la vendedora: el cliente pagó solo y el sistema le
+// creó la cuenta. Aquí ella ve a quién escribirle si el correo no llegó.
+interface Compra {
+  id: string; buyerName: string; buyerLastName: string; buyerEmail: string; buyerPhone: string;
+  productType: string; period: string; amount: number; status: string; errorMessage: string | null;
+  createdAt: string; provisionedAt: string | null;
+}
 
 const PERIOD_LABEL: Record<Period, string> = { monthly: 'Mensual', quarterly: 'Trimestral', annual: 'Anual' };
 
@@ -50,6 +57,8 @@ export default function VendedorPortalPage() {
   const [copied, setCopied] = useState(false);
 
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [compras, setCompras] = useState<Compra[]>([]);
+  const [linkCopiado, setLinkCopiado] = useState(false);
 
   // Cambiar contraseña
   const [showPwd, setShowPwd] = useState(false);
@@ -59,6 +68,7 @@ export default function VendedorPortalPage() {
 
   const loadAccounts = useCallback(() => {
     sellerFetch<Account[]>('/accounts').then(setAccounts).catch(() => {});
+    sellerFetch<Compra[]>('/compras').then(setCompras).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -154,6 +164,7 @@ export default function VendedorPortalPage() {
     return <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-900"><Loader2 className="animate-spin text-emerald-600" /></div>;
   }
 
+  const miLink = `https://ventrix.lat/planes?v=${seller?.slug || ''}`;
   const input = 'w-full px-3.5 py-2.5 rounded-xl border bg-slate-50 border-slate-200 text-[15px] focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white';
 
   return (
@@ -198,10 +209,87 @@ export default function VendedorPortalPage() {
       )}
 
       <main className="max-w-3xl mx-auto px-4 py-6 space-y-6">
+        {/* Tu link de ventas — el camino principal: el cliente paga solo y el
+            sistema le crea la cuenta y le manda las claves por correo. */}
+        <div className="bg-emerald-600 text-white rounded-2xl p-6">
+          <h2 className="text-[15px] font-bold flex items-center gap-2 mb-1"><Store size={17} /> Tu link de ventas</h2>
+          <p className="text-[13px] text-emerald-50 mb-4">
+            Compártelo por WhatsApp. El cliente elige su plan, deja sus datos y paga:
+            el sistema le crea la cuenta y le envía usuario y contraseña al correo. Tú no
+            tienes que hacer nada más, y la venta te queda registrada abajo.
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <code className="flex-1 min-w-[240px] bg-white/15 rounded-xl px-3.5 py-2.5 text-[13px] font-mono break-all">{miLink}</code>
+            <button
+              type="button"
+              onClick={() => { navigator.clipboard.writeText(miLink); setLinkCopiado(true); toast.success('Link copiado'); setTimeout(() => setLinkCopiado(false), 2000); }}
+              className="flex items-center gap-1.5 bg-white text-emerald-700 font-semibold px-4 py-2.5 rounded-xl text-[13px] hover:bg-emerald-50 transition"
+            >
+              {linkCopiado ? <Check size={15} /> : <Copy size={15} />} {linkCopiado ? 'Copiado' : 'Copiar'}
+            </button>
+            <a
+              href={`https://wa.me/?text=${encodeURIComponent(`Hola! Te comparto los planes de Ventrix para que elijas el que más te sirva: ${miLink}`)}`}
+              target="_blank" rel="noopener noreferrer"
+              className="flex items-center gap-1.5 bg-emerald-700 font-semibold px-4 py-2.5 rounded-xl text-[13px] hover:bg-emerald-800 transition"
+            >
+              <WhatsAppIcon /> Compartir
+            </a>
+          </div>
+        </div>
+
+        {/* Compras hechas por su link */}
+        <div className="bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-2xl p-6">
+          <div className="flex items-center justify-between mb-1">
+            <h2 className="text-[15px] font-bold text-slate-800 dark:text-white flex items-center gap-2"><Store size={17} className="text-emerald-600" /> Compras por tu link</h2>
+            <button onClick={loadAccounts} className="text-slate-400 hover:text-emerald-600 transition p-1" aria-label="Actualizar"><RefreshCw size={15} /></button>
+          </div>
+          <p className="text-[13px] text-slate-500 dark:text-slate-400 mb-4">
+            El correo con las claves a veces cae en spam: si el cliente no te confirma, escríbele por WhatsApp.
+          </p>
+
+          {compras.length === 0 ? (
+            <p className="text-[13px] text-slate-400 dark:text-slate-500 py-6 text-center">Aún no hay compras por tu link.</p>
+          ) : (
+            <div className="space-y-2.5">
+              {compras.map((c) => (
+                <div key={c.id} className="flex flex-wrap items-center gap-3 border border-slate-100 dark:border-slate-700 rounded-xl px-3.5 py-3">
+                  <div className="flex-1 min-w-[180px]">
+                    <p className="text-[14px] font-semibold text-slate-800 dark:text-white">{c.buyerName} {c.buyerLastName}</p>
+                    <p className="text-[12px] text-slate-500 dark:text-slate-400 break-all">{c.buyerEmail}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[13px] font-semibold text-slate-700 dark:text-slate-200">{money(c.amount)}</p>
+                    <p className="text-[11px] text-slate-400">{c.productType === 'contable' ? 'Contable' : 'POS'} · {PERIOD_LABEL[c.period as Period] || c.period}</p>
+                  </div>
+                  <span className={`text-[11px] font-semibold px-2 py-1 rounded-lg whitespace-nowrap ${
+                    c.status === 'provisioned' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'
+                      : c.status === 'failed' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
+                      : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
+                  }`}>
+                    {c.status === 'provisioned' ? 'Cuenta creada' : c.status === 'failed' ? 'Revisar' : 'Esperando pago'}
+                  </span>
+                  {c.buyerPhone && (
+                    <a
+                      href={`https://wa.me/${c.buyerPhone.startsWith('57') ? c.buyerPhone : `57${c.buyerPhone}`}?text=${encodeURIComponent(`Hola ${c.buyerName}! Soy ${seller?.name?.split(' ')[0] || 'de Ventrix'}. Tu cuenta de Ventrix ya está lista: te llegó al correo ${c.buyerEmail} el usuario y la contraseña (revisa también la carpeta de spam). ¿Pudiste entrar?`)}`}
+                      target="_blank" rel="noopener noreferrer"
+                      className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-3 py-2 rounded-lg text-[12px] transition"
+                    >
+                      <WhatsAppIcon /> Escribirle
+                    </a>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
         {/* Crear cuenta */}
         <div className="bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-2xl p-6">
-          <h2 className="text-[15px] font-bold text-slate-800 dark:text-white flex items-center gap-2 mb-1"><UserPlus size={17} className="text-emerald-600" /> Crear cuenta de cliente</h2>
-          <p className="text-[13px] text-slate-500 dark:text-slate-400 mb-4">El cliente paga por tu link de Wompi; con el n.° de la transacción, el sistema <b>verifica el pago</b> y crea la cuenta lista para enviársela por WhatsApp.</p>
+          <h2 className="text-[15px] font-bold text-slate-800 dark:text-white flex items-center gap-2 mb-1"><UserPlus size={17} className="text-emerald-600" /> Crear una cuenta a mano</h2>
+          <p className="text-[13px] text-slate-500 dark:text-slate-400 mb-4">
+            Solo si el cliente <b>pagó por fuera</b> (otro link de Wompi, Nequi o transferencia).
+            Con el n.° de la transacción el sistema <b>verifica el pago</b> y crea la cuenta.
+            Si compró por tu link, no hace falta: la cuenta se crea sola.
+          </p>
 
           <form onSubmit={onSubmit} className="space-y-4">
             <div className="grid sm:grid-cols-2 gap-3">

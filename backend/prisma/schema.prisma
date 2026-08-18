@@ -1342,6 +1342,10 @@ model GuestCheckout {
   buyerLastName String
   buyerDoc      String
   buyerEmail    String
+  // Celular con WhatsApp: el correo con las claves se va a spam más seguido de
+  // lo que uno quisiera, y sin un teléfono la vendedora no tiene cómo avisarle
+  // al cliente que su cuenta ya está lista.
+  buyerPhone    String
   // Vendedora que compartió el link (?v=slug). Da la comisión y hace que la
   // cuenta aparezca en SU portal. Null = compra directa sin vendedora.
   sellerSlug    String?
