@@ -140,6 +140,11 @@ model Business {
   // imagen de un QR para que el cliente pague directo al hacer el pedido.
   catalogPaymentLink String?
   catalogPaymentQr   String?
+  // Último día en que se envió el push-resumen de vencimientos a esta oficina
+  // contable. El aviso se repite TODOS los días mientras haya obligaciones sin
+  // presentar (por eso no basta con el dedup de la campanita), pero una sola vez
+  // al día: sin esta marca, cada reinicio del servidor volvería a sonarle.
+  lastVencPushAt     DateTime?
   ownerId            String
   owner              User              @relation("BusinessOwner", fields: [ownerId], references: [id])
   branches           Branch[]

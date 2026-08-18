@@ -229,7 +229,11 @@ export async function notifyDueSoonBatch(
 // UNA sola vez (se salta si ya hay una notificación suya para esos usuarios).
 export async function notifyContableVencimientos(
   businessId: string,
-  vencimientos: Array<{ id: string; titulo: string; mensaje: string; href: string }>,
+  // `hito` marca EN QUÉ MOMENTO de la cuenta regresiva está el vencimiento
+  // (previo → cerca → hoy → vencido). Antes se avisaba una sola vez en la vida
+  // del vencimiento: al contador le llegaba el aviso a 5 días y nunca más, ni el
+  // día que vencía. Ahora se avisa una vez POR HITO.
+  vencimientos: Array<{ id: string; titulo: string; mensaje: string; href: string; hito: string }>,
 ): Promise<number> {
   if (vencimientos.length === 0) return 0;
 
@@ -244,23 +248,32 @@ export async function notifyContableVencimientos(
     where: { userId: { in: userIds }, data: { path: ['kind'], equals: 'VENC_ALERTA' } },
     select: { data: true },
   });
+  // La llave del dedup es vencimiento + hito: el mismo vencimiento vuelve a
+  // avisar cuando cambia de etapa, pero no repite la misma etapa dos veces.
   const yaNotificados = new Set(
-    existentes.map((n) => (n.data as { vencimientoId?: string } | null)?.vencimientoId).filter(Boolean),
+    existentes
+      .map((n) => n.data as { vencimientoId?: string; hito?: string } | null)
+      .filter((d): d is { vencimientoId: string; hito?: string } => !!d?.vencimientoId)
+      // Las notificaciones creadas antes de que existieran los hitos no tienen
+      // el campo: cuentan como el hito 'previo' para no repetirle al contador un
+      // aviso que ya vio.
+      .map((d) => `${d.vencimientoId}:${d.hito || 'previo'}`),
   );
-  const nuevos = vencimientos.filter((v) => !yaNotificados.has(v.id));
-  if (nuevos.length === 0) return 0;
+  const nuevos = vencimientos.filter((v) => !yaNotificados.has(`${v.id}:${v.hito}`));
 
-  await prisma.notification.createMany({
-    data: nuevos.flatMap((v) =>
-      userIds.map((userId) => ({
-        userId,
-        title: v.titulo,
-        message: v.mensaje,
-        type: 'WARNING',
-        data: { vencimientoId: v.id, kind: 'VENC_ALERTA', href: v.href } as any,
-      })),
-    ),
-  });
+  if (nuevos.length > 0) {
+    await prisma.notification.createMany({
+      data: nuevos.flatMap((v) =>
+        userIds.map((userId) => ({
+          userId,
+          title: v.titulo,
+          message: v.mensaje,
+          type: 'WARNING',
+          data: { vencimientoId: v.id, kind: 'VENC_ALERTA', hito: v.hito, href: v.href } as any,
+        })),
+      ),
+    });
+  }
 
   // El push en vivo por socket es "mejor esfuerzo": si falla, la notificación ya
   // quedó persistida (se ve al abrir la campanita), así que no debe romper nada.
@@ -271,18 +284,45 @@ export async function notifyContableVencimientos(
     }
   } catch { /* socket opcional */ }
 
-  // Web Push: una notificación-resumen que llega al MÓVIL aunque la app esté
-  // cerrada (best-effort, no lanza). Un solo push por corrida en vez de N para
-  // no saturar; el detalle está en la campanita al abrir.
-  const pushBody = nuevos.length === 1
-    ? nuevos[0].mensaje
-    : `${nuevos.length} obligaciones vencidas o por vencer requieren tu atención.`;
-  await sendPushToUsers(userIds, {
-    title: 'Ventrix Contable · Vencimientos',
-    body: pushBody,
-    url: '/contable/panel',
-    tag: 'venc-alerta',
+  // ── Web Push al móvil, con la app cerrada ───────────────────────────────────
+  // Se manda TODOS los días mientras queden obligaciones sin presentar, no solo
+  // cuando hay un aviso nuevo: una declaración vencida sigue vencida mañana, y el
+  // contador necesita que se lo recuerden hasta que la presente. Una sola vez al
+  // día (lastVencPushAt), para que un reinicio del servidor no vuelva a sonar.
+  const hoyBogota = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Bogota', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(new Date());
+
+  const negocio = await prisma.business.findUnique({
+    where: { id: businessId },
+    select: { lastVencPushAt: true },
   });
+  const ultimoPush = negocio?.lastVencPushAt
+    ? new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota', year: 'numeric', month: '2-digit', day: '2-digit' }).format(negocio.lastVencPushAt)
+    : null;
+
+  if (ultimoPush !== hoyBogota) {
+    const vencidas = vencimientos.filter((v) => v.hito === 'vencido').length;
+    const porVencer = vencimientos.length - vencidas;
+    let body: string;
+    if (vencimientos.length === 1) {
+      body = vencimientos[0].mensaje;
+    } else if (vencidas > 0 && porVencer > 0) {
+      body = `${vencidas} obligación${vencidas === 1 ? '' : 'es'} vencida${vencidas === 1 ? '' : 's'} y ${porVencer} por vencer. Toca para revisarlas.`;
+    } else if (vencidas > 0) {
+      body = `${vencidas} obligaciones vencidas sin presentar. Toca para revisarlas.`;
+    } else {
+      body = `${porVencer} obligaciones están por vencer. Toca para revisarlas.`;
+    }
+
+    await sendPushToUsers(userIds, {
+      title: 'Ventrix Contable · Vencimientos',
+      body,
+      url: '/contable/panel',
+      tag: 'venc-alerta',
+    });
+    await prisma.business.update({ where: { id: businessId }, data: { lastVencPushAt: new Date() } });
+  }
 
   return nuevos.length;
 }

@@ -4,8 +4,11 @@ import { logger } from '../config/logger';
 import { notifyContableVencimientos } from '../services/notification.service';
 
 // Notifica a las oficinas contables los vencimientos que YA vencieron o vencen en
-// ≤5 días (no presentada/pagada). Igual que el aviso de la agenda, pero como
-// notificación persistente en la campanita. Dedup por vencimiento (una sola vez).
+// ≤5 días (no presentada/pagada), en la campanita y como push al móvil.
+//
+// El aviso se repite por HITO de la cuenta regresiva, no una sola vez en la vida
+// del vencimiento: antes el contador recibía el aviso cuando faltaban 5 días y
+// nunca más — ni el día que vencía, ni después de vencido.
 
 const OBLIG_LABEL: Record<string, string> = {
   renta: 'Renta', iva: 'IVA', retefuente: 'Retención en la fuente', ica: 'ICA',
@@ -43,7 +46,7 @@ export async function run() {
     });
     if (vencs.length === 0) return;
 
-    const byBusiness = new Map<string, Array<{ id: string; titulo: string; mensaje: string; href: string }>>();
+    const byBusiness = new Map<string, Array<{ id: string; titulo: string; mensaje: string; href: string; hito: string }>>();
     for (const v of vencs) {
       const businessId = v.taxClient?.businessId;
       if (!businessId) continue;
@@ -64,8 +67,13 @@ export async function run() {
           : `${label} · ${v.periodo} de ${cliente} vence en ${dias} día${dias === 1 ? '' : 's'} (${fechaCorta(v.fecha)}).`;
       }
 
+      // Etapa de la cuenta regresiva. Cada una avisa una vez: así el contador
+      // recibe el recordatorio cuando se acerca, el día del vencimiento, y
+      // cuando ya se le pasó.
+      const hito = dias < 0 ? 'vencido' : dias === 0 ? 'hoy' : dias <= 2 ? 'cerca' : 'previo';
+
       const list = byBusiness.get(businessId) ?? [];
-      list.push({ id: v.id, titulo, mensaje, href: hrefDe(v.obligacion) });
+      list.push({ id: v.id, titulo, mensaje, href: hrefDe(v.obligacion), hito });
       byBusiness.set(businessId, list);
     }
 
