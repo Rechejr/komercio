@@ -2,6 +2,10 @@ import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
   testDir: './tests',
+  // prod-verification corre contra PRODUCCIÓN (ventrix.lat) y hace login con una
+  // cuenta real: no puede entrar en la corrida normal ni en el CI, que se
+  // ejecutan contra el entorno local. Para ese se usa playwright-prod.config.ts.
+  testIgnore: /prod-verification\.spec\.ts/,
   globalSetup: './global-setup.ts',
   timeout: 90_000,
   expect: { timeout: 15_000 },

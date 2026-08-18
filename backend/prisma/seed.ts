@@ -36,23 +36,34 @@ async function main() {
     },
   });
 
-  // Create business + branch
-  const business = await prisma.business.upsert({
-    where: { ownerId: admin.id },
-    update: {},
-    create: {
-      name: 'Mi Negocio',
-      ownerId: admin.id,
-      currency: 'COP',
-      country: 'Colombia',
-      branches: {
-        create: { name: 'Sucursal Principal', address: 'Dirección principal' },
+  // Negocio + bodega. Ya no se puede hacer upsert por ownerId: desde que un
+  // mismo correo puede tener POS y Contable, un dueño tiene VARIOS negocios y
+  // ownerId dejó de ser único.
+  const business = await prisma.business.findFirst({ where: { ownerId: admin.id, type: 'pos' } })
+    ?? await prisma.business.create({
+      data: {
+        name: 'Mi Negocio',
+        ownerId: admin.id,
+        type: 'pos',
+        currency: 'COP',
+        country: 'Colombia',
+        // Onboarding ya visto: un negocio recién creado recibe la pantalla de
+        // BIENVENIDA, que es un modal a pantalla completa y tapa toda la interfaz.
+        // Para un entorno sembrado (desarrollo o E2E) eso estorba: bloquea cada
+        // clic hasta que alguien la cierre a mano.
+        onboarding: {
+          welcomeSeenAt: new Date().toISOString(),
+          tourDoneAt: new Date().toISOString(),
+          dismissedAt: new Date().toISOString(),
+          legacy: true,
+        },
       },
-    },
-    include: { branches: true },
-  });
+    });
 
-  const branch = business.branches[0];
+  const branch = await prisma.branch.findFirst({ where: { businessId: business.id } })
+    ?? await prisma.branch.create({
+      data: { name: 'Bodega Principal', address: 'Dirección principal', businessId: business.id, createdById: admin.id },
+    });
 
   await prisma.user.update({ where: { id: admin.id }, data: { branchId: branch.id } });
 
@@ -89,9 +100,16 @@ async function main() {
       { code: 'P004', name: 'Sal Refisal 500g', costPrice: 900, salePrice: 1200, stock: 60, minStock: 15 },
     ];
     for (const p of sampleProducts) {
-      await prisma.product.create({
-        data: { ...p, branchId: branch.id, categoryId: cat.id, unit: 'unit' },
-      }).catch(() => {});
+      // El producto cuelga del NEGOCIO (no de la bodega) desde que existen varias
+      // bodegas, y su existencia por bodega va aparte en ProductStock.
+      const creado = await prisma.product.create({
+        data: { ...p, businessId: business.id, branchId: branch.id, categoryId: cat.id, unit: 'unit' },
+      }).catch(() => null);
+      if (creado) {
+        await prisma.productStock.create({
+          data: { productId: creado.id, branchId: branch.id, stock: p.stock },
+        }).catch(() => {});
+      }
     }
   }
 
