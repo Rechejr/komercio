@@ -823,6 +823,26 @@
   box-shadow: var(--lp-shadow-lg);
   padding: 26px 24px 22px;
 }
+/* Formulario de compra directa (CompraModal): el cliente deja sus datos y paga
+   sin registrarse. 16px de fuente a propósito — con menos, iOS hace zoom al
+   enfocar el campo y descuadra el modal en el celular. */
+.planes-input {
+  width: 100%;
+  padding: 12px 14px;
+  font-size: 16px;
+  font-family: inherit;
+  color: var(--lp-ink);
+  background: var(--lp-surface);
+  border: 1px solid var(--lp-mint-line);
+  border-radius: 12px;
+  outline: none;
+  transition: border-color .15s, box-shadow .15s;
+}
+.planes-input::placeholder { color: var(--lp-ink-soft); }
+.planes-input:focus {
+  border-color: var(--lp-brand);
+  box-shadow: 0 0 0 3px rgba(13, 160, 106, .15);
+}
 .planes-modal-close {
   position: absolute; top: 12px; right: 12px;
   width: 32px; height: 32px;

@@ -5172,6 +5172,92 @@
         }
       }
     },
+    "/api/v1/payments/checkout": {
+      "post": {
+        "tags": [
+          "payment"
+        ],
+        "summary": "POST /api/v1/payments/checkout — PÚBLICO: comprar sin tener cuenta. El cliente deja cuatro datos, paga, y el webhook le crea la cuenta y le manda las claves. Sin authenticate a propósito; el rate limit se aplica en app.ts.",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Operación exitosa",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespuestaOk"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Datos inválidos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "productType": {
+                    "type": "string",
+                    "enum": [
+                      "pos",
+                      "contable"
+                    ],
+                    "description": "Producto inválido"
+                  },
+                  "period": {
+                    "type": "string",
+                    "enum": [
+                      "monthly",
+                      "quarterly",
+                      "annual"
+                    ],
+                    "description": "Período inválido"
+                  },
+                  "name": {
+                    "type": "string",
+                    "description": "Escribe tu nombre"
+                  },
+                  "lastName": {
+                    "type": "string",
+                    "description": "Escribe tus apellidos"
+                  },
+                  "document": {
+                    "type": "string",
+                    "description": "Escribe tu número de cédula"
+                  },
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "description": "Escribe un correo válido"
+                  },
+                  "sellerSlug": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "name",
+                  "lastName",
+                  "document",
+                  "email"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/payments/create-link": {
       "post": {
         "tags": [

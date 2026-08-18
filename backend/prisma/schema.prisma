@@ -60,15 +60,15 @@ enum MovementType {
 
 // ─── USERS ────────────────────────────────────────────────────────────────────
 model User {
-  id                   String          @id @default(uuid())
+  id                   String             @id @default(uuid())
   name                 String
-  email                String          @unique
+  email                String             @unique
   phone                String?
   password             String
-  googleId             String?         @unique
-  role                 UserRole        @default(CASHIER)
-  isActive             Boolean         @default(true)
-  isEmailVerified      Boolean         @default(false)
+  googleId             String?            @unique
+  role                 UserRole           @default(CASHIER)
+  isActive             Boolean            @default(true)
+  isEmailVerified      Boolean            @default(false)
   emailVerifyToken     String?
   resetPasswordToken   String?
   resetPasswordExpires DateTime?
@@ -77,18 +77,18 @@ model User {
   refreshTokens        RefreshToken[]
   // Un usuario puede ser dueño de varios negocios: así un mismo correo/clave
   // tiene POS y Contable a la vez y elige a cuál entrar tras iniciar sesión.
-  businesses           Business[]      @relation("BusinessOwner")
+  businesses           Business[]         @relation("BusinessOwner")
   branchId             String?
-  branch               Branch?         @relation(fields: [branchId], references: [id])
-  createdBranches      Branch[]        @relation("BranchCreator")
+  branch               Branch?            @relation(fields: [branchId], references: [id])
+  createdBranches      Branch[]           @relation("BranchCreator")
   createdTransfers     StockTransfer[]
   cashMovements        CashMovement[]
   sales                Sale[]
   auditLogs            AuditLog[]
   notifications        Notification[]
   pushSubscriptions    PushSubscription[]
-  createdAt            DateTime        @default(now())
-  updatedAt            DateTime        @updatedAt
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
   deletedAt            DateTime?
 
   @@index([email])
@@ -114,66 +114,66 @@ model RefreshToken {
 
 // ─── BUSINESS ─────────────────────────────────────────────────────────────────
 model Business {
-  id                String            @id @default(uuid())
-  name              String
+  id                 String            @id @default(uuid())
+  name               String
   // Discriminador de producto: "pos" (comercio, el POS de siempre) o "contable"
   // (agenda tributaria para contadores). Los negocios existentes quedan "pos"
   // por el default, así que su comportamiento no cambia en nada.
-  type              String            @default("pos")
-  category          String?
-  legalName         String?
-  nit               String?
-  phone             String?
-  email             String?
-  address           String?
-  city              String?
-  country           String            @default("Colombia")
-  logo              String?
-  currency          String            @default("COP")
-  taxRate           Decimal           @default(0)
+  type               String            @default("pos")
+  category           String?
+  legalName          String?
+  nit                String?
+  phone              String?
+  email              String?
+  address            String?
+  city               String?
+  country            String            @default("Colombia")
+  logo               String?
+  currency           String            @default("COP")
+  taxRate            Decimal           @default(0)
   // Estado del onboarding (guía de primeros pasos) — cross-device. JSON flexible:
   // { welcomeSeenAt, tourDoneAt, dismissedAt, firstSaleAt, legacy }. null = negocio
   // nuevo (recibe la bienvenida). Los negocios que ya existían al migrar quedan
   // marcados como vistos (legacy) para no molestar a los usuarios actuales.
-  onboarding        Json?
+  onboarding         Json?
   // Pago en el catálogo público: un link de pago (Wompi/Bold/Nequi…) y/o la
   // imagen de un QR para que el cliente pague directo al hacer el pedido.
   catalogPaymentLink String?
   catalogPaymentQr   String?
-  ownerId           String
-  owner             User              @relation("BusinessOwner", fields: [ownerId], references: [id])
-  branches          Branch[]
-  categories        Category[]
-  customers         Customer[]
-  suppliers         Supplier[]
-  brands            Brand[]
-  purchases         Purchase[]
-  expenses          Expense[]
-  expenseCategories ExpenseCategory[]
-  products          Product[]
-  stockTransfers    StockTransfer[]
-  plan              String            @default("free")
-  planExpiresAt     DateTime?
+  ownerId            String
+  owner              User              @relation("BusinessOwner", fields: [ownerId], references: [id])
+  branches           Branch[]
+  categories         Category[]
+  customers          Customer[]
+  suppliers          Supplier[]
+  brands             Brand[]
+  purchases          Purchase[]
+  expenses           Expense[]
+  expenseCategories  ExpenseCategory[]
+  products           Product[]
+  stockTransfers     StockTransfer[]
+  plan               String            @default("free")
+  planExpiresAt      DateTime?
   // Vendedora que creó esta cuenta desde su portal (si aplica). Sirve para que
   // cada vendedora vea "sus" cuentas y el dueño sepa quién provisionó cada una.
-  createdBySellerId String?
+  createdBySellerId  String?
   // Referencia de la transacción de Wompi con la que se pagó esta cuenta (cuando
   // la creó una vendedora). @unique = un mismo pago no puede crear dos cuentas.
-  paymentRef        String?           @unique
-  settings          Json?
-  paymentLinks      PaymentLink[]
-  aiWeeklySummaries AiWeeklySummary[]
+  paymentRef         String?           @unique
+  settings           Json?
+  paymentLinks       PaymentLink[]
+  aiWeeklySummaries  AiWeeklySummary[]
   // Medios de pago configurables (Efectivo, Bancolombia, BBVA, Caja 1, Nequi…).
   // Reemplazan progresivamente al enum PaymentMethod fijo. Ver PaymentAccount.
-  paymentAccounts   PaymentAccount[]
+  paymentAccounts    PaymentAccount[]
   // Ventrix Contable: los clientes tributarios de una oficina contable. Solo se
   // usan cuando type == "contable"; en una cuenta POS la relación queda vacía.
-  taxClients        TaxClient[]
-  quotes            Quote[]
-  supplierCredits   SupplierCredit[]
-  createdAt         DateTime          @default(now())
-  updatedAt         DateTime          @updatedAt
-  deletedAt         DateTime?
+  taxClients         TaxClient[]
+  quotes             Quote[]
+  supplierCredits    SupplierCredit[]
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  deletedAt          DateTime?
 
   @@index([ownerId])
   @@index([createdBySellerId])
@@ -522,30 +522,30 @@ model Customer {
 
 // ─── SUPPLIERS ────────────────────────────────────────────────────────────────
 model Supplier {
-  id          String     @id @default(uuid())
-  businessId  String
-  business    Business   @relation(fields: [businessId], references: [id])
-  name        String
-  legalName   String?
-  document    String?
-  phone       String?
-  mobile      String?
-  email       String?
-  address     String?
-  city        String?
-  contactName String?
-  notes       String?
-  isActive    Boolean    @default(true)
+  id              String           @id @default(uuid())
+  businessId      String
+  business        Business         @relation(fields: [businessId], references: [id])
+  name            String
+  legalName       String?
+  document        String?
+  phone           String?
+  mobile          String?
+  email           String?
+  address         String?
+  city            String?
+  contactName     String?
+  notes           String?
+  isActive        Boolean          @default(true)
   // Lo que el NEGOCIO le debe al proveedor por compras a crédito (espejo de
   // Customer.currentDebt). Sube al comprar a crédito, baja al abonar.
-  currentDebt Decimal    @default(0)
-  products    Product[]
-  purchases   Purchase[]
-  expenses    Expense[]
+  currentDebt     Decimal          @default(0)
+  products        Product[]
+  purchases       Purchase[]
+  expenses        Expense[]
   supplierCredits SupplierCredit[]
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
-  deletedAt   DateTime?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  deletedAt       DateTime?
 
   @@unique([businessId, document])
   @@index([businessId])
@@ -627,11 +627,11 @@ model SaleDetail {
 // FK), igual que InventoryMovement, para no atar el borrado a estas tablas.
 model Return {
   id           String         @id @default(uuid())
-  returnNumber String         // Correlativo NC-0001 por sucursal
+  returnNumber String // Correlativo NC-0001 por sucursal
   saleId       String
   sale         Sale           @relation(fields: [saleId], references: [id])
   branchId     String
-  userId       String         // Quién registró la devolución
+  userId       String // Quién registró la devolución
   customerId   String?
   total        Decimal        @default(0) // Monto total reembolsado
   reason       String?
@@ -653,12 +653,12 @@ model ReturnDetail {
   id               String   @id @default(uuid())
   returnId         String
   return           Return   @relation(fields: [returnId], references: [id], onDelete: Cascade)
-  saleDetailId     String?  // Línea original de la venta
+  saleDetailId     String? // Línea original de la venta
   productId        String
   productVariantId String?
-  productName      String   // Snapshot del nombre para el historial
+  productName      String // Snapshot del nombre para el historial
   quantity         Float
-  unitPrice        Decimal  // Precio efectivo por unidad reembolsado
+  unitPrice        Decimal // Precio efectivo por unidad reembolsado
   total            Decimal
   createdAt        DateTime @default(now())
 
@@ -875,21 +875,21 @@ model CreditPayment {
 // reportes/exportaciones no se rompan. `type` define cuáles son EFECTIVO (los
 // únicos que alimentan la caja física).
 model PaymentAccount {
-  id             String             @id @default(uuid())
-  businessId     String
-  business       Business           @relation(fields: [businessId], references: [id])
-  name           String
-  type           PaymentAccountType @default(OTHER)
-  legacyEnum     PaymentMethod?
-  active         Boolean            @default(true)
-  order          Int                @default(0)
-  sales          Sale[]
-  purchases      Purchase[]
-  expenses       Expense[]
-  creditPayments CreditPayment[]
+  id                     String                  @id @default(uuid())
+  businessId             String
+  business               Business                @relation(fields: [businessId], references: [id])
+  name                   String
+  type                   PaymentAccountType      @default(OTHER)
+  legacyEnum             PaymentMethod?
+  active                 Boolean                 @default(true)
+  order                  Int                     @default(0)
+  sales                  Sale[]
+  purchases              Purchase[]
+  expenses               Expense[]
+  creditPayments         CreditPayment[]
   supplierCreditPayments SupplierCreditPayment[]
-  createdAt      DateTime           @default(now())
-  updatedAt      DateTime           @updatedAt
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
 
   @@index([businessId])
   @@map("payment_accounts")
@@ -1320,4 +1320,42 @@ model CalendarioRentaNatural {
 
   @@unique([anio, dosDigitos])
   @@map("calendario_renta_natural")
+}
+
+// ─── Compra sin cuenta (pago primero, credenciales después) ────────────────────
+// El prospecto entra a /planes (con el link de una vendedora o sin él), elige
+// plan, deja solo 4 datos y PAGA. No tiene cuenta todavía: por eso el pago no
+// puede colgarse de un Business como PaymentLink. Cuando Wompi confirma, el
+// webhook crea el usuario + negocio y le envía las credenciales por correo.
+//
+// Se guarda antes de mandar a pagar para no depender de lo que Wompi devuelva:
+// el correo con el que se crea la cuenta es el que el comprador escribió aquí.
+model GuestCheckout {
+  id            String    @id @default(uuid())
+  // id del payment link de Wompi: es la llave con la que llega el webhook.
+  paymentLinkId String    @unique
+  productType   String // "pos" | "contable"
+  period        String // monthly | quarterly | annual
+  months        Int
+  amount        Int // COP; el webhook verifica que se haya pagado esto
+  buyerName     String
+  buyerLastName String
+  buyerDoc      String
+  buyerEmail    String
+  // Vendedora que compartió el link (?v=slug). Da la comisión y hace que la
+  // cuenta aparezca en SU portal. Null = compra directa sin vendedora.
+  sellerSlug    String?
+  // pending → paid → provisioned. "failed" queda para revisar a mano.
+  status        String    @default("pending")
+  transactionId String?   @unique
+  businessId    String?
+  errorMessage  String?
+  provisionedAt DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([status])
+  @@index([buyerEmail])
+  @@index([sellerSlug])
+  @@map("guest_checkouts")
 }

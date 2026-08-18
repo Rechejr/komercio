@@ -5,6 +5,10 @@ import { prisma } from '../config/database';
 import { AppError, success } from '../utils/response';
 import { logger } from '../config/logger';
 import { AuthRequest } from '../middlewares/auth';
+import bcrypt from 'bcryptjs';
+import { createBusinessForOwner } from './auth.controller';
+import { generarPasswordTemporal } from '../utils/tempPassword';
+import { emailService } from '../config/email';
 
 // .trim() defensivo: al pegar las llaves en el panel de hosting es fácil arrastrar
 // un espacio o salto de línea, y un '\n' en el valor rompe el header Authorization
@@ -203,6 +207,75 @@ export const paymentController = {
     }
   },
 
+
+  // POST /payments/checkout — PÚBLICO. El prospecto elige plan en /planes, deja
+  // cuatro datos y se va derecho a pagar. No hay cuenta todavía: por eso el pago
+  // se guarda en guest_checkouts y no en payment_links (que cuelga de un negocio).
+  // Cuando Wompi confirma, el webhook crea la cuenta y manda las credenciales.
+  async checkoutInvitado(req: Request, res: Response, next: NextFunction) {
+    try {
+      const productType = req.body.productType === 'contable' ? 'contable' : 'pos';
+      const period: string = productType === 'contable' ? 'annual' : (req.body.period || 'monthly');
+      const nombre = String(req.body.name || '').trim();
+      const apellidos = String(req.body.lastName || '').trim();
+      const documento = String(req.body.document || '').replace(/\D/g, '');
+      const email = String(req.body.email || '').trim().toLowerCase();
+      const sellerSlug = req.body.sellerSlug ? String(req.body.sellerSlug).trim().toLowerCase().slice(0, 40) : null;
+
+      if (!WOMPI_CONFIGURED) throw new AppError('Los pagos no están habilitados en este momento.', 503);
+      if (!nombre || !apellidos) throw new AppError('Escribe tu nombre y tus apellidos', 400);
+      if (documento.length < 5) throw new AppError('Escribe tu número de cédula', 400);
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new AppError('Escribe un correo válido', 400);
+
+      // Si ya tiene cuenta, el pago no debe hacerse por aquí: adentro de la app
+      // el pago SÍ se empareja con su negocio y le extiende el plan.
+      const existe = await prisma.user.findUnique({ where: { email }, select: { id: true } });
+      if (existe) {
+        throw new AppError('Ese correo ya tiene una cuenta en Ventrix. Inicia sesión y activa tu plan desde adentro.', 409);
+      }
+
+      const esContable = productType === 'contable';
+      if (!esContable && !['monthly', 'quarterly', 'annual'].includes(period)) {
+        throw new AppError('Período no válido', 400);
+      }
+      const amountCOP = esContable ? CONTABLE_ANNUAL_PRICE : PLAN_PRICES[period];
+      const months = esContable ? CONTABLE_ANNUAL_MONTHS : PLAN_MONTHS[period];
+      const planName = esContable
+        ? 'Ventrix Contable — Plan anual'
+        : `Plan Pro Ventrix — ${PERIOD_LABELS[period]}`;
+
+      const frontendUrl = (process.env.FRONTEND_URL || 'https://ventrix.lat').trim().replace(/\/+$/, '');
+      const wompiRes = await wompiPost('/v1/payment_links', {
+        name: planName,
+        description: `${esContable ? 'Agenda tributaria' : 'Ventrix ilimitado'} por ${months} mes${months > 1 ? 'es' : ''}`,
+        single_use: true,
+        collect_shipping: false,
+        currency: 'COP',
+        amount_in_cents: amountCOP * 100,
+        redirect_url: `${frontendUrl}/payment-result?nuevo=1`,
+      });
+      if (!wompiRes.ok) {
+        logger.error(`Wompi checkoutInvitado HTTP ${wompiRes.status}: ${JSON.stringify(wompiRes.data)}`);
+        throw new AppError('No se pudo abrir el pago. Intenta de nuevo en un momento.', 502);
+      }
+
+      const linkId = (wompiRes.data?.data as { id: string }).id;
+      await prisma.guestCheckout.create({
+        data: {
+          paymentLinkId: linkId,
+          productType, period: esContable ? 'annual' : period, months, amount: amountCOP,
+          buyerName: nombre.slice(0, 80), buyerLastName: apellidos.slice(0, 80),
+          buyerDoc: documento.slice(0, 20), buyerEmail: email, sellerSlug,
+        },
+      });
+
+      logger.info(`Compra sin cuenta iniciada: ${email} · ${productType}/${period}${sellerSlug ? ` · vendedora ${sellerSlug}` : ''}`);
+      return success(res, { url: `https://checkout.wompi.co/l/${linkId}` });
+    } catch (err) {
+      next(err);
+    }
+  },
+
   async webhook(req: Request, res: Response, next: NextFunction) {
     try {
       const eventsSecret = (process.env.WOMPI_EVENTS_SECRET || '').trim();
@@ -245,6 +318,20 @@ export const paymentController = {
 
       const linkId = tx.payment_link_id as string | undefined;
       if (!linkId) return res.json({ received: true });
+
+      // ── Compra sin cuenta ────────────────────────────────────────────────────
+      // El pago se hizo antes de que existiera el usuario: aquí se le crea la
+      // cuenta y se le mandan las credenciales por correo. Va antes que el flujo
+      // normal porque estos links no tienen fila en payment_links.
+      const guest = await prisma.guestCheckout.findUnique({ where: { paymentLinkId: linkId } });
+      if (guest) {
+        if (guest.status === 'provisioned') {
+          logger.info('Wompi webhook: compra sin cuenta ya atendida, ignorando duplicado', { linkId });
+          return res.json({ received: true });
+        }
+        await provisionarCompraInvitado(guest, tx);
+        return res.json({ received: true });
+      }
 
       const link = await prisma.paymentLink.findUnique({ where: { id: linkId } });
       if (!link) {
@@ -306,3 +393,76 @@ export const paymentController = {
     }
   },
 };
+
+// Crea el usuario + negocio de una compra sin cuenta y le envía las credenciales.
+// Se llama desde el webhook, así que el pago ya está APROBADO y firmado por Wompi;
+// aun así se verifica el MONTO, para que un link manipulado no active un plan caro
+// con un pago barato. Es idempotente: la fila queda en "provisioned" y un webhook
+// repetido no crea una segunda cuenta.
+export async function provisionarCompraInvitado(
+  guest: { id: string; buyerName: string; buyerLastName: string; buyerEmail: string; productType: string; months: number; amount: number; sellerSlug: string | null },
+  tx: { id?: string; amount_in_cents?: number },
+) {
+  const pagado = Math.round((tx.amount_in_cents || 0) / 100);
+  if (pagado !== guest.amount) {
+    const msg = `Monto pagado (${pagado}) distinto al del plan (${guest.amount})`;
+    logger.error(`Compra sin cuenta: ${msg}`, { guestId: guest.id });
+    await prisma.guestCheckout.update({ where: { id: guest.id }, data: { status: 'failed', errorMessage: msg, transactionId: tx.id || null } });
+    return;
+  }
+
+  // Entre el pago y el webhook alguien pudo registrarse con ese correo.
+  const yaExiste = await prisma.user.findUnique({ where: { email: guest.buyerEmail }, select: { id: true } });
+  if (yaExiste) {
+    const msg = 'Ese correo ya tenía cuenta cuando llegó el pago — revisar y aplicar el plan a mano';
+    logger.error(`Compra sin cuenta: ${msg}`, { guestId: guest.id, email: guest.buyerEmail });
+    await prisma.guestCheckout.update({ where: { id: guest.id }, data: { status: 'failed', errorMessage: msg, transactionId: tx.id || null } });
+    return;
+  }
+
+  const nombreCompleto = `${guest.buyerName} ${guest.buyerLastName}`.trim();
+  const esContable = guest.productType === 'contable';
+  const nombreNegocio = esContable ? `Contabilidad de ${guest.buyerName}` : `Negocio de ${guest.buyerName}`;
+  const planExpiresAt = new Date(Date.now() + guest.months * 30 * 24 * 60 * 60 * 1000);
+  const plainPassword = generarPasswordTemporal();
+  const hashed = await bcrypt.hash(plainPassword, 12);
+
+  // La vendedora que compartió el link se lleva la venta en su portal.
+  const seller = guest.sellerSlug
+    ? await prisma.seller.findFirst({ where: { slug: guest.sellerSlug }, select: { id: true } })
+    : null;
+
+  try {
+    const business = await prisma.$transaction(async (dbtx) => {
+      const user = await dbtx.user.create({
+        // Verificada: el pago ya confirma que el correo es suyo, y pedirle
+        // verificar antes de entrar sería una fricción de más tras haber pagado.
+        data: { name: nombreCompleto, email: guest.buyerEmail, password: hashed, role: 'ADMIN', isEmailVerified: true },
+      });
+      const biz = await createBusinessForOwner(dbtx, {
+        userId: user.id, businessName: nombreNegocio, businessType: guest.productType, assignBranch: true,
+      });
+      await dbtx.business.update({
+        where: { id: biz.id },
+        data: { plan: 'pro', planExpiresAt, paymentRef: tx.id || null, ...(seller ? { createdBySellerId: seller.id } : {}) },
+      });
+      return biz;
+    });
+
+    await prisma.guestCheckout.update({
+      where: { id: guest.id },
+      data: { status: 'provisioned', transactionId: tx.id || null, businessId: business.id, provisionedAt: new Date() },
+    });
+
+    await emailService.sendCredenciales(guest.buyerEmail, guest.buyerName, plainPassword, guest.productType);
+    logger.info(`Compra sin cuenta atendida: cuenta creada para ${guest.buyerEmail} (${guest.productType})`, { businessId: business.id });
+  } catch (err: any) {
+    // El pago ya entró: si la cuenta falla, queda registrado para atenderlo a mano
+    // en vez de perderse en un log.
+    logger.error(`Compra sin cuenta: no se pudo crear la cuenta de ${guest.buyerEmail}: ${err?.message || err}`);
+    await prisma.guestCheckout.update({
+      where: { id: guest.id },
+      data: { status: 'failed', errorMessage: String(err?.message || err).slice(0, 400), transactionId: tx.id || null },
+    });
+  }
+}

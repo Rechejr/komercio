@@ -183,6 +183,9 @@ app.use(`${apiPrefix}/auth/resend-verification`, authLimiter);
 // límite general de la API (mucho más permisivo).
 app.use(`${apiPrefix}/auth/refresh-token`, authLimiter);
 app.use(`${apiPrefix}/auth/register`, moderateAuthLimiter);
+// Comprar sin cuenta es público y crea links de pago en Wompi: se limita igual
+// que el registro para que nadie lo use de generador masivo de links.
+app.use(`${apiPrefix}/payments/checkout`, moderateAuthLimiter);
 app.use(`${apiPrefix}/auth/change-password`, moderateAuthLimiter);
 app.use(`${apiPrefix}/auth/reset-password`, moderateAuthLimiter);
 app.use(`${apiPrefix}/auth`, authRoutes);

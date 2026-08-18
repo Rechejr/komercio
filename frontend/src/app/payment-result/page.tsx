@@ -14,6 +14,10 @@ function PaymentResultContent() {
 
   const status = searchParams.get('status') ?? '';
   const approved = status === 'APPROVED';
+  // Compra SIN cuenta (?nuevo=1): el comprador todavía no tiene sesión — la
+  // cuenta la crea el webhook y le llegan las claves por correo. No hay plan que
+  // refrescar ni dashboard al que mandarlo.
+  const esCompraNueva = searchParams.get('nuevo') === '1';
 
   // Destino según el producto de la cuenta: un contador vuelve a su agenda, un
   // comercio a su dashboard. Se lee del store al momento de redirigir (el plan y
@@ -29,7 +33,7 @@ function PaymentResultContent() {
   // viéndose todavía como "Plan Gratuito" hasta la próxima vez que inicie sesión,
   // aunque el pago ya haya sido aprobado.
   useEffect(() => {
-    if (!approved) return;
+    if (!approved || esCompraNueva) return;
     let cancelled = false;
 
     async function refreshPlan() {
@@ -60,9 +64,10 @@ function PaymentResultContent() {
     const poll = setInterval(refreshPlan, 1500);
     const stopPoll = setTimeout(() => clearInterval(poll), 8000);
     return () => { cancelled = true; clearInterval(poll); clearTimeout(stopPoll); };
-  }, [approved]);
+  }, [approved, esCompraNueva]);
 
   useEffect(() => {
+    if (esCompraNueva) return; // se queda leyendo las instrucciones del correo
     const timer = setInterval(() => {
       setSeconds((s) => {
         if (s <= 1) {
@@ -74,7 +79,42 @@ function PaymentResultContent() {
       });
     }, 1000);
     return () => clearInterval(timer);
-  }, [router]);
+  }, [router, esCompraNueva]);
+
+  if (esCompraNueva) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 p-6">
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/[0.08] rounded-2xl shadow-modal max-w-sm w-full p-8 text-center">
+          {approved ? (
+            <>
+              <CheckCircle size={56} className="text-green-500 mx-auto mb-4" strokeWidth={1.5} />
+              <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">¡Pago recibido!</h1>
+              <p className="text-slate-600 dark:text-slate-300 text-sm mb-3">
+                Estamos creando tu cuenta. En unos minutos te llega a tu correo el <strong>usuario y la contraseña</strong> para entrar.
+              </p>
+              <p className="text-slate-400 dark:text-slate-500 text-xs mb-6">
+                Si no lo ves, revisa la carpeta de spam o correo no deseado.
+              </p>
+              <a href="/login" className="block w-full py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 transition-colors">
+                Ir a iniciar sesión
+              </a>
+            </>
+          ) : (
+            <>
+              <XCircle size={56} className="text-red-500 mx-auto mb-4" strokeWidth={1.5} />
+              <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">Pago no completado</h1>
+              <p className="text-slate-500 dark:text-slate-400 text-sm mb-6">
+                No se hizo ningún cobro y no se creó ninguna cuenta. Puedes intentarlo de nuevo cuando quieras.
+              </p>
+              <a href="/planes" className="block w-full py-2.5 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-sm font-semibold hover:bg-slate-700 transition-colors">
+                Volver a los planes
+              </a>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 p-6">

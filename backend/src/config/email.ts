@@ -40,6 +40,17 @@ export const emailService = {
     const url = `${APP_URL}/reset-password?token=${token}`;
     await send(to, 'Restablece tu contraseña en Ventrix', resetTemplate(name, url), 'Email reset send error');
   },
+
+  // Compra sin cuenta: el cliente pagó primero y el sistema le creó la cuenta.
+  // Este correo es lo ÚNICO que recibe, así que lleva usuario, contraseña y el
+  // enlace para entrar. La contraseña va en texto plano a propósito: es temporal
+  // y se le pide cambiarla al entrar.
+  async sendCredenciales(to: string, name: string, password: string, productType: string) {
+    const esContable = productType === 'contable';
+    const url = `${APP_URL}/login${esContable ? '?tipo=contable' : ''}`;
+    const producto = esContable ? 'Ventrix Contable' : 'Ventrix POS';
+    await send(to, `Tu cuenta de ${producto} ya está lista`, credencialesTemplate(name, to, password, producto, url), 'Email credenciales send error');
+  },
 };
 
 // El nombre viene del usuario (registro) y se inserta crudo en HTML — sin
@@ -106,6 +117,48 @@ function resetTemplate(name: string, url: string) {
             <a href="${url}" style="background:#dc2626;color:#fff;text-decoration:none;padding:14px 32px;border-radius:6px;font-size:15px;font-weight:bold;display:inline-block;">Restablecer contraseña</a>
           </div>
           <p style="font-size:13px;color:#9ca3af;margin:0;">El enlace expira en 1 hora. Si no solicitaste esto, ignora este mensaje.</p>
+        </td></tr>
+        <tr><td style="background:#f9fafb;padding:20px 32px;text-align:center;">
+          <p style="font-size:12px;color:#9ca3af;margin:0;">© ${new Date().getFullYear()} Ventrix. Todos los derechos reservados.</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+}
+
+function credencialesTemplate(name: string, email: string, password: string, producto: string, url: string) {
+  const safeName = escapeHtml(name);
+  const safeEmail = escapeHtml(email);
+  const safePass = escapeHtml(password);
+  return `
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background:#f4f6f8;font-family:Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f6f8;padding:40px 0;">
+    <tr><td align="center">
+      <table width="520" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.08);">
+        <tr><td style="background:#0DA06A;padding:32px;text-align:center;">
+          <h1 style="color:#fff;margin:0;font-size:24px;">Ventrix</h1>
+        </td></tr>
+        <tr><td style="padding:40px 32px;">
+          <p style="font-size:16px;color:#374151;margin:0 0 8px;">Hola, <strong>${safeName}</strong></p>
+          <p style="font-size:15px;color:#6b7280;margin:0 0 24px;">Recibimos tu pago y tu cuenta de <strong>${producto}</strong> ya está activa. Entra con estos datos:</p>
+          <table width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;margin:0 0 28px;">
+            <tr><td style="padding:20px 24px;">
+              <p style="font-size:12px;color:#9ca3af;margin:0 0 4px;text-transform:uppercase;letter-spacing:.5px;">Usuario</p>
+              <p style="font-size:16px;color:#111827;margin:0 0 16px;font-weight:bold;">${safeEmail}</p>
+              <p style="font-size:12px;color:#9ca3af;margin:0 0 4px;text-transform:uppercase;letter-spacing:.5px;">Contraseña</p>
+              <p style="font-size:20px;color:#111827;margin:0;font-weight:bold;letter-spacing:1px;font-family:'Courier New',monospace;">${safePass}</p>
+            </td></tr>
+          </table>
+          <div style="text-align:center;margin:0 0 28px;">
+            <a href="${url}" style="background:#0DA06A;color:#fff;text-decoration:none;padding:14px 32px;border-radius:6px;font-size:15px;font-weight:bold;display:inline-block;">Entrar a mi cuenta</a>
+          </div>
+          <p style="font-size:13px;color:#6b7280;margin:0 0 8px;">Por seguridad, cambia esta contraseña apenas entres: Configuración → Mi cuenta.</p>
+          <p style="font-size:13px;color:#9ca3af;margin:0;">¿Necesitas ayuda? Responde este correo y te acompañamos.</p>
         </td></tr>
         <tr><td style="background:#f9fafb;padding:20px 32px;text-align:center;">
           <p style="font-size:12px;color:#9ca3af;margin:0;">© ${new Date().getFullYear()} Ventrix. Todos los derechos reservados.</p>

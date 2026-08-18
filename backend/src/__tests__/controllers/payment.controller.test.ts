@@ -20,6 +20,14 @@ jest.mock('../../config/database', () => ({
       findUnique: jest.fn(),
       update: jest.fn(),
     },
+    // El webhook mira primero si el pago viene de una compra SIN cuenta; en las
+    // pruebas de este archivo siempre son pagos de negocios ya existentes.
+    guestCheckout: {
+      findUnique: jest.fn().mockResolvedValue(null),
+      update: jest.fn(),
+    },
+    user: { findUnique: jest.fn(), create: jest.fn() },
+    seller: { findFirst: jest.fn() },
     $queryRawUnsafe: jest.fn(),
     $transaction: jest.fn(),
   },

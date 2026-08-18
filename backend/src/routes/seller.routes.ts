@@ -9,6 +9,7 @@ import { validate } from '../middlewares/validate';
 import { logger } from '../config/logger';
 import { createBusinessForOwner } from '../controllers/auth.controller';
 import { getWompiTransaction, WOMPI_CONFIGURED, PLAN_PRICES, CONTABLE_ANNUAL_PRICE } from '../controllers/payment.controller';
+import { generarPasswordTemporal } from '../utils/tempPassword';
 
 // Portal de vendedoras (/seller): cada vendedora inicia sesión y crea cuentas de
 // clientes ya listas (verificadas, en Pro, con clave) para enviarlas por WhatsApp.
@@ -37,15 +38,6 @@ async function authSeller(req: any, res: any, next: any) {
     if (err instanceof AppError) return next(err);
     return next(new AppError('Sesión inválida', 401));
   }
-}
-
-// Contraseña legible para enviar por WhatsApp (sin caracteres confusos).
-function genPassword(): string {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
-  const bytes = crypto.randomBytes(10);
-  let out = '';
-  for (let i = 0; i < 10; i += 1) out += chars[bytes[i] % chars.length];
-  return out;
 }
 
 const PLAN_MONTHS: Record<string, number> = { monthly: 1, quarterly: 3, annual: 12 };
@@ -135,7 +127,7 @@ router.post('/provision',
 
       const months = businessType === 'contable' ? 12 : (PLAN_MONTHS[period] || 1);
       const planExpiresAt = new Date(Date.now() + months * 30 * 24 * 60 * 60 * 1000);
-      const plainPassword = genPassword();
+      const plainPassword = generarPasswordTemporal();
       const hashed = await bcrypt.hash(plainPassword, 12);
 
       const business = await prisma.$transaction(async (dbtx) => {

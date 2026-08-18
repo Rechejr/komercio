@@ -6,6 +6,7 @@ import { Bricolage_Grotesque, Instrument_Sans, Space_Mono } from 'next/font/goog
 import { Download, Loader2, FileText, X } from 'lucide-react';
 import { WhatsAppIcon } from '@/components/ui/WhatsAppIcon';
 import { downloadImage } from '@/lib/imageShare';
+import { CompraModal } from '@/components/planes/CompraModal';
 import { PLANS, TRUST_POINTS, PLANES_FAQ, resolveSeller, DEFAULT_SELLER, type PlanTier, type ProductPlan, type Seller, type BillingPeriod } from '@/lib/planesData';
 import '../landing.css';
 
@@ -19,13 +20,10 @@ const CheckIcon = () => (
 
 const money = (n: number) => `$${n.toLocaleString('es-CO')}`;
 
-// "Comprar ahora" → crear la cuenta con intención de comprar. Al entrar por
-// primera vez, la app abre el pago (que sí activa el plan). Ver BuyIntentHandler.
-function buyHref(product: ProductPlan, periodKey?: string): string {
-  const tipo = product.key === 'contable' ? 'contable' : 'pos';
-  const per = periodKey ? `&periodo=${periodKey}` : '';
-  return `/register?tipo=${tipo}&intent=pro${per}`;
-}
+// "Comprar ahora" abre el pago DIRECTO (CompraModal): el cliente deja cuatro
+// datos, paga, y el sistema le crea la cuenta y le manda las claves por correo.
+// Antes se le mandaba a /register y ahí se caían las ventas — el registro previo
+// es justo la fricción que las vendedoras necesitan quitar del medio.
 
 interface CotizarState { product: ProductPlan; tier: PlanTier; period?: BillingPeriod; fecha: string; validez: string }
 
@@ -36,9 +34,13 @@ export default function PlanesPage() {
   // Vendedor según ?v=<slug> en el link que compartió. Se lee en el cliente para
   // que la página siga siendo estática (sin useSearchParams / Suspense).
   const [seller, setSeller] = useState<Seller>(() => resolveSeller());
+  const [sellerSlug, setSellerSlug] = useState<string | null>(null);
+  // Plan que el visitante decidió comprar (abre el formulario de pago).
+  const [comprando, setComprando] = useState<{ product: ProductPlan; tier: PlanTier; period?: BillingPeriod } | null>(null);
   useEffect(() => {
     const slug = new URLSearchParams(window.location.search).get('v');
     setSeller(resolveSeller(slug));
+    setSellerSlug(slug ? slug.trim().toLowerCase() : null);
   }, []);
 
   const product = PLANS.find((p) => p.key === productKey)!;
@@ -180,7 +182,7 @@ export default function PlanesPage() {
 
                 {tier.cta === 'buy' ? (
                   <div className="planes-cta-group">
-                    <Link href={buyHref(product, bp?.key)} className="lp-btn lp-btn-primary">Comprar ahora</Link>
+                    <button type="button" onClick={() => setComprando({ product, tier, period: bp })} className="lp-btn lp-btn-primary">Comprar ahora</button>
                     <button type="button" onClick={() => abrirCotizar(product, tier, bp)} className="lp-btn lp-btn-ghost planes-btn-cotizar">
                       <FileText size={15} /> Cotizar
                     </button>
@@ -232,6 +234,17 @@ export default function PlanesPage() {
         </div>
       </footer>
 
+      {/* ── Modal Comprar (pago directo, sin registro previo) ─────────────── */}
+      {comprando && (
+        <CompraModal
+          product={comprando.product}
+          tier={comprando.tier}
+          period={comprando.period}
+          sellerSlug={sellerSlug}
+          onClose={() => setComprando(null)}
+        />
+      )}
+
       {/* ── Modal Cotizar (resumen + descargar/compartir imagen) ─────────── */}
       {cotizar && (
         <div className="planes-modal-overlay" onClick={() => setCotizar(null)}>
@@ -252,7 +265,11 @@ export default function PlanesPage() {
             <p className="planes-quote-valid">Cotización válida hasta el {cotizar.validez}</p>
 
             <div className="planes-cta-group" style={{ marginTop: '1rem' }}>
-              <Link href={buyHref(cotizar.product, cotizar.period?.key)} className="lp-btn lp-btn-primary">Comprar ahora</Link>
+              <button
+                type="button"
+                onClick={() => { setComprando({ product: cotizar.product, tier: cotizar.tier, period: cotizar.period }); setCotizar(null); }}
+                className="lp-btn lp-btn-primary"
+              >Comprar ahora</button>
               <a
                 href={waHref(cotizarMsg(cotizar))}
                 onClick={(e) => { e.currentTarget.href = liveWaUrl(cotizarMsg(cotizar)); }}

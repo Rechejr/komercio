@@ -68,6 +68,10 @@ describe('openapi.json', () => {
       'POST /api/v1/auth/register',
       'POST /api/v1/auth/resend-verification',
       'POST /api/v1/auth/reset-password',
+      // Comprar sin tener cuenta: el prospecto paga antes de existir en el
+      // sistema, así que este endpoint NO puede exigir sesión. Está limitado por
+      // rate limit y solo crea un link de pago.
+      'POST /api/v1/payments/checkout',
       'POST /api/v1/payments/webhook',
       'POST /api/v1/seller/login',
     ]);
