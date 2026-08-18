@@ -21,7 +21,7 @@ jest.mock('../../config/database', () => ({
 }));
 
 jest.mock('../../config/logger', () => ({ logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn() } }));
-jest.mock('../../config/email', () => ({ emailService: { sendCredenciales: jest.fn() } }));
+jest.mock('../../config/email', () => ({ emailService: { sendCredenciales: jest.fn().mockResolvedValue(true) } }));
 jest.mock('../../controllers/auth.controller', () => ({
   createBusinessForOwner: jest.fn(),
 }));
@@ -186,6 +186,17 @@ describe('tras el pago — crear la cuenta y mandar las claves', () => {
     expect(mockPrisma.guestCheckout.update.mock.calls[0][0].data).toMatchObject({
       status: 'provisioned', transactionId: 'tx-1', businessId: 'biz-nuevo',
     });
+  });
+
+  it('si el correo con las claves no sale, la cuenta queda marcada para avisar a mano', async () => {
+    // El cliente ya pagó: un correo perdido no puede quedar solo en un log,
+    // porque se queda sin saber cómo entrar.
+    (emailService.sendCredenciales as jest.Mock).mockResolvedValue(false);
+    await provisionarCompraInvitado(compra, { id: 'tx-1', amount_in_cents: 2990000 });
+
+    const guardado = mockPrisma.guestCheckout.update.mock.calls[0][0].data;
+    expect(guardado.status).toBe('provisioned'); // la cuenta sí existe
+    expect(guardado.errorMessage).toContain('correo');
   });
 
   it('NO crea la cuenta si el monto pagado no es el del plan', async () => {

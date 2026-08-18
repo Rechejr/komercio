@@ -449,13 +449,23 @@ export async function provisionarCompraInvitado(
       return biz;
     });
 
+    const correoEnviado = await emailService.sendCredenciales(guest.buyerEmail, guest.buyerName, plainPassword, guest.productType);
+
     await prisma.guestCheckout.update({
       where: { id: guest.id },
-      data: { status: 'provisioned', transactionId: tx.id || null, businessId: business.id, provisionedAt: new Date() },
+      data: {
+        status: 'provisioned', transactionId: tx.id || null, businessId: business.id, provisionedAt: new Date(),
+        // La cuenta SÍ quedó creada (no se reintenta), pero si el correo no salió
+        // el cliente no sabe cómo entrar: queda anotado para avisarle a mano.
+        errorMessage: correoEnviado ? null : 'La cuenta se creó, pero el correo con las credenciales NO se pudo enviar',
+      },
     });
 
-    await emailService.sendCredenciales(guest.buyerEmail, guest.buyerName, plainPassword, guest.productType);
-    logger.info(`Compra sin cuenta atendida: cuenta creada para ${guest.buyerEmail} (${guest.productType})`, { businessId: business.id });
+    if (!correoEnviado) {
+      logger.error(`Compra sin cuenta: cuenta creada pero SIN correo enviado a ${guest.buyerEmail} — avisar a mano`, { businessId: business.id });
+    } else {
+      logger.info(`Compra sin cuenta atendida: cuenta creada para ${guest.buyerEmail} (${guest.productType})`, { businessId: business.id });
+    }
   } catch (err: any) {
     // El pago ya entró: si la cuenta falla, queda registrado para atenderlo a mano
     // en vez de perderse en un log.

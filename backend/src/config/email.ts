@@ -21,12 +21,17 @@ const resend = new Resend(process.env.RESEND_API_KEY || 're_dummy_not_configured
 const FROM = process.env.EMAIL_FROM || 'Ventrix <onboarding@resend.dev>';
 const APP_URL = process.env.APP_URL || 'http://localhost:3000';
 
-async function send(to: string, subject: string, html: string, label: string) {
+async function send(to: string, subject: string, html: string, label: string): Promise<boolean> {
   try {
     const { error } = await resend.emails.send({ from: FROM, to, subject, html });
-    if (error) logger.error(`${label}: ${error.message}`, { name: error.name });
+    if (error) {
+      logger.error(`${label}: ${error.message}`, { name: error.name });
+      return false;
+    }
+    return true;
   } catch (err: any) {
     logger.error(`${label} (excepción): ${err?.message || err}`);
+    return false;
   }
 }
 
@@ -49,7 +54,9 @@ export const emailService = {
     const esContable = productType === 'contable';
     const url = `${APP_URL}/login${esContable ? '?tipo=contable' : ''}`;
     const producto = esContable ? 'Ventrix Contable' : 'Ventrix POS';
-    await send(to, `Tu cuenta de ${producto} ya está lista`, credencialesTemplate(name, to, password, producto, url), 'Email credenciales send error');
+    // Devuelve si salió: el cliente YA pagó, así que un correo perdido no puede
+    // quedar solo en un log — quien atienda la venta tiene que poder verlo.
+    return send(to, `Tu cuenta de ${producto} ya está lista`, credencialesTemplate(name, to, password, producto, url), 'Email credenciales send error');
   },
 };
 
