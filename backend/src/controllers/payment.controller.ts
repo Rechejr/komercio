@@ -9,6 +9,7 @@ import bcrypt from 'bcryptjs';
 import { createBusinessForOwner } from './auth.controller';
 import { generarPasswordTemporal } from '../utils/tempPassword';
 import { emailService } from '../config/email';
+import { sendPushToSellers } from '../config/webpush';
 
 // .trim() defensivo: al pegar las llaves en el panel de hosting es fácil arrastrar
 // un espacio o salto de línea, y un '\n' en el valor rompe el header Authorization
@@ -403,7 +404,7 @@ export const paymentController = {
 // con un pago barato. Es idempotente: la fila queda en "provisioned" y un webhook
 // repetido no crea una segunda cuenta.
 export async function provisionarCompraInvitado(
-  guest: { id: string; buyerName: string; buyerLastName: string; buyerEmail: string; buyerPhone?: string; productType: string; months: number; amount: number; sellerSlug: string | null },
+  guest: { id: string; buyerName: string; buyerLastName: string; buyerEmail: string; buyerPhone?: string; productType: string; period?: string; months: number; amount: number; sellerSlug: string | null },
   tx: { id?: string; amount_in_cents?: number },
 ) {
   const pagado = Math.round((tx.amount_in_cents || 0) / 100);
@@ -472,6 +473,20 @@ export async function provisionarCompraInvitado(
       logger.error(`Compra sin cuenta: cuenta creada pero SIN correo enviado a ${guest.buyerEmail} — avisar a mano`, { businessId: business.id });
     } else {
       logger.info(`Compra sin cuenta atendida: cuenta creada para ${guest.buyerEmail} (${guest.productType})`, { businessId: business.id });
+    }
+
+    // Aviso al celular de la vendedora: el cliente acaba de pagar y todavía está
+    // pendiente del teléfono, que es el momento para escribirle. Best-effort: si
+    // falla, la venta ya quedó registrada en su portal.
+    if (seller) {
+      const producto = guest.productType === 'contable' ? 'Contable' : 'POS';
+      const periodo = guest.period ? PERIOD_LABELS[guest.period] || '' : '';
+      await sendPushToSellers([seller.id], {
+        title: '🎉 ¡Nueva venta!',
+        body: `${nombreCompleto} compró ${producto}${periodo ? ` · ${periodo}` : ''} — $${guest.amount.toLocaleString('es-CO')}. Toca para escribirle.`,
+        url: '/vendedor',
+        tag: `venta-${guest.id}`,
+      }).catch(() => {});
     }
   } catch (err: any) {
     // El pago ya entró: si la cuenta falla, queda registrado para atenderlo a mano

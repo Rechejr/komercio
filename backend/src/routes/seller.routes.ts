@@ -10,6 +10,7 @@ import { logger } from '../config/logger';
 import { createBusinessForOwner } from '../controllers/auth.controller';
 import { getWompiTransaction, WOMPI_CONFIGURED, PLAN_PRICES, CONTABLE_ANNUAL_PRICE } from '../controllers/payment.controller';
 import { generarPasswordTemporal } from '../utils/tempPassword';
+import { getVapidPublicKey, sendPushToSellers, pushEnabled } from '../config/webpush';
 
 // Portal de vendedoras (/seller): cada vendedora inicia sesión y crea cuentas de
 // clientes ya listas (verificadas, en Pro, con clave) para enviarlas por WhatsApp.
@@ -186,6 +187,55 @@ router.get('/compras', authSeller, async (req: any, res: any, next: any) => {
       },
     });
     return success(res, compras);
+  } catch (err) { next(err); }
+});
+
+// ─── Avisos al celular de la vendedora (Web Push) ─────────────────────────────
+// Cuando un cliente compra por su link, ella se entera al instante aunque tenga
+// el portal cerrado — que es cuando puede escribirle mientras el cliente todavía
+// está pendiente del celular. Sesión propia (authSeller), tabla propia.
+
+// GET /seller/push/vapid → clave pública que el navegador necesita para suscribirse.
+router.get('/push/vapid', authSeller, (_req, res) => success(res, { key: getVapidPublicKey() }));
+
+// POST /seller/push/subscribe → guarda (o actualiza) este dispositivo.
+router.post('/push/subscribe', authSeller, async (req: any, res: any, next: any) => {
+  try {
+    const { endpoint, keys } = req.body || {};
+    if (!endpoint || !keys?.p256dh || !keys?.auth) throw new AppError('Suscripción incompleta', 400);
+    await prisma.sellerPushSubscription.upsert({
+      where: { endpoint },
+      // El mismo dispositivo puede cambiar de vendedora (un celular compartido):
+      // el update reasigna la suscripción en vez de dejarla apuntando a la otra.
+      update: { sellerId: req.seller.id, p256dh: keys.p256dh, auth: keys.auth },
+      create: { sellerId: req.seller.id, endpoint, p256dh: keys.p256dh, auth: keys.auth },
+    });
+    return success(res, null, 'Avisos activados en este dispositivo');
+  } catch (err) { next(err); }
+});
+
+// POST /seller/push/unsubscribe → deja de avisar en este dispositivo.
+router.post('/push/unsubscribe', authSeller, async (req: any, res: any, next: any) => {
+  try {
+    const { endpoint } = req.body || {};
+    if (endpoint) await prisma.sellerPushSubscription.deleteMany({ where: { endpoint, sellerId: req.seller.id } });
+    return success(res, null, 'Avisos desactivados en este dispositivo');
+  } catch (err) { next(err); }
+});
+
+// POST /seller/push/test → prueba en un toque, para que confirme que le llegan.
+router.post('/push/test', authSeller, async (req: any, res: any, next: any) => {
+  try {
+    if (!pushEnabled) throw new AppError('El servidor aún no tiene las notificaciones configuradas.', 503);
+    const count = await prisma.sellerPushSubscription.count({ where: { sellerId: req.seller.id } });
+    if (count === 0) return success(res, { sent: 0 }, 'Este dispositivo no está suscrito. Activa los avisos y vuelve a intentar.');
+    await sendPushToSellers([req.seller.id], {
+      title: 'Ventrix · Prueba',
+      body: '✅ Los avisos funcionan. Así te avisaremos cuando un cliente compre por tu link.',
+      url: '/vendedor',
+      tag: 'seller-test',
+    });
+    return success(res, { sent: count }, `Aviso de prueba enviado a ${count} dispositivo(s).`);
   } catch (err) { next(err); }
 });
 

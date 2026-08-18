@@ -191,16 +191,34 @@ model Business {
 // cuenta ya lista (verificada, en Pro, con clave) para enviársela por WhatsApp.
 // El `slug` coincide con /planes?v=<slug> para atar el lead al vendedor.
 model Seller {
-  id        String   @id @default(uuid())
-  name      String
-  email     String   @unique
-  password  String
-  slug      String   @unique
-  phone     String?
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now())
+  id            String                  @id @default(uuid())
+  name          String
+  email         String                  @unique
+  password      String
+  slug          String                  @unique
+  phone         String?
+  active        Boolean                 @default(true)
+  createdAt     DateTime                @default(now())
+  pushSubs      SellerPushSubscription[]
 
   @@map("sellers")
+}
+
+// Suscripción push del portal de vendedoras. Va aparte de PushSubscription
+// porque las vendedoras no son User: tienen su propia tabla y su propia sesión
+// (authSeller). Así el aviso de "te compraron" no depende de darles una cuenta
+// de usuario que no necesitan.
+model SellerPushSubscription {
+  id        String   @id @default(uuid())
+  sellerId  String
+  seller    Seller   @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+
+  @@index([sellerId])
+  @@map("seller_push_subscriptions")
 }
 
 // ─── AI WEEKLY SUMMARY ─────────────────────────────────────────────────────────

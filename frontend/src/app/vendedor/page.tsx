@@ -6,6 +6,7 @@ import { sellerFetch, getSellerToken, clearSellerToken } from '@/lib/sellerApi';
 import { Loader2, UserPlus, LogOut, Copy, Check, Store, Calculator, RefreshCw, Download, KeyRound, X } from 'lucide-react';
 import { WhatsAppIcon } from '@/components/ui/WhatsAppIcon';
 import { downloadCsv } from '@/lib/exportCsv';
+import { AvisosVendedora } from '@/components/vendedor/AvisosVendedora';
 import toast from 'react-hot-toast';
 
 type Period = 'monthly' | 'quarterly' | 'annual';
@@ -236,6 +237,8 @@ export default function VendedorPortalPage() {
             </a>
           </div>
         </div>
+
+        <AvisosVendedora />
 
         {/* Compras hechas por su link */}
         <div className="bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-2xl p-6">

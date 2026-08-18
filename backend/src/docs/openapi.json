@@ -7874,6 +7874,146 @@
         }
       }
     },
+    "/api/v1/seller/push/subscribe": {
+      "post": {
+        "tags": [
+          "seller"
+        ],
+        "summary": "POST /seller/push/subscribe → guarda (o actualiza) este dispositivo.",
+        "security": [
+          {
+            "sellerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operación exitosa",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespuestaOk"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sin sesión o token vencido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/seller/push/test": {
+      "post": {
+        "tags": [
+          "seller"
+        ],
+        "summary": "POST /seller/push/test → prueba en un toque, para que confirme que le llegan.",
+        "security": [
+          {
+            "sellerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operación exitosa",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespuestaOk"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sin sesión o token vencido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/seller/push/unsubscribe": {
+      "post": {
+        "tags": [
+          "seller"
+        ],
+        "summary": "POST /seller/push/unsubscribe → deja de avisar en este dispositivo.",
+        "security": [
+          {
+            "sellerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operación exitosa",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespuestaOk"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sin sesión o token vencido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/seller/push/vapid": {
+      "get": {
+        "tags": [
+          "seller"
+        ],
+        "summary": "─── Avisos al celular de la vendedora (Web Push) ───────────────────────────── Cuando un cliente compra por su link, ella se entera al instante aunque tenga el portal cerrado — que es cuando puede escribirle mientras el cliente todavía está pendiente del celular. Sesión propia (authSeller), tabla pr",
+        "security": [
+          {
+            "sellerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operación exitosa",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespuestaOk"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sin sesión o token vencido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/stock-transfers": {
       "get": {
         "tags": [

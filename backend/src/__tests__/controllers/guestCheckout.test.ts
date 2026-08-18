@@ -22,12 +22,14 @@ jest.mock('../../config/database', () => ({
 
 jest.mock('../../config/logger', () => ({ logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn() } }));
 jest.mock('../../config/email', () => ({ emailService: { sendCredenciales: jest.fn().mockResolvedValue(true) } }));
+jest.mock('../../config/webpush', () => ({ sendPushToSellers: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('../../controllers/auth.controller', () => ({
   createBusinessForOwner: jest.fn(),
 }));
 
 import * as https from 'https';
 import { createBusinessForOwner } from '../../controllers/auth.controller';
+import { sendPushToSellers } from '../../config/webpush';
 
 const mockPrisma = prisma as unknown as {
   user: { findUnique: jest.Mock; create: jest.Mock };
@@ -190,6 +192,30 @@ describe('tras el pago — crear la cuenta y mandar las claves', () => {
     await provisionarCompraInvitado({ ...compra, sellerSlug: null }, { id: 'tx-1', amount_in_cents: 2990000 });
     expect(mockPrisma.seller.findFirst).not.toHaveBeenCalled();
     expect(mockPrisma.business.update.mock.calls[0][0].data.createdBySellerId).toBeUndefined();
+  });
+
+  it('le avisa al celular de la vendedora, con el nombre y el monto', async () => {
+    // El cliente acaba de pagar y todavía está pendiente del teléfono: es el
+    // momento en que ella tiene que escribirle.
+    await provisionarCompraInvitado({ ...compra, period: 'quarterly', amount: 80700 }, { id: 'tx-1', amount_in_cents: 8070000 });
+
+    expect(sendPushToSellers).toHaveBeenCalledTimes(1);
+    const [ids, payload] = (sendPushToSellers as jest.Mock).mock.calls[0];
+    expect(ids).toEqual(['seller-1']);
+    expect(payload.body).toContain('Cristian Rojas');
+    expect(payload.body).toContain('80.700');
+    expect(payload.url).toBe('/vendedor');
+  });
+
+  it('sin vendedora en el link, no se manda ningún aviso', async () => {
+    await provisionarCompraInvitado({ ...compra, sellerSlug: null }, { id: 'tx-1', amount_in_cents: 2990000 });
+    expect(sendPushToSellers).not.toHaveBeenCalled();
+  });
+
+  it('no avisa de una venta que no se concretó', async () => {
+    // Monto que no cuadra: no hay cuenta creada, así que tampoco hay qué avisar.
+    await provisionarCompraInvitado(compra, { id: 'tx-1', amount_in_cents: 100 });
+    expect(sendPushToSellers).not.toHaveBeenCalled();
   });
 
   it('marca la compra como atendida para que un webhook repetido no cree otra cuenta', async () => {

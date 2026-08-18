@@ -38,11 +38,16 @@ interface PushPayload {
 // Envía un push a TODAS las suscripciones de los usuarios dados. Best-effort:
 // si una suscripción expiró (404/410) se borra sola; nunca lanza para no romper
 // el flujo que lo invoca (cron de vencimientos, etc.).
-export async function sendPushToUsers(userIds: string[], payload: PushPayload): Promise<void> {
-  if (!pushEnabled || userIds.length === 0) return;
-  const subs = await prisma.pushSubscription.findMany({ where: { userId: { in: userIds } } });
-  if (subs.length === 0) return;
+interface SuscripcionGuardada { id: string; endpoint: string; p256dh: string; auth: string }
 
+/** Envía a una lista de suscripciones y limpia las que ya no sirven. `borrar`
+ *  recibe el id de la fila muerta, porque usuarios y vendedoras guardan sus
+ *  suscripciones en tablas distintas. */
+async function enviar(
+  subs: SuscripcionGuardada[],
+  payload: PushPayload,
+  borrar: (id: string) => Promise<unknown>,
+): Promise<void> {
   const data = JSON.stringify(payload);
   await Promise.all(
     subs.map(async (s) => {
@@ -58,9 +63,9 @@ export async function sendPushToUsers(userIds: string[], payload: PushPayload): 
         // esa suscripción no va a funcionar nunca más, así que se borra para que
         // el usuario pueda volver a activar y no quede fallando en silencio.
         if (code === 404 || code === 410 || code === 403) {
-          await prisma.pushSubscription.delete({ where: { id: s.id } }).catch(() => {});
+          await borrar(s.id).catch(() => {});
           if (code === 403) {
-            logger.warn('Web push: suscripción creada con una llave VAPID distinta — se elimina; el usuario debe activar de nuevo');
+            logger.warn('Web push: suscripción creada con una llave VAPID distinta — se elimina; hay que activar de nuevo');
           }
         } else {
           logger.warn(`Web push falló (status ${code ?? 'desconocido'})`);
@@ -68,4 +73,20 @@ export async function sendPushToUsers(userIds: string[], payload: PushPayload): 
       }
     }),
   );
+}
+
+export async function sendPushToUsers(userIds: string[], payload: PushPayload): Promise<void> {
+  if (!pushEnabled || userIds.length === 0) return;
+  const subs = await prisma.pushSubscription.findMany({ where: { userId: { in: userIds } } });
+  if (subs.length === 0) return;
+  await enviar(subs, payload, (id) => prisma.pushSubscription.delete({ where: { id } }));
+}
+
+/** Avisa a las vendedoras en su celular (portal /vendedor), aunque lo tengan
+ *  cerrado: es lo que les permite escribirle al cliente recién comprado. */
+export async function sendPushToSellers(sellerIds: string[], payload: PushPayload): Promise<void> {
+  if (!pushEnabled || sellerIds.length === 0) return;
+  const subs = await prisma.sellerPushSubscription.findMany({ where: { sellerId: { in: sellerIds } } });
+  if (subs.length === 0) return;
+  await enviar(subs, payload, (id) => prisma.sellerPushSubscription.delete({ where: { id } }));
 }
