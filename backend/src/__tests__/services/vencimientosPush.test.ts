@@ -144,3 +144,61 @@ describe('push al móvil — recordatorio diario', () => {
     expect((sendPushToUsers as jest.Mock).mock.calls[0][0]).toEqual(['u-contador', 'u-auxiliar']);
   });
 });
+
+describe('las tres franjas del día dicen cosas distintas', () => {
+  // Repetir el mismo texto tres veces es lo que hace que la gente apague las
+  // notificaciones: cada franja tiene que aportar algo.
+  const hoyMismo = venc({ id: 'v-hoy', hito: 'hoy' });
+  const yaVencido = venc({ id: 'v-old', hito: 'vencido' });
+  const mañana = { ...venc({ id: 'v-man', hito: 'cerca' }), dias: 1 };
+  const enCinco = { ...venc({ id: 'v-5', hito: 'previo' }), dias: 5 };
+
+  const cuerpoEnviado = () => (sendPushToUsers as jest.Mock).mock.calls[0]?.[1]?.body as string | undefined;
+
+  it('mañana: da el panorama completo', async () => {
+    await notifyContableVencimientos('biz-1', [yaVencido, hoyMismo, enCinco], 'panorama', 7);
+    expect(cuerpoEnviado()).toMatch(/vencida|por vencer/);
+  });
+
+  it('mediodía: solo lo que se le acaba HOY', async () => {
+    await notifyContableVencimientos('biz-1', [hoyMismo], 'pendientes', 14);
+    expect(cuerpoEnviado()).toContain('HOY');
+  });
+
+  it('mediodía: NO suena si ya despachó lo urgente', async () => {
+    // Solo quedan cosas que vencen en días: a mediodía eso no es noticia.
+    await notifyContableVencimientos('biz-1', [enCinco], 'pendientes', 14);
+    expect(sendPushToUsers).not.toHaveBeenCalled();
+  });
+
+  it('cierre: prepara el día siguiente en vez de repetir lo de hoy', async () => {
+    await notifyContableVencimientos('biz-1', [mañana], 'cierre', 18);
+    expect(cuerpoEnviado()).toContain('Mañana');
+  });
+
+  it('cierre: si quedó algo de hoy sin presentar, también lo dice', async () => {
+    await notifyContableVencimientos('biz-1', [mañana, hoyMismo], 'cierre', 18);
+    expect(cuerpoEnviado()).toContain('Mañana');
+    expect(cuerpoEnviado()).toContain('sin presentar');
+  });
+
+  it('cierre: NO suena si no hay nada de mañana ni pendiente de hoy', async () => {
+    await notifyContableVencimientos('biz-1', [enCinco], 'cierre', 18);
+    expect(sendPushToUsers).not.toHaveBeenCalled();
+  });
+
+  it('cada franja suena una vez: la de la tarde no repite la de la mañana', async () => {
+    // Ya se envió a las 7am de hoy.
+    const hoy7am = new Date();
+    hoy7am.setHours(7, 5, 0, 0);
+    mockPrisma.business.findUnique.mockResolvedValue({ lastVencPushAt: hoy7am });
+
+    // A las 7 otra vez (un reinicio del servidor): no debe sonar.
+    await notifyContableVencimientos('biz-1', [hoyMismo], 'panorama', 7);
+    expect(sendPushToUsers).not.toHaveBeenCalled();
+
+    // A las 2pm sí, es otra franja.
+    await notifyContableVencimientos('biz-1', [hoyMismo], 'pendientes', 14);
+    expect(sendPushToUsers).toHaveBeenCalledTimes(1);
+  });
+});

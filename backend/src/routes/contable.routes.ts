@@ -4,7 +4,8 @@ import ExcelJS from 'exceljs';
 import { contableController } from '../controllers/contable.controller';
 import { authenticate, authorize } from '../middlewares/auth';
 import { requireContable, requireActiveContable } from '../middlewares/requireContable';
-import { AppError } from '../utils/response';
+import { AppError, success } from '../utils/response';
+import { prisma } from '../config/database';
 
 const router = Router();
 
@@ -136,5 +137,42 @@ router.delete('/credenciales/:id', ...ESCRIBIR, contableController.deleteCredenc
 router.get('/clients/:id/documentos', VER_Y_GESTIONAR, contableController.listDocumentos);
 router.post('/clients/:id/documentos', ...ESCRIBIR, docUpload.single('file'), contableController.uploadDocumento);
 router.delete('/documentos/:id', ...ESCRIBIR, contableController.deleteDocumento);
+
+// ─── Horario de los avisos de vencimientos ────────────────────────────────────
+// Cada oficina elige a qué horas quiere que le suene el celular. Por defecto tres
+// (7am panorama, 2pm pendientes, 6pm cierre), pero un contador que abre a las
+// 5:30am no quiere el mismo horario que uno que abre a las 9.
+router.get('/avisos', VER_Y_GESTIONAR, async (req: any, res, next) => {
+  try {
+    const negocio = await prisma.business.findUnique({
+      where: { id: req.user.businessId },
+      select: { vencAvisoHoras: true },
+    });
+    return success(res, { horas: [...(negocio?.vencAvisoHoras ?? [])].sort((a, b) => a - b) });
+  } catch (err) { next(err); }
+});
+
+router.patch('/avisos', ...ESCRIBIR, async (req: any, res, next) => {
+  try {
+    const crudas = Array.isArray(req.body?.horas) ? req.body.horas : null;
+    if (!crudas) throw new AppError('Envía las horas de los avisos', 400);
+
+    const horas: number[] = [...new Set(crudas.map((h: unknown) => Number(h)))]
+      .filter((h) => Number.isInteger(h) && (h as number) >= 0 && (h as number) <= 23)
+      .map((h) => h as number)
+      .sort((a, b) => a - b);
+
+    if (horas.length !== crudas.length) throw new AppError('Hay horas repetidas o fuera de 0-23', 400);
+    // Sin horas no habría avisos, y más de cuatro al día es ruido que termina
+    // haciendo que el contador apague las notificaciones.
+    if (horas.length < 1 || horas.length > 4) throw new AppError('Elige entre 1 y 4 horas al día', 400);
+
+    await prisma.business.update({
+      where: { id: req.user.businessId },
+      data: { vencAvisoHoras: horas },
+    });
+    return success(res, { horas }, 'Horario de avisos actualizado');
+  } catch (err) { next(err); }
+});
 
 export default router;

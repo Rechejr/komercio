@@ -2010,6 +2010,74 @@
         ]
       }
     },
+    "/api/v1/contable/avisos": {
+      "get": {
+        "tags": [
+          "contable"
+        ],
+        "summary": "─── Horario de los avisos de vencimientos ──────────────────────────────────── Cada oficina elige a qué horas quiere que le suene el celular. Por defecto tres (7am panorama, 2pm pendientes, 6pm cierre), pero un contador que abre a las 5:30am no quiere el mismo horario que uno que abre a las 9.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operación exitosa",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespuestaOk"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sin sesión o token vencido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "contable"
+        ],
+        "summary": "PATCH /api/v1/contable/avisos",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operación exitosa",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespuestaOk"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sin sesión o token vencido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/contable/calendario/periodos": {
       "get": {
         "tags": [

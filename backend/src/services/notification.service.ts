@@ -233,7 +233,13 @@ export async function notifyContableVencimientos(
   // (previo → cerca → hoy → vencido). Antes se avisaba una sola vez en la vida
   // del vencimiento: al contador le llegaba el aviso a 5 días y nunca más, ni el
   // día que vencía. Ahora se avisa una vez POR HITO.
-  vencimientos: Array<{ id: string; titulo: string; mensaje: string; href: string; hito: string }>,
+  vencimientos: Array<{ id: string; titulo: string; mensaje: string; href: string; hito: string; dias?: number }>,
+  // Momento del día: el aviso de la mañana da el panorama, el del mediodía
+  // recuerda lo que sigue pendiente y el del cierre prepara el día siguiente.
+  // Repetir el mismo texto tres veces es lo que hace que la gente apague las
+  // notificaciones, así que cada franja dice algo distinto.
+  momento: 'panorama' | 'pendientes' | 'cierre' = 'panorama',
+  horaFranja?: number,
 ): Promise<number> {
   if (vencimientos.length === 0) return 0;
 
@@ -301,27 +307,57 @@ export async function notifyContableVencimientos(
     ? new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota', year: 'numeric', month: '2-digit', day: '2-digit' }).format(negocio.lastVencPushAt)
     : null;
 
-  if (ultimoPush !== hoyBogota) {
-    const vencidas = vencimientos.filter((v) => v.hito === 'vencido').length;
-    const porVencer = vencimientos.length - vencidas;
-    let body: string;
-    if (vencimientos.length === 1) {
+  // ¿Ya se envió ESTA franja? Se compara contra la hora del último envío: así
+  // las tres del día suenan una vez cada una, y un reinicio no las repite.
+  const horaUltimoPush = negocio?.lastVencPushAt
+    ? Number(new Intl.DateTimeFormat('en-US', { timeZone: 'America/Bogota', hour: '2-digit', hour12: false }).format(negocio.lastVencPushAt))
+    : -1;
+  const franjaPendiente = ultimoPush !== hoyBogota || (horaFranja !== undefined && horaUltimoPush < horaFranja);
+
+  if (franjaPendiente) {
+    const vencidas = vencimientos.filter((v) => v.hito === 'vencido');
+    const deHoy = vencimientos.filter((v) => v.hito === 'hoy');
+    const deMañana = vencimientos.filter((v) => v.dias === 1);
+    const porVencer = vencimientos.length - vencidas.length;
+    const urgentes = vencidas.length + deHoy.length;
+
+    let body: string | null = null;
+
+    if (momento === 'pendientes') {
+      // Mediodía: solo lo que se le acaba hoy. Si ya lo despachó, no suena.
+      if (urgentes > 0) {
+        body = deHoy.length === 1 && vencidas.length === 0
+          ? `Te queda 1 por presentar HOY: ${deHoy[0].titulo.replace(/^[^:]+:\s*/, '')}.`
+          : `Te quedan ${urgentes} sin presentar entre vencidas y de hoy. Toca para revisarlas.`;
+      }
+    } else if (momento === 'cierre') {
+      // Final de la jornada: prepara el día siguiente en vez de repetir el
+      // regaño de hoy, que a esta hora ya no se alcanza a resolver.
+      const partes: string[] = [];
+      if (deMañana.length > 0) partes.push(`Mañana vence${deMañana.length === 1 ? '' : 'n'} ${deMañana.length}`);
+      if (urgentes > 0) partes.push(`te quedó${urgentes === 1 ? '' : 'n'} ${urgentes} de hoy sin presentar`);
+      if (partes.length > 0) body = `${partes.join(' y ')}. Toca para revisarlas.`;
+    } else if (vencimientos.length === 1) {
       body = vencimientos[0].mensaje;
-    } else if (vencidas > 0 && porVencer > 0) {
-      body = `${vencidas} obligación${vencidas === 1 ? '' : 'es'} vencida${vencidas === 1 ? '' : 's'} y ${porVencer} por vencer. Toca para revisarlas.`;
-    } else if (vencidas > 0) {
-      body = `${vencidas} obligaciones vencidas sin presentar. Toca para revisarlas.`;
+    } else if (vencidas.length > 0 && porVencer > 0) {
+      body = `${vencidas.length} obligación${vencidas.length === 1 ? '' : 'es'} vencida${vencidas.length === 1 ? '' : 's'} y ${porVencer} por vencer. Toca para revisarlas.`;
+    } else if (vencidas.length > 0) {
+      body = `${vencidas.length} obligaciones vencidas sin presentar. Toca para revisarlas.`;
     } else {
       body = `${porVencer} obligaciones están por vencer. Toca para revisarlas.`;
     }
 
-    await sendPushToUsers(userIds, {
-      title: 'Ventrix Contable · Vencimientos',
-      body,
-      url: '/contable/panel',
-      tag: 'venc-alerta',
-    });
-    await prisma.business.update({ where: { id: businessId }, data: { lastVencPushAt: new Date() } });
+    // Sin nada que decir, no se manda nada: un aviso vacío solo enseña a
+    // ignorar los que sí importan.
+    if (body) {
+      await sendPushToUsers(userIds, {
+        title: 'Ventrix Contable · Vencimientos',
+        body,
+        url: '/contable/panel',
+        tag: 'venc-alerta',
+      });
+      await prisma.business.update({ where: { id: businessId }, data: { lastVencPushAt: new Date() } });
+    }
   }
 
   return nuevos.length;

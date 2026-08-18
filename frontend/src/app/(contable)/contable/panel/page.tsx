@@ -10,6 +10,7 @@ import { CalendarClock, FileText, Users, AlertTriangle, Clock, ArrowRight } from
 import { ActivarPlanButton } from '@/components/contable/ActivarPlanButton';
 import { OnboardingChecklist } from '@/components/onboarding/OnboardingChecklist';
 import { NotificationsSetup } from '@/components/contable/NotificationsSetup';
+import { HorarioAvisos } from '@/components/contable/HorarioAvisos';
 
 interface PanelData {
   proximosVencimientos: Array<{
@@ -46,6 +47,7 @@ export default function ContablePanelPage() {
 
       {/* Activar notificaciones al celular (siempre visible, con estado claro) */}
       <NotificationsSetup />
+      <HorarioAvisos />
 
       {/* Primeros pasos (se oculta solo cuando ya están completos) */}
       <OnboardingChecklist />
