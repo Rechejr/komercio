@@ -8428,6 +8428,41 @@
         ]
       }
     },
+    "/api/v1/superadmin/sellers": {
+      "get": {
+        "tags": [
+          "superadmin"
+        ],
+        "summary": "─── Vendedoras: cuánto vendió cada una y cuánto se le debe ─────────────────── GET /superadmin/sellers?desde=YYYY-MM-DD&hasta=YYYY-MM-DD Sin fechas, devuelve todo el histórico. Las comisiones se liquidan por mes, así que el filtro es sobre la FECHA DE CREACIÓN de la cuenta (cuando se vendió).",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operación exitosa",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespuestaOk"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sin sesión o token vencido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/superadmin/stats": {
       "get": {
         "tags": [

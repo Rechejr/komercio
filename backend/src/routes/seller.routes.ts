@@ -11,6 +11,7 @@ import { createBusinessForOwner } from '../controllers/auth.controller';
 import { getWompiTransaction, WOMPI_CONFIGURED, PLAN_PRICES, CONTABLE_ANNUAL_PRICE } from '../controllers/payment.controller';
 import { generarPasswordTemporal } from '../utils/tempPassword';
 import { getVapidPublicKey, sendPushToSellers, pushEnabled } from '../config/webpush';
+import { planDesdeMonto, planDesdeDuracion } from '../utils/comision';
 
 // Portal de vendedoras (/seller): cada vendedora inicia sesión y crea cuentas de
 // clientes ya listas (verificadas, en Pro, con clave) para enviarlas por WhatsApp.
@@ -166,7 +167,26 @@ router.get('/accounts', authSeller, async (req: any, res: any, next: any) => {
         owner: { select: { name: true, email: true } },
       },
     });
-    return success(res, businesses);
+
+    // La comisión la calcula el SERVIDOR, no el navegador: es la misma cifra que
+    // ve el dueño en su panel, así que no pueden discrepar a la hora de pagar.
+    // Cuando la venta entró por el link se usa el monto realmente pagado; en las
+    // creadas a mano se deduce de la duración del plan.
+    const compras = await prisma.guestCheckout.findMany({
+      where: { status: 'provisioned', businessId: { in: businesses.map((b) => b.id) } },
+      select: { businessId: true, amount: true, productType: true },
+    });
+    const porNegocio = new Map(compras.map((c) => [c.businessId!, c]));
+
+    const conComision = businesses.map((b) => {
+      const compra = porNegocio.get(b.id);
+      const plan = compra
+        ? planDesdeMonto(compra.amount, compra.productType)
+        : planDesdeDuracion({ type: b.type, createdAt: b.createdAt, planExpiresAt: b.planExpiresAt });
+      return { ...b, periodo: plan.periodo, precio: plan.precio, comision: plan.comision };
+    });
+
+    return success(res, conComision);
   } catch (err) { next(err); }
 });
 

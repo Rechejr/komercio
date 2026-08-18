@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import { PanelVendedoras } from '@/components/superadmin/PanelVendedoras';
 import toast from 'react-hot-toast';
 import {
   Building2, Users, ShoppingCart, Zap, Search,
@@ -485,6 +486,10 @@ export default function SuperAdminPage() {
           </div>
         </div>
       )}
+
+      {/* Vendedoras y comisiones — va antes de la tabla de negocios porque es
+          lo que se revisa periódicamente para liquidar. */}
+      <PanelVendedoras />
 
       {/* Businesses table */}
       <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">

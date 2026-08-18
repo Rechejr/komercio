@@ -7,6 +7,7 @@ import { AppError, success, paginated } from '../utils/response';
 import { getPagination } from '../utils/pagination';
 import { AuthRequest } from '../middlewares/auth';
 import { PLAN_PRICES, CONTABLE_ANNUAL_PRICE } from '../controllers/payment.controller';
+import { planDesdeMonto, planDesdeDuracion, COMMISSION_RATE, ANNUAL_CAP } from '../utils/comision';
 
 const router = Router();
 
@@ -339,6 +340,98 @@ router.delete('/businesses/:id', deleteBusinessLimiter, async (req: AuthRequest,
     });
 
     return success(res, null, `Negocio "${business.name}" eliminado permanentemente`);
+  } catch (err) { next(err); }
+});
+
+// ─── Vendedoras: cuánto vendió cada una y cuánto se le debe ───────────────────
+// GET /superadmin/sellers?desde=YYYY-MM-DD&hasta=YYYY-MM-DD
+// Sin fechas, devuelve todo el histórico. Las comisiones se liquidan por mes, así
+// que el filtro es sobre la FECHA DE CREACIÓN de la cuenta (cuando se vendió).
+router.get('/sellers', async (req: AuthRequest, res, next) => {
+  try {
+    const desde = req.query.desde ? new Date(String(req.query.desde)) : null;
+    const hasta = req.query.hasta ? new Date(String(req.query.hasta)) : null;
+    if (hasta) hasta.setHours(23, 59, 59, 999);
+
+    const rango = desde || hasta
+      ? { createdAt: { ...(desde ? { gte: desde } : {}), ...(hasta ? { lte: hasta } : {}) } }
+      : {};
+
+    const [vendedoras, negocios, compras] = await Promise.all([
+      prisma.seller.findMany({
+        orderBy: { createdAt: 'asc' },
+        select: { id: true, name: true, slug: true, phone: true, active: true },
+      }),
+      // Solo lo vendido por una vendedora: lo demás no genera comisión.
+      prisma.business.findMany({
+        where: { createdBySellerId: { not: null }, deletedAt: null, ...rango },
+        select: {
+          id: true, name: true, type: true, plan: true, createdAt: true,
+          planExpiresAt: true, createdBySellerId: true,
+          owner: { select: { name: true, email: true, phone: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+      // El monto REAL pagado, cuando la venta entró por el link (compra sin
+      // cuenta). Para las creadas a mano se deduce de la duración del plan.
+      prisma.guestCheckout.findMany({
+        where: { status: 'provisioned', businessId: { not: null } },
+        select: { businessId: true, amount: true, productType: true },
+      }),
+    ]);
+
+    const montoPorNegocio = new Map(compras.map((c) => [c.businessId!, c]));
+
+    const ventasPorVendedora = new Map<string, Array<Record<string, unknown>>>();
+    for (const b of negocios) {
+      const compra = montoPorNegocio.get(b.id);
+      const plan = compra
+        ? planDesdeMonto(compra.amount, compra.productType)
+        : planDesdeDuracion({ type: b.type, createdAt: b.createdAt, planExpiresAt: b.planExpiresAt });
+
+      const lista = ventasPorVendedora.get(b.createdBySellerId!) ?? [];
+      lista.push({
+        businessId: b.id,
+        negocio: b.name,
+        producto: b.type === 'contable' ? 'Contable' : 'POS',
+        cliente: b.owner?.name ?? '—',
+        email: b.owner?.email ?? '',
+        celular: b.owner?.phone ?? '',
+        periodo: plan.periodo,
+        precio: plan.precio,
+        comision: plan.comision,
+        // De dónde salió la cifra: del pago real o deducida de la duración.
+        montoReal: !!compra,
+        fecha: b.createdAt,
+        plan: b.plan,
+        planExpiresAt: b.planExpiresAt,
+      });
+      ventasPorVendedora.set(b.createdBySellerId!, lista);
+    }
+
+    const filas = vendedoras.map((v) => {
+      const ventas = ventasPorVendedora.get(v.id) ?? [];
+      const facturado = ventas.reduce((a, x) => a + (x.precio as number), 0);
+      const comision = ventas.reduce((a, x) => a + (x.comision as number), 0);
+      return {
+        ...v,
+        cuentas: ventas.length,
+        facturado,
+        comision,
+        ultimaVenta: ventas.length ? ventas[0].fecha : null,
+        ventas,
+      };
+    });
+
+    return success(res, {
+      vendedoras: filas.sort((a, b) => b.comision - a.comision),
+      totales: {
+        cuentas: filas.reduce((a, f) => a + f.cuentas, 0),
+        facturado: filas.reduce((a, f) => a + f.facturado, 0),
+        comision: filas.reduce((a, f) => a + f.comision, 0),
+      },
+      reglas: { porcentaje: COMMISSION_RATE, topeAnual: ANNUAL_CAP },
+    });
   } catch (err) { next(err); }
 });
 

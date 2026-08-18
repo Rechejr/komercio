@@ -11,7 +11,13 @@ import toast from 'react-hot-toast';
 
 type Period = 'monthly' | 'quarterly' | 'annual';
 interface ProvisionResult { name: string; email: string; password: string; businessType: string; businessName: string; loginUrl: string }
-interface Account { id: string; name: string; type: string; plan: string; planExpiresAt: string | null; createdAt: string; owner: { name: string; email: string } }
+interface Account {
+  id: string; name: string; type: string; plan: string; planExpiresAt: string | null; createdAt: string;
+  owner: { name: string; email: string };
+  // Calculados por el SERVIDOR: es la misma cifra que ve el dueño en su panel,
+  // así que a la hora de liquidar no pueden discrepar.
+  periodo?: string; precio?: number; comision?: number;
+}
 // Compra hecha por el link de la vendedora: el cliente pagó solo y el sistema le
 // creó la cuenta. Aquí ella ve a quién escribirle si el correo no llegó.
 interface Compra {
@@ -22,13 +28,17 @@ interface Compra {
 
 const PERIOD_LABEL: Record<Period, string> = { monthly: 'Mensual', quarterly: 'Trimestral', annual: 'Anual' };
 
-// Comisión: 30% del primer pago, con tope de $40.000 en planes anuales. Se deriva
-// el plan/periodo de cada cuenta a partir de su duración (planExpiresAt-createdAt).
+// Comisión: 30% del primer pago, con tope de $40.000 en planes anuales. La
+// calcula el backend (utils/comision.ts) y viene en la respuesta; esto queda solo
+// como respaldo por si una respuesta vieja no la trae.
 const COMMISSION_RATE = 0.30;
 const ANNUAL_CAP = 40000;
 const money = (n: number) => `$${Math.round(n).toLocaleString('es-CO')}`;
 
 function planInfo(a: Account): { periodLabel: string; price: number; commission: number } {
+  if (a.comision !== undefined && a.precio !== undefined) {
+    return { periodLabel: a.periodo || '', price: a.precio, commission: a.comision };
+  }
   const created = new Date(a.createdAt).getTime();
   const expires = a.planExpiresAt ? new Date(a.planExpiresAt).getTime() : created;
   const months = Math.max(1, Math.round((expires - created) / (30 * 24 * 60 * 60 * 1000)));
