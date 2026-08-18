@@ -98,3 +98,124 @@ jobs:
 
       - name: Compilar
         run: cd frontend && npm run build
+
+  # ── E2E de humo: la app entera funcionando ──────────────────────────────────
+  # Levanta Postgres, Redis, el backend y el frontend, y maneja la app con un
+  # navegador de verdad. Las pruebas unitarias verifican piezas; esto verifica
+  # que el conjunto ARRANCA y se puede usar, que es lo que ninguna otra capa mira.
+  #
+  # Solo van cinco specs — entrar, tablero, POS, inventario y ventas — porque son
+  # los estables y cubren el camino que no puede romperse nunca. Los otros nueve
+  # (clientes, proveedores, compras, caja…) se corren a mano al tocar esa zona:
+  # esperan modales con tiempos fijos y unos dependen de otros, así que en cada
+  # push pondrían el CI en rojo por fragilidad y no por errores reales, que es
+  # como la gente termina ignorándolo.
+  #
+  # Corre DESPUÉS de que backend y frontend pasen: si algo básico está roto, no
+  # tiene sentido gastar minutos levantando la aplicación completa.
+  e2e:
+    name: E2E de humo (Playwright)
+    runs-on: ubuntu-latest
+    needs: [backend-build, frontend-build]
+    # En local, contra una base remota, estos cinco specs tardan ~11 min; aquí la
+    # base corre en el mismo runner, así que bajan bastante. 25 deja margen para
+    # los npm ci, los builds y la descarga del navegador sin cortar a la mitad.
+    timeout-minutes: 25
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: ventrix_e2e
+        ports: ['5432:5432']
+        options: --health-cmd pg_isready --health-interval 10s
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: --health-cmd "redis-cli ping" --health-interval 10s
+
+    env:
+      DATABASE_URL: postgresql://test:test@localhost:5432/ventrix_e2e
+      JWT_SECRET: test-secret-ci-at-least-32-characters-long
+      JWT_REFRESH_SECRET: test-refresh-secret-ci-at-least-32-characters-long
+      # NODE_ENV=test a propósito: en production el límite de intentos de login
+      # baja a 5 por cuarto de hora y los E2E, que inician sesión muchas veces,
+      # se bloquearían solos.
+      NODE_ENV: test
+      PORT: '4000'
+      CORS_ORIGIN: http://localhost:3001
+      NEXT_PUBLIC_API_URL: http://localhost:4000/api/v1
+      NEXT_PUBLIC_SOCKET_URL: http://localhost:4000
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22' }
+
+      # ── Backend ──
+      - name: Backend — dependencias y build
+        run: |
+          cd backend
+          npm ci
+          npx prisma generate
+          npx prisma migrate deploy
+          npm run build
+
+      - name: Backend — datos de prueba
+        # El seed crea admin@komercio.app, su negocio y productos de ejemplo:
+        # es con esa cuenta que Playwright inicia sesión.
+        run: cd backend && npm run db:seed
+
+      - name: Backend — arrancar
+        run: |
+          cd backend
+          node dist/index.js > /tmp/backend.log 2>&1 &
+          for i in $(seq 1 60); do
+            curl -sf http://localhost:4000/health > /dev/null && echo "backend arriba" && exit 0
+            sleep 2
+          done
+          echo "El backend no arrancó:"; cat /tmp/backend.log; exit 1
+
+      # ── Frontend ──
+      - name: Frontend — dependencias y build
+        run: |
+          cd frontend
+          npm ci
+          npm run build
+
+      - name: Frontend — arrancar
+        run: |
+          cd frontend
+          npm start > /tmp/frontend.log 2>&1 &
+          for i in $(seq 1 60); do
+            curl -sf http://localhost:3001/login > /dev/null && echo "frontend arriba" && exit 0
+            sleep 2
+          done
+          echo "El frontend no arrancó:"; cat /tmp/frontend.log; exit 1
+
+      # ── Pruebas ──
+      - name: Playwright — instalar navegador
+        run: cd e2e && npm ci && npx playwright install --with-deps chromium
+
+      - name: Correr los E2E de humo
+        run: |
+          cd e2e
+          npx playwright test             tests/auth.spec.ts             tests/dashboard.spec.ts             tests/pos.spec.ts             tests/inventario.spec.ts             tests/ventas.spec.ts
+
+      - name: Guardar el reporte si algo falla
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reporte-e2e
+          path: |
+            e2e/playwright-report/
+            e2e/test-results/
+          retention-days: 7
+
+      - name: Logs de los servidores si algo falla
+        if: failure()
+        run: |
+          echo "───── backend ─────"; tail -60 /tmp/backend.log || true
+          echo "───── frontend ────"; tail -40 /tmp/frontend.log || true
