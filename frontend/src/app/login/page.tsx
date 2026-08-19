@@ -66,15 +66,17 @@ function SocialBtn({ onClick, disabled, loading, icon, label }: {
 }
 
 // ── Google btn ────────────────────────────────────────────────────────────────
-function GoogleBtn({ onSuccess }: { onSuccess: (user: any, token: string) => void }) {
+function GoogleBtn({ onSuccess }: { onSuccess: (user: any, token: string, accounts?: Account[]) => void }) {
   const [loading, setLoading] = useState(false);
   const login = useGoogleLogin({
     onSuccess: async (res) => {
       setLoading(true);
       try {
         const r = await api.post('/auth/google', { accessToken: res.access_token });
-        const { user, accessToken } = r.data.data;
-        onSuccess(user, accessToken);
+        // `accounts` importa cuando el correo tiene POS y Contable: sin pasarlo,
+        // no aparece el selector y entra siempre al producto por defecto.
+        const { user, accessToken, accounts } = r.data.data;
+        onSuccess(user, accessToken, accounts);
       } catch (err: any) {
         toast.error(err.response?.data?.error || 'No se pudo iniciar sesión con Google');
       } finally {

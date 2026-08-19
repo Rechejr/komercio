@@ -519,9 +519,8 @@ describe('authController.googleAuth', () => {
   it('enlaza la cuenta de Google a un usuario que ya existía por correo', async () => {
     mockGoogle({ aud: CLIENT_ID, sub: 'g-999' }, perfilGoogle);
     mockPrisma.user.findFirst.mockResolvedValue({
-      id: 'u-1', name: 'Cristian', email: 'nuevo@gmail.com', role: 'ADMIN', avatar: null,
-      googleId: null, isActive: true, isEmailVerified: true, branchId: 'br-pos',
-      branch: { id: 'br-pos', businessId: 'biz-pos', business: { id: 'biz-pos', name: 'Mi Tienda', plan: 'pro' } },
+      ...usuarioMulticuenta, email: 'nuevo@gmail.com', googleId: null, isActive: true,
+      businesses: [usuarioMulticuenta.businesses[0]], // solo POS
     });
     const { res, json } = makeRes();
 
@@ -529,10 +528,50 @@ describe('authController.googleAuth', () => {
 
     expect(mockPrisma.user.update).toHaveBeenCalledWith({
       where: { id: 'u-1' },
-      data: { googleId: 'g-999', avatar: 'https://foto' },
+      data: { googleId: 'g-999', avatar: 'https://foto', isEmailVerified: true },
     });
     expect(mockPrisma.user.create).not.toHaveBeenCalled(); // no duplica la cuenta
     expect(json.mock.calls[0][0].data.accessToken).toBe('access-token-nuevo');
+  });
+
+  it('da por verificado el correo de quien entra con Google', async () => {
+    // Caso real: la cuenta se creó con correo y clave y quedó sin verificar.
+    // Al entrar con Google, el correo ya está demostrado. Si se dejara sin
+    // verificar, quedaría en un limbo: entra con Google pero el login con
+    // contraseña la rechaza con 403 por no verificada.
+    mockGoogle({ aud: CLIENT_ID, sub: 'g-999' }, perfilGoogle);
+    mockPrisma.user.findFirst.mockResolvedValue({
+      ...usuarioMulticuenta, email: 'nuevo@gmail.com', googleId: 'g-999',
+      isActive: true, isEmailVerified: false,
+    });
+    const { res, json } = makeRes();
+
+    await authController.googleAuth(makeReq({ body: { accessToken: 'g-tok' } }), res, makeNext());
+
+    expect(mockPrisma.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ isEmailVerified: true }) }),
+    );
+    expect(json.mock.calls[0][0].data.user.isEmailVerified).toBe(true);
+  });
+
+  it('responde con el producto de la cuenta y la lista de cuentas', async () => {
+    // Sin businessType, a un contador que entra con Google el frontend lo
+    // mandaba al tablero del POS; sin accounts, quien tiene los dos productos
+    // no veía el selector para elegir.
+    mockGoogle({ aud: CLIENT_ID, sub: 'g-999' }, perfilGoogle);
+    mockPrisma.user.findFirst.mockResolvedValue({
+      ...usuarioMulticuenta, email: 'nuevo@gmail.com', googleId: 'g-999', isActive: true,
+    });
+    const { res, json } = makeRes();
+
+    await authController.googleAuth(makeReq({ body: { accessToken: 'g-tok' } }), res, makeNext());
+
+    const data = json.mock.calls[0][0].data;
+    expect(data.user.businessType).toBe('pos'); // su sucursal asignada manda
+    expect(data.accounts).toEqual([
+      expect.objectContaining({ businessId: 'biz-pos', businessType: 'pos' }),
+      expect.objectContaining({ businessId: 'biz-cont', businessType: 'contable' }),
+    ]);
   });
 
   it('crea usuario y negocio la primera vez que entra con Google', async () => {

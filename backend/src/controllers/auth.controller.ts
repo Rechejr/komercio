@@ -593,28 +593,24 @@ export const authController = {
 
       if (!email) throw new AppError('No se pudo obtener el correo de Google', 400);
 
-      const INCLUDE_BRANCH = {
-        branch: {
-          select: {
-            id: true,
-            businessId: true,
-            business: { select: { id: true, name: true, plan: true } },
-          },
-        },
-      } as const;
-
+      // Mismo include que el login con correo: hace falta para armar la lista de
+      // cuentas (POS / Contable) del usuario.
       let user = await prisma.user.findFirst({
         where: { OR: [{ email }, { googleId }], deletedAt: null },
-        include: INCLUDE_BRANCH,
+        include: USER_ACCOUNTS_INCLUDE,
       });
 
       if (user) {
-        // Link Google account if not already linked
-        if (!user.googleId) {
+        // Enlazar Google a la cuenta que ya existía. Se marca el correo como
+        // verificado: quien acaba de entrar con Google demostró que el correo es
+        // suyo, y si se dejara sin verificar quedaría en un limbo raro — entra
+        // por Google pero el login con contraseña lo rechaza por no verificado.
+        if (!user.googleId || !user.isEmailVerified) {
           await prisma.user.update({
             where: { id: user.id },
-            data: { googleId, avatar: avatar || user.avatar },
+            data: { googleId, avatar: avatar || user.avatar, isEmailVerified: true },
           });
+          user = { ...user, isEmailVerified: true };
         }
       } else {
         // Usuario nuevo: cuenta + negocio en una sola transacción. El negocio se
@@ -646,28 +642,22 @@ export const authController = {
 
           return tx.user.findUniqueOrThrow({
             where: { id: newUser.id },
-            include: INCLUDE_BRANCH,
+            include: USER_ACCOUNTS_INCLUDE,
           });
         });
       }
 
       if (!user!.isActive) throw new AppError('Cuenta desactivada. Contacta al administrador.', 403);
 
-      const jwtPayload = {
-        userId: user!.id,
-        email: user!.email,
-        role: user!.role,
-        businessId: user!.branch?.businessId,
-        branchId: user!.branchId ?? undefined,
-      };
+      // De aquí en adelante, exactamente lo mismo que el login con correo: la
+      // respuesta tiene que traer businessType y la lista de cuentas. Sin
+      // businessType, a un contador que entra con Google el frontend lo mandaba
+      // al tablero del POS; sin accounts, quien tiene los dos productos no veía
+      // el selector para elegir a cuál entrar.
+      const accounts = buildAccounts(user);
+      const account = defaultAccount(user, accounts) || ({ businessType: 'pos', plan: 'free' } as Account);
 
-      const accessToken = generateAccessToken(jwtPayload);
-      const refreshToken = generateRefreshToken(jwtPayload);
-      const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
-
-      await prisma.refreshToken.create({
-        data: { token: refreshToken, userId: user!.id, expiresAt: new Date(Date.now() + THIRTY_DAYS) },
-      });
+      const accessToken = await issueSession(res, user, account);
 
       prisma.refreshToken.deleteMany({
         where: { userId: user!.id, expiresAt: { lt: new Date() } },
@@ -675,27 +665,10 @@ export const authController = {
 
       await prisma.user.update({ where: { id: user!.id }, data: { lastLogin: new Date() } });
 
-      res.cookie('refreshToken', refreshToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'strict',
-        maxAge: THIRTY_DAYS,
-      });
-
       return success(res, {
         accessToken,
-        user: {
-          id: user!.id,
-          name: user!.name,
-          email: user!.email,
-          role: user!.role,
-          avatar: user!.avatar,
-          branchId: user!.branchId ?? undefined,
-          businessId: user!.branch?.businessId ?? undefined,
-          businessName: user!.branch?.business?.name ?? undefined,
-          isEmailVerified: user!.isEmailVerified,
-          plan: user!.branch?.business?.plan || 'free',
-        },
+        user: userResponse(user, account),
+        accounts: publicAccounts(accounts),
       }, 'Sesión iniciada con Google');
     } catch (err) {
       next(err);
