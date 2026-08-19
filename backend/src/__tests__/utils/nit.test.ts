@@ -1,4 +1,6 @@
-import { calcularDV, soloDigitos, separarNitDv, ultimoDigito, dosUltimosDigitos } from '../../utils/nit';
+import {
+  calcularDV, soloDigitos, separarNitDv, nitConDvPegado, ultimoDigito, dosUltimosDigitos,
+} from '../../utils/nit';
 
 // El NIT es la llave del cliente contable y, por su último dígito, define TODO su
 // calendario DIAN. Un dígito de más (por ejemplo el DV metido dentro del número)
@@ -84,6 +86,63 @@ describe('separarNitDv + calcularDV, juntos', () => {
     const { nit, dvExplicito } = separarNitDv('890903938-3');
     expect(dvExplicito).toBe(3);
     expect(calcularDV(nit)).toBe(8); // el correcto
+  });
+});
+
+// Este detector decide qué clientes toca el script de reparación
+// (scripts/backfillNitDv.ts). Un falso positivo le cambiaría el NIT a un cliente
+// que estaba bien, así que ante la duda tiene que devolver null.
+describe('nitConDvPegado', () => {
+  it.each([
+    ['8909039388', '890903938', 'Bancolombia con su DV pegado'],
+    ['8999990681', '899999068', 'Ecopetrol con su DV pegado'],
+    ['8001972684', '800197268', 'DIAN con su DV pegado'],
+  ])('detecta %s → %s (%s)', (guardado, esperado) => {
+    expect(nitConDvPegado(guardado)).toBe(esperado);
+  });
+
+  it('detecta una cédula de 11 dígitos, largo imposible sin el DV', () => {
+    const cedula = '1020304050';
+    const conDv = `${cedula}${calcularDV(cedula)}`;
+    expect(conDv).toHaveLength(11);
+    expect(nitConDvPegado(conDv)).toBe(cedula);
+  });
+
+  it.each([
+    ['890903938', 'un NIT de empresa correcto, de 9 dígitos'],
+    ['1020304050', 'una cédula de 10 dígitos'],
+    ['79123456', 'una cédula de 8 dígitos'],
+  ])('deja quieto %s (%s)', (nit) => {
+    expect(nitConDvPegado(nit)).toBeNull();
+  });
+
+  it('no toca una cédula de 10 dígitos aunque el DV cuadre de casualidad', () => {
+    // Empieza por 1, así que es un documento de persona: no se puede afirmar que
+    // el último dígito sea un DV. Pasa 1 de cada 11 veces por puro azar.
+    const cedulas = ['1000000000', '1000000001', '1000000002', '1000000003', '1000000004',
+                     '1000000005', '1000000006', '1000000007', '1000000008', '1000000009',
+                     '1000000010'];
+    const casuales = cedulas.filter((c) => calcularDV(c.slice(0, -1)) === Number(c.slice(-1)));
+    expect(casuales.length).toBeGreaterThan(0); // el azar existe
+    for (const c of casuales) expect(nitConDvPegado(c)).toBeNull(); // y aun así no se toca
+  });
+
+  it.each([
+    ['9001234561', 'el DV no corresponde'],
+    ['', 'vacío'],
+    ['900-123', 'con caracteres raros'],
+    ['abc', 'sin dígitos'],
+  ])('devuelve null para %s (%s)', (nit) => {
+    expect(nitConDvPegado(nit)).toBeNull();
+  });
+
+  it('lo que corrige queda idéntico a lo que hoy guardaría separarNitDv', () => {
+    // Un cliente reparado tiene que quedar igual que si se hubiera importado
+    // después del fix; si no, seguiría habiendo dos formas del mismo NIT.
+    for (const nit of ['890903938', '899999068', '800197268']) {
+      const guardadoMal = `${nit}${calcularDV(nit)}`;
+      expect(nitConDvPegado(guardadoMal)).toBe(separarNitDv(`${nit}-${calcularDV(nit)}`).nit);
+    }
   });
 });
 

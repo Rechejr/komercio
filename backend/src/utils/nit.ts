@@ -40,6 +40,27 @@ export function separarNitDv(raw: string): { nit: string; dvExplicito: number | 
   return { nit: soloDigitos(texto), dvExplicito: null };
 }
 
+/** ¿Este NIT ya guardado trae el DV pegado al final? Devuelve el NIT sin él, o
+ *  null si no se puede afirmar. Lo usa el script que repara los clientes que se
+ *  guardaron mal antes de que existiera separarNitDv().
+ *
+ *  Que el último dígito coincida con el DV del resto pasa por azar 1 de cada 11
+ *  veces, así que NO alcanza como criterio: se exige además una longitud que sea
+ *  imposible para un documento legítimo.
+ *   - NIT de empresa: son 9 dígitos y empiezan por 8 o 9 → con el DV, 10.
+ *   - Cédula: máximo 10 dígitos → 11 dígitos solo se explica por el DV pegado.
+ *  Ante la duda se devuelve null: es preferible dejar un NIT malo sin tocar que
+ *  romper uno bueno. */
+export function nitConDvPegado(nit: string): string | null {
+  if (!/^\d+$/.test(nit)) return null;
+  const cuerpo = nit.slice(0, -1);
+  if (!cuerpo) return null;
+  if (calcularDV(cuerpo) !== Number(nit.slice(-1))) return null;
+  if (nit.length === 10 && /^[89]/.test(nit)) return cuerpo;
+  if (nit.length === 11) return cuerpo;
+  return null;
+}
+
 /** Último dígito del NIT — clave general del calendario DIAN. */
 export function ultimoDigito(nit: string): number {
   return Number(soloDigitos(nit).slice(-1) || '0');

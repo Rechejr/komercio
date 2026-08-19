@@ -16,6 +16,7 @@
     "db:backfill-product-stock": "ts-node prisma/backfillProductStock.ts",
     "db:backfill-payment-accounts": "ts-node scripts/backfillPaymentAccounts.ts",
     "db:backfill-pila-dates": "ts-node scripts/backfillPilaDates.ts",
+    "db:fix-nit-dv": "ts-node scripts/backfillNitDv.ts",
     "db:backup": "ts-node scripts/backup.ts",
     "db:seed-calendario": "ts-node prisma/seedCalendario.ts",
     "db:studio": "prisma studio",
