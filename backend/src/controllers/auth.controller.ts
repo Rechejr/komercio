@@ -617,12 +617,12 @@ export const authController = {
           });
         }
       } else {
-        // New user — create account + business in one transaction
+        // Usuario nuevo: cuenta + negocio en una sola transacción. El negocio se
+        // crea con createBusinessForOwner —el MISMO camino que el registro con
+        // correo— para que nazca completo: bodega, categorías de gasto y medios
+        // de pago. Cuando esto se armaba aparte, el negocio quedaba sin medios de
+        // pago y el dueño abría el POS sin nada con qué cobrar.
         const randomPwd = await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 12);
-        const defaultCategories = [
-          'Arriendo', 'Servicios públicos', 'Nómina', 'Transporte',
-          'Publicidad', 'Insumos', 'Mantenimiento', 'Otros',
-        ];
 
         user = await prisma.$transaction(async (tx) => {
           const newUser = await tx.user.create({
@@ -635,25 +635,13 @@ export const authController = {
               role: 'ADMIN',
               isEmailVerified: true,
             },
-            include: INCLUDE_BRANCH,
           });
 
-          const business = await tx.business.create({
-            data: {
-              name: `Negocio de ${newUser.name}`,
-              ownerId: newUser.id,
-              branches: { create: { name: 'Bodega Principal', createdById: newUser.id } },
-            },
-            include: { branches: true },
-          });
-
-          await tx.user.update({
-            where: { id: newUser.id },
-            data: { branchId: business.branches[0].id },
-          });
-
-          await tx.expenseCategory.createMany({
-            data: defaultCategories.map((n) => ({ name: n, businessId: business.id })),
+          await createBusinessForOwner(tx, {
+            userId: newUser.id,
+            businessName: `Negocio de ${newUser.name}`,
+            businessType: 'pos',
+            assignBranch: true,
           });
 
           return tx.user.findUniqueOrThrow({

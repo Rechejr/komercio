@@ -555,9 +555,40 @@ describe('authController.googleAuth', () => {
     expect(datosUsuario.isEmailVerified).toBe(true); // Google ya verificó el correo
     expect(datosUsuario.role).toBe('ADMIN');
     expect(mockPrisma.business.create).toHaveBeenCalled();
-    expect(mockPrisma.expenseCategory.createMany).toHaveBeenCalled();
     expect(cookie).toHaveBeenCalledWith('refreshToken', 'refresh-token-nuevo', expect.objectContaining({ httpOnly: true }));
     expect(json.mock.calls[0][0].data.user.businessId).toBe('biz-nuevo');
+  });
+
+  it('el negocio nace COMPLETO, igual que en el registro con correo', async () => {
+    // Entrar con Google crea la cuenta al vuelo. Si ese negocio naciera sin
+    // medios de pago, el dueño abriría el POS sin nada con qué cobrar: por eso
+    // pasa por createBusinessForOwner, el mismo camino que el registro normal.
+    mockGoogle({ aud: CLIENT_ID, sub: 'g-999' }, perfilGoogle);
+    mockPrisma.user.findFirst.mockResolvedValue(null);
+    mockPrisma.user.create.mockResolvedValue({ id: 'u-nuevo', name: 'Cristian', email: 'nuevo@gmail.com' });
+    mockPrisma.business.create.mockResolvedValue({ id: 'biz-nuevo', branches: [{ id: 'br-nuevo' }] });
+    mockPrisma.user.findUniqueOrThrow.mockResolvedValue({
+      id: 'u-nuevo', name: 'Cristian', email: 'nuevo@gmail.com', role: 'ADMIN',
+      isActive: true, isEmailVerified: true, branchId: 'br-nuevo',
+      branch: { id: 'br-nuevo', businessId: 'biz-nuevo', business: { id: 'biz-nuevo', name: 'Negocio de Cristian', plan: 'free' } },
+    });
+    const { res } = makeRes();
+
+    await authController.googleAuth(makeReq({ body: { accessToken: 'g-tok' } }), res, makeNext());
+
+    // Bodega principal, categorías de gasto y —lo que faltaba— medios de pago.
+    expect(mockPrisma.business.create.mock.calls[0][0].data.branches.create.name).toBe('Bodega Principal');
+    expect(mockPrisma.expenseCategory.createMany).toHaveBeenCalled();
+    expect(mockPrisma.paymentAccount.createMany).toHaveBeenCalled();
+    const medios = mockPrisma.paymentAccount.createMany.mock.calls[0][0].data;
+    expect(medios.map((m: { name: string }) => m.name)).toEqual(
+      expect.arrayContaining(['Efectivo', 'Nequi', 'Daviplata']),
+    );
+    expect(medios.every((m: { businessId: string }) => m.businessId === 'biz-nuevo')).toBe(true);
+    // Y el usuario queda anclado a esa bodega.
+    expect(mockPrisma.user.update).toHaveBeenCalledWith({
+      where: { id: 'u-nuevo' }, data: { branchId: 'br-nuevo' },
+    });
   });
 
   it('no deja entrar a una cuenta desactivada', async () => {

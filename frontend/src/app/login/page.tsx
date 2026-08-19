@@ -41,26 +41,10 @@ function GoogleIcon() {
   );
 }
 
-function FacebookIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="#1877F2">
-      <path d="M24 12.073C24 5.405 18.627 0 12 0S0 5.405 0 12.073C0 18.1 4.388 23.094 10.125 24v-8.437H7.078v-3.49h3.047V9.41c0-3.025 1.792-4.697 4.533-4.697 1.312 0 2.686.235 2.686.235v2.953h-1.514c-1.491 0-1.956.93-1.956 1.886v2.286h3.328l-.532 3.49h-2.796V24C19.612 23.094 24 18.1 24 12.073Z"/>
-    </svg>
-  );
-}
-
-function AppleIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-      <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98l-.09.06c-.22.15-2.19 1.28-2.17 3.81.03 3.02 2.65 4.03 2.68 4.04l-.06.27Zm-5.3-17.26c.73-.89 1.94-1.56 2.94-1.6.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.01Z"/>
-    </svg>
-  );
-}
-
 // ── Social button ─────────────────────────────────────────────────────────────
-function SocialBtn({ onClick, disabled, loading, icon, label, faded }: {
+function SocialBtn({ onClick, disabled, loading, icon, label }: {
   onClick: () => void; disabled?: boolean; loading?: boolean;
-  icon: React.ReactNode; label: string; faded?: boolean;
+  icon: React.ReactNode; label: string;
 }) {
   return (
     <button
@@ -73,7 +57,6 @@ function SocialBtn({ onClick, disabled, loading, icon, label, faded }: {
         'text-slate-700 dark:text-slate-300',
         'hover:bg-slate-50 dark:hover:bg-slate-800 hover:border-slate-300 dark:hover:border-slate-600',
         'disabled:opacity-50 disabled:cursor-not-allowed',
-        faded ? 'opacity-50' : '',
       ].join(' ')}
     >
       {loading ? <Loader2 size={15} className="animate-spin" /> : icon}
@@ -100,7 +83,7 @@ function GoogleBtn({ onSuccess }: { onSuccess: (user: any, token: string) => voi
     },
     onError: () => toast.error('No se pudo conectar con Google'),
   });
-  return <SocialBtn onClick={() => login()} loading={loading} icon={<GoogleIcon />} label="Google" />;
+  return <SocialBtn onClick={() => login()} loading={loading} icon={<GoogleIcon />} label="Continuar con Google" />;
 }
 
 // ── Field ─────────────────────────────────────────────────────────────────────
@@ -490,39 +473,23 @@ function LoginForm() {
         </div>
       )}
 
-      {/* Social divider */}
-      <div className="flex items-center gap-3 my-5">
-        <div className="flex-1 h-px bg-slate-200 dark:bg-slate-700/60" />
-        <span className="text-[12px] text-slate-400 dark:text-slate-500 whitespace-nowrap">O continúa con</span>
-        <div className="flex-1 h-px bg-slate-200 dark:bg-slate-700/60" />
-      </div>
+      {/* Entrar con Google. Si no hay client id configurado, la sección entera no
+          se muestra: es preferible que no exista a que el cliente vea un botón
+          que no funciona. Basta con definir NEXT_PUBLIC_GOOGLE_CLIENT_ID para
+          que aparezca. */}
+      {GOOGLE_CLIENT_ID && (
+        <>
+          <div className="flex items-center gap-3 my-5">
+            <div className="flex-1 h-px bg-slate-200 dark:bg-slate-700/60" />
+            <span className="text-[12px] text-slate-400 dark:text-slate-500 whitespace-nowrap">O continúa con</span>
+            <div className="flex-1 h-px bg-slate-200 dark:bg-slate-700/60" />
+          </div>
 
-      <div className="grid grid-cols-3 gap-2.5">
-        {GOOGLE_CLIENT_ID ? (
           <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
             <GoogleBtn onSuccess={handleAuthSuccess} />
           </GoogleOAuthProvider>
-        ) : (
-          <SocialBtn
-            onClick={() => toast('Configura NEXT_PUBLIC_GOOGLE_CLIENT_ID', { icon: '⚙️' })}
-            icon={<GoogleIcon />}
-            label="Google"
-            faded
-          />
-        )}
-        <SocialBtn
-          onClick={() => toast('Facebook próximamente', { icon: '🚧' })}
-          icon={<FacebookIcon />}
-          label="Facebook"
-          faded
-        />
-        <SocialBtn
-          onClick={() => toast('Apple próximamente', { icon: '🚧' })}
-          icon={<AppleIcon />}
-          label="Apple"
-          faded
-        />
-      </div>
+        </>
+      )}
     </div>
   );
 }
