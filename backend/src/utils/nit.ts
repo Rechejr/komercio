@@ -22,6 +22,24 @@ export function soloDigitos(nit: string): string {
   return nit.replace(/\D/g, '');
 }
 
+/** Separa el NIT del dígito de verificación cuando viene escrito con guion
+ *  ("900.123.456-7" → nit 900123456, dv 7), que es como lo trae el RUT y casi
+ *  todo Excel de contador. Sin esta separación el DV entraría como parte del
+ *  número: el NIT quedaría con un dígito de más y —peor— el último dígito, que
+ *  es la clave del calendario DIAN, sería el equivocado.
+ *
+ *  Solo separa si hay guion seguido de UN dígito al final. Sin guion no se puede
+ *  adivinar: una cédula de 10 dígitos es un número legítimo, no un NIT con DV. */
+export function separarNitDv(raw: string): { nit: string; dvExplicito: number | null } {
+  const texto = String(raw ?? '').trim();
+  const conGuion = /^(.*\d)\s*-\s*(\d)$/.exec(texto);
+  if (conGuion) {
+    const nit = soloDigitos(conGuion[1]);
+    if (nit) return { nit, dvExplicito: Number(conGuion[2]) };
+  }
+  return { nit: soloDigitos(texto), dvExplicito: null };
+}
+
 /** Último dígito del NIT — clave general del calendario DIAN. */
 export function ultimoDigito(nit: string): number {
   return Number(soloDigitos(nit).slice(-1) || '0');

@@ -127,8 +127,21 @@ export function urgenciaVencimiento(iso: string, estado: EstadoVencimiento): Urg
 
 // ─── DV (idéntico al backend utils/nit.ts) ──────────────────────────────────────
 const PESOS = [3, 7, 13, 17, 19, 23, 29, 37, 41, 43, 47, 53, 59, 67, 71];
+
+/** Separa el NIT del DV cuando lo escriben con guion ("900.123.456-7"), igual
+ *  que el backend: así la vista previa del DV coincide con lo que se guardará. */
+export function separarNitDv(raw: string): { nit: string; dvExplicito: number | null } {
+  const texto = String(raw ?? '').trim();
+  const conGuion = /^(.*\d)\s*-\s*(\d)$/.exec(texto);
+  if (conGuion) {
+    const nit = conGuion[1].replace(/\D/g, '');
+    if (nit) return { nit, dvExplicito: Number(conGuion[2]) };
+  }
+  return { nit: texto.replace(/\D/g, ''), dvExplicito: null };
+}
+
 export function calcularDV(nitCrudo: string): number | null {
-  const limpio = (nitCrudo || '').replace(/\D/g, '');
+  const { nit: limpio } = separarNitDv(nitCrudo || '');
   if (!limpio) return null;
   const digitos = limpio.split('').reverse().map(Number);
   const suma = digitos.reduce((acc, d, i) => acc + d * (PESOS[i] ?? 0), 0);

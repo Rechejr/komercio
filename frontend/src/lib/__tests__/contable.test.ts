@@ -1,9 +1,20 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
-  calcularDV, calidadBloqueada, estadoManual, diasHastaVencimiento,
+  calcularDV, separarNitDv, calidadBloqueada, estadoManual, diasHastaVencimiento,
   situacionPorFecha, urgenciaVencimiento, formatNit, formatFecha,
   resumenCalidades, OBLIGACION_LABEL, type TaxClient,
 } from '../contable';
+
+describe('separarNitDv', () => {
+  it('separa el DV solo cuando viene con guion al final', () => {
+    expect(separarNitDv('890903938-8')).toEqual({ nit: '890903938', dvExplicito: 8 });
+    expect(separarNitDv('890.903.938')).toEqual({ nit: '890903938', dvExplicito: null });
+  });
+
+  it('no parte una cédula de 10 dígitos', () => {
+    expect(separarNitDv('1020304050')).toEqual({ nit: '1020304050', dvExplicito: null });
+  });
+});
 
 describe('calcularDV', () => {
   // NITs públicos reales: el DV se puede verificar contra el RUT de cada empresa.
@@ -20,6 +31,13 @@ describe('calcularDV', () => {
     expect(calcularDV('890.903.938')).toBe(8);
     expect(calcularDV('890 903 938')).toBe(8);
     expect(calcularDV('890-903-938')).toBe(8);
+  });
+
+  it('con el NIT pegado del RUT (con su DV) da el mismo DV, no otro', () => {
+    // Sin separar el DV, el "8" final entraría al número y el DV saldría errado.
+    expect(calcularDV('890903938-8')).toBe(8);
+    expect(calcularDV('890.903.938-8')).toBe(8);
+    expect(calcularDV('899.999.068-1')).toBe(1);
   });
 
   it('devuelve null si no hay dígitos', () => {

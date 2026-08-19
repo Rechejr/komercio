@@ -4,7 +4,7 @@ import { prisma } from '../config/database';
 import { AuthRequest } from '../middlewares/auth';
 import { success, created, paginated, AppError } from '../utils/response';
 import { getPagination, getSearch } from '../utils/pagination';
-import { calcularDV, soloDigitos, ultimoDigito, dosUltimosDigitos } from '../utils/nit';
+import { calcularDV, soloDigitos, separarNitDv, ultimoDigito, dosUltimosDigitos } from '../utils/nit';
 import { normalizarResponsabilidades, obligacionesSugeridas } from '../utils/calidades';
 import { periodosPila, periodosNomina } from '../utils/pila';
 import { periodosExogena } from '../utils/exogena';
@@ -179,8 +179,9 @@ export const contableController = {
 
       const where: Prisma.TaxClientWhereInput = { businessId, activo: true };
       if (search) {
-        // Buscar por razón social o por NIT (con o sin el guion del DV).
-        const soloNum = soloDigitos(search);
+        // Buscar por razón social o por NIT (con o sin el guion del DV: si lo
+        // pegan del RUT como "900123456-7", se busca por el número sin el DV).
+        const { nit: soloNum } = separarNitDv(search);
         where.OR = [
           { razonSocial: { contains: search, mode: 'insensitive' } },
           ...(soloNum ? [{ nit: { contains: soloNum } }] : []),
@@ -201,7 +202,9 @@ export const contableController = {
       const { razonSocial, nit, celular, direccion, tipoPersona, responsabilidades, ivaPeriodicidad } = req.body;
 
       if (!razonSocial?.trim()) throw new AppError('La razón social es requerida', 400);
-      const nitLimpio = soloDigitos(nit || '');
+      // Si lo escriben con el DV ("900.123.456-7"), se separa: guardar el DV
+      // dentro del número corrompería el último dígito, que define el calendario.
+      const { nit: nitLimpio } = separarNitDv(nit || '');
       if (!nitLimpio) throw new AppError('El NIT es requerido', 400);
       if (tipoPersona !== 'natural' && tipoPersona !== 'juridica') {
         throw new AppError('Tipo de persona inválido', 400);
@@ -246,7 +249,7 @@ export const contableController = {
 
       const { razonSocial, nit, celular, direccion, tipoPersona, responsabilidades, ivaPeriodicidad } = req.body;
       if (!razonSocial?.trim()) throw new AppError('La razón social es requerida', 400);
-      const nitLimpio = soloDigitos(nit || '');
+      const { nit: nitLimpio } = separarNitDv(nit || '');
       if (!nitLimpio) throw new AppError('El NIT es requerido', 400);
       if (tipoPersona !== 'natural' && tipoPersona !== 'juridica') {
         throw new AppError('Tipo de persona inválido', 400);
@@ -408,10 +411,23 @@ export const contableController = {
         if (!razonSocial) continue;
         totalRows++;
 
-        const nit = soloDigitos(cellVal(row, col.nit));
+        // El Excel de un contador suele traer el NIT con el DV ("900123456-7"),
+        // tal como sale del RUT: se separa para no meter el DV dentro del número.
+        const { nit, dvExplicito } = separarNitDv(cellVal(row, col.nit));
         if (!nit) {
           issues.push({ row: rowNum, name: razonSocial, message: 'Sin NIT/cédula — no se puede importar', type: 'error' });
           continue;
+        }
+
+        // Si trajeron el DV y no coincide con el calculado, el número está mal
+        // digitado. Se importa igual (con el DV correcto) pero se avisa para que
+        // el contador lo revise contra el RUT.
+        if (dvExplicito != null && dvExplicito !== calcularDV(nit)) {
+          issues.push({
+            row: rowNum, name: razonSocial,
+            message: `El NIT ${nit} trae DV ${dvExplicito}, pero le corresponde ${calcularDV(nit)} — revísalo contra el RUT`,
+            type: 'warning',
+          });
         }
 
         // NIT duplicado dentro del archivo → gana la primera fila, se avisa.
@@ -599,7 +615,7 @@ export const contableController = {
       const where: Prisma.VencimientoWhereInput = { taxClient: { businessId } };
       if (obligacion) where.obligacion = obligacion;
       if (search) {
-        const soloNum = soloDigitos(search);
+        const { nit: soloNum } = separarNitDv(search);
         where.taxClient = {
           businessId,
           OR: [
@@ -1001,7 +1017,7 @@ export const contableController = {
       const where: Prisma.ClientCredentialWhereInput = { deletedAt: null, taxClient: { businessId } };
       if (search) {
         // Solo agregar el filtro por NIT si hay dígitos: `contains: ''` matchea todo.
-        const num = soloDigitos(search);
+        const { nit: num } = separarNitDv(search);
         where.OR = [
           { entidad: { contains: search, mode: 'insensitive' } },
           { usuario1: { contains: search, mode: 'insensitive' } },
