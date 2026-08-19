@@ -65,16 +65,20 @@ export function HorarioAvisos() {
   if (!data) return null;
 
   return (
-    <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 px-4 py-3.5">
-      <div className="flex items-start gap-3 mb-3">
-        <Clock size={18} className="text-slate-400 flex-none mt-0.5" />
-        <div>
-          <p className="text-[13px] font-semibold text-slate-700 dark:text-slate-200">¿A qué horas quieres los avisos?</p>
-          <p className="text-[12px] text-slate-500 dark:text-slate-400">
-            Hasta 4 al día. Cada uno te dice algo distinto, no repite lo mismo.
-          </p>
+    <div className="card overflow-hidden">
+      <div className="px-6 py-4 border-b border-slate-100 dark:border-white/[0.06] flex items-center gap-2.5">
+        <div className="w-7 h-7 bg-emerald-50 dark:bg-emerald-500/10 rounded-lg flex items-center justify-center">
+          <Clock size={14} className="text-emerald-600 dark:text-emerald-400" />
         </div>
+        <h2 className="text-[14px] font-semibold text-slate-800 dark:text-white">Horario de los avisos</h2>
       </div>
+
+      <div className="p-6">
+      <p className="text-[13px] text-slate-600 dark:text-slate-400 leading-relaxed mb-4">
+        Elige a qué horas quieres que te avisemos de los vencimientos. Hasta 4 al día, y cada
+        uno te dice algo distinto: el primero da el panorama de la jornada, los de en medio
+        recuerdan lo que sigue sin presentar, y el último prepara el día siguiente.
+      </p>
 
       <div className="flex flex-wrap gap-1.5 mb-3">
         {OPCIONES.map((h) => {
@@ -121,6 +125,7 @@ export function HorarioAvisos() {
           </button>
         </div>
       )}
+      </div>
     </div>
   );
 }

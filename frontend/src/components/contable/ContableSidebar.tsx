@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -11,11 +11,26 @@ import { AccountSwitcher } from '@/components/layout/AccountSwitcher';
 import {
   LayoutDashboard, Users, CalendarClock, CalendarDays, FileText, FileSpreadsheet, ClipboardList,
   ShieldCheck, ChevronLeft, ChevronRight, LogOut, X, KeyRound, Settings, Receipt,
+  type LucideIcon,
 } from 'lucide-react';
+
+// Marca de "ya vio lo nuevo". Lleva versión en el nombre: el día que haya otra
+// novedad que anunciar, se cambia el sufijo y el distintivo vuelve a aparecer,
+// sin que a nadie le reaparezca el de la vez pasada.
+const NUEVO_KEY = 'ventrix-contable-nuevo-v1';
+
+type NavItem = {
+  href: string;
+  icon: LucideIcon;
+  label: string;
+  roles: readonly string[];
+  /** Muestra el distintivo "Nuevo" hasta que la persona entre una vez. */
+  nuevo?: boolean;
+};
 
 // Navegación de Ventrix Contable. Solo dos roles la ven: ADMIN (el contador,
 // dueño) y AUXILIAR (su ayudante). El AUXILIAR no gestiona la cuenta.
-const NAV_ITEMS = [
+const NAV_ITEMS: readonly NavItem[] = [
   { href: '/contable/panel',        icon: LayoutDashboard, label: 'Panel',            roles: ['ADMIN', 'AUXILIAR'] },
   { href: '/contable/clientes',     icon: Users,           label: 'Clientes',         roles: ['ADMIN', 'AUXILIAR'] },
   { href: '/contable/vencimientos', icon: CalendarClock,   label: 'Vencimientos',     roles: ['ADMIN', 'AUXILIAR'] },
@@ -26,8 +41,10 @@ const NAV_ITEMS = [
   { href: '/contable/exogena',      icon: FileSpreadsheet, label: 'Información Exógena', roles: ['ADMIN', 'AUXILIAR'] },
   { href: '/contable/otras-responsabilidades', icon: ClipboardList, label: 'Otras Responsabilidades', roles: ['ADMIN', 'AUXILIAR'] },
   { href: '/contable/credenciales',            icon: KeyRound,      label: 'Usuarios y Contraseñas', roles: ['ADMIN', 'AUXILIAR'] },
-  { href: '/contable/configuracion',           icon: Settings,      label: 'Configuración',          roles: ['ADMIN', 'AUXILIAR'] },
-] as const;
+  // Lleva "Nuevo" para que se enteren de que el horario de los avisos ahora se
+  // configura aquí; al visitar la sección el distintivo se apaga solo.
+  { href: '/contable/configuracion',           icon: Settings,      label: 'Configuración',          roles: ['ADMIN', 'AUXILIAR'], nuevo: true },
+];
 
 interface ContableSidebarProps {
   mobileOpen: boolean;
@@ -49,6 +66,19 @@ export function ContableSidebar({ mobileOpen, onMobileClose }: ContableSidebarPr
   const visibleItems = NAV_ITEMS.filter(
     (i) => user?.role && i.roles.includes(user.role as never),
   );
+
+  // Distintivo "Nuevo" de Configuración. Arranca apagado y se enciende tras
+  // montar: leer localStorage en el render rompería la hidratación (el servidor
+  // no lo tiene). Se apaga en cuanto entran a la sección, y queda apagado.
+  const [verNuevo, setVerNuevo] = useState(false);
+  useEffect(() => {
+    if (pathname.startsWith('/contable/configuracion')) {
+      localStorage.setItem(NUEVO_KEY, '1');
+      setVerNuevo(false);
+      return;
+    }
+    setVerNuevo(localStorage.getItem(NUEVO_KEY) !== '1');
+  }, [pathname]);
 
   return (
     <>
@@ -147,6 +177,18 @@ export function ContableSidebar({ mobileOpen, onMobileClose }: ContableSidebarPr
                     className={cn('flex-shrink-0 transition-colors duration-150', active ? 'text-emerald-400' : 'text-slate-600 group-hover:text-slate-300')}
                   />
                   <span className={cn('truncate flex-1', collapsed && 'md:hidden')}>{item.label}</span>
+
+                  {/* "Nuevo": con el menú abierto va la palabra; plegado, solo un
+                      punto sobre el icono, que es lo único que cabe. */}
+                  {item.nuevo && verNuevo && (
+                    collapsed ? (
+                      <span className="hidden md:block absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                    ) : (
+                      <span className="flex-shrink-0 text-[10px] font-bold uppercase tracking-wide px-1.5 py-[2px] rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/25">
+                        Nuevo
+                      </span>
+                    )
+                  )}
                 </Link>
               </Tooltip>
             );

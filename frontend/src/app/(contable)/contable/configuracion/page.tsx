@@ -7,6 +7,7 @@ import { api } from '@/lib/api';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '@/store/auth.store';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { HorarioAvisos } from '@/components/contable/HorarioAvisos';
 import { Loader2, Building2, Lock, ImagePlus, Trash2, CalendarClock } from 'lucide-react';
 
 const inputCls =
@@ -192,6 +193,12 @@ export default function ConfiguracionContablePage() {
           </form>
         </div>
       )}
+
+      {/* ── Horario de los avisos de vencimientos ──────────────────────────
+          Vivía en el Panel, pero ahí competía con la agenda del día: es algo
+          que se configura una vez, no que se mira a diario. Lo ve cualquiera
+          (ADMIN y AUXILIAR), porque cada quien elige cuándo le suena a él. */}
+      <HorarioAvisos />
 
       {/* ── Agenda del año: regenerar vencimientos de todos los clientes ───── */}
       {esAdmin && (
