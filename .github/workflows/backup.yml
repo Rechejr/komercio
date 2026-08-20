@@ -37,10 +37,15 @@ jobs:
             exit 1
           fi
 
-      - name: Instalar pg_dump 17
-        # El del sistema puede ser más viejo que el servidor, y pg_dump se niega a
-        # volcar una base más nueva que él. Con el 17 se cubre cualquier versión
-        # que use Railway hoy o mañana.
+      - name: Instalar el pg_dump más reciente
+        # pg_dump se niega a volcar una base MÁS NUEVA que él. Railway ya va en
+        # PostgreSQL 18 y seguirá subiendo, así que no se fija una versión: se
+        # instala el metapaquete de PGDG, que siempre apunta a la última.
+        #
+        # Y hay que meterlo al PATH a mano: Ubuntu trae su propio pg_dump en
+        # /usr/bin, que gana por orden y dejaría el recién instalado sin usar
+        # (fue exactamente lo que pasó la primera vez: instalado el 17, corriendo
+        # el 16 del sistema).
         run: |
           sudo install -d /usr/share/postgresql-common/pgdg
           curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
@@ -48,8 +53,24 @@ jobs:
           echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
             | sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null
           sudo apt-get update -qq
-          sudo apt-get install -y -qq postgresql-client-17
-          pg_dump --version
+          sudo apt-get install -y -qq postgresql-client
+          VER=$(ls -1 /usr/lib/postgresql | sort -n | tail -1)
+          echo "Versión instalada: $VER"
+          echo "/usr/lib/postgresql/$VER/bin" >> "$GITHUB_PATH"
+
+      - name: Comprobar que pg_dump le gana al servidor
+        # Sin esto, la falla sale como un error críptico de "desadaptación de
+        # versión" en mitad del volcado. Mejor decirlo claro y antes.
+        env:
+          URL: ${{ secrets.BACKUP_DATABASE_URL }}
+        run: |
+          CLIENTE=$(pg_dump --version | grep -oE '[0-9]+' | head -1)
+          SERVIDOR=$(psql "$URL" -tAc "SHOW server_version" | grep -oE '^[0-9]+')
+          echo "pg_dump: $CLIENTE · servidor: $SERVIDOR"
+          if [ "$CLIENTE" -lt "$SERVIDOR" ]; then
+            echo "::error::pg_dump es $CLIENTE y el servidor $SERVIDOR. pg_dump no puede volcar una base más nueva que él: hay que instalar postgresql-client-$SERVIDOR o superior."
+            exit 1
+          fi
 
       - name: Volcar la base
         env:
