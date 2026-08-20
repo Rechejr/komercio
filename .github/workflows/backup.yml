@@ -1,0 +1,97 @@
+name: Respaldo de la base
+
+# Copia de seguridad de la base de producción, guardada FUERA de Railway.
+#
+# El punto de esto: los respaldos que ofrece el proveedor te cubren de "borré una
+# tabla", pero no de perder acceso a la cuenta, de que se suspenda el proyecto por
+# un cobro fallido, o de un borrado del servicio entero. Un respaldo que vive en el
+# mismo sitio que el original no es un respaldo.
+#
+# Necesita un secreto del repositorio (Settings -> Secrets and variables -> Actions):
+#   BACKUP_DATABASE_URL = la DATABASE_PUBLIC_URL del servicio Postgres en Railway
+#                         (la pública, con proxy.rlwy.net — la interna no se alcanza
+#                          desde fuera de Railway).
+
+on:
+  schedule:
+    # Lunes a las 08:00 UTC = 3:00 a.m. en Colombia. Fuera de horario de trabajo.
+    - cron: '0 8 * * 1'
+  # Y a mano cuando se quiera, desde la pestaña Actions.
+  workflow_dispatch:
+
+jobs:
+  respaldo:
+    name: Volcar y guardar
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Comprobar que el secreto existe
+        env:
+          URL: ${{ secrets.BACKUP_DATABASE_URL }}
+        run: |
+          if [ -z "$URL" ]; then
+            echo "::error::Falta el secreto BACKUP_DATABASE_URL."
+            echo "Ponlo en Settings -> Secrets and variables -> Actions con la"
+            echo "DATABASE_PUBLIC_URL del servicio Postgres de Railway."
+            exit 1
+          fi
+
+      - name: Instalar pg_dump 17
+        # El del sistema puede ser más viejo que el servidor, y pg_dump se niega a
+        # volcar una base más nueva que él. Con el 17 se cubre cualquier versión
+        # que use Railway hoy o mañana.
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+            | sudo tee /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc >/dev/null
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-17
+          pg_dump --version
+
+      - name: Volcar la base
+        env:
+          URL: ${{ secrets.BACKUP_DATABASE_URL }}
+        run: |
+          FECHA=$(date -u +%Y-%m-%d_%H%M)
+          echo "ARCHIVO=ventrix-$FECHA.dump" >> "$GITHUB_ENV"
+          # -Fc = formato comprimido de PostgreSQL: permite restaurar tablas
+          # sueltas con pg_restore, no solo la base entera.
+          pg_dump -Fc --no-owner --no-privileges "$URL" -f "ventrix-$FECHA.dump"
+
+      - name: Comprobar que el respaldo sirve
+        # Un archivo vacío o truncado es PEOR que no tener respaldo: da falsa
+        # tranquilidad hasta el día que se necesita. Se revisa tamaño y contenido.
+        run: |
+          BYTES=$(stat -c%s "$ARCHIVO")
+          echo "Tamaño: $BYTES bytes"
+          if [ "$BYTES" -lt 10000 ]; then
+            echo "::error::El respaldo pesa $BYTES bytes — demasiado poco, algo falló."
+            exit 1
+          fi
+          # pg_restore -l lista el contenido: si el archivo está corrupto, falla aquí.
+          TABLAS=$(pg_restore -l "$ARCHIVO" | grep -c "TABLE DATA" || true)
+          echo "Tablas con datos: $TABLAS"
+          if [ "$TABLAS" -lt 5 ]; then
+            echo "::error::Solo $TABLAS tablas con datos — el volcado quedó incompleto."
+            exit 1
+          fi
+          {
+            echo "### Respaldo hecho"
+            echo ""
+            echo "- Archivo: \`$ARCHIVO\`"
+            echo "- Tamaño: $(numfmt --to=iec "$BYTES")"
+            echo "- Tablas con datos: $TABLAS"
+            echo ""
+            echo "Descárgalo de la sección **Artifacts** de esta corrida."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Guardar el archivo
+        uses: actions/upload-artifact@v4
+        with:
+          name: respaldo-${{ github.run_number }}
+          path: ${{ env.ARCHIVO }}
+          retention-days: 90
+          if-no-files-found: error
