@@ -67,7 +67,7 @@ export default function NominaPage() {
       </div>
 
       <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50/60 dark:bg-amber-900/15 px-4 py-2.5 text-[12px] text-amber-700 dark:text-amber-300">
-        Los registros marcados como Presentada o Pagada se borran automáticamente 2 meses después de su fecha de vencimiento. Los pendientes se conservan.
+        Los registros marcados como Presentada, Pagada o No aplica se borran automáticamente 2 meses después de su fecha de vencimiento. Los pendientes se conservan.
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
