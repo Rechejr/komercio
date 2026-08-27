@@ -80,7 +80,7 @@ describe('contableVencimientos — a quién le toca aviso', () => {
     await run(7);
 
     const where = mockPrisma.vencimiento.findMany.mock.calls[0][0].where;
-    expect(where.estado).toEqual({ notIn: ['presentada', 'pagada'] });
+    expect(where.estado).toEqual({ notIn: ['presentada', 'pagada', 'no_aplica'] });
     expect(where.taxClient).toEqual({ businessId: { in: ['ofi-1'] } });
   });
 

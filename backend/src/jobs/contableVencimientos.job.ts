@@ -64,7 +64,7 @@ export async function run(horaActual?: number) {
 
     const vencs = await prisma.vencimiento.findMany({
       where: {
-        estado: { notIn: ['presentada', 'pagada'] },
+        estado: { notIn: ['presentada', 'pagada', 'no_aplica'] },
         fecha: { lt: limite },
         taxClient: { businessId: { in: oficinas.map((o) => o.id) } },
       },

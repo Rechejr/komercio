@@ -601,14 +601,19 @@ export const contableController = {
       const obligacion = req.query.obligacion as Obligacion | undefined;
       const search = (req.query.search as string)?.trim();
 
-      // Auto-borrado: los ya cumplidos (presentada/pagada) se borran 2 meses
-      // después de su fecha, para no saturar. Lo pendiente/vencido se conserva.
-      // Solo con plan activo: en modo solo-lectura (vencido) sus datos no se tocan.
+      // Auto-borrado: los ya resueltos (presentada/pagada, y los que no aplicaban
+      // ese periodo) se borran 2 meses después de su fecha, para no saturar. Lo
+      // pendiente/vencido se conserva. Solo con plan activo: en modo solo-lectura
+      // (vencido) sus datos no se tocan.
       if (planActivo(req)) {
         const corte = new Date();
         corte.setMonth(corte.getMonth() - 2);
         await prisma.vencimiento.deleteMany({
-          where: { taxClient: { businessId }, estado: { in: ['presentada', 'pagada'] }, fecha: { lt: corte } },
+          where: {
+            taxClient: { businessId },
+            estado: { in: ['presentada', 'pagada', 'no_aplica'] },
+            fecha: { lt: corte },
+          },
         });
       }
 
@@ -755,7 +760,7 @@ export const contableController = {
       const { estado } = req.body;
       // "vencida" ya NO es un estado que se fije a mano: es automático según la
       // fecha (lo calcula el frontend). El contador solo maneja estos.
-      const ESTADOS = ['pendiente', 'en_proceso', 'presentada', 'pagada'];
+      const ESTADOS = ['pendiente', 'en_proceso', 'presentada', 'pagada', 'no_aplica'];
       if (!ESTADOS.includes(estado)) throw new AppError('Estado inválido', 400);
 
       // Asegurar que el vencimiento sea de esta oficina antes de tocarlo.
@@ -955,7 +960,7 @@ export const contableController = {
       const items = await prisma.vencimiento.findMany({
         where: {
           taxClient: { businessId },
-          estado: { notIn: ['presentada', 'pagada'] },
+          estado: { notIn: ['presentada', 'pagada', 'no_aplica'] },
           fecha: { lte: diasDesdeHoy(7) },
         },
         include: { taxClient: { select: { id: true, razonSocial: true, nit: true, dv: true } } },
@@ -981,7 +986,7 @@ export const contableController = {
         prisma.vencimiento.findMany({
           where: {
             taxClient: { businessId },
-            estado: { notIn: ['presentada', 'pagada'] },
+            estado: { notIn: ['presentada', 'pagada', 'no_aplica'] },
             fecha: { lte: diasDesdeHoy(15) },
           },
           include: { taxClient: { select: { id: true, razonSocial: true, nit: true, dv: true } } },

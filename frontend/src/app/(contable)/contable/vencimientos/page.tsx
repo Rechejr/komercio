@@ -9,7 +9,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Portal } from '@/components/ui/Portal';
 import {
   OBLIGACIONES, OBLIGACION_LABEL, ESTADOS_MANUALES, ESTADO_COLOR, estadoManual,
-  urgenciaVencimiento, diasHastaVencimiento, formatNit, formatFecha,
+  vencimientoResuelto, urgenciaVencimiento, diasHastaVencimiento, formatNit, formatFecha,
   type Obligacion, type EstadoVencimiento,
 } from '@/lib/contable';
 import { Plus, Search, Trash2, X, Loader2, CalendarClock, Sparkles, ArrowUp, ArrowDown, ChevronsUpDown, MessageCircle } from 'lucide-react';
@@ -36,7 +36,7 @@ function waLinkRenta(celular: string | null): string | null {
 
 type SortKey = 'cliente' | 'obligacion' | 'periodo' | 'fecha' | 'situacion' | 'estado';
 const ESTADO_ORDEN: Record<EstadoVencimiento, number> = {
-  pendiente: 0, en_proceso: 1, presentada: 2, pagada: 3, vencida: 0,
+  pendiente: 0, en_proceso: 1, presentada: 2, pagada: 3, vencida: 0, no_aplica: 4,
 };
 
 const inputCls =
@@ -107,7 +107,7 @@ export default function VencimientosPage() {
   // Filtrado (obligación por pestaña + estado + situación) y ordenamiento por la
   // columna elegida. Todo en memoria sobre la lista ya cargada.
   const visibles = useMemo(() => {
-    const resuelto = (v: Vencimiento) => estadoManual(v.estado) === 'presentada' || estadoManual(v.estado) === 'pagada';
+    const resuelto = (v: Vencimiento) => vencimientoResuelto(v.estado);
 
     let arr = tab === 'todas' ? vencimientos : vencimientos.filter((v) => v.obligacion === tab);
 
@@ -213,7 +213,7 @@ export default function VencimientosPage() {
           <option value="todas">Situación: todas</option>
           <option value="vencidos">Vencidos / vence hoy</option>
           <option value="por_vencer">Por vencer</option>
-          <option value="resueltos">Resueltos (presentada/pagada)</option>
+          <option value="resueltos">Resueltos o no aplica</option>
         </select>
         <select
           value={filtroTipo}

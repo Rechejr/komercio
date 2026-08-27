@@ -5,7 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import {
-  OBLIGACION_LABEL, estadoManual, diasHastaVencimiento, formatNit, formatFecha,
+  OBLIGACION_LABEL, estadoManual, vencimientoResuelto, diasHastaVencimiento, formatNit, formatFecha,
   type EstadoVencimiento, type Obligacion,
 } from '@/lib/contable';
 import { ChevronLeft, ChevronRight, CalendarDays, X } from 'lucide-react';
@@ -27,10 +27,14 @@ const keyFromVenc = (iso: string) => {
 const keyFromCell = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 
 function resuelto(v: Venc) {
-  const e = estadoManual(v.estado);
-  return e === 'presentada' || e === 'pagada';
+  return vencimientoResuelto(v.estado);
 }
 function chipColor(v: Venc) {
+  // "No aplica" va en gris, no en verde: verde es "lo presenté", y esto es
+  // justamente lo contrario — no había nada que presentar.
+  if (estadoManual(v.estado) === 'no_aplica') {
+    return 'bg-slate-100 text-slate-400 dark:bg-slate-800/60 dark:text-slate-500';
+  }
   if (resuelto(v)) return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300';
   const dias = diasHastaVencimiento(v.fecha);
   if (dias < 0) return 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300';

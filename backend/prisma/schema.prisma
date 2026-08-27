@@ -1125,6 +1125,12 @@ enum EstadoVencimiento {
   presentada
   pagada
   vencida
+  // "No aplica": ese periodo no había nada que declarar (el caso típico es
+  // retención en la fuente en un mes sin retenciones practicadas). Se decide
+  // periodo por periodo: marcar enero no afecta a febrero. Cuenta como resuelto
+  // —no avisa ni sale como pendiente— pero se distingue de "presentada" porque
+  // no se presentó nada.
+  no_aplica
 
   @@map("estado_vencimiento")
 }

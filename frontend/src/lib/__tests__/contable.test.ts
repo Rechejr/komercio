@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
-  calcularDV, separarNitDv, calidadBloqueada, estadoManual, diasHastaVencimiento,
+  calcularDV, separarNitDv, calidadBloqueada, estadoManual, vencimientoResuelto,
+  ESTADO_COLOR, ESTADOS_MANUALES, diasHastaVencimiento,
   situacionPorFecha, urgenciaVencimiento, formatNit, formatFecha,
   resumenCalidades, OBLIGACION_LABEL, type TaxClient,
 } from '../contable';
@@ -81,6 +82,7 @@ describe('estadoManual', () => {
   it('conserva los estados que el contador sí elige', () => {
     expect(estadoManual('presentada')).toBe('presentada');
     expect(estadoManual('pagada')).toBe('pagada');
+    expect(estadoManual('no_aplica')).toBe('no_aplica');
   });
 
   it('muestra como "pendiente" los estados heredados que ya no son manuales', () => {
@@ -88,6 +90,41 @@ describe('estadoManual', () => {
     expect(estadoManual('vencida')).toBe('pendiente');
     expect(estadoManual('en_proceso')).toBe('pendiente');
     expect(estadoManual('pendiente')).toBe('pendiente');
+  });
+});
+
+describe('vencimientoResuelto / "No aplica"', () => {
+  it('lo cumplido y lo que no aplica no requieren acción', () => {
+    expect(vencimientoResuelto('presentada')).toBe(true);
+    expect(vencimientoResuelto('pagada')).toBe(true);
+    // Ese periodo no había nada que declarar (p. ej. retefuente sin retenciones):
+    // no se presentó nada, pero tampoco queda nada por hacer.
+    expect(vencimientoResuelto('no_aplica')).toBe(true);
+  });
+
+  it('lo pendiente y lo vencido sí requieren acción', () => {
+    expect(vencimientoResuelto('pendiente')).toBe(false);
+    expect(vencimientoResuelto('vencida')).toBe(false);
+    expect(vencimientoResuelto('en_proceso')).toBe(false);
+  });
+
+  it('un "no aplica" no muestra cuenta regresiva aunque la fecha ya pasó', () => {
+    // Sin esto diría "Vencido hace 12 días" de algo que nunca hubo que declarar,
+    // que es justo la angustia que este estado viene a quitar.
+    const hace12dias = new Date(Date.now() - 12 * 86_400_000).toISOString().slice(0, 10);
+    expect(urgenciaVencimiento(hace12dias, 'no_aplica')).toBeNull();
+    expect(urgenciaVencimiento(hace12dias, 'pendiente')).not.toBeNull();
+  });
+
+  it('el color de "no aplica" es apagado, no el verde de presentada', () => {
+    expect(ESTADO_COLOR.no_aplica).not.toBe(ESTADO_COLOR.presentada);
+    expect(ESTADO_COLOR.no_aplica).toContain('slate');
+  });
+
+  it('aparece en el selector del contador', () => {
+    const codigos = ESTADOS_MANUALES.map((e) => e.codigo);
+    expect(codigos).toEqual(['pendiente', 'presentada', 'pagada', 'no_aplica']);
+    expect(ESTADOS_MANUALES.find((e) => e.codigo === 'no_aplica')?.label).toBe('No aplica');
   });
 });
 

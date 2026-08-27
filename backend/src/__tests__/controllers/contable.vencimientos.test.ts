@@ -91,7 +91,8 @@ describe('contableController.listVencimientos', () => {
     await contableController.listVencimientos(makeReq(), res, makeNext());
 
     const where = mockPrisma.vencimiento.deleteMany.mock.calls[0][0].where;
-    expect(where.estado).toEqual({ in: ['presentada', 'pagada'] });
+    // "no aplica" también se purga: ya no requiere nada, igual que lo cumplido.
+    expect(where.estado).toEqual({ in: ['presentada', 'pagada', 'no_aplica'] });
     expect(where.taxClient).toEqual({ businessId: 'ofi-1' });
     // Solo lo anterior al corte; lo pendiente o vencido nunca se borra.
     expect(where.fecha.lt).toBeInstanceOf(Date);
@@ -331,7 +332,7 @@ describe('contableController.generarVencimientos', () => {
 // ─── updateEstadoVencimiento ─────────────────────────────────────────────────
 
 describe('contableController.updateEstadoVencimiento', () => {
-  it.each(['pendiente', 'en_proceso', 'presentada', 'pagada'])('acepta el estado %s', async (estado) => {
+  it.each(['pendiente', 'en_proceso', 'presentada', 'pagada', 'no_aplica'])('acepta el estado %s', async (estado) => {
     mockPrisma.vencimiento.findFirst.mockResolvedValue({ id: 'v1' });
     mockPrisma.vencimiento.update.mockResolvedValue({ id: 'v1', estado });
     const { res } = makeRes();
@@ -339,6 +340,25 @@ describe('contableController.updateEstadoVencimiento', () => {
     await contableController.updateEstadoVencimiento(makeReq({ params: { id: 'v1' }, body: { estado } }), res, makeNext());
 
     expect(mockPrisma.vencimiento.update).toHaveBeenCalledWith({ where: { id: 'v1' }, data: { estado } });
+  });
+
+  it('deja marcar "no aplica" cuando ese periodo no había nada que declarar', async () => {
+    // El caso del contador: retefuente en un mes sin retenciones practicadas.
+    // Se decide periodo por periodo, así que es un estado más del vencimiento.
+    mockPrisma.vencimiento.findFirst.mockResolvedValue({ id: 'v1' });
+    mockPrisma.vencimiento.update.mockResolvedValue({ id: 'v1', estado: 'no_aplica' });
+    const { res, json } = makeRes();
+    const next = makeNext();
+
+    await contableController.updateEstadoVencimiento(
+      makeReq({ params: { id: 'v1' }, body: { estado: 'no_aplica' } }), res, next,
+    );
+
+    expect(next).not.toHaveBeenCalled();
+    expect(mockPrisma.vencimiento.update).toHaveBeenCalledWith({
+      where: { id: 'v1' }, data: { estado: 'no_aplica' },
+    });
+    expect(json).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
   });
 
   it('no deja marcar "vencida" a mano (esa la pone la fecha)', async () => {

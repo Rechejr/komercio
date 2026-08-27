@@ -392,7 +392,7 @@ describe('contableController.panel', () => {
     // Vencimientos: los próximos 15 días, sin los ya cumplidos.
     const whereVenc = mockPrisma.vencimiento.findMany.mock.calls[0][0].where;
     expect(whereVenc.taxClient).toEqual({ businessId: 'ofi-1' });
-    expect(whereVenc.estado).toEqual({ notIn: ['presentada', 'pagada'] });
+    expect(whereVenc.estado).toEqual({ notIn: ['presentada', 'pagada', 'no_aplica'] });
     // Resoluciones: las que vencen en 30 días.
     expect(mockPrisma.resolucionDian.findMany.mock.calls[0][0].where.taxClient).toEqual({ businessId: 'ofi-1' });
   });
@@ -424,7 +424,7 @@ describe('contableController.prioritarios', () => {
 
     const args = mockPrisma.vencimiento.findMany.mock.calls[0][0];
     expect(args.where.taxClient).toEqual({ businessId: 'ofi-1' });
-    expect(args.where.estado).toEqual({ notIn: ['presentada', 'pagada'] });
+    expect(args.where.estado).toEqual({ notIn: ['presentada', 'pagada', 'no_aplica'] });
     expect(args.orderBy).toEqual({ fecha: 'asc' });
     // La ventana incluye lo ya vencido (lte), que es lo que urge avisar.
     const corte = args.where.fecha.lte as Date;

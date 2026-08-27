@@ -12,7 +12,8 @@ export type Calidad =
 export type Obligacion =
   | 'renta' | 'iva' | 'retefuente' | 'ica' | 'exogena' | 'pila' | 'impoconsumo' | 'simple' | 'nomina';
 
-export type EstadoVencimiento = 'pendiente' | 'en_proceso' | 'presentada' | 'pagada' | 'vencida';
+export type EstadoVencimiento =
+  | 'pendiente' | 'en_proceso' | 'presentada' | 'pagada' | 'vencida' | 'no_aplica';
 
 export interface TaxClient {
   id: string;
@@ -57,6 +58,7 @@ export const ESTADOS: { codigo: EstadoVencimiento; label: string }[] = [
   { codigo: 'presentada', label: 'Presentada' },
   { codigo: 'pagada',     label: 'Pagada' },
   { codigo: 'vencida',    label: 'Vencida' },
+  { codigo: 'no_aplica',  label: 'No aplica' },
 ];
 
 export const ESTADO_COLOR: Record<EstadoVencimiento, string> = {
@@ -65,23 +67,39 @@ export const ESTADO_COLOR: Record<EstadoVencimiento, string> = {
   presentada: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300',
   pagada:     'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
   vencida:    'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300',
+  // Apagado a propósito: no es un logro como "presentada", es algo que se
+  // descartó. Debe leerse como "aquí no hay nada que hacer".
+  no_aplica:  'bg-slate-100 text-slate-400 dark:bg-slate-800/60 dark:text-slate-500',
 };
 
 // ─── Estado manual vs. situación automática ─────────────────────────────────────
-// El contador SOLO elige a mano: Pendiente / Presentada / Pagada. Que esté
-// "vencida" NO se elige — se calcula de la fecha (un estado que depende del
-// tiempo cambia solo, no debe quedar quemado en la base).
+// El contador SOLO elige a mano: Pendiente / Presentada / Pagada / No aplica.
+// Que esté "vencida" NO se elige — se calcula de la fecha (un estado que depende
+// del tiempo cambia solo, no debe quedar quemado en la base).
 export const ESTADOS_MANUALES: { codigo: EstadoVencimiento; label: string }[] = [
   { codigo: 'pendiente',  label: 'Pendiente' },
   { codigo: 'presentada', label: 'Presentada' },
   { codigo: 'pagada',     label: 'Pagada' },
+  // Ese periodo no había nada que declarar (p. ej. retefuente en un mes sin
+  // retenciones). Se elige periodo por periodo: marcar enero no toca febrero.
+  { codigo: 'no_aplica',  label: 'No aplica' },
 ];
 
 /** Devuelve el estado manual con el que se debe mostrar el selector. Los estados
  *  heredados que ya no son manuales (en_proceso, vencida) se muestran como
  *  "pendiente" — la situación real de vencido la pinta la columna automática. */
 export function estadoManual(estado: EstadoVencimiento): EstadoVencimiento {
-  return estado === 'presentada' || estado === 'pagada' ? estado : 'pendiente';
+  return estado === 'presentada' || estado === 'pagada' || estado === 'no_aplica'
+    ? estado
+    : 'pendiente';
+}
+
+/** ¿Este vencimiento ya no requiere ninguna acción? Presentada y pagada son las
+ *  cumplidas; "no aplica" no se cumplió, pero tampoco hay nada que hacer. Los
+ *  tres se sacan de los avisos, de la cuenta regresiva y del tope de la lista. */
+export function vencimientoResuelto(estado: EstadoVencimiento): boolean {
+  const e = estadoManual(estado);
+  return e === 'presentada' || e === 'pagada' || e === 'no_aplica';
 }
 
 /** Días de calendario (hora de Colombia) entre hoy y una fecha DIAN (columna
@@ -120,9 +138,10 @@ export function situacionPorFecha(iso: string, resuelto: boolean): Urgencia | nu
   return { label: `Faltan ${dias} días`, className: gris, vencido: false };
 }
 
-/** Situación de un vencimiento: resuelto si está presentada o pagada. */
+/** Situación de un vencimiento. No muestra cuenta regresiva de lo ya resuelto:
+ *  sería absurdo decir "vencido hace 12 días" de algo que no había que declarar. */
 export function urgenciaVencimiento(iso: string, estado: EstadoVencimiento): Urgencia | null {
-  return situacionPorFecha(iso, estado === 'presentada' || estado === 'pagada');
+  return situacionPorFecha(iso, vencimientoResuelto(estado));
 }
 
 // ─── DV (idéntico al backend utils/nit.ts) ──────────────────────────────────────
