@@ -165,7 +165,12 @@ async function generarAgendaBatch(
     }
   }
   if (filas.length === 0) return 0;
-  const res = await prisma.vencimiento.createMany({ data: filas, skipDuplicates: true });
+  // anio: a que calendario pertenecen. Sin esto, el "Enero" del año nuevo
+  // chocaria con el del anterior y skipDuplicates lo saltaria sin avisar.
+  const res = await prisma.vencimiento.createMany({
+    data: filas.map((f) => ({ ...f, anio: ANIO_CALENDARIO })),
+    skipDuplicates: true,
+  });
   return res.count;
 }
 
@@ -309,7 +314,7 @@ export const contableController = {
           // Agregar los vencimientos de las obligaciones nuevas (ignora duplicados).
           if (nuevos.length) {
             await tx.vencimiento.createMany({
-              data: nuevos.map((n) => ({ taxClientId: c.id, ...n })),
+              data: nuevos.map((n) => ({ taxClientId: c.id, anio: ANIO_CALENDARIO, ...n })),
               skipDuplicates: true,
             });
           }
@@ -658,6 +663,9 @@ export const contableController = {
             taxClientId,
             obligacion,
             periodo: periodo.trim(),
+            // Aunque lo escriba a mano, pertenece al calendario en curso: es lo
+            // que permite que su "Marzo" de este año y el del siguiente convivan.
+            anio: ANIO_CALENDARIO,
             fecha: fechaValida(fecha),
             monto: montoValido(monto),
             notas: notas?.trim() || null,
@@ -706,7 +714,7 @@ export const contableController = {
           if (filtro && !filtro.has(p.periodo)) continue;
           try {
             await prisma.vencimiento.create({
-              data: { taxClientId: client.id, obligacion: obl, periodo: p.periodo, fecha: p.fecha },
+              data: { taxClientId: client.id, obligacion: obl, periodo: p.periodo, fecha: p.fecha, anio: ANIO_CALENDARIO },
             });
             creados++;
           } catch (e) {

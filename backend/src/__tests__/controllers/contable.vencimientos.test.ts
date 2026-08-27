@@ -35,6 +35,9 @@ const mockPrisma = prisma as any;
 
 const EN_UN_MES = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
+// Año del calendario en uso (el mismo que lee el controlador del entorno).
+const ANIO_ESPERADO = Number(process.env.ANIO_CALENDARIO) || 2026;
+
 // El plan vigente habilita la escritura (y la purga); vencido deja todo en
 // solo-lectura. requireContable deja planExpiresAt en el request.
 function makeReq(overrides: Record<string, unknown> = {}): AuthRequest {
@@ -217,6 +220,17 @@ describe('contableController.createVencimiento', () => {
     expect(status).toHaveBeenCalledWith(201);
   });
 
+  it('guarda a qué año de calendario pertenece', async () => {
+    mockPrisma.vencimiento.create.mockResolvedValue({ id: 'v1' });
+    const { res } = makeRes();
+
+    await contableController.createVencimiento(makeReq({ body: bodyVenc() }), res, makeNext());
+
+    // Sin el año, el "Marzo" que escriba a mano este año chocaría con el del
+    // año siguiente y el segundo no se podría crear.
+    expect(mockPrisma.vencimiento.create.mock.calls[0][0].data.anio).toBe(ANIO_ESPERADO);
+  });
+
   it('acepta que no venga monto', async () => {
     mockPrisma.vencimiento.create.mockResolvedValue({ id: 'v1' });
     const { res } = makeRes();
@@ -261,6 +275,26 @@ describe('contableController.generarVencimientos', () => {
     expect(errorDe(next).statusCode).toBe(404);
   });
 
+  it('marca cada vencimiento generado con el año del calendario', async () => {
+    mockPrisma.calendarioDian.findMany.mockResolvedValue([
+      { periodo: 'Enero', fecha: new Date('2026-02-10') },
+    ]);
+    mockPrisma.vencimiento.create.mockResolvedValue({ id: 'v1' });
+    const { res } = makeRes();
+
+    await contableController.generarVencimientos(makeReq({
+      body: { taxClientId: 'tc-1', obligacion: 'retefuente' },
+    }), res, makeNext());
+
+    // Esto es lo que hará que en enero, al sembrar el calendario nuevo, el
+    // "Enero" del año siguiente NO choque con este y se genere de verdad.
+    // Sin el año, skipDuplicates lo saltaría sin dar error y el cliente se
+    // quedaría sin ese vencimiento.
+    expect(mockPrisma.vencimiento.create.mock.calls[0][0].data).toEqual(
+      expect.objectContaining({ periodo: 'Enero', anio: ANIO_ESPERADO }),
+    );
+  });
+
   it('genera la agenda que corresponde a las calidades del cliente', async () => {
     mockPrisma.calendarioDian.findMany.mockResolvedValue([
       { periodo: 'Año 2025', fecha: new Date('2026-04-15') },
@@ -272,7 +306,7 @@ describe('contableController.generarVencimientos', () => {
 
     // Declarante de renta → se le genera renta.
     expect(mockPrisma.vencimiento.create).toHaveBeenCalledWith({
-      data: { taxClientId: 'tc-1', obligacion: 'renta', periodo: 'Año 2025', fecha: expect.any(Date) },
+      data: { taxClientId: 'tc-1', obligacion: 'renta', periodo: 'Año 2025', fecha: expect.any(Date), anio: ANIO_ESPERADO },
     });
     expect(json.mock.calls[0][0].data.creados).toBe(1);
   });

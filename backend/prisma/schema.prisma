@@ -1283,6 +1283,15 @@ model Vencimiento {
   taxClient   TaxClient         @relation(fields: [taxClientId], references: [id], onDelete: Cascade)
   obligacion  Obligacion
   periodo     String
+  // Año del calendario tributario al que pertenece (ANIO_CALENDARIO al crearlo).
+  //
+  // Existe por el nombre de los periodos: los mensuales se llaman "Enero",
+  // "Febrero"… SIN año. Sin esta columna, la llave única [cliente, obligación,
+  // periodo] haría que el "Enero" del calendario nuevo choque con el del año
+  // anterior — y como la agenda se genera con skipDuplicates, se saltaría EN
+  // SILENCIO: el cliente se quedaría sin ese vencimiento y nadie se enteraría
+  // hasta que se le pasara la fecha.
+  anio        Int
   // Se propone desde el calendario (por dígito del NIT) pero es editable.
   fecha       DateTime          @db.Date
   estado      EstadoVencimiento @default(pendiente)
@@ -1291,7 +1300,7 @@ model Vencimiento {
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @updatedAt
 
-  @@unique([taxClientId, obligacion, periodo])
+  @@unique([taxClientId, obligacion, periodo, anio])
   @@index([taxClientId])
   @@index([fecha])
   @@map("vencimientos")

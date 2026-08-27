@@ -296,7 +296,12 @@ describe('contableController.updateClient', () => {
       expect.objectContaining({ skipDuplicates: true }),
     );
     const creados = mockPrisma.vencimiento.createMany.mock.calls[0][0].data;
-    expect(creados[0]).toEqual({ taxClientId: 'tc-1', obligacion: 'iva', periodo: 'Bimestre 1', fecha: expect.any(Date) });
+    // anio: a que calendario pertenece — sin el, el mismo periodo del año
+    // siguiente chocaria con este y se saltaria en silencio.
+    expect(creados[0]).toEqual({
+      taxClientId: 'tc-1', obligacion: 'iva', periodo: 'Bimestre 1',
+      fecha: expect.any(Date), anio: expect.any(Number),
+    });
   });
 
   it('no toca la agenda si las calidades no cambiaron', async () => {
