@@ -102,6 +102,22 @@ export function vencimientoResuelto(estado: EstadoVencimiento): boolean {
   return e === 'presentada' || e === 'pagada' || e === 'no_aplica';
 }
 
+/** Periodos únicos de una lista, en orden CRONOLÓGICO — por la fecha más
+ *  temprana de cada uno, no por su nombre. Ordenar por texto pondría "Abril,
+ *  Agosto, Diciembre…", que para un contador no significa nada. Al mirar la
+ *  fecha funciona igual con meses, bimestres, cuatrimestres o un año entero,
+ *  sin tener que conocer cómo se llama cada periodo. */
+export function periodosOrdenados(items: { periodo: string; fecha: string }[]): string[] {
+  const primeraFecha = new Map<string, string>();
+  for (const it of items) {
+    const actual = primeraFecha.get(it.periodo);
+    if (!actual || it.fecha < actual) primeraFecha.set(it.periodo, it.fecha);
+  }
+  return Array.from(primeraFecha.entries())
+    .sort((a, b) => a[1].localeCompare(b[1]))
+    .map(([periodo]) => periodo);
+}
+
 /** Días de calendario (hora de Colombia) entre hoy y una fecha DIAN (columna
  *  @db.Date, serializada como medianoche UTC). Negativo = ya pasó. Compara el
  *  día de calendario, no las horas, para no correrse por zona horaria. */

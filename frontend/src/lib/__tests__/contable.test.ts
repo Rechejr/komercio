@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   calcularDV, separarNitDv, calidadBloqueada, estadoManual, vencimientoResuelto,
-  ESTADO_COLOR, ESTADOS_MANUALES, diasHastaVencimiento,
+  periodosOrdenados, ESTADO_COLOR, ESTADOS_MANUALES, diasHastaVencimiento,
   situacionPorFecha, urgenciaVencimiento, formatNit, formatFecha,
   resumenCalidades, OBLIGACION_LABEL, type TaxClient,
 } from '../contable';
@@ -90,6 +90,52 @@ describe('estadoManual', () => {
     expect(estadoManual('vencida')).toBe('pendiente');
     expect(estadoManual('en_proceso')).toBe('pendiente');
     expect(estadoManual('pendiente')).toBe('pendiente');
+  });
+});
+
+describe('periodosOrdenados — filtro de periodo', () => {
+  it('ordena los meses por fecha, no por nombre', () => {
+    // Alfabéticamente sería "Agosto, Julio, Junio", que no le dice nada a nadie.
+    const items = [
+      { periodo: 'Julio',  fecha: '2026-08-19' },
+      { periodo: 'Junio',  fecha: '2026-07-15' },
+      { periodo: 'Agosto', fecha: '2026-09-17' },
+    ];
+    expect(periodosOrdenados(items)).toEqual(['Junio', 'Julio', 'Agosto']);
+  });
+
+  it('no repite un periodo aunque lo tengan muchos clientes', () => {
+    const items = [
+      { periodo: 'Julio', fecha: '2026-08-19' },
+      { periodo: 'Julio', fecha: '2026-08-21' },
+      { periodo: 'Julio', fecha: '2026-08-12' },
+    ];
+    expect(periodosOrdenados(items)).toEqual(['Julio']);
+  });
+
+  it('usa la fecha más temprana del periodo, que varía según el NIT', () => {
+    // El mismo "Julio" vence en días distintos según el último dígito del NIT:
+    // el orden debe salir de la primera fecha, no de cuál llegó antes en la lista.
+    const items = [
+      { periodo: 'Agosto', fecha: '2026-09-10' },
+      { periodo: 'Julio',  fecha: '2026-08-25' },
+      { periodo: 'Julio',  fecha: '2026-08-11' },
+    ];
+    expect(periodosOrdenados(items)).toEqual(['Julio', 'Agosto']);
+  });
+
+  it('sirve igual con bimestres y con un año entero', () => {
+    const bimestres = [
+      { periodo: 'Bimestre 3', fecha: '2026-07-14' },
+      { periodo: 'Bimestre 1', fecha: '2026-03-10' },
+      { periodo: 'Bimestre 2', fecha: '2026-05-12' },
+    ];
+    expect(periodosOrdenados(bimestres)).toEqual(['Bimestre 1', 'Bimestre 2', 'Bimestre 3']);
+    expect(periodosOrdenados([{ periodo: 'Año 2025', fecha: '2026-05-12' }])).toEqual(['Año 2025']);
+  });
+
+  it('con la lista vacía devuelve vacío', () => {
+    expect(periodosOrdenados([])).toEqual([]);
   });
 });
 

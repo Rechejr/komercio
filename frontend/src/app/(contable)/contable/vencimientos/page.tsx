@@ -9,7 +9,8 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Portal } from '@/components/ui/Portal';
 import {
   OBLIGACIONES, OBLIGACION_LABEL, ESTADOS_MANUALES, ESTADO_COLOR, estadoManual,
-  vencimientoResuelto, urgenciaVencimiento, diasHastaVencimiento, formatNit, formatFecha,
+  vencimientoResuelto, periodosOrdenados, urgenciaVencimiento, diasHastaVencimiento,
+  formatNit, formatFecha,
   type Obligacion, type EstadoVencimiento,
 } from '@/lib/contable';
 import { Plus, Search, Trash2, X, Loader2, CalendarClock, Sparkles, ArrowUp, ArrowDown, ChevronsUpDown, MessageCircle } from 'lucide-react';
@@ -61,6 +62,9 @@ export default function VencimientosPage() {
   const [filtroEstado, setFiltroEstado] = useState<'todos' | EstadoVencimiento>('todos');
   const [filtroSituacion, setFiltroSituacion] = useState<'todas' | 'vencidos' | 'por_vencer' | 'resueltos'>('todas');
   const [filtroTipo, setFiltroTipo] = useState<'todos' | 'natural' | 'juridica'>('todos');
+  // Periodo: solo tiene sentido dentro de UNA obligación. En "Todas" se
+  // mezclarían "Julio", "Bimestre 3" y "Año 2025" en una lista larga e inútil.
+  const [filtroPeriodo, setFiltroPeriodo] = useState<string>('todos');
 
   function toggleSort(key: SortKey) {
     if (sortBy === key) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
@@ -104,6 +108,16 @@ export default function VencimientosPage() {
 
   const obligacionesConDatos = OBLIGACIONES.filter((o) => conteos[o.codigo]);
 
+  // Periodos de la obligación abierta, en orden cronológico (ver periodosOrdenados).
+  const periodosDeLaPestana = useMemo(
+    () => (tab === 'todas' ? [] : periodosOrdenados(vencimientos.filter((v) => v.obligacion === tab))),
+    [vencimientos, tab],
+  );
+
+  // Al cambiar de pestaña se limpia el periodo: "Julio" no existe en Renta, y
+  // dejarlo puesto mostraría una lista vacía sin explicar por qué.
+  useEffect(() => { setFiltroPeriodo('todos'); }, [tab]);
+
   // Filtrado (obligación por pestaña + estado + situación) y ordenamiento por la
   // columna elegida. Todo en memoria sobre la lista ya cargada.
   const visibles = useMemo(() => {
@@ -114,6 +128,8 @@ export default function VencimientosPage() {
     if (filtroEstado !== 'todos') arr = arr.filter((v) => estadoManual(v.estado) === filtroEstado);
 
     if (filtroTipo !== 'todos') arr = arr.filter((v) => v.taxClient.tipoPersona === filtroTipo);
+
+    if (filtroPeriodo !== 'todos') arr = arr.filter((v) => v.periodo === filtroPeriodo);
 
     if (filtroSituacion !== 'todas') {
       arr = arr.filter((v) => {
@@ -149,7 +165,7 @@ export default function VencimientosPage() {
         : String(va).localeCompare(String(vb), 'es');
       return sortDir === 'asc' ? cmp : -cmp;
     });
-  }, [vencimientos, tab, filtroEstado, filtroTipo, filtroSituacion, sortBy, sortDir]);
+  }, [vencimientos, tab, filtroEstado, filtroTipo, filtroSituacion, filtroPeriodo, sortBy, sortDir]);
 
   const estadoMut = useMutation({
     mutationFn: ({ id, estado }: { id: string; estado: string }) =>
@@ -224,8 +240,23 @@ export default function VencimientosPage() {
           <option value="juridica">Jurídica</option>
           <option value="natural">Natural</option>
         </select>
-        {(filtroEstado !== 'todos' || filtroSituacion !== 'todas' || filtroTipo !== 'todos') && (
-          <button onClick={() => { setFiltroEstado('todos'); setFiltroSituacion('todas'); setFiltroTipo('todos'); }} className="text-xs text-emerald-600 hover:underline">Limpiar filtros</button>
+
+        {/* Periodo: solo dentro de una obligación (en "Todas" se mezclarían los
+            periodos de todas y la lista no diría nada). Los meses/bimestres van
+            en orden cronológico, no alfabético. */}
+        {tab !== 'todas' && periodosDeLaPestana.length > 1 && (
+          <select
+            value={filtroPeriodo}
+            onChange={(e) => setFiltroPeriodo(e.target.value)}
+            className="px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+          >
+            <option value="todos">Periodo: todos</option>
+            {periodosDeLaPestana.map((p) => <option key={p} value={p}>{p}</option>)}
+          </select>
+        )}
+
+        {(filtroEstado !== 'todos' || filtroSituacion !== 'todas' || filtroTipo !== 'todos' || filtroPeriodo !== 'todos') && (
+          <button onClick={() => { setFiltroEstado('todos'); setFiltroSituacion('todas'); setFiltroTipo('todos'); setFiltroPeriodo('todos'); }} className="text-xs text-emerald-600 hover:underline">Limpiar filtros</button>
         )}
         <span className="text-xs text-slate-400 ml-auto">{visibles.length} resultado{visibles.length !== 1 ? 's' : ''}</span>
       </div>
