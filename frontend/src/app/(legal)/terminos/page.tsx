@@ -185,7 +185,119 @@ export default function TerminosPage() {
         </p>
       </Section>
 
-      <Section n={13} title="Suspensión y terminación">
+      {/* ── Ventrix Contable ─────────────────────────────────────────────────
+          Estas secciones acotan el riesgo del producto contable: el servicio
+          ORGANIZA la agenda tributaria, pero quien responde ante la DIAN sigue
+          siendo el contribuyente y su contador. */}
+      <Section n={13} title="Ventrix Contable: alcance y naturaleza del servicio">
+        <p>
+          Ventrix Contable es una herramienta de <b>organización y recordatorio</b> de obligaciones
+          tributarias. Ayuda a llevar el control de clientes, calendarios, vencimientos y
+          documentos, pero <b>no constituye asesoría tributaria, contable ni legal</b>, y no
+          reemplaza el criterio profesional del contador.
+        </p>
+        <p>
+          Las fechas de vencimiento se calculan a partir del calendario tributario publicado por la
+          DIAN para el año en curso y de los datos que el propio usuario registra: el número de
+          identificación (NIT o cédula), el tipo de persona, las calidades tributarias y, cuando
+          aplica, la periodicidad del IVA. En consecuencia:
+        </p>
+        <Bullets items={[
+          <>Si esos datos se registran de forma incorrecta o incompleta, <b>las fechas resultantes serán incorrectas</b>. El usuario debe verificarlos contra el RUT de cada cliente.</>,
+          <>El usuario debe <b>contrastar las fechas</b> con el calendario oficial vigente antes de actuar sobre ellas, en especial cuando la DIAN modifique plazos mediante decreto o resolución.</>,
+          <>{LEGAL.brand} <b>no presenta declaraciones, no transmite información ni realiza pagos</b> ante la DIAN, la UGPP ni ninguna otra entidad. Esas gestiones las hace el usuario por fuera de la plataforma.</>,
+          <>El servicio <b>no incluye facturación electrónica</b> ni la emisión de documentos electrónicos ante la DIAN.</>,
+        ]} />
+        <p>
+          La responsabilidad de presentar y pagar las obligaciones dentro de los plazos legales
+          recae exclusivamente en el contribuyente y en el profesional que lo asesora.{' '}
+          {LEGAL.brand} no asume responsabilidad por sanciones, intereses de mora ni perjuicios
+          derivados de presentaciones extemporáneas, omitidas o erróneas.
+        </p>
+      </Section>
+
+      <Section n={14} title="Avisos y recordatorios">
+        <p>
+          La plataforma puede enviar avisos dentro de la aplicación, notificaciones al dispositivo y
+          correos electrónicos sobre vencimientos próximos, cuentas por cobrar o pagar, inventario
+          bajo y otros eventos. Estos avisos son <b>una ayuda, no una garantía de cumplimiento</b>.
+        </p>
+        <p>
+          Su entrega depende de factores ajenos al control de {LEGAL.brand}, entre otros:
+        </p>
+        <Bullets items={[
+          'Que el dispositivo esté encendido, con conexión y con los permisos de notificación concedidos.',
+          'El comportamiento del navegador, del sistema operativo o de los filtros de correo no deseado.',
+          'La disponibilidad de los proveedores de mensajería, notificaciones push y correo electrónico.',
+        ]} />
+        <Callout>
+          El usuario no debe depender exclusivamente de estos avisos para cumplir sus obligaciones.
+          La ausencia de un aviso no exime del cumplimiento oportuno ni genera responsabilidad
+          para {LEGAL.brand}.
+        </Callout>
+      </Section>
+
+      <Section n={15} title="Información de terceros registrada por el usuario">
+        <p>
+          Cuando el usuario registra en la plataforma datos de terceros —clientes, proveedores,
+          empleados o, en el caso de Ventrix Contable, los contribuyentes que asesora— actúa como{' '}
+          <b>responsable del tratamiento</b> de esa información, y {LEGAL.brand} actúa como{' '}
+          <b>encargado</b>, tratándola únicamente para prestar el servicio y conforme a sus
+          instrucciones.
+        </p>
+        <p>El usuario declara y garantiza que:</p>
+        <Bullets items={[
+          'Cuenta con la autorización de los titulares, o con otra base legal, para registrar y tratar sus datos en la plataforma.',
+          'Informará a dichos titulares que se apoya en un proveedor tecnológico para la gestión de su información.',
+          'Atenderá las solicitudes de consulta, actualización, rectificación o supresión que le presenten sus titulares.',
+          'Registrará únicamente la información necesaria para la finalidad del servicio.',
+        ]} />
+        <p>
+          El usuario mantendrá indemne a {LEGAL.brand} frente a reclamaciones de terceros derivadas
+          del incumplimiento de estas garantías.
+        </p>
+      </Section>
+
+      <Section n={16} title="Bóveda de credenciales y documentos">
+        <p>
+          Ventrix Contable permite guardar credenciales de acceso a portales de terceros y adjuntar
+          documentos de los contribuyentes. Las contraseñas se almacenan <b>cifradas</b>; la
+          plataforma no las utiliza para ingresar a ningún portal ni las comparte con terceros: solo
+          se muestran al usuario que las guardó y a quienes él autorice dentro de su propia cuenta.
+        </p>
+        <p>
+          El usuario es responsable de contar con autorización expresa de sus clientes para
+          almacenar dichas credenciales, de mantener actualizados los permisos de su equipo de
+          trabajo y de retirar de la bóveda la información que ya no necesite. Se recomienda no
+          almacenar credenciales de servicios financieros cuando exista una alternativa.
+        </p>
+      </Section>
+
+      <Section n={17} title="Respaldos, conservación y depuración automática">
+        <p>
+          {LEGAL.brand} realiza copias de seguridad periódicas de su infraestructura como medida de
+          continuidad. Estas copias son un mecanismo interno de recuperación ante fallas y{' '}
+          <b>no sustituyen las obligaciones del usuario</b> de conservar su propia información. La
+          plataforma permite exportar los datos en cualquier momento y se recomienda hacerlo de
+          forma periódica, en especial respecto de la información que deba conservarse por mandato
+          legal.
+        </p>
+        <p>
+          Para mantener la plataforma ágil, algunos registros se depuran automáticamente. El usuario
+          acepta expresamente este comportamiento:
+        </p>
+        <Bullets items={[
+          <>Los vencimientos marcados como <b>presentada, pagada o no aplica</b> se eliminan dos (2) meses después de su fecha. Los pendientes o vencidos se conservan.</>,
+          <>Las resoluciones DIAN se eliminan dos (2) meses después de expirar su vigencia.</>,
+          <>Las notificaciones se eliminan transcurrido un tiempo desde su creación, según hayan sido leídas o no.</>,
+        ]} />
+        <p>
+          Si el usuario necesita conservar esa información, debe exportarla antes de que se cumplan
+          dichos plazos.
+        </p>
+      </Section>
+
+      <Section n={18} title="Suspensión y terminación">
         <p>
           El usuario puede cancelar su cuenta en cualquier momento desde la configuración de la
           plataforma o solicitándolo a {LEGAL.supportEmail}.
@@ -198,7 +310,7 @@ export default function TerminosPage() {
         </p>
       </Section>
 
-      <Section n={14} title="Modificación de los términos">
+      <Section n={19} title="Modificación de los términos">
         <p>
           Estos términos podrán actualizarse para reflejar cambios en el servicio o en la
           normatividad aplicable. Las modificaciones sustanciales se comunicarán a través de la
@@ -207,7 +319,7 @@ export default function TerminosPage() {
         </p>
       </Section>
 
-      <Section n={15} title="Ley aplicable y solución de controversias">
+      <Section n={20} title="Ley aplicable y solución de controversias">
         <p>
           Estos términos se rigen por las leyes de la República de Colombia. Cualquier controversia
           se someterá a la jurisdicción de los jueces competentes de {LEGAL.city}, {LEGAL.country}.
@@ -220,7 +332,7 @@ export default function TerminosPage() {
         </p>
       </Section>
 
-      <Section n={16} title="Contacto">
+      <Section n={21} title="Contacto">
         <p>
           Para cualquier duda sobre estos términos, escríbenos a{' '}
           <strong>{LEGAL.supportEmail}</strong> o al WhatsApp {LEGAL.supportPhone}.

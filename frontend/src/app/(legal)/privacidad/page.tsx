@@ -181,10 +181,16 @@ export default function PrivacidadPage() {
         <p>
           {LEGAL.brand} adopta medidas técnicas, humanas y administrativas razonables para proteger
           la información contra acceso no autorizado, pérdida, alteración o uso indebido. Entre
-          ellas: cifrado del tráfico mediante HTTPS, almacenamiento de contraseñas con algoritmos de
-          hash, autenticación mediante tokens con expiración, control de acceso por roles,
-          limitación de intentos de acceso, aislamiento de la información entre negocios distintos y
-          registros de auditoría de las operaciones sensibles.
+          ellas: cifrado del tráfico mediante HTTPS, almacenamiento de las contraseñas de acceso con
+          algoritmos de hash, autenticación mediante tokens con expiración, control de acceso por
+          roles, limitación de intentos de acceso, aislamiento de la información entre cuentas
+          distintas y copias de seguridad periódicas.
+        </p>
+        <p>
+          Las credenciales de portales de terceros que el usuario decida guardar en la bóveda de
+          Ventrix Contable se almacenan <b>cifradas</b> mediante un algoritmo de cifrado simétrico
+          autenticado. No se utilizan para ingresar a ningún portal ni se comparten con terceros:
+          únicamente se muestran a los usuarios autorizados dentro de la cuenta que las registró.
         </p>
         <p>
           Ningún sistema es completamente infalible. En caso de presentarse un incidente de
