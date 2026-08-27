@@ -12,6 +12,7 @@ import { startContableVencimientosJob } from './jobs/contableVencimientos.job';
 import { startDowngradeExpiredPlansJob } from './jobs/downgradeExpiredPlans.job';
 import { startDueSoonJob } from './jobs/dueSoon.job';
 import { startLowStockSweepJob } from './jobs/lowStockSweep.job';
+import { startNotificationCleanupJob } from './jobs/notificationCleanup.job';
 import { seedSellers } from './config/seedSellers';
 import { fixPilaDates } from './config/fixPilaDates';
 
@@ -49,6 +50,7 @@ async function bootstrap() {
     startCreditOverdueJob();
     startContableVencimientosJob();
     startDowngradeExpiredPlansJob();
+    startNotificationCleanupJob();
     startDueSoonJob();
     startLowStockSweepJob();
     seedSellers();

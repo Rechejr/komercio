@@ -987,6 +987,9 @@ model Notification {
   @@index([userId])
   @@index([isRead])
   @@index([userId, isRead])
+  // Para la limpieza semanal por antigüedad (jobs/notificationCleanup): sin este
+  // índice, el borrado recorre la tabla entera, que es justo lo que va creciendo.
+  @@index([isRead, createdAt])
   @@map("notifications")
 }
 
