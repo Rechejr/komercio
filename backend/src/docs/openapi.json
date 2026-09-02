@@ -8773,7 +8773,7 @@
         "tags": [
           "supplierCredit"
         ],
-        "summary": "Abonar a un proveedor: paga parte del saldo → SALE plata de la caja.",
+        "summary": "POST /api/v1/supplier-credits/{id}/payments",
         "security": [
           {
             "bearerAuth": []
@@ -8868,6 +8868,91 @@
                 "required": [
                   "amount"
                 ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/supplier-credits/import": {
+      "post": {
+        "tags": [
+          "supplierCredit"
+        ],
+        "summary": "Abonar a un proveedor: paga parte del saldo → SALE plata de la caja. ── Importación masiva (admite ?dryRun=true para la vista previa) ───────────── Sirve para cargar de una las facturas que el negocio ya tiene pendientes con sus proveedores, en vez de teclearlas una por una al empezar a usar Ventrix",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operación exitosa",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespuestaOk"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sin sesión o token vencido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Requiere rol: ADMIN, SUPERVISOR",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "Roles permitidos: ADMIN, SUPERVISOR.",
+        "x-roles": [
+          "ADMIN",
+          "SUPERVISOR"
+        ]
+      }
+    },
+    "/api/v1/supplier-credits/import-template": {
+      "get": {
+        "tags": [
+          "supplierCredit"
+        ],
+        "summary": "── Plantilla (sin sesión: es un archivo en blanco, no lleva datos de nadie) ──",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operación exitosa",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespuestaOk"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sin sesión o token vencido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
               }
             }
           }
