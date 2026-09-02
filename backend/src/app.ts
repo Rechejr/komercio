@@ -128,6 +128,25 @@ const authLimiter = rateLimit({
   message: { error: 'Demasiados intentos, espere 15 minutos antes de reintentar.' },
 });
 
+// Renovar la sesión NO es adivinable por fuerza bruta: no hay contraseña que
+// probar, el refresh token es un secreto largo y aleatorio. Y la app lo llama
+// de forma legítima varias veces —al abrir /login con "mantener sesión", al
+// vencer el token en una pestaña, en cada pestaña abierta—, así que con el tope
+// estricto de 5 bastaba con abrir la pantalla de ingreso unas pocas veces para
+// quedar bloqueado 15 minutos SIN haber escrito una sola contraseña.
+// Peor aún: el límite es por IP, así que en un negocio con varios cajeros
+// —o una oficina entera tras la misma conexión— los fallos de uno bloqueaban
+// a todos. Se le deja un tope propio, holgado para el uso real.
+const refreshLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: process.env.NODE_ENV === 'production' ? 30 : 1_000,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: true,
+  store: makeRateLimitStore('rl:refresh:'),
+  message: { error: 'Demasiados intentos, espere 15 minutos antes de reintentar.' },
+});
+
 // Menos estricto que authLimiter — para registro/cambio de contraseña, donde
 // bloquear tan agresivo estorbaría el uso normal, pero sí conviene un tope
 // más bajo que el límite general de la API.
@@ -178,10 +197,9 @@ const apiPrefix = '/api/v1';
 app.use(`${apiPrefix}/auth/login`, authLimiter);
 app.use(`${apiPrefix}/auth/forgot-password`, authLimiter);
 app.use(`${apiPrefix}/auth/resend-verification`, authLimiter);
-// La ruta real es /auth/refresh-token, no /auth/refresh — con el prefijo viejo
-// este limiter nunca hacía match y ese endpoint solo quedaba cubierto por el
-// límite general de la API (mucho más permisivo).
-app.use(`${apiPrefix}/auth/refresh-token`, authLimiter);
+// Renovar sesión va con su propio tope (ver refreshLimiter): con el estricto de
+// login, abrir la pantalla de ingreso unas pocas veces dejaba a la gente fuera.
+app.use(`${apiPrefix}/auth/refresh-token`, refreshLimiter);
 app.use(`${apiPrefix}/auth/register`, moderateAuthLimiter);
 // Comprar sin cuenta es público y crea links de pago en Wompi: se limita igual
 // que el registro para que nadie lo use de generador masivo de links.

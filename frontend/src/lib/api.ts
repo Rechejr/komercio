@@ -32,6 +32,16 @@ api.interceptors.response.use(
     const original = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
     if (error.response?.status !== 401 || original._retry) return Promise.reject(error);
 
+    // Un 401 de las rutas de autenticación NO se reintenta renovando la sesión:
+    // ahí todavía no hay sesión que renovar. Hacerlo tenía dos consecuencias
+    // feas: gastaba un intento del tope de la API por cada clave equivocada, y
+    // TAPABA el mensaje real — quien se equivocaba de contraseña veía
+    // "Refresh token inválido o expirado", que no le dice nada a nadie.
+    const url = original.url || '';
+    if (/\/auth\/(login|refresh-token|register|reset-password|google)/.test(url)) {
+      return Promise.reject(error);
+    }
+
     if (isRefreshing) {
       return new Promise((resolve, reject) => {
         failedQueue.push({ resolve, reject });

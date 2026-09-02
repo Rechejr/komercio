@@ -230,6 +230,10 @@ function LoginForm() {
         router.replace(user.role === 'SUPER_ADMIN' ? '/superadmin' : safe);
       } catch {
         // Sesión no válida (cookie vencida/ausente): mostramos el formulario.
+        // Se borra la marca de "mantener sesión" para no volver a intentarlo en
+        // cada carga de esta pantalla: reintentar algo que ya se sabe vencido
+        // solo gasta el tope de peticiones y termina bloqueando a la persona.
+        localStorage.removeItem('ventrix-remember');
         if (!cancelled) setCheckingSession(false);
       }
     })();
