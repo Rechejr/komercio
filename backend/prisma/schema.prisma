@@ -37,6 +37,12 @@ enum CreditStatus {
   CANCELLED
 }
 
+enum InstallmentStatus {
+  PENDING
+  PARTIAL
+  PAID
+}
+
 enum PurchaseStatus {
   PENDING
   COMPLETED
@@ -149,7 +155,7 @@ model Business {
   // defecto tres: 7am el panorama del día, 2pm lo que sigue pendiente, y 6pm el
   // cierre con lo de mañana. Cada contador las ajusta a su jornada — uno que
   // abre a las 5:30am no quiere el mismo horario que uno que abre a las 9.
-  vencAvisoHoras     Int[]     @default([7, 14, 18])
+  vencAvisoHoras     Int[]             @default([7, 14, 18])
   ownerId            String
   owner              User              @relation("BusinessOwner", fields: [ownerId], references: [id])
   branches           Branch[]
@@ -196,15 +202,15 @@ model Business {
 // cuenta ya lista (verificada, en Pro, con clave) para enviársela por WhatsApp.
 // El `slug` coincide con /planes?v=<slug> para atar el lead al vendedor.
 model Seller {
-  id            String                  @id @default(uuid())
-  name          String
-  email         String                  @unique
-  password      String
-  slug          String                  @unique
-  phone         String?
-  active        Boolean                 @default(true)
-  createdAt     DateTime                @default(now())
-  pushSubs      SellerPushSubscription[]
+  id        String                   @id @default(uuid())
+  name      String
+  email     String                   @unique
+  password  String
+  slug      String                   @unique
+  phone     String?
+  active    Boolean                  @default(true)
+  createdAt DateTime                 @default(now())
+  pushSubs  SellerPushSubscription[]
 
   @@map("sellers")
 }
@@ -856,21 +862,32 @@ model Expense {
 
 // ─── CREDITS / FIADOS ─────────────────────────────────────────────────────────
 model Credit {
-  id          String          @id @default(uuid())
-  saleId      String?         @unique
-  sale        Sale?           @relation(fields: [saleId], references: [id])
-  customerId  String
-  customer    Customer        @relation(fields: [customerId], references: [id])
-  totalAmount Decimal
-  paidAmount  Decimal         @default(0)
-  balance     Decimal
-  status      CreditStatus    @default(PENDING)
-  dueDate     DateTime?
-  notes       String?
-  payments    CreditPayment[]
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
-  deletedAt   DateTime?
+  id              String              @id @default(uuid())
+  saleId          String?             @unique
+  sale            Sale?               @relation(fields: [saleId], references: [id])
+  customerId      String
+  customer        Customer            @relation(fields: [customerId], references: [id])
+  totalAmount     Decimal
+  paidAmount      Decimal             @default(0)
+  balance         Decimal
+  status          CreditStatus        @default(PENDING)
+  // Fecha de pago. Con plan de cuotas apunta SIEMPRE a la próxima cuota sin
+  // pagar: así los avisos, el estado "En mora" y los filtros que ya existían
+  // siguen funcionando igual, sin saber que hay cuotas debajo.
+  dueDate         DateTime?
+  // ── Financiación (solo cuando se vende a cuotas) ──────────────────────────
+  // Interés que se cobra POR DAR EL PLAZO: se suma al saldo desde el principio
+  // y queda repartido en las cuotas, así el cliente sabe desde el primer día
+  // cuánto va a pagar en total. No es un recargo por atraso.
+  interestRate    Decimal? // % mensual que se aplicó (0 o null = sin interés)
+  interestAmount  Decimal? // cuánto sumó ese interés, en pesos
+  principalAmount Decimal? // saldo antes del interés (útil para el reporte)
+  notes           String?
+  payments        CreditPayment[]
+  installments    CreditInstallment[]
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  deletedAt       DateTime?
 
   @@index([customerId])
   @@index([status])
@@ -880,18 +897,23 @@ model Credit {
 }
 
 model CreditPayment {
-  id               String          @id @default(uuid())
+  id               String             @id @default(uuid())
   creditId         String
-  credit           Credit          @relation(fields: [creditId], references: [id], onDelete: Cascade)
+  credit           Credit             @relation(fields: [creditId], references: [id], onDelete: Cascade)
   amount           Decimal
-  paymentMethod    PaymentMethod   @default(CASH)
+  paymentMethod    PaymentMethod      @default(CASH)
   paymentAccountId String?
-  paymentAccount   PaymentAccount? @relation(fields: [paymentAccountId], references: [id])
+  paymentAccount   PaymentAccount?    @relation(fields: [paymentAccountId], references: [id])
+  // A qué cuota se aplicó. Lo elige el cliente al abonar; si el fiado no tiene
+  // plan de cuotas (o abona al saldo general) queda en null.
+  installmentId    String?
+  installment      CreditInstallment? @relation(fields: [installmentId], references: [id])
   notes            String?
-  createdAt        DateTime        @default(now())
+  createdAt        DateTime           @default(now())
 
   @@index([creditId])
   @@index([paymentAccountId])
+  @@index([installmentId])
   @@map("credit_payments")
 }
 
@@ -1408,4 +1430,28 @@ model GuestCheckout {
   @@index([buyerEmail])
   @@index([sellerSlug])
   @@map("guest_checkouts")
+}
+
+// Cuota de un fiado vendido a plazos. El valor de cada una lo define el
+// vendedor (no se reparte solo): en muebles es común una primera más alta o
+// redondear la última. Vencen mensualmente.
+model CreditInstallment {
+  id         String            @id @default(uuid())
+  creditId   String
+  credit     Credit            @relation(fields: [creditId], references: [id], onDelete: Cascade)
+  numero     Int // 1, 2, 3… en el orden en que vencen
+  monto      Decimal
+  dueDate    DateTime          @db.Date
+  paidAmount Decimal           @default(0)
+  status     InstallmentStatus @default(PENDING)
+  payments   CreditPayment[]
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+
+  // Dos cuotas no pueden compartir número dentro del mismo fiado.
+  @@unique([creditId, numero])
+  @@index([creditId])
+  // Para buscar las cuotas que vencen pronto sin recorrer la tabla entera.
+  @@index([dueDate])
+  @@map("credit_installments")
 }

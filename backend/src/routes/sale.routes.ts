@@ -32,6 +32,11 @@ router.post('/',
     // entra en mora ni genera avisos: es lo que hace que el resto del sistema
     // (el aviso 3 días antes y el estado "En mora") funcione de verdad.
     body('creditDueDate').optional({ checkFalsy: true }).isISO8601().withMessage('Fecha de vencimiento inválida'),
+    // Venta a cuotas. El tope evita generar cientos de filas por un dedazo.
+    body('creditInstallments').optional({ checkFalsy: true }).isInt({ min: 2, max: 36 }).withMessage('Las cuotas deben ser entre 2 y 36'),
+    body('creditInterestRate').optional({ nullable: true }).isFloat({ min: 0, max: 100 }).withMessage('El interés debe estar entre 0 y 100'),
+    body('creditFirstDueDate').optional({ checkFalsy: true }).isISO8601().withMessage('Fecha de la primera cuota inválida'),
+    body('creditInstallmentAmounts').optional({ checkFalsy: true }).isArray({ max: 36 }).withMessage('Montos de cuotas inválidos'),
     body('branchId').optional({ checkFalsy: true }).isUUID().withMessage('branchId inválido'),
   ],
   validate,

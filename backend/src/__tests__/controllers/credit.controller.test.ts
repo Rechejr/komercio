@@ -173,6 +173,12 @@ describe('creditController.addPayment', () => {
       const tx = {
         $queryRaw: jest.fn().mockResolvedValue([lockedCredit]),
         creditPayment: { create: jest.fn().mockResolvedValue({}) },
+        // Fiado sin plan de cuotas: la lista viene vacía y el abono va al saldo.
+        creditInstallment: {
+          findMany: jest.fn().mockResolvedValue([]),
+          findFirst: jest.fn().mockResolvedValue(null),
+          update: jest.fn().mockResolvedValue({}),
+        },
         credit: { update: jest.fn().mockResolvedValue({}) },
         customer: {
           findUnique: jest.fn().mockResolvedValue({ currentDebt: 100000 }),
@@ -200,6 +206,12 @@ describe('creditController.addPayment', () => {
       const tx = {
         $queryRaw: jest.fn().mockResolvedValue([lockedCredit]),
         creditPayment: { create: jest.fn().mockResolvedValue({}) },
+        // Fiado sin plan de cuotas: la lista viene vacía y el abono va al saldo.
+        creditInstallment: {
+          findMany: jest.fn().mockResolvedValue([]),
+          findFirst: jest.fn().mockResolvedValue(null),
+          update: jest.fn().mockResolvedValue({}),
+        },
         credit: { update: jest.fn().mockResolvedValue({}) },
         customer: {
           findUnique: jest.fn().mockResolvedValue({ currentDebt: 50000 }),
@@ -266,6 +278,12 @@ describe('creditController.addPayment', () => {
       const tx = {
         $queryRaw: jest.fn().mockResolvedValue([lockedCredit]),
         creditPayment: { create: jest.fn().mockResolvedValue({}) },
+        // Fiado sin plan de cuotas: la lista viene vacía y el abono va al saldo.
+        creditInstallment: {
+          findMany: jest.fn().mockResolvedValue([]),
+          findFirst: jest.fn().mockResolvedValue(null),
+          update: jest.fn().mockResolvedValue({}),
+        },
         credit: { update: jest.fn().mockResolvedValue({}) },
         customer: {
           findUnique: jest.fn().mockResolvedValue({ currentDebt: 100000, name: 'Juan Pérez' }),
@@ -302,6 +320,12 @@ describe('creditController.addPayment', () => {
       const tx = {
         $queryRaw: jest.fn().mockResolvedValue([lockedCredit]),
         creditPayment: { create: jest.fn().mockResolvedValue({}) },
+        // Fiado sin plan de cuotas: la lista viene vacía y el abono va al saldo.
+        creditInstallment: {
+          findMany: jest.fn().mockResolvedValue([]),
+          findFirst: jest.fn().mockResolvedValue(null),
+          update: jest.fn().mockResolvedValue({}),
+        },
         credit: { update: jest.fn().mockResolvedValue({}) },
         customer: {
           findUnique: jest.fn().mockResolvedValue({ currentDebt: 100000, name: 'Juan Pérez' }),
@@ -493,6 +517,158 @@ describe('creditController.updateDueDate', () => {
   it('rechaza una fecha basura', async () => {
     await creditController.updateDueDate(
       makeReq({ params: { id: 'credit-1' }, body: { dueDate: 'el proximo mes' } }), makeRes().res, next,
+    );
+
+    expect((next as jest.Mock).mock.calls[0][0].statusCode).toBe(400);
+  });
+});
+
+// ─── Abonos contra un plan de cuotas ─────────────────────────────────────────
+// El negocio pidió que el cliente elija a QUÉ cuota abona. Si el abono alcanza
+// para más, el excedente sigue por las siguientes: dejar dinero sin asignar
+// haría que la suma de las cuotas no cuadre nunca con el saldo del fiado.
+describe('creditController.addPayment — con cuotas', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  const fiado = { id: 'credit-1', totalAmount: 864000, paidAmount: 0, balance: 864000, status: 'PENDING', customerId: 'cust-1' };
+
+  /** Arma el tx con un plan de 4 cuotas de $216.000 y devuelve los espías. */
+  function conPlan(cuotas = [
+    { id: 'c1', numero: 1, monto: 216000, paidAmount: 0 },
+    { id: 'c2', numero: 2, monto: 216000, paidAmount: 0 },
+    { id: 'c3', numero: 3, monto: 216000, paidAmount: 0 },
+    { id: 'c4', numero: 4, monto: 216000, paidAmount: 0 },
+  ]) {
+    const cuotaUpdate = jest.fn().mockResolvedValue({});
+    const creditUpdate = jest.fn().mockResolvedValue({});
+    const pagoCreate = jest.fn().mockResolvedValue({});
+    (mockPrisma.$transaction as jest.Mock).mockImplementation(async (fn: any) => fn({
+      $queryRaw: jest.fn().mockResolvedValue([fiado]),
+      creditPayment: { create: pagoCreate },
+      credit: { update: creditUpdate },
+      creditInstallment: {
+        findMany: jest.fn().mockResolvedValue(cuotas),
+        findFirst: jest.fn().mockResolvedValue({ dueDate: new Date('2026-11-15') }),
+        update: cuotaUpdate,
+      },
+      customer: {
+        findUnique: jest.fn().mockResolvedValue({ currentDebt: 864000, name: 'Yolardy' }),
+        update: jest.fn().mockResolvedValue({}),
+      },
+    }));
+    return { cuotaUpdate, creditUpdate, pagoCreate };
+  }
+
+  it('aplica el abono a la cuota que eligió el cliente, no a la primera', async () => {
+    const { cuotaUpdate } = conPlan();
+
+    await creditController.addPayment(
+      makeReq({ params: { id: 'credit-1' }, body: { amount: 216000, installmentId: 'c3' } }),
+      makeRes().res, next,
+    );
+
+    // La 3 quedó pagada y no se tocó ninguna otra.
+    expect(cuotaUpdate).toHaveBeenCalledTimes(1);
+    expect(cuotaUpdate).toHaveBeenCalledWith({
+      where: { id: 'c3' },
+      data: { paidAmount: 216000, status: 'PAID' },
+    });
+  });
+
+  it('un abono menor deja la cuota en parcial', async () => {
+    const { cuotaUpdate } = conPlan();
+
+    await creditController.addPayment(
+      makeReq({ params: { id: 'credit-1' }, body: { amount: 100000, installmentId: 'c1' } }),
+      makeRes().res, next,
+    );
+
+    expect(cuotaUpdate).toHaveBeenCalledWith({
+      where: { id: 'c1' },
+      data: { paidAmount: 100000, status: 'PARTIAL' },
+    });
+  });
+
+  it('lo que sobra pasa a la siguiente cuota, no se pierde', async () => {
+    const { cuotaUpdate } = conPlan();
+
+    // Paga $300.000: cubre la cuota 1 ($216.000) y abona $84.000 a la 2.
+    await creditController.addPayment(
+      makeReq({ params: { id: 'credit-1' }, body: { amount: 300000, installmentId: 'c1' } }),
+      makeRes().res, next,
+    );
+
+    expect(cuotaUpdate).toHaveBeenNthCalledWith(1, {
+      where: { id: 'c1' }, data: { paidAmount: 216000, status: 'PAID' },
+    });
+    expect(cuotaUpdate).toHaveBeenNthCalledWith(2, {
+      where: { id: 'c2' }, data: { paidAmount: 84000, status: 'PARTIAL' },
+    });
+  });
+
+  it('respeta lo ya abonado antes en esa cuota', async () => {
+    const { cuotaUpdate } = conPlan([
+      { id: 'c1', numero: 1, monto: 216000, paidAmount: 150000 },
+      { id: 'c2', numero: 2, monto: 216000, paidAmount: 0 },
+    ]);
+
+    await creditController.addPayment(
+      makeReq({ params: { id: 'credit-1' }, body: { amount: 66000, installmentId: 'c1' } }),
+      makeRes().res, next,
+    );
+
+    // 150.000 que ya tenía + 66.000 = 216.000 → queda saldada.
+    expect(cuotaUpdate).toHaveBeenCalledWith({
+      where: { id: 'c1' }, data: { paidAmount: 216000, status: 'PAID' },
+    });
+  });
+
+  it('sin elegir cuota, abona a la más antigua sin pagar', async () => {
+    const { cuotaUpdate } = conPlan();
+
+    await creditController.addPayment(
+      makeReq({ params: { id: 'credit-1' }, body: { amount: 216000 } }),
+      makeRes().res, next,
+    );
+
+    expect(cuotaUpdate).toHaveBeenCalledWith({
+      where: { id: 'c1' }, data: { paidAmount: 216000, status: 'PAID' },
+    });
+  });
+
+  it('mueve la fecha del fiado a la próxima cuota sin pagar', async () => {
+    // De ahí salen los avisos y el estado "En mora": si no se moviera, el fiado
+    // seguiría "venciendo" en la fecha de una cuota ya pagada.
+    const { creditUpdate } = conPlan();
+
+    await creditController.addPayment(
+      makeReq({ params: { id: 'credit-1' }, body: { amount: 216000, installmentId: 'c1' } }),
+      makeRes().res, next,
+    );
+
+    expect(creditUpdate).toHaveBeenCalledWith({
+      where: { id: 'credit-1' },
+      data: { dueDate: new Date('2026-11-15') },
+    });
+  });
+
+  it('guarda a qué cuota se aplicó el abono', async () => {
+    const { pagoCreate } = conPlan();
+
+    await creditController.addPayment(
+      makeReq({ params: { id: 'credit-1' }, body: { amount: 216000, installmentId: 'c2' } }),
+      makeRes().res, next,
+    );
+
+    expect(pagoCreate.mock.calls[0][0].data.installmentId).toBe('c2');
+  });
+
+  it('rechaza abonar a una cuota de otro fiado', async () => {
+    conPlan();
+
+    await creditController.addPayment(
+      makeReq({ params: { id: 'credit-1' }, body: { amount: 100000, installmentId: 'cuota-ajena' } }),
+      makeRes().res, next,
     );
 
     expect((next as jest.Mock).mock.calls[0][0].statusCode).toBe(400);

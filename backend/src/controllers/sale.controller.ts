@@ -14,6 +14,7 @@ import { acquirePlanLimitLock } from '../utils/planLimitLock';
 import { logger } from '../config/logger';
 import { resolveEffectiveBranchId } from '../utils/resolveBranch';
 import { resolvePayment } from '../utils/paymentAccount';
+import { armarPlan, fechasMensuales, hoyUTC, MAX_CUOTAS } from '../utils/cuotas';
 
 // Checked once per process on first sale; avoids breaking when migration is pending.
 let _counterTableReady: boolean | undefined;
@@ -201,6 +202,12 @@ export const saleController = {
         paidAmount,
         priceList = 'retail',
         creditDueDate,
+        // Venta a cuotas: cuántas, con qué interés mensual, cuándo vence la
+        // primera y —si el vendedor los ajustó— el valor de cada una.
+        creditInstallments,
+        creditInterestRate,
+        creditFirstDueDate,
+        creditInstallmentAmounts,
       } = req.body;
 
       // Lista de precios de la venta: 'wholesale' usa el precio mayorista de cada
@@ -218,6 +225,25 @@ export const saleController = {
         const d = new Date(creditDueDate);
         if (isNaN(d.getTime())) throw new AppError('La fecha de vencimiento del fiado no es válida', 400);
         dueDate = d;
+      }
+
+      // ── Plan de cuotas ────────────────────────────────────────────────────
+      // Si se vende a plazos, el número de cuotas manda sobre la fecha suelta:
+      // el vencimiento del fiado pasa a ser el de la primera cuota.
+      const numCuotas = isCredit ? Math.trunc(Number(creditInstallments) || 0) : 0;
+      const conCuotas = numCuotas > 1;
+      if (numCuotas > 0 && (numCuotas < 2 || numCuotas > MAX_CUOTAS)) {
+        throw new AppError(`El número de cuotas debe estar entre 2 y ${MAX_CUOTAS}`, 400);
+      }
+      const tasaInteres = conCuotas ? Math.max(0, Number(creditInterestRate) || 0) : 0;
+      if (tasaInteres > 100) throw new AppError('El interés mensual no puede superar el 100%', 400);
+
+      let primeraCuota: Date | null = null;
+      if (conCuotas) {
+        // Por defecto, la primera cuota vence al mes de la venta.
+        const base = creditFirstDueDate ? new Date(creditFirstDueDate) : fechasMensuales(hoyUTC(), 2)[1];
+        if (isNaN(base.getTime())) throw new AppError('La fecha de la primera cuota no es válida', 400);
+        primeraCuota = base;
       }
 
       // Sin esto, un cliente de la API (o un bug de frontend) podía mandar splits que
@@ -570,18 +596,71 @@ export const saleController = {
 
         // Update customer debt if credit sale
         if (isCredit && customerId && total > paid) {
-          const balance = total - paid;
-          await tx.credit.create({
+          const saldo = total - paid;
+
+          // Con plan de cuotas, el interés de financiación se suma al saldo: el
+          // cliente debe capital + interés, y eso es lo que suman las cuotas.
+          // Lo pagado hoy (paid) es la cuota inicial y no genera interés.
+          const plan = conCuotas
+            ? armarPlan(
+                saldo, numCuotas, tasaInteres, primeraCuota!,
+                Array.isArray(creditInstallmentAmounts) && creditInstallmentAmounts.length === numCuotas
+                  ? creditInstallmentAmounts.map((m: unknown) => Math.round(Number(m) || 0))
+                  : undefined,
+              )
+            : null;
+
+          if (plan) {
+            const suma = plan.cuotas.reduce((acc, c) => acc + c.monto, 0);
+            // Las cuotas TIENEN que sumar el total financiado. Si el vendedor
+            // ajustó los montos y no cuadran, se rechaza: dejar pasar la
+            // diferencia haría que el fiado no se pueda saldar nunca (o que
+            // quede saldado debiendo).
+            if (suma !== plan.total) {
+              throw new AppError(
+                `Las cuotas suman $${suma.toLocaleString('es-CO')} y deben sumar $${plan.total.toLocaleString('es-CO')}`,
+                400,
+              );
+            }
+            if (plan.cuotas.some((c) => c.monto <= 0)) {
+              throw new AppError('Cada cuota debe ser mayor a 0', 400);
+            }
+          }
+
+          const balance = plan ? plan.total : saldo;
+
+          const nuevoCredito = await tx.credit.create({
             data: {
               saleId: newSale.id,
               customerId,
-              totalAmount: total,
+              // Con financiación, lo que el cliente debe en total incluye el
+              // interés; sin ella, es el total de la venta como siempre.
+              totalAmount: plan ? total + plan.interes : total,
               paidAmount: paid,
               balance,
               status: 'PENDING',
-              dueDate,
+              // La fecha del fiado es la de la primera cuota, para que los
+              // avisos y el estado "En mora" sigan funcionando igual.
+              dueDate: plan ? plan.cuotas[0].dueDate : dueDate,
+              ...(plan ? {
+                interestRate: tasaInteres,
+                interestAmount: plan.interes,
+                principalAmount: saldo,
+              } : {}),
             },
           });
+
+          if (plan) {
+            await tx.creditInstallment.createMany({
+              data: plan.cuotas.map((c) => ({
+                creditId: nuevoCredito.id,
+                numero: c.numero,
+                monto: c.monto,
+                dueDate: c.dueDate,
+              })),
+            });
+          }
+
           await tx.customer.update({
             where: { id: customerId },
             data: { currentDebt: { increment: balance } },

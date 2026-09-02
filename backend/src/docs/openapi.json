@@ -3640,6 +3640,11 @@
                   },
                   "paymentAccountId": {
                     "type": "string"
+                  },
+                  "installmentId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Cuota inválida"
                   }
                 },
                 "required": [
@@ -7293,6 +7298,30 @@
                     "type": "string",
                     "format": "date-time",
                     "description": "Fecha de vencimiento inválida"
+                  },
+                  "creditInstallments": {
+                    "type": "integer",
+                    "description": "Las cuotas deben ser entre 2 y 36",
+                    "minimum": 2,
+                    "maximum": 36
+                  },
+                  "creditInterestRate": {
+                    "type": "number",
+                    "description": "El interés debe estar entre 0 y 100",
+                    "minimum": 0,
+                    "maximum": 100
+                  },
+                  "creditFirstDueDate": {
+                    "type": "string",
+                    "format": "date-time",
+                    "description": "Fecha de la primera cuota inválida"
+                  },
+                  "creditInstallmentAmounts": {
+                    "type": "array",
+                    "description": "Montos de cuotas inválidos",
+                    "items": {
+                      "type": "object"
+                    }
                   },
                   "branchId": {
                     "type": "string",

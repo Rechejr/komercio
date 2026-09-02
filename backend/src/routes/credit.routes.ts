@@ -23,6 +23,8 @@ router.post('/:id/payments',
     body('amount').isFloat({ min: 0.01 }).withMessage('Monto inválido'),
     body('paymentMethod').optional().isIn(['CASH', 'TRANSFER', 'NEQUI', 'DAVIPLATA', 'CARD']),
     body('paymentAccountId').optional({ nullable: true }).isString(),
+    // A qué cuota se aplica el abono. Lo elige el cliente al pagar.
+    body('installmentId').optional({ nullable: true, checkFalsy: true }).isUUID().withMessage('Cuota inválida'),
   ],
   validate,
   creditController.addPayment,

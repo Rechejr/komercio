@@ -7,6 +7,7 @@ import { AuthRequest } from '../middlewares/auth';
 import { emitToBusinesss, socketEvents } from '../config/socket';
 import { resolvePayment } from '../utils/paymentAccount';
 import { parseBogotaBoundary } from '../utils/bogotaTime';
+import { estadoCuota, aNumero } from '../utils/cuotas';
 
 export const creditController = {
   async list(req: AuthRequest, res: Response, next: NextFunction) {
@@ -55,6 +56,9 @@ export const creditController = {
           customer: true,
           sale: { select: { invoiceNumber: true, details: { include: { product: { select: { name: true } } } } } },
           payments: { orderBy: { createdAt: 'desc' } },
+          // Plan de cuotas (vacío en los fiados sin plazos). Va ordenado por
+          // número, que es como lo lee el vendedor al cobrar.
+          installments: { orderBy: { numero: 'asc' } },
         },
       });
       if (!credit) throw new AppError('Crédito no encontrado', 404);
@@ -104,7 +108,7 @@ export const creditController = {
   async addPayment(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const { id } = req.params;
-      const { amount, paymentMethod, paymentAccountId, notes } = req.body;
+      const { amount, paymentMethod, paymentAccountId, notes, installmentId } = req.body;
 
       const paymentAmount = parseFloat(amount);
       if (!paymentAmount || paymentAmount <= 0) throw new AppError('El monto debe ser mayor a 0', 400);
@@ -141,8 +145,58 @@ export const creditController = {
             : newPaid > 0 ? 'PARTIAL' : 'PENDING';
 
         await tx.creditPayment.create({
-          data: { creditId: id, amount: paymentAmount, paymentMethod: pay.paymentMethod, paymentAccountId: pay.paymentAccountId, notes },
+          data: {
+            creditId: id, amount: paymentAmount, paymentMethod: pay.paymentMethod,
+            paymentAccountId: pay.paymentAccountId, notes,
+            installmentId: installmentId || null,
+          },
         });
+
+        // ── Aplicar el abono a las cuotas ────────────────────────────────────
+        // El cliente elige a cuál cuota abona (installmentId). Si el abono
+        // alcanza para más, el excedente sigue por las siguientes cuotas sin
+        // pagar, en orden: dejar dinero "flotando" sin asignar haría que la
+        // suma de las cuotas no cuadrara nunca con el saldo del fiado.
+        const cuotas = await tx.creditInstallment.findMany({
+          where: { creditId: id, status: { not: 'PAID' } },
+          orderBy: { numero: 'asc' },
+          select: { id: true, numero: true, monto: true, paidAmount: true },
+        });
+
+        if (cuotas.length > 0) {
+          // La elegida primero; el resto en orden de vencimiento.
+          const elegida = installmentId ? cuotas.find((c) => c.id === installmentId) : undefined;
+          if (installmentId && !elegida) throw new AppError('Esa cuota no es de este fiado', 400);
+          const orden = elegida
+            ? [elegida, ...cuotas.filter((c) => c.id !== elegida.id)]
+            : cuotas;
+
+          let restante = paymentAmount;
+          for (const cuota of orden) {
+            if (restante <= 0) break;
+            const monto = aNumero(cuota.monto);
+            const yaPago = aNumero(cuota.paidAmount);
+            const falta = Math.max(0, monto - yaPago);
+            if (falta <= 0) continue;
+            const aplicado = Math.min(restante, falta);
+            const nuevoPagado = yaPago + aplicado;
+            await tx.creditInstallment.update({
+              where: { id: cuota.id },
+              data: { paidAmount: nuevoPagado, status: estadoCuota(monto, nuevoPagado) },
+            });
+            restante -= aplicado;
+          }
+
+          // La fecha del fiado apunta SIEMPRE a la próxima cuota sin pagar: de
+          // ahí salen los avisos, el estado "En mora" y la columna Vencimiento,
+          // que así siguen funcionando sin saber que hay cuotas debajo.
+          const siguiente = await tx.creditInstallment.findFirst({
+            where: { creditId: id, status: { not: 'PAID' } },
+            orderBy: { dueDate: 'asc' },
+            select: { dueDate: true },
+          });
+          await tx.credit.update({ where: { id }, data: { dueDate: siguiente?.dueDate ?? null } });
+        }
 
         await tx.credit.update({
           where: { id },
