@@ -563,7 +563,8 @@ export default function CreditosPage() {
                   esto nacieron SIN fecha, y sin fecha no entran en mora ni
                   disparan el aviso de "vence pronto": hay que poder ponérsela
                   después. También sirve cuando el cliente pide otro plazo. */}
-              {selected.status !== 'PAID' && selected.status !== 'CANCELLED' && (
+              {selected.status !== 'PAID' && selected.status !== 'CANCELLED'
+                && !(detail?.installments?.length > 0) && (
                 <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 px-3 py-2.5">
                   <div className="flex items-center gap-2 mb-2">
                     <Clock size={13} className="text-slate-400" />
@@ -593,6 +594,72 @@ export default function CreditosPage() {
                       {dueDateMut.isPending ? <Loader2 size={13} className="animate-spin" /> : null}
                       Guardar
                     </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Plan de cuotas. Solo en fiados vendidos a plazos; los demás ni
+                  se enteran de que esto existe. */}
+              {detail?.installments?.length > 0 && (
+                <div>
+                  <div className="flex items-baseline justify-between mb-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                      Plan de {detail.installments.length} cuotas
+                    </p>
+                    {Number(detail.interestAmount) > 0 && (
+                      <p className="text-[11px] text-amber-600 dark:text-amber-400">
+                        Incluye {formatCurrency(detail.interestAmount)} de interés ({Number(detail.interestRate)}%/mes)
+                      </p>
+                    )}
+                  </div>
+                  <div className="card overflow-hidden">
+                    <div className="divide-y divide-slate-50 dark:divide-white/[0.04]">
+                      {detail.installments.map((c: any) => {
+                        const monto = Number(c.monto);
+                        const pagado = Number(c.paidAmount);
+                        const falta = Math.round(monto - pagado);
+                        const vencida = c.status !== 'PAID' && new Date(c.dueDate) < new Date();
+                        return (
+                          <div key={c.id} className="flex items-center justify-between px-4 py-2.5">
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold flex-shrink-0 ${
+                                c.status === 'PAID'
+                                  ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'
+                                  : vencida
+                                    ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
+                                    : 'bg-slate-100 text-slate-500 dark:bg-slate-700/40 dark:text-slate-400'
+                              }`}>
+                                {c.numero}
+                              </span>
+                              <div className="min-w-0">
+                                <p className="text-[13px] text-slate-700 dark:text-slate-200 tabular-nums">
+                                  {formatCurrency(monto)}
+                                </p>
+                                <p className={`text-[11px] ${vencida ? 'text-red-500' : 'text-slate-400 dark:text-slate-500'}`}>
+                                  {formatDate(c.dueDate)}{vencida ? ' · vencida' : ''}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="text-right flex-shrink-0">
+                              {c.status === 'PAID' ? (
+                                <span className="text-[11.5px] font-semibold text-emerald-600 dark:text-emerald-400">Pagada</span>
+                              ) : (
+                                <>
+                                  <p className="text-[12px] text-slate-500 dark:text-slate-400 tabular-nums">
+                                    Faltan {formatCurrency(falta)}
+                                  </p>
+                                  {pagado > 0 && (
+                                    <p className="text-[11px] text-emerald-600 dark:text-emerald-400 tabular-nums">
+                                      Abonado {formatCurrency(pagado)}
+                                    </p>
+                                  )}
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
               )}
@@ -739,6 +806,31 @@ export default function CreditosPage() {
                   />
                   {payErrors.amount && <p className="text-[11px] text-red-500 mt-1">{payErrors.amount.message as string}</p>}
                 </div>
+                {/* A qué cuota se abona: lo elige el cliente, no el sistema.
+                    Solo aparece si el fiado se vendió a plazos. */}
+                {detail?.installments?.length > 0 && (
+                  <div>
+                    <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5 block">
+                      ¿A cuál cuota?
+                    </label>
+                    <select {...register('installmentId')} className={inputCls}>
+                      <option value="">La más antigua sin pagar</option>
+                      {detail.installments
+                        .filter((c: any) => c.status !== 'PAID')
+                        .map((c: any) => {
+                          const falta = Math.round(Number(c.monto) - Number(c.paidAmount));
+                          return (
+                            <option key={c.id} value={c.id}>
+                              Cuota {c.numero} — {formatDate(c.dueDate)} — faltan {formatCurrency(falta)}
+                            </option>
+                          );
+                        })}
+                    </select>
+                    <p className="text-[11px] text-slate-400 mt-1 leading-snug">
+                      Si el abono alcanza para más, el resto pasa a las siguientes.
+                    </p>
+                  </div>
+                )}
                 <div>
                   <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5 block">Medio de pago</label>
                   <select {...register('paymentAccountId')} className={inputCls}>

@@ -10,6 +10,7 @@ import { useUpgradeStore } from '@/store/upgrade.store';
 import { formatCurrency, formatDate, statusColor, statusLabel, cn } from '@/lib/utils';
 import { calcularDescuentoGlobal, calcularCambio, faltantePorPagar, sumarPagos, puedeConfirmarVenta, montoPagado } from '@/lib/pos';
 import { usePaymentAccounts, labelPago } from '@/lib/usePaymentAccounts';
+import { armarPlan, proximoMesISO, MAX_CUOTAS } from '@/lib/cuotas';
 import { EASE, DUR } from '@/lib/motion';
 import { useSound } from '@/lib/useSound';
 import toast from 'react-hot-toast';
@@ -103,6 +104,12 @@ export default function POSPage() {
   // Plazo del fiado. Se elige con atajos (15/30 días) porque en el mostrador
   // nadie abre un calendario con el cliente esperando. Vacío = sin plazo.
   const [creditDueDate, setCreditDueDate]     = useState('');
+  // Venta a cuotas: 0 = fiado simple (una sola fecha). >1 arma el plan.
+  const [numCuotas, setNumCuotas]             = useState(0);
+  const [tasaInteres, setTasaInteres]         = useState('');
+  const [primeraCuota, setPrimeraCuota]       = useState('');
+  // Montos editados a mano; vacío = reparto parejo que propone el sistema.
+  const [montosCuotas, setMontosCuotas]       = useState<number[]>([]);
   const [lastSale, setLastSale]               = useState<any>(null);
   const [sharingWhatsApp, setSharingWhatsApp] = useState(false);
   const receiptItemsRef = useRef<ReceiptItem[]>([]);
@@ -243,6 +250,10 @@ export default function POSPage() {
       // El plazo es de ESTA venta: si se quedara puesto, la siguiente heredaría
       // una fecha que nadie acordó con ese otro cliente.
       setCreditDueDate('');
+      setNumCuotas(0);
+      setTasaInteres('');
+      setPrimeraCuota('');
+      setMontosCuotas([]);
       toast.success('¡Venta registrada!');
       qc.invalidateQueries({ queryKey: ['sales'] });
       qc.invalidateQueries({ queryKey: ['products'] });
@@ -373,7 +384,14 @@ export default function POSPage() {
         : { paymentAccountId: paymentMethod }),
       paidAmount: paid,
       discountAmount: discount, isCredit, priceList,
-      ...(isCredit && creditDueDate ? { creditDueDate } : {}),
+      ...(isCredit && numCuotas < 2 && creditDueDate ? { creditDueDate } : {}),
+      ...(isCredit && numCuotas >= 2 ? {
+        creditInstallments: numCuotas,
+        creditInterestRate: Number(tasaInteres) || 0,
+        creditFirstDueDate: primeraCuota || proximoMesISO(),
+        // Solo se mandan si el vendedor los ajustó; si no, el servidor reparte.
+        ...(montosCuotas.length === numCuotas ? { creditInstallmentAmounts: montosCuotas } : {}),
+      } : {}),
       notes: saleNotes.trim() || undefined,
     });
   }
@@ -1122,11 +1140,131 @@ export default function POSPage() {
               </label>
             )}
 
-            {/* Plazo del fiado. Sin fecha, el fiado nunca entra en mora ni avisa
-                nada: es lo que enciende el aviso de "vence en 3 días" y el estado
-                "En mora". Los atajos evitan abrir el calendario en el mostrador. */}
+            {/* Forma de pago del fiado: de una sola vez, o a cuotas mensuales. */}
             {isCredit && (
-              <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 px-3 py-2.5">
+              <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 px-3 py-2.5 space-y-2.5">
+                <div className="flex gap-1.5">
+                  <button
+                    type="button" onClick={() => setNumCuotas(0)}
+                    className={`flex-1 text-[12px] font-medium px-2 py-1.5 rounded-lg border transition ${
+                      numCuotas < 2
+                        ? 'bg-emerald-600 border-emerald-600 text-white'
+                        : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300'
+                    }`}
+                  >
+                    Pago único
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setNumCuotas(numCuotas >= 2 ? numCuotas : 3); if (!primeraCuota) setPrimeraCuota(proximoMesISO()); }}
+                    className={`flex-1 text-[12px] font-medium px-2 py-1.5 rounded-lg border transition ${
+                      numCuotas >= 2
+                        ? 'bg-emerald-600 border-emerald-600 text-white'
+                        : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300'
+                    }`}
+                  >
+                    Por cuotas
+                  </button>
+                </div>
+
+                {numCuotas >= 2 && (() => {
+                  const saldo = Math.max(0, Math.round(total - montoPagado({ paymentMethod, paidAmount, total, mixedTotal, isCredit })));
+                  const plan = armarPlan(saldo, numCuotas, Number(tasaInteres) || 0, primeraCuota || proximoMesISO(),
+                    montosCuotas.length === numCuotas ? montosCuotas : undefined);
+                  const suma = plan.cuotas.reduce((s, c) => s + c.monto, 0);
+                  const descuadre = suma - plan.total;
+                  return (
+                    <div className="space-y-2.5">
+                      <div className="grid grid-cols-3 gap-2">
+                        <div>
+                          <label className="block text-[11px] text-slate-500 dark:text-slate-400 mb-1">Cuotas</label>
+                          <input
+                            type="number" min={2} max={MAX_CUOTAS} value={numCuotas}
+                            onChange={(e) => {
+                              const n = Math.max(2, Math.min(MAX_CUOTAS, Number(e.target.value) || 2));
+                              setNumCuotas(n);
+                              setMontosCuotas([]); // cambió el plan: se vuelve al reparto parejo
+                            }}
+                            className="w-full px-2 py-1.5 text-[16px] sm:text-[13px] rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] text-slate-500 dark:text-slate-400 mb-1">Interés %/mes</label>
+                          <input
+                            type="number" min={0} max={100} step="0.1" value={tasaInteres} placeholder="0"
+                            onChange={(e) => { setTasaInteres(e.target.value); setMontosCuotas([]); }}
+                            className="w-full px-2 py-1.5 text-[16px] sm:text-[13px] rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] text-slate-500 dark:text-slate-400 mb-1">1ª cuota</label>
+                          <input
+                            type="date" value={primeraCuota || proximoMesISO()}
+                            onChange={(e) => setPrimeraCuota(e.target.value)}
+                            className="w-full px-2 py-1.5 text-[16px] sm:text-[12px] rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Resumen: el cliente debe saber el total ANTES de firmar. */}
+                      <div className="text-[12px] text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 rounded-lg px-2.5 py-2 space-y-0.5">
+                        <div className="flex justify-between"><span>Saldo a financiar</span><span className="tabular-nums">{formatCurrency(saldo)}</span></div>
+                        {plan.interes > 0 && (
+                          <div className="flex justify-between text-amber-600 dark:text-amber-400">
+                            <span>Interés ({tasaInteres}% × {numCuotas})</span>
+                            <span className="tabular-nums">+{formatCurrency(plan.interes)}</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between font-bold pt-0.5 border-t border-slate-100 dark:border-slate-700">
+                          <span>Total a pagar</span><span className="tabular-nums">{formatCurrency(plan.total)}</span>
+                        </div>
+                      </div>
+
+                      {/* Cada cuota, editable. El vendedor ajusta si quiere una
+                          primera más alta o redondear la última. */}
+                      <div className="max-h-44 overflow-y-auto space-y-1">
+                        {plan.cuotas.map((c, i) => (
+                          <div key={c.numero} className="flex items-center gap-2 text-[12px]">
+                            <span className="w-6 text-slate-400 tabular-nums">{c.numero}.</span>
+                            <span className="flex-1 text-slate-500 dark:text-slate-400">
+                              {c.fecha.toISOString().slice(8, 10)}/{c.fecha.toISOString().slice(5, 7)}/{c.fecha.getUTCFullYear()}
+                            </span>
+                            <input
+                              type="number" min={1} value={c.monto}
+                              onChange={(e) => {
+                                const copia = plan.cuotas.map((x) => x.monto);
+                                copia[i] = Math.max(0, Math.round(Number(e.target.value) || 0));
+                                setMontosCuotas(copia);
+                              }}
+                              className="w-28 px-2 py-1 text-[16px] sm:text-[12px] text-right tabular-nums rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+                            />
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Si los montos ajustados no suman el total, se avisa aquí
+                          mismo: el servidor lo rechazaría igual, pero es mejor
+                          verlo antes de intentar cobrar. */}
+                      {descuadre !== 0 && (
+                        <p className="text-[11.5px] text-red-600 dark:text-red-400 leading-snug">
+                          Las cuotas suman {formatCurrency(suma)}: {descuadre > 0 ? 'sobran' : 'faltan'}{' '}
+                          {formatCurrency(Math.abs(descuadre))} para llegar a {formatCurrency(plan.total)}.
+                        </p>
+                      )}
+                      {montosCuotas.length > 0 && (
+                        <button
+                          type="button" onClick={() => setMontosCuotas([])}
+                          className="text-[11.5px] text-emerald-600 hover:underline"
+                        >
+                          Volver al reparto parejo
+                        </button>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                {numCuotas < 2 && (
+                  <>
                 <p className="text-[12px] font-medium text-slate-600 dark:text-slate-300 mb-2">
                   ¿Cuándo lo paga? <span className="text-slate-400 font-normal">(opcional)</span>
                 </p>
@@ -1169,6 +1307,8 @@ export default function POSPage() {
                   aria-label="Fecha en que el cliente pagará el fiado"
                   className="w-full px-3 py-2 text-[16px] sm:text-[13px] rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
                 />
+                  </>
+                )}
               </div>
             )}
 

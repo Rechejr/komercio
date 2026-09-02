@@ -428,8 +428,10 @@ describe('creditController.cancel', () => {
 describe('creditController.updateDueDate', () => {
   beforeEach(() => jest.clearAllMocks());
 
+  // _count.installments = 0 → fiado normal, sin plan de cuotas. Con cuotas la
+  // fecha la maneja el sistema y no se puede tocar a mano (ver el último test).
   const credito = (extra: Record<string, unknown> = {}) => ({
-    id: 'credit-1', status: 'PENDING', ...extra,
+    id: 'credit-1', status: 'PENDING', _count: { installments: 0 }, ...extra,
   });
 
   it('guarda la fecha de pago del fiado', async () => {
@@ -505,6 +507,21 @@ describe('creditController.updateDueDate', () => {
     ['ya saldado', 'PAID'],
   ])('rechaza cambiar la fecha de un fiado %s', async (_caso, status) => {
     (mockPrisma.credit.findFirst as jest.Mock).mockResolvedValue(credito({ status }));
+
+    await creditController.updateDueDate(
+      makeReq({ params: { id: 'credit-1' }, body: { dueDate: '2026-10-15' } }), makeRes().res, next,
+    );
+
+    expect((next as jest.Mock).mock.calls[0][0].statusCode).toBe(400);
+    expect(mockPrisma.credit.update).not.toHaveBeenCalled();
+  });
+
+  it('no deja cambiarla a mano si el fiado se pagó a cuotas', async () => {
+    // Ahí la fecha la define la próxima cuota pendiente: tocarla a mano la
+    // dejaría diciendo una cosa y las cuotas otra.
+    (mockPrisma.credit.findFirst as jest.Mock).mockResolvedValue(
+      credito({ _count: { installments: 4 } }),
+    );
 
     await creditController.updateDueDate(
       makeReq({ params: { id: 'credit-1' }, body: { dueDate: '2026-10-15' } }), makeRes().res, next,

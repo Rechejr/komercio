@@ -322,9 +322,15 @@ export const creditController = {
       // que es quien lleva el businessId.
       const credito = await prisma.credit.findFirst({
         where: { id, deletedAt: null, customer: { businessId } },
-        select: { id: true, status: true },
+        select: { id: true, status: true, _count: { select: { installments: true } } },
       });
       if (!credito) throw new AppError('Crédito no encontrado', 404);
+      // En un fiado a cuotas la fecha NO se toca a mano: la maneja el sistema,
+      // que la mantiene apuntando a la próxima cuota sin pagar. Cambiarla aquí
+      // la dejaría diciendo una cosa y las cuotas otra.
+      if (credito._count.installments > 0) {
+        throw new AppError('Este fiado se pagó a cuotas: la fecha la define la próxima cuota pendiente', 400);
+      }
       if (credito.status === 'CANCELLED') throw new AppError('Este crédito está anulado', 400);
       if (credito.status === 'PAID') throw new AppError('Este crédito ya está saldado', 400);
 
