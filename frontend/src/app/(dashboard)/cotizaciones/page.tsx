@@ -10,13 +10,16 @@ import { useAuthStore } from '@/store/auth.store';
 import { useCartStore } from '@/store/cart.store';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Portal } from '@/components/ui/Portal';
-import { FileText, Plus, Search, Trash2, X, Loader2, ShoppingCart, Eye, CheckCircle, MessageCircle } from 'lucide-react';
+import { CotizacionImage, type CotizacionData } from '@/components/CotizacionImage';
+import { shareImageWhatsApp, downloadImage, printImage } from '@/lib/imageShare';
+import { FileText, Plus, Search, Trash2, X, Loader2, ShoppingCart, Eye, CheckCircle, MessageCircle, Download, Printer } from 'lucide-react';
 
 const inputCls =
   'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[16px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition';
 
 interface QItem { productId?: string; productVariantId?: string; name: string; code?: string; quantity: number; unitPrice: number; discountPct?: number; taxRate?: number; variantLabel?: string }
 interface QuoteRow { id: string; number: string; customerName: string | null; total: string; status: string; validUntil: string | null; createdAt: string; itemCount: number }
+interface Negocio { name: string; legalName: string | null; nit: string | null; address: string | null; city: string | null; phone: string | null; logo: string | null }
 interface QuoteFull extends QuoteRow { items: QItem[]; notes: string | null; customerId: string | null; customerPhone: string | null; subtotal: string; taxAmount: string; discountAmount: string }
 
 const money = (n: number) => `$${Math.round(n).toLocaleString('es-CO')}`;
@@ -283,6 +286,38 @@ function DetalleModal({ id, onClose }: { id: string; onClose: () => void }) {
     queryFn: () => api.get(`/quotes/${id}`).then((r) => r.data.data),
   });
 
+  // Logo y datos fiscales del negocio para el encabezado del documento. Si la
+  // consulta falla, la cotización igual sale: solo pierde el membrete.
+  const { data: negocio } = useQuery<Negocio | null>({
+    queryKey: ['business'],
+    queryFn: () => api.get('/business/me').then((r) => r.data.data),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const cotData: CotizacionData | null = useMemo(() => q ? {
+    numero: q.number,
+    fecha: formatDate(q.createdAt),
+    validUntil: q.validUntil ? fmtVigencia(q.validUntil) : null,
+    cliente: q.customerName,
+    clienteTelefono: q.customerPhone,
+    items: q.items.map((it) => ({
+      name: it.name, code: it.code, quantity: Number(it.quantity),
+      unitPrice: Number(it.unitPrice), discountPct: Number(it.discountPct || 0),
+      taxRate: Number(it.taxRate || 0), variantLabel: it.variantLabel,
+    })),
+    subtotal: Number(q.subtotal),
+    discountAmount: Number(q.discountAmount),
+    taxAmount: Number(q.taxAmount),
+    total: Number(q.total),
+    notas: q.notes,
+    negocio: negocio ? {
+      name: negocio.name, legalName: negocio.legalName, nit: negocio.nit,
+      address: negocio.address, city: negocio.city, phone: negocio.phone, logo: negocio.logo,
+    } : { name: businessName ?? '' },
+  } : null, [q, negocio, businessName]);
+
+  const archivo = q ? `cotizacion-${q.number}` : 'cotizacion';
+
   const convertir = () => {
     if (!q) return;
     clear();
@@ -332,20 +367,41 @@ function DetalleModal({ id, onClose }: { id: string; onClose: () => void }) {
               </div>
               <div className="px-6 py-4 border-t border-slate-100 dark:border-white/[0.06] space-y-2">
                 <div className="flex gap-2">
-                  <a
-                    href={waCotizacion(q, businessName)}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                  <button
+                    onClick={() => downloadImage('cotizacion-content', archivo)}
+                    className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 text-sm font-semibold flex items-center justify-center gap-2 transition"
+                  >
+                    <Download size={16} /> Imagen
+                  </button>
+                  <button
+                    onClick={() => printImage('cotizacion-content')}
+                    className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 text-sm font-semibold flex items-center justify-center gap-2 transition"
+                  >
+                    <Printer size={16} /> Imprimir
+                  </button>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => shareImageWhatsApp('cotizacion-content', archivo, q.customerPhone)}
                     className="flex-1 py-2.5 rounded-xl border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 text-sm font-semibold flex items-center justify-center gap-2 transition"
                   >
                     <MessageCircle size={16} /> WhatsApp
-                  </a>
+                  </button>
                   <button onClick={convertir} className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold flex items-center justify-center gap-2">
                     <ShoppingCart size={16} /> Convertir a venta
                   </button>
                 </div>
+                <a
+                  href={waCotizacion(q, businessName)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block text-center text-[11px] text-slate-400 hover:text-emerald-600 transition"
+                >
+                  Enviarla solo como texto
+                </a>
                 {q.status === 'CONVERTED' && <p className="text-[11px] text-center text-emerald-600 dark:text-emerald-400">Ya fue convertida antes — puedes volver a cargarla.</p>}
               </div>
+              {cotData && <CotizacionImage data={cotData} />}
             </>
           )}
         </div>

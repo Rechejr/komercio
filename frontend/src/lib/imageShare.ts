@@ -70,3 +70,31 @@ export async function shareImageWhatsApp(elementId: string, filename: string, ph
   const waUrl = buildWaUrl(phone);
   if (waUrl) window.open(waUrl, '_blank');
 }
+
+// Imprime el elemento como imagen, en una hoja aparte.
+//
+// Va dentro de un iframe propio a propósito: la hoja de impresión de la app
+// está armada para el ticket térmico (@page 80mm) y un documento tamaño carta
+// —una cotización, por ejemplo— saldría cortado si se usara window.print().
+// El iframe trae su propio @page y no hereda nada.
+export async function printImage(elementId: string): Promise<void> {
+  const blob = await captureImage(elementId);
+  if (!blob) { toast.error('No se pudo generar la imagen'); return; }
+
+  const url = URL.createObjectURL(blob);
+  const iframe = document.createElement('iframe');
+  iframe.setAttribute('aria-hidden', 'true');
+  iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;';
+  document.body.appendChild(iframe);
+
+  // La impresión se dispara cuando la imagen ya cargó dentro del iframe; si se
+  // hiciera al cargar el iframe saldría la hoja en blanco.
+  iframe.srcdoc = `<!doctype html><html><head><meta charset="utf-8"><style>
+    @page { size: auto; margin: 12mm; }
+    html, body { margin: 0; padding: 0; }
+    img { width: 100%; display: block; }
+  </style></head><body><img src="${url}" onload="window.focus();window.print();"></body></html>`;
+
+  // Se limpia con retraso: el diálogo de impresión necesita el iframe vivo.
+  window.setTimeout(() => { iframe.remove(); URL.revokeObjectURL(url); }, 60_000);
+}
