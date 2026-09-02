@@ -63,6 +63,8 @@ export default function CreditosPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
   const [selected, setSelected] = useState<any>(null);
+  // Fecha de pago que se está editando en el panel de detalle.
+  const [dueDateEdit, setDueDateEdit] = useState('');
   const [showPayment, setShowPayment] = useState(false);
   const [showDetail, setShowDetail] = useState(false);
   const [showNewCredit, setShowNewCredit] = useState(false);
@@ -161,6 +163,21 @@ export default function CreditosPage() {
     onError: (err: any) => toast.error(err.response?.data?.error || 'Error al registrar pago'),
   });
 
+  // Cambiar la fecha de pago del fiado. Enviar null la quita (fiado sin plazo).
+  const dueDateMut = useMutation({
+    mutationFn: (dueDate: string | null) =>
+      api.patch(`/credits/${selected.id}/due-date`, { dueDate }),
+    onSuccess: (res: any) => {
+      qc.invalidateQueries({ queryKey: ['credits'] });
+      qc.invalidateQueries({ queryKey: ['credit', selected?.id] });
+      // El panel de detalle se alimenta de `selected`: se refresca en el acto
+      // para que el estado y la fecha no queden mostrando lo viejo.
+      setSelected((s: any) => (s ? { ...s, ...res.data.data } : s));
+      toast.success(res.data.message || 'Fecha actualizada');
+    },
+    onError: (err: any) => toast.error(err.response?.data?.error || 'No se pudo guardar la fecha'),
+  });
+
   const newCreditMutation = useMutation({
     mutationFn: (data: any) => api.post('/credits', data),
     onSuccess: () => {
@@ -215,7 +232,14 @@ export default function CreditosPage() {
   } : null;
   const estadoFile = `estado-cuenta-${(selected?.customer?.name || 'cliente').replace(/\s+/g, '-').toLowerCase()}`;
 
-  function openDetail(c: any) { setSelected(c); setShowDetail(true); setShowPayment(false); }
+  function openDetail(c: any) {
+    setSelected(c);
+    // El campo de fecha arranca con la que ya tiene el fiado (o vacío si no
+    // tiene), para que el botón Guardar solo se active si de verdad la cambian.
+    setDueDateEdit(c?.dueDate ? String(c.dueDate).slice(0, 10) : '');
+    setShowDetail(true);
+    setShowPayment(false);
+  }
   function openPayment(c: any) { setSelected(c); setShowPayment(true); setShowDetail(false); reset(); }
 
   return (
@@ -533,12 +557,45 @@ export default function CreditosPage() {
 
               <div className="flex items-center justify-between">
                 <span className={`badge ${statusColor(selected.status)}`}>{statusLabel(selected.status)}</span>
-                {selected.dueDate && (
-                  <span className="text-[12px] text-slate-400 dark:text-slate-500 flex items-center gap-1">
-                    <Clock size={12} /> Vence: {formatDate(selected.dueDate)}
-                  </span>
-                )}
               </div>
+
+              {/* Fecha de pago, editable. Los fiados hechos en el POS antes de
+                  esto nacieron SIN fecha, y sin fecha no entran en mora ni
+                  disparan el aviso de "vence pronto": hay que poder ponérsela
+                  después. También sirve cuando el cliente pide otro plazo. */}
+              {selected.status !== 'PAID' && selected.status !== 'CANCELLED' && (
+                <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 px-3 py-2.5">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Clock size={13} className="text-slate-400" />
+                    <p className="text-[12px] font-medium text-slate-600 dark:text-slate-300">
+                      {selected.dueDate ? 'Se comprometió a pagar el' : 'Sin fecha de pago'}
+                    </p>
+                  </div>
+                  {!selected.dueDate && (
+                    <p className="text-[11.5px] text-slate-500 dark:text-slate-400 mb-2 leading-snug">
+                      Sin fecha no aparece como vencido ni te avisamos cuando se acerque.
+                    </p>
+                  )}
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="date"
+                      value={dueDateEdit}
+                      onChange={(e) => setDueDateEdit(e.target.value)}
+                      aria-label="Fecha en que el cliente pagará"
+                      className="flex-1 px-3 py-2 text-[16px] sm:text-[13px] rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => dueDateMut.mutate(dueDateEdit || null)}
+                      disabled={dueDateMut.isPending || dueDateEdit === (selected.dueDate ? selected.dueDate.slice(0, 10) : '')}
+                      className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg text-[13px] font-semibold transition flex items-center gap-1.5"
+                    >
+                      {dueDateMut.isPending ? <Loader2 size={13} className="animate-spin" /> : null}
+                      Guardar
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Historial de abonos */}
               <div>

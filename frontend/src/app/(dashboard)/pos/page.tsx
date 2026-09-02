@@ -100,6 +100,9 @@ export default function POSPage() {
   const [paymentMethod, setPaymentMethod]     = useState('CASH');
   const [paidAmount, setPaidAmount]           = useState('');
   const [isCredit, setIsCredit]               = useState(false);
+  // Plazo del fiado. Se elige con atajos (15/30 días) porque en el mostrador
+  // nadie abre un calendario con el cliente esperando. Vacío = sin plazo.
+  const [creditDueDate, setCreditDueDate]     = useState('');
   const [lastSale, setLastSale]               = useState<any>(null);
   const [sharingWhatsApp, setSharingWhatsApp] = useState(false);
   const receiptItemsRef = useRef<ReceiptItem[]>([]);
@@ -237,6 +240,9 @@ export default function POSPage() {
       setSaleNotes('');
       setPaidAmount('');
       setDiscInput('');
+      // El plazo es de ESTA venta: si se quedara puesto, la siguiente heredaría
+      // una fecha que nadie acordó con ese otro cliente.
+      setCreditDueDate('');
       toast.success('¡Venta registrada!');
       qc.invalidateQueries({ queryKey: ['sales'] });
       qc.invalidateQueries({ queryKey: ['products'] });
@@ -367,6 +373,7 @@ export default function POSPage() {
         : { paymentAccountId: paymentMethod }),
       paidAmount: paid,
       discountAmount: discount, isCredit, priceList,
+      ...(isCredit && creditDueDate ? { creditDueDate } : {}),
       notes: saleNotes.trim() || undefined,
     });
   }
@@ -1113,6 +1120,56 @@ export default function POSPage() {
                 <input type="checkbox" checked={isCredit} onChange={(e) => setIsCredit(e.target.checked)} className="rounded accent-emerald-600" />
                 Fiado / Crédito
               </label>
+            )}
+
+            {/* Plazo del fiado. Sin fecha, el fiado nunca entra en mora ni avisa
+                nada: es lo que enciende el aviso de "vence en 3 días" y el estado
+                "En mora". Los atajos evitan abrir el calendario en el mostrador. */}
+            {isCredit && (
+              <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 px-3 py-2.5">
+                <p className="text-[12px] font-medium text-slate-600 dark:text-slate-300 mb-2">
+                  ¿Cuándo lo paga? <span className="text-slate-400 font-normal">(opcional)</span>
+                </p>
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {[
+                    { label: '15 días', dias: 15 },
+                    { label: '30 días', dias: 30 },
+                    { label: '45 días', dias: 45 },
+                  ].map(({ label, dias }) => {
+                    const f = new Date(Date.now() + dias * 86_400_000).toISOString().slice(0, 10);
+                    const activo = creditDueDate === f;
+                    return (
+                      <button
+                        key={dias} type="button"
+                        onClick={() => setCreditDueDate(activo ? '' : f)}
+                        className={`text-[12px] font-medium px-2.5 py-1.5 rounded-lg border transition ${
+                          activo
+                            ? 'bg-emerald-600 border-emerald-600 text-white'
+                            : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:border-emerald-400'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                  {creditDueDate && (
+                    <button
+                      type="button" onClick={() => setCreditDueDate('')}
+                      className="text-[12px] text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 px-2 py-1.5"
+                    >
+                      Sin plazo
+                    </button>
+                  )}
+                </div>
+                <input
+                  type="date"
+                  value={creditDueDate}
+                  min={new Date().toISOString().slice(0, 10)}
+                  onChange={(e) => setCreditDueDate(e.target.value)}
+                  aria-label="Fecha en que el cliente pagará el fiado"
+                  className="w-full px-3 py-2 text-[16px] sm:text-[13px] rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+                />
+              </div>
             )}
 
             <button

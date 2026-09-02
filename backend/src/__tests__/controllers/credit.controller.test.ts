@@ -397,3 +397,104 @@ describe('creditController.cancel', () => {
     expect((next as jest.Mock).mock.calls[0][0].statusCode).toBe(400);
   });
 });
+// ─── Fecha de pago del fiado ─────────────────────────────────────────────────
+// Sin fecha, un fiado NUNCA entra en mora ni dispara avisos: el proceso que los
+// marca busca por dueDate. Los fiados hechos desde el POS nacían sin ella, así
+// que toda esa maquinaria estaba apagada para el caso más común.
+describe('creditController.updateDueDate', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  const credito = (extra: Record<string, unknown> = {}) => ({
+    id: 'credit-1', status: 'PENDING', ...extra,
+  });
+
+  it('guarda la fecha de pago del fiado', async () => {
+    (mockPrisma.credit.findFirst as jest.Mock).mockResolvedValue(credito());
+    (mockPrisma.credit.update as jest.Mock).mockResolvedValue({ id: 'credit-1' });
+
+    const { res, json } = makeRes();
+    await creditController.updateDueDate(
+      makeReq({ params: { id: 'credit-1' }, body: { dueDate: '2026-10-15' } }), res, next,
+    );
+
+    const data = (mockPrisma.credit.update as jest.Mock).mock.calls[0][0].data;
+    expect(data.dueDate).toBeInstanceOf(Date);
+    expect(json).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('con la fecha vacía la quita (fiado sin plazo)', async () => {
+    (mockPrisma.credit.findFirst as jest.Mock).mockResolvedValue(credito());
+    (mockPrisma.credit.update as jest.Mock).mockResolvedValue({ id: 'credit-1' });
+
+    const { res } = makeRes();
+    await creditController.updateDueDate(
+      makeReq({ params: { id: 'credit-1' }, body: { dueDate: null } }), res, next,
+    );
+
+    expect((mockPrisma.credit.update as jest.Mock).mock.calls[0][0].data.dueDate).toBeNull();
+  });
+
+  it('al dar un plazo nuevo hacia adelante, deja de estar en mora', async () => {
+    // Si no, quedaría "En mora" con una fecha futura —que no tiene sentido— y
+    // le seguiría saliendo al dueño en los avisos de cobro.
+    (mockPrisma.credit.findFirst as jest.Mock).mockResolvedValue(credito({ status: 'OVERDUE' }));
+    (mockPrisma.credit.update as jest.Mock).mockResolvedValue({ id: 'credit-1' });
+    const enUnMes = new Date(Date.now() + 30 * 86_400_000).toISOString();
+
+    const { res } = makeRes();
+    await creditController.updateDueDate(
+      makeReq({ params: { id: 'credit-1' }, body: { dueDate: enUnMes } }), res, next,
+    );
+
+    expect((mockPrisma.credit.update as jest.Mock).mock.calls[0][0].data.status).toBe('PENDING');
+  });
+
+  it('un plazo en el PASADO no lo saca de mora', async () => {
+    (mockPrisma.credit.findFirst as jest.Mock).mockResolvedValue(credito({ status: 'OVERDUE' }));
+    (mockPrisma.credit.update as jest.Mock).mockResolvedValue({ id: 'credit-1' });
+    const hace10dias = new Date(Date.now() - 10 * 86_400_000).toISOString();
+
+    const { res } = makeRes();
+    await creditController.updateDueDate(
+      makeReq({ params: { id: 'credit-1' }, body: { dueDate: hace10dias } }), res, next,
+    );
+
+    expect((mockPrisma.credit.update as jest.Mock).mock.calls[0][0].data.status).toBeUndefined();
+  });
+
+  it('404 si el fiado es de otro negocio', async () => {
+    (mockPrisma.credit.findFirst as jest.Mock).mockResolvedValue(null);
+
+    await creditController.updateDueDate(
+      makeReq({ params: { id: 'ajeno' }, body: { dueDate: '2026-10-15' } }), makeRes().res, next,
+    );
+
+    expect((next as jest.Mock).mock.calls[0][0].statusCode).toBe(404);
+    // La consulta va acotada al negocio del token, por el cliente dueño del fiado.
+    expect((mockPrisma.credit.findFirst as jest.Mock).mock.calls[0][0].where.customer)
+      .toEqual({ businessId: 'biz-1' });
+  });
+
+  it.each([
+    ['anulado', 'CANCELLED'],
+    ['ya saldado', 'PAID'],
+  ])('rechaza cambiar la fecha de un fiado %s', async (_caso, status) => {
+    (mockPrisma.credit.findFirst as jest.Mock).mockResolvedValue(credito({ status }));
+
+    await creditController.updateDueDate(
+      makeReq({ params: { id: 'credit-1' }, body: { dueDate: '2026-10-15' } }), makeRes().res, next,
+    );
+
+    expect((next as jest.Mock).mock.calls[0][0].statusCode).toBe(400);
+    expect(mockPrisma.credit.update).not.toHaveBeenCalled();
+  });
+
+  it('rechaza una fecha basura', async () => {
+    await creditController.updateDueDate(
+      makeReq({ params: { id: 'credit-1' }, body: { dueDate: 'el proximo mes' } }), makeRes().res, next,
+    );
+
+    expect((next as jest.Mock).mock.calls[0][0].statusCode).toBe(400);
+  });
+});

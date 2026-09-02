@@ -3459,6 +3459,94 @@
         ]
       }
     },
+    "/api/v1/credits/{id}/due-date": {
+      "patch": {
+        "tags": [
+          "credit"
+        ],
+        "summary": "Cambiar la fecha de pago. La puede tocar quien atiende (CASHIER), porque acordar un plazo nuevo con el cliente es parte del mostrador, no una decisión administrativa: no mueve plata, solo la fecha.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operación exitosa",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespuestaOk"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Datos inválidos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sin sesión o token vencido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Requiere rol: ADMIN, SUPERVISOR, CASHIER",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "Roles permitidos: ADMIN, SUPERVISOR, CASHIER.",
+        "x-roles": [
+          "ADMIN",
+          "SUPERVISOR",
+          "CASHIER"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "dueDate": {
+                    "type": "string",
+                    "format": "date-time",
+                    "description": "Fecha inválida"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/credits/{id}/payments": {
       "post": {
         "tags": [
@@ -7200,6 +7288,11 @@
                     "type": "string",
                     "format": "uuid",
                     "description": "customerId inválido"
+                  },
+                  "creditDueDate": {
+                    "type": "string",
+                    "format": "date-time",
+                    "description": "Fecha de vencimiento inválida"
                   },
                   "branchId": {
                     "type": "string",

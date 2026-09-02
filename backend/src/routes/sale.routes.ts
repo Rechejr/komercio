@@ -28,6 +28,10 @@ router.post('/',
     body('paymentMethod').optional().isIn(['CASH', 'TRANSFER', 'NEQUI', 'DAVIPLATA', 'CARD', 'MIXED']).withMessage('Método de pago inválido'),
     body('paymentAccountId').optional({ nullable: true }).isString(),
     body('customerId').optional({ checkFalsy: true }).isUUID().withMessage('customerId inválido'),
+    // Fecha en que se compromete a pagar el fiado. Sin ella, el fiado nunca
+    // entra en mora ni genera avisos: es lo que hace que el resto del sistema
+    // (el aviso 3 días antes y el estado "En mora") funcione de verdad.
+    body('creditDueDate').optional({ checkFalsy: true }).isISO8601().withMessage('Fecha de vencimiento inválida'),
     body('branchId').optional({ checkFalsy: true }).isUUID().withMessage('branchId inválido'),
   ],
   validate,

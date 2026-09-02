@@ -200,6 +200,7 @@ export const saleController = {
         isCredit = false,
         paidAmount,
         priceList = 'retail',
+        creditDueDate,
       } = req.body;
 
       // Lista de precios de la venta: 'wholesale' usa el precio mayorista de cada
@@ -208,6 +209,16 @@ export const saleController = {
 
       if (!items || items.length === 0) throw new AppError('La venta debe tener productos', 400);
       if (isCredit && !customerId) throw new AppError('Se requiere un cliente para registrar una venta a crédito', 400);
+
+      // Fecha de pago del fiado. Es opcional —hay quien fía sin plazo—, pero si
+      // viene tiene que ser una fecha usable: una basura aquí dejaría el fiado
+      // sin poder entrar en mora nunca.
+      let dueDate: Date | null = null;
+      if (isCredit && creditDueDate) {
+        const d = new Date(creditDueDate);
+        if (isNaN(d.getTime())) throw new AppError('La fecha de vencimiento del fiado no es válida', 400);
+        dueDate = d;
+      }
 
       // Sin esto, un cliente de la API (o un bug de frontend) podía mandar splits que
       // no sumaran lo mismo que paidAmount — el movimiento de caja usa los splits, así
@@ -568,6 +579,7 @@ export const saleController = {
               paidAmount: paid,
               balance,
               status: 'PENDING',
+              dueDate,
             },
           });
           await tx.customer.update({

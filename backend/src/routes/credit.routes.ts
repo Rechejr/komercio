@@ -28,6 +28,16 @@ router.post('/:id/payments',
   creditController.addPayment,
 );
 
+// Cambiar la fecha de pago. La puede tocar quien atiende (CASHIER), porque
+// acordar un plazo nuevo con el cliente es parte del mostrador, no una decisión
+// administrativa: no mueve plata, solo la fecha.
+router.patch('/:id/due-date',
+  authorize('ADMIN', 'SUPERVISOR', 'CASHIER'),
+  [body('dueDate').optional({ nullable: true, checkFalsy: true }).isISO8601().withMessage('Fecha inválida')],
+  validate,
+  creditController.updateDueDate,
+);
+
 // Anular un crédito manual (registrado con el cliente o monto equivocado) —
 // requiere ADMIN/SUPERVISOR, igual que anular una venta.
 router.patch('/:id/cancel', authorize('ADMIN', 'SUPERVISOR'), creditController.cancel);

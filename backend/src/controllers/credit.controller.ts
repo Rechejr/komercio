@@ -244,5 +244,56 @@ export const creditController = {
       next(err);
     }
   },
+
+  /** Cambia la fecha en que el cliente se compromete a pagar.
+   *
+   *  Hace falta para dos cosas: ponérsela a los fiados viejos, que nacieron sin
+   *  fecha y por eso nunca entraron en mora ni avisaron nada; y para cuando el
+   *  cliente pide un plazo nuevo, que en un negocio de barrio pasa a diario.
+   *  Enviar la fecha vacía la quita (vuelve a ser un fiado sin plazo). */
+  async updateDueDate(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const { id } = req.params;
+      const businessId = req.user!.businessId;
+      const { dueDate } = req.body;
+
+      let fecha: Date | null = null;
+      if (dueDate) {
+        const d = new Date(dueDate);
+        if (isNaN(d.getTime())) throw new AppError('La fecha de vencimiento no es válida', 400);
+        fecha = d;
+      }
+
+      // El crédito tiene que ser de ESTE negocio: se comprueba por el cliente,
+      // que es quien lleva el businessId.
+      const credito = await prisma.credit.findFirst({
+        where: { id, deletedAt: null, customer: { businessId } },
+        select: { id: true, status: true },
+      });
+      if (!credito) throw new AppError('Crédito no encontrado', 404);
+      if (credito.status === 'CANCELLED') throw new AppError('Este crédito está anulado', 400);
+      if (credito.status === 'PAID') throw new AppError('Este crédito ya está saldado', 400);
+
+      // Si estaba marcado en mora y le dan un plazo nuevo hacia adelante, deja de
+      // estarlo: el estado lo vuelve a calcular el proceso de cada hora según la
+      // fecha. Sin esto, quedaría "En mora" con una fecha futura, que no tiene
+      // sentido y además le seguiría saliendo en los avisos.
+      const yaNoEstaEnMora = credito.status === 'OVERDUE' && fecha && fecha > new Date();
+
+      const actualizado = await prisma.credit.update({
+        where: { id },
+        data: {
+          dueDate: fecha,
+          ...(yaNoEstaEnMora ? { status: 'PENDING' as const } : {}),
+        },
+        select: { id: true, dueDate: true, status: true },
+      });
+
+      await cache.del(`dashboard:${businessId}`).catch(() => {});
+      return success(res, actualizado, fecha ? 'Fecha de pago actualizada' : 'Se quitó la fecha de pago');
+    } catch (err) {
+      next(err);
+    }
+  },
 };
 
