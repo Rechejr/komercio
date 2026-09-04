@@ -172,10 +172,10 @@ function PlanModal({ business, onClose }: { business: Business; onClose: () => v
       onClick={onClose}
     >
       <div
-        className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-sm p-5 shadow-2xl"
+        className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-sm shadow-2xl max-h-[90dvh] overflow-hidden flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between px-5 pt-5 pb-4 flex-shrink-0">
           <h2 className="text-[15px] font-bold text-white flex items-center gap-2">
             <Zap size={15} className="text-amber-400" /> Cambiar plan
           </h2>
@@ -189,6 +189,7 @@ function PlanModal({ business, onClose }: { business: Business; onClose: () => v
           </button>
         </div>
 
+        <div className="px-5 overflow-y-auto min-h-0 flex-1">
         <div className="mb-4 p-3 bg-gray-800 rounded-xl text-sm">
           <p className="font-semibold text-white">{business.name}</p>
           <p className="text-gray-400 text-xs mt-0.5">{business.owner.email}</p>
@@ -348,7 +349,9 @@ function PlanModal({ business, onClose }: { business: Business; onClose: () => v
           </div>
         )}
 
-        <div className="flex gap-2 pt-1">
+        </div>
+
+        <div className="flex gap-2 px-5 py-4 border-t border-gray-800 flex-shrink-0">
           <button
             type="button"
             onClick={onClose}
