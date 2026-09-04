@@ -3,11 +3,12 @@ import bcrypt from 'bcryptjs';
 import { rateLimit } from 'express-rate-limit';
 import { prisma } from '../config/database';
 import { authenticate } from '../middlewares/auth';
-import { AppError, success, paginated } from '../utils/response';
+import { AppError, success, created, paginated } from '../utils/response';
 import { getPagination } from '../utils/pagination';
 import { AuthRequest } from '../middlewares/auth';
 import { PLAN_PRICES, CONTABLE_ANNUAL_PRICE } from '../controllers/payment.controller';
 import { planDesdeMonto, planDesdeDuracion, COMMISSION_RATE, ANNUAL_CAP } from '../utils/comision';
+import { parseBogotaBoundary } from '../utils/bogotaTime';
 
 const router = Router();
 
@@ -59,7 +60,7 @@ router.get('/stats', async (_req, res, next) => {
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const in7 = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
 
-    const [proActive, proExpiring7, consumedLinks] = await Promise.all([
+    const [proActive, proExpiring7, consumedLinks, manualPayments] = await Promise.all([
       // Pro vigentes: plan pro y no vencidos (o sin fecha = vitalicio).
       prisma.business.count({ where: { deletedAt: null, plan: 'pro', OR: [{ planExpiresAt: null }, { planExpiresAt: { gt: now } }] } }),
       // Pro que vencen en los próximos 7 días (oportunidad de retención).
@@ -71,19 +72,36 @@ router.get('/stats', async (_req, res, next) => {
         select: { period: true, consumedAt: true, business: { select: { name: true, type: true } } },
         orderBy: { consumedAt: 'desc' },
       }),
+      // Cobros por fuera de la pasarela (efectivo, transferencia, Nequi): aquí
+      // el monto es el que se registró, no un precio de lista, porque un pago en
+      // efectivo puede llevar descuento o ser un abono acordado.
+      prisma.manualPayment.findMany({
+        select: { amount: true, period: true, method: true, paidAt: true, business: { select: { name: true, type: true } } },
+        orderBy: { paidAt: 'desc' },
+      }),
     ]);
 
     const priceOf = (period: string, type: string) => type === 'contable' ? CONTABLE_ANNUAL_PRICE : (PLAN_PRICES[period] || 0);
+
+    // Las dos fuentes se mezclan en una sola línea de tiempo: para el panel un
+    // peso cobrado en efectivo vale lo mismo que uno cobrado por Wompi.
+    const pagos = [
+      ...consumedLinks.map((l) => ({
+        business: l.business.name, type: l.business.type, period: l.period,
+        amount: priceOf(l.period, l.business.type), date: l.consumedAt as Date, method: 'wompi',
+      })),
+      ...manualPayments.map((m) => ({
+        business: m.business.name, type: m.business.type, period: m.period,
+        amount: m.amount, date: m.paidAt, method: m.method,
+      })),
+    ].sort((a, b) => b.date.getTime() - a.date.getTime());
+
     let revenueTotal = 0, revenueMonth = 0;
-    for (const l of consumedLinks) {
-      const amt = priceOf(l.period, l.business.type);
-      revenueTotal += amt;
-      if (l.consumedAt && l.consumedAt >= monthStart) revenueMonth += amt;
+    for (const p of pagos) {
+      revenueTotal += p.amount;
+      if (p.date >= monthStart) revenueMonth += p.amount;
     }
-    const recentPayments = consumedLinks.slice(0, 8).map((l) => ({
-      business: l.business.name, type: l.business.type, period: l.period,
-      amount: priceOf(l.period, l.business.type), date: l.consumedAt,
-    }));
+    const recentPayments = pagos.slice(0, 8);
 
     const conversion = totalBusinesses > 0 ? Math.round((proActive / totalBusinesses) * 100) : 0;
 
@@ -96,7 +114,7 @@ router.get('/stats', async (_req, res, next) => {
       recentBusinesses,
       subscriptions: {
         revenueTotal, revenueMonth, proActive, proExpiring7, conversion, recentPayments,
-        payingCount: consumedLinks.length,
+        payingCount: pagos.length,
       },
     });
   } catch (err) { next(err); }
@@ -175,22 +193,114 @@ router.get('/businesses', async (req: AuthRequest, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.patch('/businesses/:id/plan', async (req, res, next) => {
+// Medios de cobro por fuera de la pasarela. "otro" cubre lo que no se repite
+// (un canje, un pago combinado); la nota explica el caso.
+const MANUAL_METHODS = ['efectivo', 'transferencia', 'nequi', 'daviplata', 'otro'];
+const MANUAL_PERIODS = ['monthly', 'quarterly', 'annual'];
+
+/** Valida el pago manual que puede venir junto al cambio de plan. */
+function parsearPagoManual(raw: any) {
+  if (!raw) return null;
+
+  const amount = Math.round(Number(raw.amount));
+  if (!Number.isFinite(amount) || amount <= 0) throw new AppError('El monto del pago debe ser mayor a cero', 400);
+  // Tope de cordura: atrapa el dedo pegado en el cero, no un cobro real.
+  if (amount > 100_000_000) throw new AppError('El monto del pago es demasiado alto', 400);
+
+  const period = String(raw.period || '');
+  if (!MANUAL_PERIODS.includes(period)) throw new AppError('Periodo del pago inválido', 400);
+
+  const method = String(raw.method || 'efectivo').toLowerCase();
+  if (!MANUAL_METHODS.includes(method)) throw new AppError('Medio de pago inválido', 400);
+
+  // Sin fecha = hoy. Un "YYYY-MM-DD" se ancla a la medianoche de Colombia, si no
+  // un pago del día 1 se contaría en el mes anterior (medianoche UTC = 7 pm acá).
+  const paidAt = raw.paidAt ? parseBogotaBoundary(String(raw.paidAt), 'start') : new Date();
+  if (!paidAt || isNaN(paidAt.getTime())) throw new AppError('Fecha de pago inválida', 400);
+  // Un pago futuro inflaría los ingresos del mes con plata que no ha entrado.
+  if (paidAt.getTime() > Date.now() + 24 * 60 * 60 * 1000) throw new AppError('La fecha del pago no puede ser futura', 400);
+
+  const note = raw.note ? String(raw.note).trim().slice(0, 200) : null;
+  return { amount, period, method, paidAt, note };
+}
+
+router.patch('/businesses/:id/plan', async (req: AuthRequest, res, next) => {
   try {
     const { plan, planExpiresAt } = req.body;
 
     if (!['free', 'pro'].includes(plan)) throw new AppError('Plan inválido. Use "free" o "pro"', 400);
 
-    const business = await prisma.business.update({
-      where: { id: req.params.id },
-      data: {
-        plan,
-        planExpiresAt: planExpiresAt ? new Date(planExpiresAt) : null,
-      },
-      select: { id: true, name: true, plan: true, planExpiresAt: true },
+    // Pago opcional: cuando el cliente pagó en efectivo o por transferencia, se
+    // registra junto con la activación para que la plata entre a los ingresos
+    // del panel. Sin esto la cuenta quedaba en Pro y el cobro no existía.
+    const pago = parsearPagoManual(req.body.payment);
+    if (pago && plan !== 'pro') throw new AppError('Solo se registra el pago al activar el plan Pro', 400);
+
+    const business = await prisma.$transaction(async (tx) => {
+      const biz = await tx.business.update({
+        where: { id: req.params.id },
+        data: {
+          plan,
+          planExpiresAt: planExpiresAt ? new Date(planExpiresAt) : null,
+        },
+        select: { id: true, name: true, plan: true, planExpiresAt: true },
+      });
+      if (pago) {
+        await tx.manualPayment.create({
+          data: { ...pago, businessId: biz.id, createdBy: req.user!.userId },
+        });
+      }
+      return biz;
     });
 
-    return success(res, business, `Plan de "${business.name}" actualizado a ${plan}`);
+    return success(
+      res,
+      business,
+      pago
+        ? `Plan de "${business.name}" actualizado a ${plan} y pago de $${pago.amount.toLocaleString('es-CO')} registrado`
+        : `Plan de "${business.name}" actualizado a ${plan}`,
+    );
+  } catch (err) { next(err); }
+});
+
+// Pagos manuales de un negocio — para revisar qué se le ha cobrado por fuera de
+// la pasarela y poder corregir un registro equivocado.
+router.get('/businesses/:id/payments', async (req, res, next) => {
+  try {
+    const pagos = await prisma.manualPayment.findMany({
+      where: { businessId: req.params.id },
+      orderBy: { paidAt: 'desc' },
+      take: 100,
+    });
+    return success(res, pagos);
+  } catch (err) { next(err); }
+});
+
+// Registrar un pago sin tocar el plan (renovación de alguien que ya está en Pro).
+router.post('/businesses/:id/payments', async (req: AuthRequest, res, next) => {
+  try {
+    const pago = parsearPagoManual(req.body);
+    if (!pago) throw new AppError('Faltan los datos del pago', 400);
+
+    const business = await prisma.business.findUnique({
+      where: { id: req.params.id },
+      select: { id: true, name: true },
+    });
+    if (!business) throw new AppError('Negocio no encontrado', 404);
+
+    const creado = await prisma.manualPayment.create({
+      data: { ...pago, businessId: business.id, createdBy: req.user!.userId },
+    });
+
+    return created(res, creado, `Pago de $${pago.amount.toLocaleString('es-CO')} registrado a "${business.name}"`);
+  } catch (err) { next(err); }
+});
+
+// Borrar un pago mal registrado (monto equivocado, negocio equivocado).
+router.delete('/payments/:paymentId', async (req, res, next) => {
+  try {
+    await prisma.manualPayment.delete({ where: { id: req.params.paymentId } });
+    return success(res, { id: req.params.paymentId }, 'Pago eliminado');
   } catch (err) { next(err); }
 });
 
@@ -316,6 +426,8 @@ router.delete('/businesses/:id', deleteBusinessLimiter, async (req: AuthRequest,
       await tx.branch.deleteMany({ where: { businessId } });
       // 14.5. Links de pago (Wompi) — FK RESTRICT hacia businesses.
       await tx.paymentLink.deleteMany({ where: { businessId } });
+      // 14.55. Pagos manuales (efectivo/transferencia) — mismo FK RESTRICT.
+      await tx.manualPayment.deleteMany({ where: { businessId } });
       // 14.6. Resúmenes semanales con IA — mismo FK RESTRICT.
       await tx.aiWeeklySummary.deleteMany({ where: { businessId } });
       // 14.7. Contable: clientes del contador — FK RESTRICT hacia businesses. Al

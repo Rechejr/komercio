@@ -178,6 +178,8 @@ model Business {
   paymentRef         String?           @unique
   settings           Json?
   paymentLinks       PaymentLink[]
+  // Cobros hechos por fuera de la pasarela (efectivo, transferencia, Nequi).
+  manualPayments     ManualPayment[]
   aiWeeklySummaries  AiWeeklySummary[]
   // Medios de pago configurables (Efectivo, Bancolombia, BBVA, Caja 1, Nequi…).
   // Reemplazan progresivamente al enum PaymentMethod fijo. Ver PaymentAccount.
@@ -267,6 +269,33 @@ model PaymentLink {
 
   @@index([businessId])
   @@map("payment_links")
+}
+
+// ─── PAGOS MANUALES (fuera de Wompi) ──────────────────────────────────────────
+// Cobros que no pasan por la pasarela: efectivo, transferencia, Nequi… El
+// superadmin los registra cuando activa el plan a mano. Sin esta tabla la plata
+// cobrada por fuera no existía para el panel: la cuenta quedaba en Pro, pero
+// "Ingresos" y "Pagos recientes" solo veían los payment_links de Wompi, así que
+// una venta en efectivo no aparecía por ningún lado.
+model ManualPayment {
+  id         String   @id @default(uuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id])
+  amount     Int // COP
+  period     String // monthly | quarterly | annual
+  method     String // efectivo | transferencia | nequi | otro
+  // Cuándo se recibió la plata (puede ser anterior al registro: uno cobra hoy y
+  // lo anota mañana). Es la fecha con la que suma en el mes y ordena la lista.
+  paidAt     DateTime
+  note       String?
+  // Superadmin que lo registró. Sin FK a propósito: si algún día se borra ese
+  // usuario, el pago histórico no debe desaparecer ni bloquear el borrado.
+  createdBy  String?
+  createdAt  DateTime @default(now())
+
+  @@index([businessId])
+  @@index([paidAt])
+  @@map("manual_payments")
 }
 
 model Branch {

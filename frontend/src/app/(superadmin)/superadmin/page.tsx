@@ -13,6 +13,39 @@ import {
 
 const PERIODO_LABEL: Record<string, string> = { monthly: 'Mensual', quarterly: 'Trimestral', annual: 'Anual' };
 
+// Precios de lista (los mismos del backend) — solo prellenan el monto del pago
+// manual: el cobro real puede llevar descuento y por eso el campo es editable.
+const PRECIOS_POS: Record<string, number> = { monthly: 29900, quarterly: 80700, annual: 287000 };
+const CONTABLE_ANUAL = 120000;
+const MESES_PERIODO: Record<string, number> = { monthly: 1, quarterly: 3, annual: 12 };
+
+const MEDIOS_PAGO = [
+  { id: 'efectivo', label: 'Efectivo' },
+  { id: 'transferencia', label: 'Transferencia' },
+  { id: 'nequi', label: 'Nequi' },
+  { id: 'daviplata', label: 'Daviplata' },
+  { id: 'otro', label: 'Otro' },
+];
+const MEDIO_LABEL: Record<string, string> = {
+  wompi: 'Wompi', efectivo: 'Efectivo', transferencia: 'Transferencia',
+  nequi: 'Nequi', daviplata: 'Daviplata', otro: 'Otro',
+};
+
+/** "YYYY-MM-DD" de hoy en Colombia (no en la zona del navegador). */
+function hoyISO(): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Bogota', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(new Date());
+}
+
+/** Suma meses a un "YYYY-MM-DD" sin salirse del mes (31 de enero + 1 mes = 28/29 de febrero). */
+function sumarMeses(fechaISO: string, meses: number): string {
+  const [y, m, d] = fechaISO.split('-').map(Number);
+  const destino = new Date(Date.UTC(y, m - 1 + meses, d));
+  if (destino.getUTCDate() !== d) destino.setUTCDate(0); // el día no existe en ese mes
+  return destino.toISOString().slice(0, 10);
+}
+
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 interface Business {
   id: string;
@@ -79,11 +112,53 @@ function PlanModal({ business, onClose }: { business: Business; onClose: () => v
     business.planExpiresAt ? business.planExpiresAt.split('T')[0] : '',
   );
 
+  // Cobro por fuera de la pasarela. Viene marcado cuando se esta activando Pro
+  // (activar a mano casi siempre es porque el cliente ya pago en efectivo o por
+  // transferencia); si el negocio ya estaba en Pro se asume que solo se corrige
+  // la fecha, y no se registra plata que no entro.
+  const esContable = business.type === 'contable';
+  const [registrarPago, setRegistrarPago] = useState(business.plan !== 'pro');
+  const [periodo, setPeriodo] = useState<'monthly' | 'quarterly' | 'annual'>(esContable ? 'annual' : 'monthly');
+  const precioLista = (p: string) => (esContable ? CONTABLE_ANUAL : PRECIOS_POS[p] ?? 0);
+  const [monto, setMonto] = useState<string>(String(precioLista(esContable ? 'annual' : 'monthly')));
+  const [medio, setMedio] = useState('efectivo');
+  const [fechaPago, setFechaPago] = useState(hoyISO());
+  const [nota, setNota] = useState('');
+
+  // Elegir el periodo prellena el monto y, cuando se esta ACTIVANDO la cuenta,
+  // tambien calcula el vencimiento. Si el negocio ya estaba en Pro con fecha, no
+  // se toca: ahi lo normal es solo anotar un pago que ya se habia activado, y
+  // recalcular le sumaria meses regalados sin que nadie lo pidiera.
+  const puedeAutoFecha = business.plan !== 'pro' || !business.planExpiresAt;
+  function elegirPeriodo(p: 'monthly' | 'quarterly' | 'annual') {
+    setPeriodo(p);
+    setMonto(String(precioLista(p)));
+    if (!puedeAutoFecha) return;
+    const vigente = business.planExpiresAt?.split('T')[0];
+    const base = vigente && vigente > fechaPago ? vigente : fechaPago;
+    setExpires(sumarMeses(base, MESES_PERIODO[p]));
+  }
+
+  // Renovacion: el boton corre la fecha explicitamente, para que sumar meses sea
+  // una decision y no un efecto colateral de elegir el periodo.
+  function renovarDesdeVencimiento() {
+    const vigente = business.planExpiresAt?.split('T')[0];
+    const base = vigente && vigente > fechaPago ? vigente : fechaPago;
+    setExpires(sumarMeses(base, MESES_PERIODO[periodo]));
+  }
+
+  const montoNum = Math.round(Number(monto.replace(/[^0-9]/g, '')));
+  const pagoInvalido = registrarPago && plan === 'pro' && (!Number.isFinite(montoNum) || montoNum <= 0);
+
   const mutation = useMutation({
-    mutationFn: (data: { plan: string; planExpiresAt?: string | null }) =>
+    mutationFn: (data: {
+      plan: string;
+      planExpiresAt?: string | null;
+      payment?: { amount: number; period: string; method: string; paidAt: string; note?: string };
+    }) =>
       api.patch(`/superadmin/businesses/${business.id}/plan`, data).then((r) => r.data),
-    onSuccess: () => {
-      toast.success(`Plan de "${business.name}" actualizado a ${plan.toUpperCase()}`);
+    onSuccess: (r: any) => {
+      toast.success(r?.message || `Plan de "${business.name}" actualizado a ${plan.toUpperCase()}`);
       qc.invalidateQueries({ queryKey: ['sa-businesses'] });
       qc.invalidateQueries({ queryKey: ['sa-stats'] });
       onClose();
@@ -158,7 +233,118 @@ function PlanModal({ business, onClose }: { business: Business; onClose: () => v
               onChange={(e) => setExpires(e.target.value)}
               className="w-full px-3 py-2.5 text-[16px] sm:text-sm rounded-xl border border-gray-700 bg-gray-800 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
             />
-            <p className="text-xs text-gray-600 mt-1">Dejar vacío = sin expiración</p>
+            <div className="flex items-center justify-between gap-2 mt-1">
+              <p className="text-xs text-gray-600">Dejar vacío = sin expiración</p>
+              {!puedeAutoFecha && registrarPago && (
+                <button
+                  type="button"
+                  onClick={renovarDesdeVencimiento}
+                  className="text-xs font-semibold text-emerald-400 hover:text-emerald-300 transition-colors flex-none"
+                >
+                  +{MESES_PERIODO[periodo]} {MESES_PERIODO[periodo] === 1 ? 'mes' : 'meses'}
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {plan === 'pro' && (
+          <div className="mb-4 rounded-xl border border-gray-700 bg-gray-800/40 p-3">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={registrarPago}
+                onChange={(e) => setRegistrarPago(e.target.checked)}
+                className="w-4 h-4 accent-emerald-500"
+              />
+              <span className="text-[13px] font-semibold text-white">Registrar pago recibido</span>
+            </label>
+            <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">
+              Para cobros por fuera de Wompi (efectivo, transferencia). Suma en los ingresos y
+              aparece en Pagos recientes.
+            </p>
+
+            {registrarPago && (
+              <div className="mt-3 space-y-3">
+                <div>
+                  <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+                    Periodo pagado
+                  </label>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {(['monthly', 'quarterly', 'annual'] as const).map((p) => (
+                      <button
+                        key={p}
+                        type="button"
+                        onClick={() => elegirPeriodo(p)}
+                        className={`py-1.5 rounded-lg border text-xs font-semibold transition-all ${
+                          periodo === p
+                            ? 'border-emerald-500 bg-emerald-500/10 text-emerald-400'
+                            : 'border-gray-700 text-gray-500 hover:border-gray-600'
+                        }`}
+                      >
+                        {PERIODO_LABEL[p]}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label htmlFor="pago-monto" className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+                      Monto
+                    </label>
+                    <input
+                      id="pago-monto"
+                      inputMode="numeric"
+                      value={monto}
+                      onChange={(e) => setMonto(e.target.value)}
+                      className="w-full px-3 py-2 text-[16px] sm:text-sm rounded-lg border border-gray-700 bg-gray-800 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="pago-fecha" className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+                      Fecha del pago
+                    </label>
+                    <input
+                      id="pago-fecha"
+                      type="date"
+                      max={hoyISO()}
+                      value={fechaPago}
+                      onChange={(e) => setFechaPago(e.target.value)}
+                      className="w-full px-3 py-2 text-[16px] sm:text-sm rounded-lg border border-gray-700 bg-gray-800 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label htmlFor="pago-medio" className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+                    Cómo pagó
+                  </label>
+                  <select
+                    id="pago-medio"
+                    value={medio}
+                    onChange={(e) => setMedio(e.target.value)}
+                    className="w-full px-3 py-2 text-[16px] sm:text-sm rounded-lg border border-gray-700 bg-gray-800 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  >
+                    {MEDIOS_PAGO.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+                  </select>
+                </div>
+
+                <div>
+                  <label htmlFor="pago-nota" className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+                    Nota (opcional)
+                  </label>
+                  <input
+                    id="pago-nota"
+                    value={nota}
+                    onChange={(e) => setNota(e.target.value)}
+                    maxLength={200}
+                    placeholder="Ej: pagó en la oficina"
+                    className="w-full px-3 py-2 text-[16px] sm:text-sm rounded-lg border border-gray-700 bg-gray-800 text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -175,8 +361,11 @@ function PlanModal({ business, onClose }: { business: Business; onClose: () => v
             onClick={() => mutation.mutate({
               plan,
               planExpiresAt: plan === 'pro' && expires ? new Date(expires).toISOString() : null,
+              ...(plan === 'pro' && registrarPago
+                ? { payment: { amount: montoNum, period: periodo, method: medio, paidAt: fechaPago, note: nota.trim() || undefined } }
+                : {}),
             })}
-            disabled={mutation.isPending}
+            disabled={mutation.isPending || pagoInvalido}
             className="flex-1 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white rounded-xl text-sm font-semibold transition-colors flex items-center justify-center gap-2"
           >
             {mutation.isPending && <Loader2 size={13} className="animate-spin" />}
@@ -477,6 +666,7 @@ export default function SuperAdminPage() {
                   <p className="text-[13px] text-white truncate">{p.business}</p>
                   <p className="text-[11px] text-gray-500">
                     {p.type === 'contable' ? 'Contable' : 'POS'} · {PERIODO_LABEL[p.period] ?? p.period}
+                    {p.method && ` · ${MEDIO_LABEL[p.method] ?? p.method}`}
                     {p.date && ` · ${new Date(p.date).toLocaleDateString('es-CO')}`}
                   </p>
                 </div>

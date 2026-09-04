@@ -6,8 +6,9 @@ import * as jwtUtils from '../../utils/jwt';
 
 jest.mock('../../config/database', () => ({
   prisma: {
-    business: { findUnique: jest.fn(), findFirst: jest.fn(), delete: jest.fn() },
+    business: { findUnique: jest.fn(), findFirst: jest.fn(), delete: jest.fn(), update: jest.fn() },
     user: { findUnique: jest.fn(), findMany: jest.fn(), delete: jest.fn() },
+    manualPayment: { create: jest.fn(), findMany: jest.fn(), delete: jest.fn() },
     $transaction: jest.fn(),
   },
 }));
@@ -73,6 +74,7 @@ describe('DELETE /api/v1/superadmin/businesses/:id', () => {
       user: { deleteMany: jest.fn().mockResolvedValue({}), delete: jest.fn().mockResolvedValue({}) },
       branch: { deleteMany: jest.fn().mockResolvedValue({}) },
       paymentLink: { deleteMany: jest.fn().mockResolvedValue({}) },
+      manualPayment: { deleteMany: jest.fn().mockResolvedValue({}) },
       aiWeeklySummary: { deleteMany: jest.fn().mockResolvedValue({}) },
       taxClient: { deleteMany: jest.fn().mockResolvedValue({}) },
       quote: { deleteMany: jest.fn().mockResolvedValue({}) },
@@ -89,6 +91,7 @@ describe('DELETE /api/v1/superadmin/businesses/:id', () => {
     expect(tx.stockTransfer.deleteMany).toHaveBeenCalledWith({ where: { businessId: 'biz-1' } });
     expect(tx.productStock.deleteMany).toHaveBeenCalledWith({ where: { product: { businessId: 'biz-1' } } });
     expect(tx.paymentLink.deleteMany).toHaveBeenCalledWith({ where: { businessId: 'biz-1' } });
+    expect(tx.manualPayment.deleteMany).toHaveBeenCalledWith({ where: { businessId: 'biz-1' } });
     expect(tx.aiWeeklySummary.deleteMany).toHaveBeenCalledWith({ where: { businessId: 'biz-1' } });
 
     // Orden: transferencias/stock por bodega ANTES de borrar productos (FK RESTRICT).
@@ -100,9 +103,11 @@ describe('DELETE /api/v1/superadmin/businesses/:id', () => {
 
     // paymentLink y aiWeeklySummary ANTES de borrar el negocio (FK RESTRICT hacia businesses).
     const paymentLinkOrder = (tx.paymentLink.deleteMany as jest.Mock).mock.invocationCallOrder[0];
+    const manualPaymentOrder = (tx.manualPayment.deleteMany as jest.Mock).mock.invocationCallOrder[0];
     const aiSummaryOrder = (tx.aiWeeklySummary.deleteMany as jest.Mock).mock.invocationCallOrder[0];
     const businessDeleteOrder = (tx.business.delete as jest.Mock).mock.invocationCallOrder[0];
     expect(paymentLinkOrder).toBeLessThan(businessDeleteOrder);
+    expect(manualPaymentOrder).toBeLessThan(businessDeleteOrder);
     expect(aiSummaryOrder).toBeLessThan(businessDeleteOrder);
   });
 
@@ -116,6 +121,86 @@ describe('DELETE /api/v1/superadmin/businesses/:id', () => {
       .send({ password: 'wrong-password' });
 
     expect(res.status).toBe(401);
+    expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+  });
+});
+
+
+describe('PATCH /api/v1/superadmin/businesses/:id/plan', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  function mockTx() {
+    const tx = {
+      business: {
+        update: jest.fn().mockResolvedValue({
+          id: 'biz-1', name: 'Negocio de prueba', plan: 'pro', planExpiresAt: null,
+        }),
+      },
+      manualPayment: { create: jest.fn().mockResolvedValue({ id: 'pago-1' }) },
+    };
+    (mockPrisma.$transaction as jest.Mock).mockImplementation(async (fn: any) => fn(tx));
+    return tx;
+  }
+
+  it('registra el pago en efectivo junto con la activacion del plan Pro', async () => {
+    const tx = mockTx();
+
+    const res = await request(app)
+      .patch('/api/v1/superadmin/businesses/biz-1/plan')
+      .set(authHeader())
+      .send({
+        plan: 'pro',
+        planExpiresAt: '2026-12-04T00:00:00.000Z',
+        payment: { amount: 80700, period: 'quarterly', method: 'efectivo', paidAt: '2026-09-04' },
+      });
+
+    expect(res.status).toBe(200);
+    expect(tx.manualPayment.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        businessId: 'biz-1', amount: 80700, period: 'quarterly',
+        method: 'efectivo', createdBy: 'super-1',
+      }),
+    });
+    // "2026-09-04" es la medianoche de Colombia (05:00 UTC), no la de UTC: si no,
+    // un pago del dia 1 se contaria en el mes anterior.
+    const { paidAt } = (tx.manualPayment.create as jest.Mock).mock.calls[0][0].data;
+    expect(paidAt.toISOString()).toBe('2026-09-04T05:00:00.000Z');
+  });
+
+  it('cambia el plan sin registrar nada cuando no viene pago', async () => {
+    const tx = mockTx();
+
+    const res = await request(app)
+      .patch('/api/v1/superadmin/businesses/biz-1/plan')
+      .set(authHeader())
+      .send({ plan: 'free' });
+
+    expect(res.status).toBe(200);
+    expect(tx.manualPayment.create).not.toHaveBeenCalled();
+  });
+
+  it('rechaza un pago con monto cero', async () => {
+    mockTx();
+
+    const res = await request(app)
+      .patch('/api/v1/superadmin/businesses/biz-1/plan')
+      .set(authHeader())
+      .send({ plan: 'pro', payment: { amount: 0, period: 'monthly', method: 'efectivo' } });
+
+    expect(res.status).toBe(400);
+    expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('rechaza un pago con fecha futura (inflaria los ingresos del mes)', async () => {
+    mockTx();
+    const enUnMes = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+    const res = await request(app)
+      .patch('/api/v1/superadmin/businesses/biz-1/plan')
+      .set(authHeader())
+      .send({ plan: 'pro', payment: { amount: 29900, period: 'monthly', method: 'efectivo', paidAt: enUnMes } });
+
+    expect(res.status).toBe(400);
     expect(mockPrisma.$transaction).not.toHaveBeenCalled();
   });
 });
