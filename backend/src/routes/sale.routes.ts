@@ -1,20 +1,21 @@
 import { Router } from 'express';
 import { body } from 'express-validator';
 import { saleController } from '../controllers/sale.controller';
-import { authenticate, authorize } from '../middlewares/auth';
+import { authenticate } from '../middlewares/auth';
+import { requirePermission } from '../middlewares/permissions';
 import { validate } from '../middlewares/validate';
 import { planLimit } from '../middlewares/planLimit';
 
 const router = Router();
 router.use(authenticate);
 
-router.get('/', saleController.list);
-router.get('/summary/daily', saleController.getDailySummary);
+router.get('/', requirePermission('ventas.ver'), saleController.list);
+router.get('/summary/daily', requirePermission('ventas.ver'), saleController.getDailySummary);
 // Historial de devoluciones (va antes de '/:id' para que no lo capture).
-router.get('/returns/list', saleController.listReturns);
-router.get('/:id', saleController.getOne);
+router.get('/returns/list', requirePermission('ventas.ver'), saleController.listReturns);
+router.get('/:id', requirePermission('ventas.ver'), saleController.getOne);
 
-router.post('/',
+router.post('/', requirePermission('ventas.crear'),
   planLimit.salesPerMonth(),
   planLimit.saleCredit(),
   [
@@ -44,7 +45,7 @@ router.post('/',
 );
 
 router.patch('/:id/cancel',
-  authorize('ADMIN', 'SUPERVISOR'),
+  requirePermission('ventas.anular'),
   [body('reason').optional().trim()],
   validate,
   saleController.cancel,
@@ -52,7 +53,7 @@ router.patch('/:id/cancel',
 
 // Devolución / nota crédito (total o parcial). Solo ADMIN y Supervisor.
 router.post('/:id/return',
-  authorize('ADMIN', 'SUPERVISOR'),
+  requirePermission('ventas.anular'),
   [
     body('items').isArray({ min: 1 }).withMessage('Selecciona al menos un producto para devolver'),
     body('items.*.saleDetailId').isUUID().withMessage('saleDetailId inválido'),
@@ -65,7 +66,7 @@ router.post('/:id/return',
 );
 
 router.delete('/:id',
-  authorize('ADMIN'),
+  requirePermission('ventas.eliminar'),
   saleController.permanentDelete,
 );
 

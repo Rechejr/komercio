@@ -5,13 +5,14 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { api } from '@/lib/api';
 import toast from 'react-hot-toast';
-import { Loader2, Store, Lock, ImagePlus, X, Users, UserPlus, Edit, Shield, UserX, Volume2, VolumeX, Building2, MapPin, Plus, Trash2, Wallet, AlertTriangle } from 'lucide-react';
+import { Loader2, Store, Lock, ImagePlus, X, Users, UserPlus, Edit, Shield, ShieldCheck, UserX, Volume2, VolumeX, Building2, MapPin, Plus, Trash2, Wallet, AlertTriangle } from 'lucide-react';
 import { useAuthStore } from '@/store/auth.store';
 import { useSoundStore } from '@/store/sound.store';
 import { useUpgradeStore } from '@/store/upgrade.store';
 import { sounds } from '@/lib/sounds';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Portal } from '@/components/ui/Portal';
+import { ModalPermisos, type EmpleadoPermisos } from '@/components/equipo/ModalPermisos';
 import { CatalogPaymentSettings } from '@/components/configuracion/CatalogPaymentSettings';
 import { BlindCashCountSettings } from '@/components/configuracion/BlindCashCountSettings';
 
@@ -48,6 +49,18 @@ const ROLE_LABEL: Record<string, string> = {
   ADMIN: 'Administrador',
   SUPERVISOR: 'Supervisor',
   CASHIER: 'Cajero',
+  SELLER: 'Vendedor',
+  WAREHOUSE: 'Bodeguero',
+};
+
+// Qué hace cada rol, en cristiano. El rol es solo el punto de partida: desde el
+// botón de permisos se le ajusta a cada persona lo que haga falta.
+const ROLE_HINT: Record<string, string> = {
+  ADMIN: 'Acceso total al negocio',
+  SUPERVISOR: 'Todo menos la configuración y los borrados definitivos',
+  CASHIER: 'Vende, maneja caja y fiados',
+  SELLER: 'Solo vende y atiende clientes',
+  WAREHOUSE: 'Inventario y compras, sin manejar plata',
 };
 
 // Debe reflejar backend/src/config/plans.ts — solo se usa para el aviso previo
@@ -78,6 +91,8 @@ export default function ConfiguracionPage() {
 
   // Employee form state
   const [showEmpForm, setShowEmpForm] = useState(false);
+  // Empleado al que se le están ajustando los permisos (null = modal cerrado).
+  const [permisosDe, setPermisosDe] = useState<EmpleadoPermisos | null>(null);
   const [editEmp, setEditEmp] = useState<any>(null);
   const [deleteEmpTarget, setDeleteEmpTarget] = useState<any>(null);
 
@@ -129,7 +144,8 @@ export default function ConfiguracionPage() {
 
   const { register: regBusiness, handleSubmit: handleBusiness, watch: watchBusiness, formState: { isSubmitting: savingBusiness, errors: bizErrors } } = useForm({ values: business });
   const { register: regPwd, handleSubmit: handlePwd, reset: resetPwd, watch: watchPwd, formState: { isSubmitting: savingPwd } } = useForm();
-  const { register: regEmp, handleSubmit: handleEmp, reset: resetEmp, formState: { errors: empErrors } } = useForm();
+  const { register: regEmp, handleSubmit: handleEmp, reset: resetEmp, watch: watchEmp, formState: { errors: empErrors } } = useForm();
+  const watchEmpRole: string = watchEmp('role') || 'CASHIER';
   const { register: regBranch, handleSubmit: handleBranchSubmit, reset: resetBranch, formState: { errors: branchErrors } } = useForm();
   const { register: regPayAcct, handleSubmit: handlePayAcctSubmit, reset: resetPayAcct, formState: { errors: payAcctErrors } } = useForm();
 
@@ -486,6 +502,18 @@ export default function ConfiguracionPage() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1 justify-end">
+                        {/* Al dueño no se le recortan permisos: manda en su negocio. */}
+                        {!emp.isOwner && (
+                          <button
+                            type="button"
+                            aria-label={`Permisos de ${emp.name}`}
+                            title="Permisos"
+                            onClick={() => setPermisosDe(emp)}
+                            className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 transition"
+                          >
+                            <ShieldCheck size={13} />
+                          </button>
+                        )}
                         <button
                           type="button"
                           aria-label="Editar empleado"
@@ -861,9 +889,15 @@ export default function ConfiguracionPage() {
                 <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400 mb-1.5 block">Rol *</label>
                 <select {...regEmp('role', { required: true })} className={inputCls}>
                   <option value="CASHIER">Cajero</option>
+                  <option value="SELLER">Vendedor</option>
+                  <option value="WAREHOUSE">Bodeguero</option>
                   <option value="SUPERVISOR">Supervisor</option>
                   <option value="ADMIN">Administrador</option>
                 </select>
+                <p className="text-[11px] text-slate-500 mt-1">
+                  {ROLE_HINT[watchEmpRole] ?? ''}
+                  {' '}Después puedes ajustarle permisos uno por uno con el botón del escudo.
+                </p>
               </div>
 
               {branches.length > 1 && (
@@ -1031,6 +1065,11 @@ export default function ConfiguracionPage() {
         loading={deletePayAcctMutation.isPending}
         variant="danger"
       />
+
+      {/* ── Permisos de un empleado ──────────────────────────────────────────── */}
+      {permisosDe && (
+        <ModalPermisos empleado={permisosDe} onClose={() => setPermisosDe(null)} />
+      )}
 
       {/* ── Eliminar empleado ────────────────────────────────────────────────── */}
       <ConfirmDialog

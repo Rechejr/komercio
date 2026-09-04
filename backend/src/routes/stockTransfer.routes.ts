@@ -4,6 +4,7 @@ import { Prisma } from '@prisma/client';
 import { body } from 'express-validator';
 import { prisma } from '../config/database';
 import { authenticate, authorize, AuthRequest } from '../middlewares/auth';
+import { requirePermission } from '../middlewares/permissions';
 import { success, created, paginated, AppError } from '../utils/response';
 import { getPagination, getSearch } from '../utils/pagination';
 import { parseBogotaBoundary } from '../utils/bogotaTime';
@@ -160,7 +161,7 @@ async function assertProducts(businessId: string, items: Array<{ productId: stri
 const router = Router();
 router.use(authenticate);
 
-router.get('/', async (req: AuthRequest, res, next) => {
+router.get('/', requirePermission('productos.ver'), async (req: AuthRequest, res, next) => {
   try {
     const { page, limit, skip } = getPagination(req);
     const search = getSearch(req);
@@ -212,7 +213,7 @@ router.get('/', async (req: AuthRequest, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.get('/:id', async (req: AuthRequest, res, next) => {
+router.get('/:id', requirePermission('productos.ver'), async (req: AuthRequest, res, next) => {
   try {
     const transfer = await prisma.stockTransfer.findFirst({
       where: { id: req.params.id, businessId: req.user!.businessId, deletedAt: null },
@@ -230,7 +231,7 @@ router.get('/:id', async (req: AuthRequest, res, next) => {
 
 // Solo ADMIN/SUPERVISOR — mover mercancía entre bodegas es una decisión del
 // dueño/encargado, no del cajero (mismo criterio que editar/eliminar compras).
-router.post('/', authorize('ADMIN', 'SUPERVISOR'), transferValidators, validate, async (req: AuthRequest, res: Response, next: NextFunction) => {
+router.post('/', requirePermission('inventario.transferir'), transferValidators, validate, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const { fromBranchId, toBranchId, items, notes } = req.body;
     const businessId = req.user!.businessId;
@@ -265,7 +266,7 @@ router.post('/', authorize('ADMIN', 'SUPERVISOR'), transferValidators, validate,
   } catch (err) { next(err); }
 });
 
-router.put('/:id', authorize('ADMIN', 'SUPERVISOR'), transferValidators, validate, async (req: AuthRequest, res: Response, next: NextFunction) => {
+router.put('/:id', requirePermission('inventario.transferir'), transferValidators, validate, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const { fromBranchId, toBranchId, items, notes } = req.body;
     const businessId = req.user!.businessId;
@@ -314,7 +315,7 @@ router.put('/:id', authorize('ADMIN', 'SUPERVISOR'), transferValidators, validat
   } catch (err) { next(err); }
 });
 
-router.delete('/:id', authorize('ADMIN', 'SUPERVISOR'), async (req: AuthRequest, res, next) => {
+router.delete('/:id', requirePermission('inventario.transferir'), async (req: AuthRequest, res, next) => {
   try {
     const existing = await prisma.stockTransfer.findFirst({
       where: { id: req.params.id, businessId: req.user!.businessId, deletedAt: null },

@@ -863,23 +863,8 @@
                 }
               }
             }
-          },
-          "403": {
-            "description": "Requiere rol: ADMIN, SUPERVISOR",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
           }
-        },
-        "description": "Roles permitidos: ADMIN, SUPERVISOR.",
-        "x-roles": [
-          "ADMIN",
-          "SUPERVISOR"
-        ]
+        }
       }
     },
     "/api/v1/brands/{id}": {
@@ -913,22 +898,8 @@
                 }
               }
             }
-          },
-          "403": {
-            "description": "Requiere rol: ADMIN",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
           }
         },
-        "description": "Roles permitidos: ADMIN.",
-        "x-roles": [
-          "ADMIN"
-        ],
         "parameters": [
           {
             "name": "id",
@@ -970,23 +941,8 @@
                 }
               }
             }
-          },
-          "403": {
-            "description": "Requiere rol: ADMIN, SUPERVISOR",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
           }
         },
-        "description": "Roles permitidos: ADMIN, SUPERVISOR.",
-        "x-roles": [
-          "ADMIN",
-          "SUPERVISOR"
-        ],
         "parameters": [
           {
             "name": "id",
@@ -1063,22 +1019,8 @@
                 }
               }
             }
-          },
-          "403": {
-            "description": "Requiere rol: ADMIN",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
           }
-        },
-        "description": "Roles permitidos: ADMIN.",
-        "x-roles": [
-          "ADMIN"
-        ]
+        }
       }
     },
     "/api/v1/business/branches/{id}": {
@@ -1112,22 +1054,8 @@
                 }
               }
             }
-          },
-          "403": {
-            "description": "Requiere rol: ADMIN",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
           }
         },
-        "description": "Roles permitidos: ADMIN.",
-        "x-roles": [
-          "ADMIN"
-        ],
         "parameters": [
           {
             "name": "id",
@@ -1214,22 +1142,8 @@
                 }
               }
             }
-          },
-          "403": {
-            "description": "Requiere rol: ADMIN",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
           }
         },
-        "description": "Roles permitidos: ADMIN.",
-        "x-roles": [
-          "ADMIN"
-        ],
         "requestBody": {
           "required": false,
           "content": {
@@ -1342,22 +1256,8 @@
                 }
               }
             }
-          },
-          "403": {
-            "description": "Requiere rol: ADMIN",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
           }
         },
-        "description": "Roles permitidos: ADMIN.",
-        "x-roles": [
-          "ADMIN"
-        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -1414,22 +1314,8 @@
                 }
               }
             }
-          },
-          "403": {
-            "description": "Requiere rol: ADMIN",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
           }
         },
-        "description": "Roles permitidos: ADMIN.",
-        "x-roles": [
-          "ADMIN"
-        ],
         "parameters": [
           {
             "name": "id",
@@ -1481,22 +1367,8 @@
                 }
               }
             }
-          },
-          "403": {
-            "description": "Requiere rol: ADMIN",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
           }
         },
-        "description": "Roles permitidos: ADMIN.",
-        "x-roles": [
-          "ADMIN"
-        ],
         "parameters": [
           {
             "name": "id",
@@ -1567,24 +1439,8 @@
                 }
               }
             }
-          },
-          "403": {
-            "description": "Requiere rol: ADMIN, SUPERVISOR, CASHIER",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
           }
         },
-        "description": "Roles permitidos: ADMIN, SUPERVISOR, CASHIER.",
-        "x-roles": [
-          "ADMIN",
-          "SUPERVISOR",
-          "CASHIER"
-        ],
         "parameters": [
           {
             "name": "id",
@@ -1628,24 +1484,8 @@
                 }
               }
             }
-          },
-          "403": {
-            "description": "Requiere rol: ADMIN, SUPERVISOR, CASHIER",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
           }
         },
-        "description": "Roles permitidos: ADMIN, SUPERVISOR, CASHIER.",
-        "x-roles": [
-          "ADMIN",
-          "SUPERVISOR",
-          "CASHIER"
-        ],
         "parameters": [
           {
             "name": "id",
@@ -1689,24 +1529,8 @@
                 }
               }
             }
-          },
-          "403": {
-            "description": "Requiere rol: ADMIN, SUPERVISOR, CASHIER",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
           }
-        },
-        "description": "Roles permitidos: ADMIN, SUPERVISOR, CASHIER.",
-        "x-roles": [
-          "ADMIN",
-          "SUPERVISOR",
-          "CASHIER"
-        ]
+        }
       }
     },
     "/api/v1/cash-register/history": {
@@ -1740,23 +1564,8 @@
                 }
               }
             }
-          },
-          "403": {
-            "description": "Requiere rol: ADMIN, SUPERVISOR",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
           }
-        },
-        "description": "Roles permitidos: ADMIN, SUPERVISOR.",
-        "x-roles": [
-          "ADMIN",
-          "SUPERVISOR"
-        ]
+        }
       }
     },
     "/api/v1/cash-register/open": {
@@ -1790,24 +1599,8 @@
                 }
               }
             }
-          },
-          "403": {
-            "description": "Requiere rol: ADMIN, SUPERVISOR, CASHIER",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
           }
-        },
-        "description": "Roles permitidos: ADMIN, SUPERVISOR, CASHIER.",
-        "x-roles": [
-          "ADMIN",
-          "SUPERVISOR",
-          "CASHIER"
-        ]
+        }
       }
     },
     "/api/v1/categories": {
@@ -1874,23 +1667,8 @@
                 }
               }
             }
-          },
-          "403": {
-            "description": "Requiere rol: ADMIN, SUPERVISOR",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
           }
-        },
-        "description": "Roles permitidos: ADMIN, SUPERVISOR.",
-        "x-roles": [
-          "ADMIN",
-          "SUPERVISOR"
-        ]
+        }
       }
     },
     "/api/v1/categories/{id}": {
@@ -1924,22 +1702,8 @@
                 }
               }
             }
-          },
-          "403": {
-            "description": "Requiere rol: ADMIN",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
           }
         },
-        "description": "Roles permitidos: ADMIN.",
-        "x-roles": [
-          "ADMIN"
-        ],
         "parameters": [
           {
             "name": "id",
@@ -1981,23 +1745,8 @@
                 }
               }
             }
-          },
-          "403": {
-            "description": "Requiere rol: ADMIN, SUPERVISOR",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
           }
         },
-        "description": "Roles permitidos: ADMIN, SUPERVISOR.",
-        "x-roles": [
-          "ADMIN",
-          "SUPERVISOR"
-        ],
         "parameters": [
           {
             "name": "id",
@@ -3314,24 +3063,8 @@
                 }
               }
             }
-          },
-          "403": {
-            "description": "Requiere rol: ADMIN, SUPERVISOR, CASHIER",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
           }
         },
-        "description": "Roles permitidos: ADMIN, SUPERVISOR, CASHIER.",
-        "x-roles": [
-          "ADMIN",
-          "SUPERVISOR",
-          "CASHIER"
-        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -3430,23 +3163,8 @@
                 }
               }
             }
-          },
-          "403": {
-            "description": "Requiere rol: ADMIN, SUPERVISOR",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
           }
         },
-        "description": "Roles permitidos: ADMIN, SUPERVISOR.",
-        "x-roles": [
-          "ADMIN",
-          "SUPERVISOR"
-        ],
         "parameters": [
           {
             "name": "id",
@@ -3500,24 +3218,8 @@
                 }
               }
             }
-          },
-          "403": {
-            "description": "Requiere rol: ADMIN, SUPERVISOR, CASHIER",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
           }
         },
-        "description": "Roles permitidos: ADMIN, SUPERVISOR, CASHIER.",
-        "x-roles": [
-          "ADMIN",
-          "SUPERVISOR",
-          "CASHIER"
-        ],
         "parameters": [
           {
             "name": "id",
@@ -3588,24 +3290,8 @@
                 }
               }
             }
-          },
-          "403": {
-            "description": "Requiere rol: ADMIN, SUPERVISOR, CASHIER",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
           }
         },
-        "description": "Roles permitidos: ADMIN, SUPERVISOR, CASHIER.",
-        "x-roles": [
-          "ADMIN",
-          "SUPERVISOR",
-          "CASHIER"
-        ],
         "parameters": [
           {
             "name": "id",
@@ -3720,25 +3406,8 @@
                 }
               }
             }
-          },
-          "403": {
-            "description": "Requiere rol: ADMIN, SUPERVISOR, CASHIER, SELLER",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
           }
-        },
-        "description": "Roles permitidos: ADMIN, SUPERVISOR, CASHIER, SELLER.",
-        "x-roles": [
-          "ADMIN",
-          "SUPERVISOR",
-          "CASHIER",
-          "SELLER"
-        ]
+        }
       }
     },
     "/api/v1/customers/{id}": {
@@ -3772,23 +3441,8 @@
                 }
               }
             }
-          },
-          "403": {
-            "description": "Requiere rol: ADMIN, SUPERVISOR",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
           }
         },
-        "description": "Roles permitidos: ADMIN, SUPERVISOR.",
-        "x-roles": [
-          "ADMIN",
-          "SUPERVISOR"
-        ],
         "parameters": [
           {
             "name": "id",
@@ -3883,25 +3537,8 @@
                 }
               }
             }
-          },
-          "403": {
-            "description": "Requiere rol: ADMIN, SUPERVISOR, CASHIER, SELLER",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
           }
         },
-        "description": "Roles permitidos: ADMIN, SUPERVISOR, CASHIER, SELLER.",
-        "x-roles": [
-          "ADMIN",
-          "SUPERVISOR",
-          "CASHIER",
-          "SELLER"
-        ],
         "parameters": [
           {
             "name": "id",
@@ -4019,25 +3656,8 @@
                 }
               }
             }
-          },
-          "403": {
-            "description": "Requiere rol: ADMIN, SUPERVISOR, CASHIER, SELLER",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
           }
-        },
-        "description": "Roles permitidos: ADMIN, SUPERVISOR, CASHIER, SELLER.",
-        "x-roles": [
-          "ADMIN",
-          "SUPERVISOR",
-          "CASHIER",
-          "SELLER"
-        ]
+        }
       }
     },
     "/api/v1/customers/import-template": {
@@ -4254,23 +3874,8 @@
                 }
               }
             }
-          },
-          "403": {
-            "description": "Requiere rol: ADMIN, SUPERVISOR",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
           }
         },
-        "description": "Roles permitidos: ADMIN, SUPERVISOR.",
-        "x-roles": [
-          "ADMIN",
-          "SUPERVISOR"
-        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -4348,22 +3953,8 @@
                 }
               }
             }
-          },
-          "403": {
-            "description": "Requiere rol: ADMIN",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
           }
         },
-        "description": "Roles permitidos: ADMIN.",
-        "x-roles": [
-          "ADMIN"
-        ],
         "parameters": [
           {
             "name": "id",
@@ -4415,23 +4006,8 @@
                 }
               }
             }
-          },
-          "403": {
-            "description": "Requiere rol: ADMIN, SUPERVISOR",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
           }
         },
-        "description": "Roles permitidos: ADMIN, SUPERVISOR.",
-        "x-roles": [
-          "ADMIN",
-          "SUPERVISOR"
-        ],
         "parameters": [
           {
             "name": "id",
@@ -4549,23 +4125,8 @@
                 }
               }
             }
-          },
-          "403": {
-            "description": "Requiere rol: ADMIN, SUPERVISOR",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
           }
         },
-        "description": "Roles permitidos: ADMIN, SUPERVISOR.",
-        "x-roles": [
-          "ADMIN",
-          "SUPERVISOR"
-        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -4618,22 +4179,8 @@
                 }
               }
             }
-          },
-          "403": {
-            "description": "Requiere rol: ADMIN",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
           }
         },
-        "description": "Roles permitidos: ADMIN.",
-        "x-roles": [
-          "ADMIN"
-        ],
         "parameters": [
           {
             "name": "id",
@@ -4747,23 +4294,8 @@
                 }
               }
             }
-          },
-          "403": {
-            "description": "Requiere rol: ADMIN, SUPERVISOR",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
           }
-        },
-        "description": "Roles permitidos: ADMIN, SUPERVISOR.",
-        "x-roles": [
-          "ADMIN",
-          "SUPERVISOR"
-        ]
+        }
       }
     },
     "/api/v1/exports/products": {
@@ -5585,24 +5117,8 @@
                 }
               }
             }
-          },
-          "403": {
-            "description": "Requiere rol: ADMIN, SUPERVISOR, WAREHOUSE",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
           }
         },
-        "description": "Roles permitidos: ADMIN, SUPERVISOR, WAREHOUSE.",
-        "x-roles": [
-          "ADMIN",
-          "SUPERVISOR",
-          "WAREHOUSE"
-        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -5691,23 +5207,8 @@
                 }
               }
             }
-          },
-          "403": {
-            "description": "Requiere rol: ADMIN, SUPERVISOR",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
           }
         },
-        "description": "Roles permitidos: ADMIN, SUPERVISOR.",
-        "x-roles": [
-          "ADMIN",
-          "SUPERVISOR"
-        ],
         "parameters": [
           {
             "name": "id",
@@ -5802,24 +5303,8 @@
                 }
               }
             }
-          },
-          "403": {
-            "description": "Requiere rol: ADMIN, SUPERVISOR, WAREHOUSE",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
           }
         },
-        "description": "Roles permitidos: ADMIN, SUPERVISOR, WAREHOUSE.",
-        "x-roles": [
-          "ADMIN",
-          "SUPERVISOR",
-          "WAREHOUSE"
-        ],
         "parameters": [
           {
             "name": "id",
@@ -5911,24 +5396,8 @@
                 }
               }
             }
-          },
-          "403": {
-            "description": "Requiere rol: ADMIN, SUPERVISOR, WAREHOUSE",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
           }
         },
-        "description": "Roles permitidos: ADMIN, SUPERVISOR, WAREHOUSE.",
-        "x-roles": [
-          "ADMIN",
-          "SUPERVISOR",
-          "WAREHOUSE"
-        ],
         "parameters": [
           {
             "name": "id",
@@ -6003,24 +5472,8 @@
                 }
               }
             }
-          },
-          "403": {
-            "description": "Requiere rol: ADMIN, SUPERVISOR, WAREHOUSE",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
           }
         },
-        "description": "Roles permitidos: ADMIN, SUPERVISOR, WAREHOUSE.",
-        "x-roles": [
-          "ADMIN",
-          "SUPERVISOR",
-          "WAREHOUSE"
-        ],
         "parameters": [
           {
             "name": "id",
@@ -6119,23 +5572,8 @@
                 }
               }
             }
-          },
-          "403": {
-            "description": "Requiere rol: ADMIN, SUPERVISOR",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
           }
         },
-        "description": "Roles permitidos: ADMIN, SUPERVISOR.",
-        "x-roles": [
-          "ADMIN",
-          "SUPERVISOR"
-        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -6266,24 +5704,8 @@
                 }
               }
             }
-          },
-          "403": {
-            "description": "Requiere rol: ADMIN, SUPERVISOR, WAREHOUSE",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
           }
-        },
-        "description": "Roles permitidos: ADMIN, SUPERVISOR, WAREHOUSE.",
-        "x-roles": [
-          "ADMIN",
-          "SUPERVISOR",
-          "WAREHOUSE"
-        ]
+        }
       }
     },
     "/api/v1/products/import-template": {
@@ -6492,25 +5914,8 @@
                 }
               }
             }
-          },
-          "403": {
-            "description": "Requiere rol: ADMIN, SUPERVISOR, WAREHOUSE, CASHIER",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
           }
         },
-        "description": "Roles permitidos: ADMIN, SUPERVISOR, WAREHOUSE, CASHIER.",
-        "x-roles": [
-          "ADMIN",
-          "SUPERVISOR",
-          "WAREHOUSE",
-          "CASHIER"
-        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -6564,23 +5969,8 @@
                 }
               }
             }
-          },
-          "403": {
-            "description": "Requiere rol: ADMIN, SUPERVISOR",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
           }
         },
-        "description": "Roles permitidos: ADMIN, SUPERVISOR.",
-        "x-roles": [
-          "ADMIN",
-          "SUPERVISOR"
-        ],
         "parameters": [
           {
             "name": "id",
@@ -6665,24 +6055,8 @@
                 }
               }
             }
-          },
-          "403": {
-            "description": "Requiere rol: ADMIN, SUPERVISOR, WAREHOUSE",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
           }
         },
-        "description": "Roles permitidos: ADMIN, SUPERVISOR, WAREHOUSE.",
-        "x-roles": [
-          "ADMIN",
-          "SUPERVISOR",
-          "WAREHOUSE"
-        ],
         "parameters": [
           {
             "name": "id",
@@ -6829,23 +6203,8 @@
                 }
               }
             }
-          },
-          "403": {
-            "description": "Requiere rol: ADMIN, SUPERVISOR",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
           }
         },
-        "description": "Roles permitidos: ADMIN, SUPERVISOR.",
-        "x-roles": [
-          "ADMIN",
-          "SUPERVISOR"
-        ],
         "parameters": [
           {
             "name": "id",
@@ -6951,7 +6310,7 @@
         "tags": [
           "report"
         ],
-        "summary": "GET /api/v1/reports/profit",
+        "summary": "La utilidad expone costos y margen: va aparte de los demas reportes.",
         "security": [
           {
             "bearerAuth": []
@@ -6977,23 +6336,8 @@
                 }
               }
             }
-          },
-          "403": {
-            "description": "Requiere rol: ADMIN, SUPERVISOR",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
           }
-        },
-        "description": "Roles permitidos: ADMIN, SUPERVISOR.",
-        "x-roles": [
-          "ADMIN",
-          "SUPERVISOR"
-        ]
+        }
       }
     },
     "/api/v1/reports/sales": {
@@ -7027,23 +6371,8 @@
                 }
               }
             }
-          },
-          "403": {
-            "description": "Requiere rol: ADMIN, SUPERVISOR",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
           }
-        },
-        "description": "Roles permitidos: ADMIN, SUPERVISOR.",
-        "x-roles": [
-          "ADMIN",
-          "SUPERVISOR"
-        ]
+        }
       }
     },
     "/api/v1/reports/top-customers": {
@@ -7077,23 +6406,8 @@
                 }
               }
             }
-          },
-          "403": {
-            "description": "Requiere rol: ADMIN, SUPERVISOR",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
           }
-        },
-        "description": "Roles permitidos: ADMIN, SUPERVISOR.",
-        "x-roles": [
-          "ADMIN",
-          "SUPERVISOR"
-        ]
+        }
       }
     },
     "/api/v1/reports/top-products": {
@@ -7127,23 +6441,8 @@
                 }
               }
             }
-          },
-          "403": {
-            "description": "Requiere rol: ADMIN, SUPERVISOR",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
           }
-        },
-        "description": "Roles permitidos: ADMIN, SUPERVISOR.",
-        "x-roles": [
-          "ADMIN",
-          "SUPERVISOR"
-        ]
+        }
       }
     },
     "/api/v1/sales": {
@@ -7369,22 +6668,8 @@
                 }
               }
             }
-          },
-          "403": {
-            "description": "Requiere rol: ADMIN",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
           }
         },
-        "description": "Roles permitidos: ADMIN.",
-        "x-roles": [
-          "ADMIN"
-        ],
         "parameters": [
           {
             "name": "id",
@@ -7481,23 +6766,8 @@
                 }
               }
             }
-          },
-          "403": {
-            "description": "Requiere rol: ADMIN, SUPERVISOR",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
           }
         },
-        "description": "Roles permitidos: ADMIN, SUPERVISOR.",
-        "x-roles": [
-          "ADMIN",
-          "SUPERVISOR"
-        ],
         "parameters": [
           {
             "name": "id",
@@ -7566,23 +6836,8 @@
                 }
               }
             }
-          },
-          "403": {
-            "description": "Requiere rol: ADMIN, SUPERVISOR",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
           }
         },
-        "description": "Roles permitidos: ADMIN, SUPERVISOR.",
-        "x-roles": [
-          "ADMIN",
-          "SUPERVISOR"
-        ],
         "parameters": [
           {
             "name": "id",
@@ -8268,23 +7523,8 @@
                 }
               }
             }
-          },
-          "403": {
-            "description": "Requiere rol: ADMIN, SUPERVISOR",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
           }
-        },
-        "description": "Roles permitidos: ADMIN, SUPERVISOR.",
-        "x-roles": [
-          "ADMIN",
-          "SUPERVISOR"
-        ]
+        }
       }
     },
     "/api/v1/stock-transfers/{id}": {
@@ -8318,23 +7558,8 @@
                 }
               }
             }
-          },
-          "403": {
-            "description": "Requiere rol: ADMIN, SUPERVISOR",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
           }
         },
-        "description": "Roles permitidos: ADMIN, SUPERVISOR.",
-        "x-roles": [
-          "ADMIN",
-          "SUPERVISOR"
-        ],
         "parameters": [
           {
             "name": "id",
@@ -8419,23 +7644,8 @@
                 }
               }
             }
-          },
-          "403": {
-            "description": "Requiere rol: ADMIN, SUPERVISOR",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
           }
         },
-        "description": "Roles permitidos: ADMIN, SUPERVISOR.",
-        "x-roles": [
-          "ADMIN",
-          "SUPERVISOR"
-        ],
         "parameters": [
           {
             "name": "id",
@@ -8942,24 +8152,8 @@
                 }
               }
             }
-          },
-          "403": {
-            "description": "Requiere rol: ADMIN, SUPERVISOR, CASHIER",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
           }
         },
-        "description": "Roles permitidos: ADMIN, SUPERVISOR, CASHIER.",
-        "x-roles": [
-          "ADMIN",
-          "SUPERVISOR",
-          "CASHIER"
-        ],
         "parameters": [
           {
             "name": "id",
@@ -9038,23 +8232,8 @@
                 }
               }
             }
-          },
-          "403": {
-            "description": "Requiere rol: ADMIN, SUPERVISOR",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
           }
-        },
-        "description": "Roles permitidos: ADMIN, SUPERVISOR.",
-        "x-roles": [
-          "ADMIN",
-          "SUPERVISOR"
-        ]
+        }
       }
     },
     "/api/v1/supplier-credits/import-template": {
@@ -9156,24 +8335,8 @@
                 }
               }
             }
-          },
-          "403": {
-            "description": "Requiere rol: ADMIN, SUPERVISOR, CASHIER",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
           }
-        },
-        "description": "Roles permitidos: ADMIN, SUPERVISOR, CASHIER.",
-        "x-roles": [
-          "ADMIN",
-          "SUPERVISOR",
-          "CASHIER"
-        ]
+        }
       }
     },
     "/api/v1/suppliers/{id}": {
@@ -9307,23 +8470,8 @@
                 }
               }
             }
-          },
-          "403": {
-            "description": "Requiere rol: ADMIN, SUPERVISOR",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
           }
         },
-        "description": "Roles permitidos: ADMIN, SUPERVISOR.",
-        "x-roles": [
-          "ADMIN",
-          "SUPERVISOR"
-        ],
         "parameters": [
           {
             "name": "id",
@@ -9367,23 +8515,8 @@
                 }
               }
             }
-          },
-          "403": {
-            "description": "Requiere rol: ADMIN, SUPERVISOR",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
           }
-        },
-        "description": "Roles permitidos: ADMIN, SUPERVISOR.",
-        "x-roles": [
-          "ADMIN",
-          "SUPERVISOR"
-        ]
+        }
       }
     },
     "/api/v1/suppliers/import-template": {
@@ -9487,23 +8620,8 @@
                 }
               }
             }
-          },
-          "403": {
-            "description": "Requiere rol: ADMIN, SUPERVISOR",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
           }
-        },
-        "description": "Roles permitidos: ADMIN, SUPERVISOR.",
-        "x-roles": [
-          "ADMIN",
-          "SUPERVISOR"
-        ]
+        }
       },
       "post": {
         "tags": [
@@ -9535,22 +8653,8 @@
                 }
               }
             }
-          },
-          "403": {
-            "description": "Requiere rol: ADMIN",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
           }
-        },
-        "description": "Roles permitidos: ADMIN.",
-        "x-roles": [
-          "ADMIN"
-        ]
+        }
       }
     },
     "/api/v1/users/{id}": {
@@ -9584,22 +8688,8 @@
                 }
               }
             }
-          },
-          "403": {
-            "description": "Requiere rol: ADMIN",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
           }
         },
-        "description": "Roles permitidos: ADMIN.",
-        "x-roles": [
-          "ADMIN"
-        ],
         "parameters": [
           {
             "name": "id",
@@ -9641,22 +8731,8 @@
                 }
               }
             }
-          },
-          "403": {
-            "description": "Requiere rol: ADMIN",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
           }
         },
-        "description": "Roles permitidos: ADMIN.",
-        "x-roles": [
-          "ADMIN"
-        ],
         "parameters": [
           {
             "name": "id",
@@ -9667,6 +8743,86 @@
             }
           }
         ]
+      }
+    },
+    "/api/v1/users/{id}/permissions": {
+      "patch": {
+        "tags": [
+          "user"
+        ],
+        "summary": "Marcar o desmarcar permisos sueltos a un empleado. Solo se guarda lo que DIFIERE de su rol: si mañana le cambian el rol, las marcas siguen leyéndose como \"esto se lo di aparte\" y no como una copia congelada del rol viejo.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operación exitosa",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespuestaOk"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sin sesión o token vencido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/users/permissions/catalog": {
+      "get": {
+        "tags": [
+          "user"
+        ],
+        "summary": "Catálogo de permisos + roles asignables, para dibujar la pantalla de equipo. Va antes de '/:id' y lo puede leer cualquiera que gestione usuarios.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operación exitosa",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespuestaOk"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sin sesión o token vencido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/health": {

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { prisma } from '../config/database';
 import { authenticate, authorize, AuthRequest } from '../middlewares/auth';
+import { requirePermission } from '../middlewares/permissions';
 import { success, created } from '../utils/response';
 import { AppError } from '../utils/response';
 
@@ -18,7 +19,7 @@ router.get('/', async (req: AuthRequest, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.post('/', authorize('ADMIN', 'SUPERVISOR'), async (req: AuthRequest, res, next) => {
+router.post('/', requirePermission('categorias.gestionar'), async (req: AuthRequest, res, next) => {
   try {
     const name = req.body.name?.toString().trim();
     if (!name) throw new AppError('El nombre de la marca es requerido', 400);
@@ -35,7 +36,7 @@ router.post('/', authorize('ADMIN', 'SUPERVISOR'), async (req: AuthRequest, res,
   } catch (err) { next(err); }
 });
 
-router.put('/:id', authorize('ADMIN', 'SUPERVISOR'), async (req: AuthRequest, res, next) => {
+router.put('/:id', requirePermission('categorias.gestionar'), async (req: AuthRequest, res, next) => {
   try {
     const existing = await prisma.brand.findFirst({
       where: { id: req.params.id, deletedAt: null, businessId: req.user!.businessId },
@@ -47,7 +48,7 @@ router.put('/:id', authorize('ADMIN', 'SUPERVISOR'), async (req: AuthRequest, re
   } catch (err) { next(err); }
 });
 
-router.delete('/:id', authorize('ADMIN'), async (req: AuthRequest, res, next) => {
+router.delete('/:id', requirePermission('categorias.gestionar'), async (req: AuthRequest, res, next) => {
   try {
     const existing = await prisma.brand.findFirst({
       where: { id: req.params.id, deletedAt: null, businessId: req.user!.businessId },

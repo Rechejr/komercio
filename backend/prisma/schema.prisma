@@ -73,6 +73,11 @@ model User {
   password             String
   googleId             String?            @unique
   role                 UserRole           @default(CASHIER)
+  // Permisos sueltos que el dueno le marco a ESTA persona, por encima de lo que
+  // trae su rol: { "reportes.ver": true, "ventas.anular": false }. Solo se
+  // guarda lo que DIFIERE del rol, asi que cambiarle el rol despues sigue
+  // teniendo sentido. null = exactamente lo del rol. Ver config/permissions.ts.
+  permissions          Json?
   isActive             Boolean            @default(true)
   isEmailVerified      Boolean            @default(false)
   emailVerifyToken     String?

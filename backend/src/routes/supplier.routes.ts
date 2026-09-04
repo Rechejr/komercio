@@ -3,6 +3,7 @@ import multer from 'multer';
 import ExcelJS from 'exceljs';
 import { supplierController } from '../controllers/supplier.controller';
 import { authenticate, authorize, AuthRequest } from '../middlewares/auth';
+import { requirePermission } from '../middlewares/permissions';
 import { planLimit } from '../middlewares/planLimit';
 import { prisma } from '../config/database';
 import { success, AppError } from '../utils/response';
@@ -96,7 +97,7 @@ const SUPPLIER_FIELD_LABELS: Record<string, string> = {
 
 // ── Bulk import (supports ?dryRun=true for preview) ──────────────────────────
 router.post('/import',
-  authorize('ADMIN', 'SUPERVISOR'),
+  requirePermission('proveedores.gestionar'),
   planLimit.bulkImport(),
   xlsxUpload.single('file'),
   async (req: AuthRequest, res, next) => {
@@ -279,12 +280,12 @@ router.post('/import',
 
 // ── Standard CRUD ────────────────────────────────────────────────────────────
 router.get('/', supplierController.list);
-router.get('/:id', supplierController.getOne);
+router.get('/:id', requirePermission('proveedores.gestionar'), supplierController.getOne);
 // CASHIER puede crear un proveedor nuevo al vuelo (ej. registrando una compra
 // de un proveedor que aún no existe en el sistema), pero no editar/eliminar
 // uno existente — eso sigue siendo de ADMIN/SUPERVISOR.
-router.post('/', authorize('ADMIN', 'SUPERVISOR', 'CASHIER'), planLimit.suppliers(), supplierController.create);
-router.put('/:id', authorize('ADMIN', 'SUPERVISOR'), supplierController.update);
+router.post('/', requirePermission('proveedores.gestionar'), planLimit.suppliers(), supplierController.create);
+router.put('/:id', requirePermission('proveedores.gestionar'), supplierController.update);
 router.delete('/:id', authorize('ADMIN'), supplierController.delete);
 
 export default router;

@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth.store';
+import { usePermisos } from '@/hooks/usePermisos';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { AccountSwitcher } from '@/components/layout/AccountSwitcher';
 import {
@@ -23,27 +24,28 @@ type NavItem = {
   href: string;
   icon: LucideIcon;
   label: string;
-  roles: readonly string[];
+  /** Permiso que hay que tener para verlo. null = lo ve cualquiera del equipo. */
+  permiso: string | null;
   /** Muestra el distintivo "Nuevo" hasta que la persona entre una vez. */
   nuevo?: boolean;
 };
 
-// Navegación de Ventrix Contable. Solo dos roles la ven: ADMIN (el contador,
-// dueño) y AUXILIAR (su ayudante). El AUXILIAR no gestiona la cuenta.
+// Navegación de Ventrix Contable. Cada sección pide su permiso: así el contador
+// puede, por ejemplo, dejarle la bóveda de claves a un auxiliar y a otro no.
 const NAV_ITEMS: readonly NavItem[] = [
-  { href: '/contable/panel',        icon: LayoutDashboard, label: 'Panel',            roles: ['ADMIN', 'AUXILIAR'] },
-  { href: '/contable/clientes',     icon: Users,           label: 'Clientes',         roles: ['ADMIN', 'AUXILIAR'] },
-  { href: '/contable/vencimientos', icon: CalendarClock,   label: 'Vencimientos',     roles: ['ADMIN', 'AUXILIAR'] },
-  { href: '/contable/calendario',   icon: CalendarDays,    label: 'Calendario',       roles: ['ADMIN', 'AUXILIAR'] },
-  { href: '/contable/pila',         icon: ShieldCheck,     label: 'PILA',             roles: ['ADMIN', 'AUXILIAR'] },
-  { href: '/contable/nomina',       icon: Receipt,         label: 'Nómina',           roles: ['ADMIN', 'AUXILIAR'] },
-  { href: '/contable/resoluciones', icon: FileText,        label: 'Resoluciones DIAN', roles: ['ADMIN', 'AUXILIAR'] },
-  { href: '/contable/exogena',      icon: FileSpreadsheet, label: 'Información Exógena', roles: ['ADMIN', 'AUXILIAR'] },
-  { href: '/contable/otras-responsabilidades', icon: ClipboardList, label: 'Otras Responsabilidades', roles: ['ADMIN', 'AUXILIAR'] },
-  { href: '/contable/credenciales',            icon: KeyRound,      label: 'Usuarios y Contraseñas', roles: ['ADMIN', 'AUXILIAR'] },
+  { href: '/contable/panel',        icon: LayoutDashboard, label: 'Panel',            permiso: 'contable.clientes.ver' },
+  { href: '/contable/clientes',     icon: Users,           label: 'Clientes',         permiso: 'contable.clientes.ver' },
+  { href: '/contable/vencimientos', icon: CalendarClock,   label: 'Vencimientos',     permiso: 'contable.vencimientos.gestionar' },
+  { href: '/contable/calendario',   icon: CalendarDays,    label: 'Calendario',       permiso: 'contable.clientes.ver' },
+  { href: '/contable/pila',         icon: ShieldCheck,     label: 'PILA',             permiso: 'contable.vencimientos.gestionar' },
+  { href: '/contable/nomina',       icon: Receipt,         label: 'Nómina',           permiso: 'contable.vencimientos.gestionar' },
+  { href: '/contable/resoluciones', icon: FileText,        label: 'Resoluciones DIAN', permiso: 'contable.clientes.ver' },
+  { href: '/contable/exogena',      icon: FileSpreadsheet, label: 'Información Exógena', permiso: 'contable.clientes.ver' },
+  { href: '/contable/otras-responsabilidades', icon: ClipboardList, label: 'Otras Responsabilidades', permiso: 'contable.clientes.ver' },
+  { href: '/contable/credenciales',            icon: KeyRound,      label: 'Usuarios y Contraseñas', permiso: 'contable.boveda.ver' },
   // Lleva "Nuevo" para que se enteren de que el horario de los avisos ahora se
   // configura aquí; al visitar la sección el distintivo se apaga solo.
-  { href: '/contable/configuracion',           icon: Settings,      label: 'Configuración',          roles: ['ADMIN', 'AUXILIAR'], nuevo: true },
+  { href: '/contable/configuracion',           icon: Settings,      label: 'Configuración',          permiso: null, nuevo: true },
 ];
 
 interface ContableSidebarProps {
@@ -55,6 +57,7 @@ export function ContableSidebar({ mobileOpen, onMobileClose }: ContableSidebarPr
   const [collapsed, setCollapsed] = useState(false);
   const pathname = usePathname();
   const { user, logout } = useAuthStore();
+  const puede = usePermisos();
 
   // Etiqueta cosmética: en una cuenta contable, el dueño (ADMIN) se muestra como
   // "Contador"; su ayudante como "Auxiliar". No es un rol nuevo (decisión: se
@@ -64,7 +67,7 @@ export function ContableSidebar({ mobileOpen, onMobileClose }: ContableSidebarPr
   const bizInitial = bizName.charAt(0).toUpperCase();
 
   const visibleItems = NAV_ITEMS.filter(
-    (i) => user?.role && i.roles.includes(user.role as never),
+    (i) => !i.permiso || puede(i.permiso),
   );
 
   // Distintivo "Nuevo" de Configuración. Arranca apagado y se enciende tras

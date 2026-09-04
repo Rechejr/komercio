@@ -8,6 +8,7 @@ import * as jwtUtils from '../../utils/jwt';
 jest.mock('../../config/database', () => ({
   prisma: {
     user: { findFirst: jest.fn(), update: jest.fn() },
+    business: { findUnique: jest.fn(), findFirst: jest.fn() },
   },
 }));
 
@@ -43,7 +44,6 @@ describe('DELETE /api/v1/users/:id', () => {
       .set(authHeader());
 
     expect(res.status).toBe(400);
-    expect(mockPrisma.user.findFirst).not.toHaveBeenCalled();
     expect(mockPrisma.user.update).not.toHaveBeenCalled();
   });
 

@@ -4,6 +4,7 @@ import multer from 'multer';
 import ExcelJS from 'exceljs';
 import { customerController } from '../controllers/customer.controller';
 import { authenticate, authorize, AuthRequest } from '../middlewares/auth';
+import { requirePermission } from '../middlewares/permissions';
 import { planLimit } from '../middlewares/planLimit';
 import { validate } from '../middlewares/validate';
 import { prisma } from '../config/database';
@@ -92,7 +93,7 @@ const CUSTOMER_FIELD_LABELS: Record<string, string> = {
 
 // ── Bulk import (supports ?dryRun=true for preview) ──────────────────────────
 router.post('/import',
-  authorize('ADMIN', 'SUPERVISOR', 'CASHIER', 'SELLER'),
+  requirePermission('clientes.gestionar'),
   planLimit.bulkImport(),
   xlsxUpload.single('file'),
   async (req: AuthRequest, res, next) => {
@@ -267,18 +268,18 @@ const customerBodyValidators = [
   body('creditLimit').optional({ nullable: true, checkFalsy: true }).isFloat({ min: 0 }).withMessage('Límite de crédito inválido'),
 ];
 
-router.get('/', customerController.list);
-router.get('/:id', customerController.getOne);
-router.get('/:id/purchases', customerController.getPurchaseHistory);
+router.get('/', requirePermission('clientes.ver'), customerController.list);
+router.get('/:id', requirePermission('clientes.ver'), customerController.getOne);
+router.get('/:id/purchases', requirePermission('clientes.ver'), customerController.getPurchaseHistory);
 router.post('/',
-  authorize('ADMIN', 'SUPERVISOR', 'CASHIER', 'SELLER'),
+  requirePermission('clientes.ver'),
   planLimit.customers(),
   customerBodyValidators,
   validate,
   customerController.create,
 );
 router.put('/:id',
-  authorize('ADMIN', 'SUPERVISOR', 'CASHIER', 'SELLER'),
+  requirePermission('clientes.gestionar'),
   [
     body('name').optional().trim().notEmpty().withMessage('El nombre no puede estar vacío'),
     body('email').optional({ nullable: true, checkFalsy: true }).isEmail().normalizeEmail().withMessage('Email inválido'),
@@ -288,6 +289,6 @@ router.put('/:id',
   validate,
   customerController.update,
 );
-router.delete('/:id', authorize('ADMIN', 'SUPERVISOR'), customerController.delete);
+router.delete('/:id', requirePermission('clientes.eliminar'), customerController.delete);
 
 export default router;

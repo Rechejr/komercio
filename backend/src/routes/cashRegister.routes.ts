@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { prisma } from '../config/database';
-import { authenticate, authorize } from '../middlewares/auth';
+import { authenticate } from '../middlewares/auth';
+import { requirePermission } from '../middlewares/permissions';
 import { success, created, paginated, AppError } from '../utils/response';
 import { getPagination } from '../utils/pagination';
 import { parseBogotaBoundary } from '../utils/bogotaTime';
@@ -12,7 +13,7 @@ router.use(authenticate);
 // turno (y con qué vendedor) apareció una diferencia de caja. openedBy/closedBy
 // son solo el id (sin relación Prisma a User), así que se resuelven los
 // nombres en un segundo query en batch en vez de con un include.
-router.get('/history', authorize('ADMIN', 'SUPERVISOR'), async (req: any, res, next) => {
+router.get('/history', requirePermission('caja.historial'), async (req: any, res, next) => {
   try {
     const { page, limit, skip } = getPagination(req);
     const { userId, startDate, endDate } = req.query;
@@ -60,7 +61,7 @@ router.get('/history', authorize('ADMIN', 'SUPERVISOR'), async (req: any, res, n
   } catch (err) { next(err); }
 });
 
-router.get('/current', authorize('ADMIN', 'SUPERVISOR', 'CASHIER'), async (req: any, res, next) => {
+router.get('/current', requirePermission('caja.operar'), async (req: any, res, next) => {
   try {
     if (!req.user.branchId) return next(new AppError('No tienes una bodega asignada', 403));
     const register = await prisma.cashRegister.findFirst({
@@ -117,7 +118,7 @@ router.get('/current', authorize('ADMIN', 'SUPERVISOR', 'CASHIER'), async (req: 
   } catch (err) { next(err); }
 });
 
-router.post('/open', authorize('ADMIN', 'SUPERVISOR', 'CASHIER'), async (req: any, res, next) => {
+router.post('/open', requirePermission('caja.operar'), async (req: any, res, next) => {
   try {
     if (!req.user.branchId) return next(new AppError('No tienes una bodega asignada', 403));
     const existing = await prisma.cashRegister.findFirst({
@@ -151,7 +152,7 @@ router.post('/open', authorize('ADMIN', 'SUPERVISOR', 'CASHIER'), async (req: an
   } catch (err) { next(err); }
 });
 
-router.post('/:id/close', authorize('ADMIN', 'SUPERVISOR', 'CASHIER'), async (req: any, res, next) => {
+router.post('/:id/close', requirePermission('caja.operar'), async (req: any, res, next) => {
   try {
     const register = await prisma.cashRegister.findUnique({ where: { id: req.params.id } });
     if (!register || register.status !== 'OPEN') throw new AppError('Caja no encontrada o ya cerrada', 400);
@@ -195,7 +196,7 @@ router.post('/:id/close', authorize('ADMIN', 'SUPERVISOR', 'CASHIER'), async (re
   } catch (err) { next(err); }
 });
 
-router.post('/:id/movement', authorize('ADMIN', 'SUPERVISOR', 'CASHIER'), async (req: any, res, next) => {
+router.post('/:id/movement', requirePermission('caja.operar'), async (req: any, res, next) => {
   try {
     const register = await prisma.cashRegister.findUnique({ where: { id: req.params.id } });
     if (!register) throw new AppError('Caja no encontrada', 404);

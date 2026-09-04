@@ -15,6 +15,12 @@ interface User {
   // va el usuario tras el login y qué grupo de rutas puede ver.
   businessType?: string;
   isEmailVerified?: boolean;
+  // Lo que esta persona puede hacer: su rol más las marcas que le puso el dueño.
+  // Sirve para esconder menús y botones; el permiso de verdad lo revisa el
+  // servidor en cada llamada, esto es solo para no mostrar puertas cerradas.
+  permissions?: string[];
+  // El dueño no se filtra por permisos: manda en su negocio siempre.
+  isOwner?: boolean;
 }
 
 // Una "cuenta" a la que puede entrar este correo. Un mismo login puede tener POS

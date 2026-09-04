@@ -1,16 +1,16 @@
 import { Router } from 'express';
-import { authenticate, authorize } from '../middlewares/auth';
+import { authenticate } from '../middlewares/auth';
+import { requirePermission } from '../middlewares/permissions';
 import { quoteController } from '../controllers/quote.controller';
 
 const router = Router();
 router.use(authenticate);
 
-const VENDER = authorize('ADMIN', 'SUPERVISOR', 'CASHIER', 'SELLER');
 
-router.get('/', VENDER, quoteController.list);
-router.get('/:id', VENDER, quoteController.getOne);
-router.post('/', VENDER, quoteController.create);
-router.patch('/:id/converted', VENDER, quoteController.markConverted);
-router.delete('/:id', authorize('ADMIN', 'SUPERVISOR'), quoteController.remove);
+router.get('/', requirePermission('cotizaciones.gestionar'), quoteController.list);
+router.get('/:id', requirePermission('cotizaciones.gestionar'), quoteController.getOne);
+router.post('/', requirePermission('cotizaciones.gestionar'), quoteController.create);
+router.patch('/:id/converted', requirePermission('cotizaciones.gestionar'), quoteController.markConverted);
+router.delete('/:id', requirePermission('cotizaciones.gestionar'), quoteController.remove);
 
 export default router;

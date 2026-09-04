@@ -7,6 +7,7 @@ import { useQuery } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth.store';
+import { usePermisos } from '@/hooks/usePermisos';
 import { useUpgradeStore } from '@/store/upgrade.store';
 import { api } from '@/lib/api';
 import { Tooltip } from '@/components/ui/Tooltip';
@@ -23,31 +24,31 @@ const NAV_GROUPS = [
   {
     label: 'Operaciones',
     items: [
-      { href: '/dashboard',  icon: LayoutDashboard, label: 'Dashboard',        roles: ['ADMIN','SUPERVISOR','CASHIER','SELLER','WAREHOUSE'], pro: false },
-      { href: '/pos',        icon: Calculator,      label: 'Punto de Venta',   roles: ['ADMIN','SUPERVISOR','CASHIER','SELLER'],             pro: false },
-      { href: '/ventas',     icon: ShoppingCart,    label: 'Ventas',           roles: ['ADMIN','SUPERVISOR','CASHIER','SELLER'],             pro: false },
-      { href: '/cotizaciones', icon: FileText,      label: 'Cotizaciones',     roles: ['ADMIN','SUPERVISOR','CASHIER','SELLER'],             pro: false },
-      { href: '/inventario', icon: Package,         label: 'Inventario',       roles: ['ADMIN','SUPERVISOR','WAREHOUSE'],                   pro: false },
-      { href: '/compras',    icon: ShoppingBag,     label: 'Compras',          roles: ['ADMIN','SUPERVISOR','WAREHOUSE','CASHIER'],         pro: true  },
-      { href: '/transferencias', icon: ArrowLeftRight, label: 'Transferencias', roles: ['ADMIN','SUPERVISOR'],                             pro: false },
-      { href: '/gastos',     icon: Receipt,         label: 'Gastos',           roles: ['ADMIN','SUPERVISOR'],                               pro: false },
-      { href: '/caja',       icon: DollarSign,      label: 'Caja',             roles: ['ADMIN','SUPERVISOR','CASHIER'],                     pro: false },
-      { href: '/reportes',   icon: TrendingUp,      label: 'Reportes',         roles: ['ADMIN','SUPERVISOR'],                               pro: true  },
+      { href: '/dashboard',  icon: LayoutDashboard, label: 'Dashboard',        permiso: null,                     pro: false },
+      { href: '/pos',        icon: Calculator,      label: 'Punto de Venta',   permiso: 'ventas.crear',           pro: false },
+      { href: '/ventas',     icon: ShoppingCart,    label: 'Ventas',           permiso: 'ventas.ver',             pro: false },
+      { href: '/cotizaciones', icon: FileText,      label: 'Cotizaciones',     permiso: 'cotizaciones.gestionar', pro: false },
+      { href: '/inventario', icon: Package,         label: 'Inventario',       permiso: 'productos.gestionar',    pro: false },
+      { href: '/compras',    icon: ShoppingBag,     label: 'Compras',          permiso: 'compras.ver',            pro: true  },
+      { href: '/transferencias', icon: ArrowLeftRight, label: 'Transferencias', permiso: 'inventario.transferir', pro: false },
+      { href: '/gastos',     icon: Receipt,         label: 'Gastos',           permiso: 'gastos.ver',             pro: false },
+      { href: '/caja',       icon: DollarSign,      label: 'Caja',             permiso: 'caja.operar',            pro: false },
+      { href: '/reportes',   icon: TrendingUp,      label: 'Reportes',         permiso: 'reportes.ver',           pro: true  },
     ],
   },
   {
     label: 'Contactos',
     items: [
-      { href: '/clientes',    icon: Users,      label: 'Clientes',          roles: ['ADMIN','SUPERVISOR','CASHIER','SELLER'], pro: false },
-      { href: '/creditos',    icon: CreditCard, label: 'Créditos / Fiados', roles: ['ADMIN','SUPERVISOR','CASHIER'],          pro: true  },
-      { href: '/proveedores', icon: Truck,      label: 'Proveedores',       roles: ['ADMIN','SUPERVISOR'],                   pro: true  },
-      { href: '/cuentas-por-pagar', icon: HandCoins, label: 'Cuentas por pagar', roles: ['ADMIN','SUPERVISOR'],              pro: true  },
+      { href: '/clientes',    icon: Users,      label: 'Clientes',          permiso: 'clientes.ver',           pro: false },
+      { href: '/creditos',    icon: CreditCard, label: 'Créditos / Fiados', permiso: 'creditos.ver',           pro: true  },
+      { href: '/proveedores', icon: Truck,      label: 'Proveedores',       permiso: 'proveedores.gestionar',  pro: true  },
+      { href: '/cuentas-por-pagar', icon: HandCoins, label: 'Cuentas por pagar', permiso: 'cuentas_por_pagar.pagar', pro: true  },
     ],
   },
   {
     label: null,
     items: [
-      { href: '/configuracion', icon: Settings, label: 'Configuración', roles: ['ADMIN'], pro: false },
+      { href: '/configuracion', icon: Settings, label: 'Configuración', permiso: 'configuracion.negocio', pro: false },
     ],
   },
 ] as const;
@@ -70,6 +71,7 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
   const pathname    = usePathname();
   const { user, logout } = useAuthStore();
+  const puede = usePermisos();
   const openUpgrade = useUpgradeStore((s) => s.open);
 
   const { data: business } = useQuery({
@@ -223,7 +225,7 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
             /* Nav normal para el resto de roles */
             NAV_GROUPS.map((group, gi) => {
               const visible = group.items.filter(
-                (i) => user?.role && i.roles.includes(user.role as never),
+                (i) => !i.permiso || puede(i.permiso),
               );
               if (visible.length === 0) return null;
 

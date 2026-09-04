@@ -2,6 +2,7 @@ import { Router, Response, NextFunction } from 'express';
 import { body } from 'express-validator';
 import { prisma } from '../config/database';
 import { authenticate, authorize, AuthRequest } from '../middlewares/auth';
+import { requirePermission } from '../middlewares/permissions';
 import { planLimit } from '../middlewares/planLimit';
 import { success, created, AppError } from '../utils/response';
 import { validate } from '../middlewares/validate';
@@ -19,7 +20,7 @@ router.get('/me', async (req: any, res, next) => {
 });
 
 router.put('/me',
-  authorize('ADMIN'),
+  requirePermission('configuracion.negocio'),
   [
     body('email').optional({ nullable: true }).isEmail().normalizeEmail().withMessage('Email inválido'),
     body('taxRate').optional({ nullable: true }).isFloat({ min: 0, max: 100 }).withMessage('IVA debe estar entre 0 y 100'),
@@ -87,7 +88,7 @@ router.get('/branches', async (req: any, res, next) => {
 // staff. El límite de plan (planLimit.branches()) es el único freno duro:
 // Free se queda en 1, Pro en 2 (ver plans.ts) — a propósito no ilimitado, para
 // que no se use una sola suscripción Pro para operar más de dos locales.
-router.post('/branches', authorize('ADMIN'), planLimit.branches(), async (req: AuthRequest, res: Response, next: NextFunction) => {
+router.post('/branches', requirePermission('configuracion.negocio'), planLimit.branches(), async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const { name, address, phone } = req.body;
     if (!name?.trim()) throw new AppError('El nombre de la bodega es requerido', 400);
@@ -108,7 +109,7 @@ router.post('/branches', authorize('ADMIN'), planLimit.branches(), async (req: A
   } catch (err) { next(err); }
 });
 
-router.put('/branches/:id', authorize('ADMIN'), async (req: AuthRequest, res: Response, next: NextFunction) => {
+router.put('/branches/:id', requirePermission('configuracion.negocio'), async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const existing = await prisma.branch.findFirst({
       where: { id: req.params.id, businessId: req.user!.businessId, deletedAt: null },
@@ -150,7 +151,7 @@ router.get('/payment-accounts', async (req: AuthRequest, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.post('/payment-accounts', authorize('ADMIN'),
+router.post('/payment-accounts', requirePermission('configuracion.negocio'),
   [
     body('name').trim().notEmpty().withMessage('El nombre es requerido'),
     body('type').optional().isIn(PAYMENT_TYPES as unknown as string[]).withMessage('Tipo inválido'),
@@ -178,7 +179,7 @@ router.post('/payment-accounts', authorize('ADMIN'),
     } catch (err) { next(err); }
   });
 
-router.put('/payment-accounts/:id', authorize('ADMIN'),
+router.put('/payment-accounts/:id', requirePermission('configuracion.negocio'),
   [
     body('name').optional().trim().notEmpty().withMessage('El nombre no puede estar vacío'),
     body('type').optional().isIn(PAYMENT_TYPES as unknown as string[]).withMessage('Tipo inválido'),
@@ -212,7 +213,7 @@ router.put('/payment-accounts/:id', authorize('ADMIN'),
 // Borrado seguro: si el medio ya tiene movimientos (ventas/compras/gastos/abonos),
 // NO se borra — se desactiva, para conservar a qué cuenta fue cada movimiento
 // histórico. Solo se elimina de verdad si nunca se usó.
-router.delete('/payment-accounts/:id', authorize('ADMIN'), async (req: AuthRequest, res: Response, next: NextFunction) => {
+router.delete('/payment-accounts/:id', requirePermission('configuracion.negocio'), async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const existing = await prisma.paymentAccount.findFirst({
       where: { id: req.params.id, businessId: req.user!.businessId },

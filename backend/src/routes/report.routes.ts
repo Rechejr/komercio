@@ -1,11 +1,11 @@
 import { Router } from 'express';
 import { rateLimit } from 'express-rate-limit';
 import { reportController } from '../controllers/report.controller';
-import { authenticate, authorize } from '../middlewares/auth';
+import { authenticate } from '../middlewares/auth';
+import { requirePermission } from '../middlewares/permissions';
 
 const router = Router();
 router.use(authenticate);
-router.use(authorize('ADMIN', 'SUPERVISOR'));
 
 // Reports run heavy aggregation queries — limit to 30 per 5 min per user
 const reportLimiter = rateLimit({
@@ -18,9 +18,10 @@ const reportLimiter = rateLimit({
 });
 router.use(reportLimiter);
 
-router.get('/sales', reportController.salesReport);
-router.get('/top-products', reportController.topProducts);
-router.get('/top-customers', reportController.topCustomers);
-router.get('/profit', reportController.profitReport);
+router.get('/sales', requirePermission('reportes.ver'), reportController.salesReport);
+router.get('/top-products', requirePermission('reportes.ver'), reportController.topProducts);
+router.get('/top-customers', requirePermission('reportes.ver'), reportController.topCustomers);
+// La utilidad expone costos y margen: va aparte de los demas reportes.
+router.get('/profit', requirePermission('reportes.financiero'), reportController.profitReport);
 
 export default router;

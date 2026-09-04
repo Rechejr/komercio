@@ -4,6 +4,7 @@ import { body } from 'express-validator';
 import { prisma } from '../config/database';
 import { cache } from '../config/redis';
 import { authenticate, authorize, AuthRequest } from '../middlewares/auth';
+import { requirePermission } from '../middlewares/permissions';
 import { resolveEffectiveBranchId } from '../utils/resolveBranch';
 import { success, created, paginated } from '../utils/response';
 import { getPagination, getSearch } from '../utils/pagination';
@@ -107,7 +108,7 @@ async function resolvePurchaseBranchId(tx: { branch: { findFirst: typeof prisma.
 const router = Router();
 router.use(authenticate);
 
-router.get('/', async (req: AuthRequest, res, next) => {
+router.get('/', requirePermission('compras.ver'), async (req: AuthRequest, res, next) => {
   try {
     const { page, limit, skip } = getPagination(req);
     const search = getSearch(req);
@@ -152,7 +153,7 @@ router.get('/', async (req: AuthRequest, res, next) => {
 });
 
 // Debe ir antes de "/:id" — si no, Express la interpreta como un id.
-router.get('/check-invoice', async (req: AuthRequest, res, next) => {
+router.get('/check-invoice', requirePermission('compras.ver'), async (req: AuthRequest, res, next) => {
   try {
     const supplierId = req.query.supplierId as string | undefined;
     const invoiceNumber = ((req.query.invoiceNumber as string) || '').trim();
@@ -174,7 +175,7 @@ router.get('/check-invoice', async (req: AuthRequest, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.get('/:id', async (req: AuthRequest, res, next) => {
+router.get('/:id', requirePermission('compras.ver'), async (req: AuthRequest, res, next) => {
   try {
     const purchase = await prisma.purchase.findFirst({
       where: { id: req.params.id, deletedAt: null, businessId: req.user!.businessId },
@@ -191,7 +192,7 @@ router.get('/:id', async (req: AuthRequest, res, next) => {
 // CASHIER puede registrar la compra (ej. un proveedor entrega un pedido y el
 // cajero lo recibe), pero no editar/eliminar una ya registrada — esa sigue
 // siendo una acción de ADMIN/SUPERVISOR/WAREHOUSE.
-router.post('/', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE', 'CASHIER'), planLimit.purchases(),
+router.post('/', requirePermission('compras.gestionar'), planLimit.purchases(),
   [body('supplierId').isUUID().withMessage('Selecciona un proveedor'), ...purchaseItemValidators],
   validate, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
@@ -385,7 +386,7 @@ router.post('/', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE', 'CASHIER'), planL
   } catch (err) { next(err); }
 });
 
-router.put('/:id', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE'), purchaseItemValidators, validate, async (req: AuthRequest, res: Response, next: NextFunction) => {
+router.put('/:id', requirePermission('compras.gestionar'), purchaseItemValidators, validate, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const { supplierId, invoiceNumber, items, notes, purchaseDate, paymentMethod, paymentAccountId } = req.body;
     if (!items?.length) throw new AppError('Se requieren productos', 400);
@@ -642,7 +643,7 @@ router.put('/:id', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE'), purchaseItemVa
   } catch (err) { next(err); }
 });
 
-router.delete('/:id', authorize('ADMIN', 'SUPERVISOR'), async (req: AuthRequest, res, next) => {
+router.delete('/:id', requirePermission('compras.eliminar'), async (req: AuthRequest, res, next) => {
   try {
     const existing = await prisma.purchase.findFirst({
       where: { id: req.params.id, deletedAt: null, businessId: req.user!.businessId },

@@ -2,7 +2,8 @@ import { Router } from 'express';
 import { body } from 'express-validator';
 import { prisma } from '../config/database';
 import { cache } from '../config/redis';
-import { authenticate, authorize } from '../middlewares/auth';
+import { authenticate } from '../middlewares/auth';
+import { requirePermission } from '../middlewares/permissions';
 import { success, paginated, AppError } from '../utils/response';
 import { getPagination } from '../utils/pagination';
 import { validate } from '../middlewares/validate';
@@ -161,7 +162,7 @@ router.get('/:id', async (req: any, res, next) => {
 // Sirve para cargar de una las facturas que el negocio ya tiene pendientes con
 // sus proveedores, en vez de teclearlas una por una al empezar a usar Ventrix.
 router.post('/import',
-  authorize('ADMIN', 'SUPERVISOR'),
+  requirePermission('compras.gestionar'),
   planLimit.bulkImport(),
   xlsxUpload.single('file'),
   async (req: AuthRequest, res, next) => {
@@ -319,7 +320,7 @@ router.post('/import',
 );
 
 router.post('/:id/payments',
-  authorize('ADMIN', 'SUPERVISOR', 'CASHIER'),
+  requirePermission('cuentas_por_pagar.pagar'),
   [
     body('amount').isFloat({ gt: 0 }).withMessage('El monto debe ser mayor a 0'),
     body('paymentMethod').optional().isIn(['CASH', 'TRANSFER', 'NEQUI', 'DAVIPLATA', 'CARD']),

@@ -5,6 +5,7 @@ import { prisma } from '../config/database';
 import { cache } from '../config/redis';
 import { generateAccessToken, generateRefreshToken, verifyRefreshToken } from '../utils/jwt';
 import { AppError, success, created } from '../utils/response';
+import { permisosEfectivos } from '../config/permissions';
 import { AuthRequest } from '../middlewares/auth';
 import { emailService } from '../config/email';
 
@@ -79,6 +80,12 @@ function userResponse(user: any, account?: Account) {
     plan: account?.plan || 'free',
     // Producto de la cuenta ACTIVA: "pos" o "contable". El frontend redirige con esto.
     businessType: account?.businessType || 'pos',
+    // Lo que esta persona puede hacer (su rol + las marcas que le puso el dueño).
+    // El frontend lo usa para esconder menús y botones; quien manda igual es el
+    // servidor, que revisa el permiso en cada llamada.
+    permissions: permisosEfectivos(user.role, user.permissions),
+    // El dueño no se filtra por permisos: manda en su negocio siempre.
+    isOwner: (user.businesses?.length ?? 0) > 0 || user.role === 'SUPER_ADMIN',
   };
 }
 
@@ -466,7 +473,7 @@ export const authController = {
           select: {
             id: true, name: true, email: true, phone: true,
             role: true, avatar: true, isEmailVerified: true,
-            branchId: true, lastLogin: true,
+            branchId: true, lastLogin: true, permissions: true,
             ...USER_ACCOUNTS_INCLUDE,
           },
         }),
@@ -486,12 +493,14 @@ export const authController = {
       // Se sustituye la sucursal asignada por la ACTIVA (la del token) y se expone
       // la lista de cuentas para el selector del menú.
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { businesses, branch, ...rest } = user as any;
+      const { businesses, branch, permissions, ...rest } = user as any;
       return success(res, {
         ...rest,
         branchId: activeBranch?.id ?? rest.branchId,
         branch: activeBranch,
         accounts: publicAccounts(accounts),
+        permissions: permisosEfectivos(user.role, permissions),
+        isOwner: (businesses?.length ?? 0) > 0 || user.role === 'SUPER_ADMIN',
       });
     } catch (err) {
       next(err);

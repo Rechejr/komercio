@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { prisma } from '../config/database';
-import { authenticate, authorize } from '../middlewares/auth';
+import { authenticate } from '../middlewares/auth';
+import { requirePermission } from '../middlewares/permissions';
 import { success, created, AppError } from '../utils/response';
 
 const router = Router();
@@ -19,7 +20,7 @@ router.get('/', async (req: any, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.post('/', authorize('ADMIN', 'SUPERVISOR'), async (req: any, res, next) => {
+router.post('/', requirePermission('categorias.gestionar'), async (req: any, res, next) => {
   try {
     const { name, description, color, icon, parentId } = req.body;
     if (!name?.trim()) throw new AppError('El nombre es requerido', 400);
@@ -37,7 +38,7 @@ router.post('/', authorize('ADMIN', 'SUPERVISOR'), async (req: any, res, next) =
   } catch (err) { next(err); }
 });
 
-router.put('/:id', authorize('ADMIN', 'SUPERVISOR'), async (req: any, res, next) => {
+router.put('/:id', requirePermission('categorias.gestionar'), async (req: any, res, next) => {
   try {
     const existing = await prisma.category.findFirst({
       where: { id: req.params.id, businessId: req.user.businessId || null, deletedAt: null },
@@ -50,7 +51,7 @@ router.put('/:id', authorize('ADMIN', 'SUPERVISOR'), async (req: any, res, next)
   } catch (err) { next(err); }
 });
 
-router.delete('/:id', authorize('ADMIN'), async (req: any, res, next) => {
+router.delete('/:id', requirePermission('categorias.gestionar'), async (req: any, res, next) => {
   try {
     const existing = await prisma.category.findFirst({
       where: { id: req.params.id, businessId: req.user.businessId || null, deletedAt: null },

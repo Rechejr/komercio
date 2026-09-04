@@ -5,6 +5,7 @@ import multer from 'multer';
 import ExcelJS from 'exceljs';
 import { productController } from '../controllers/product.controller';
 import { authenticate, authorize, AuthRequest } from '../middlewares/auth';
+import { requirePermission } from '../middlewares/permissions';
 import { validate } from '../middlewares/validate';
 import { planLimit } from '../middlewares/planLimit';
 import { prisma } from '../config/database';
@@ -71,7 +72,7 @@ const xlsxUpload = multer({
 
 // ── Bulk import (supports ?dryRun=true for preview) ──────────────────────────
 router.post('/import',
-  authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE'),
+  requirePermission('productos.importar'),
   planLimit.bulkImport(),
   xlsxUpload.single('file'),
   async (req: AuthRequest, res, next) => {
@@ -429,7 +430,7 @@ router.post('/import',
 // bodegas (mover/fijar cantidades grandes de stock es una decisión del
 // dueño/encargado, no de cualquier rol que pueda ajustar un producto suelto).
 router.post('/branch-stock-count',
-  authorize('ADMIN', 'SUPERVISOR'),
+  requirePermission('productos.gestionar'),
   [
     body('branchId').isUUID().withMessage('branchId inválido'),
     body('items').isArray({ min: 1 }).withMessage('Se requiere al menos un producto'),
@@ -442,13 +443,13 @@ router.post('/branch-stock-count',
 );
 
 // ── Standard CRUD ────────────────────────────────────────────────────────────
-router.get('/', productController.list);
-router.get('/low-stock', productController.getLowStock);
-router.get('/:id/stock-by-branch', productController.getStockByBranch);
-router.get('/:id', productController.getOne);
+router.get('/', requirePermission('productos.ver'), productController.list);
+router.get('/low-stock', requirePermission('productos.ver'), productController.getLowStock);
+router.get('/:id/stock-by-branch', requirePermission('productos.gestionar'), productController.getStockByBranch);
+router.get('/:id', requirePermission('productos.gestionar'), productController.getOne);
 
 router.post('/',
-  authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE'),
+  requirePermission('productos.ver'),
   planLimit.products(),
   [
     body('code').trim().notEmpty().withMessage('El código es requerido'),
@@ -465,7 +466,7 @@ router.post('/',
 );
 
 router.put('/:id',
-  authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE'),
+  requirePermission('productos.gestionar'),
   [
     body('salePrice').optional({ checkFalsy: true }).isFloat({ min: 0 }).withMessage('Precio de venta inválido'),
     body('costPrice').optional({ checkFalsy: true }).isFloat({ min: 0 }).withMessage('Costo inválido'),
@@ -476,12 +477,12 @@ router.put('/:id',
   validate,
   productController.update,
 );
-router.delete('/:id', authorize('ADMIN', 'SUPERVISOR'), productController.delete);
+router.delete('/:id', requirePermission('productos.eliminar'), productController.delete);
 // Vaciar todo el catálogo (soft-delete masivo) — solo el dueño, con confirmación en el frontend.
 router.post('/clear-catalog', authorize('ADMIN'), productController.clearCatalog);
-router.post('/:id/duplicate', authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE'), planLimit.products(), productController.duplicate);
+router.post('/:id/duplicate', requirePermission('productos.gestionar'), planLimit.products(), productController.duplicate);
 router.patch('/:id/adjust-stock',
-  authorize('ADMIN', 'SUPERVISOR', 'WAREHOUSE'),
+  requirePermission('productos.gestionar'),
   [
     body('quantity').isFloat({ min: 0.001 }),
     body('type').isIn(['IN', 'OUT', 'ADJUSTMENT']),

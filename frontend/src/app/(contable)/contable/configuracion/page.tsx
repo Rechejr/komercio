@@ -4,6 +4,8 @@ import { useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { api } from '@/lib/api';
+import { usePermisos } from '@/hooks/usePermisos';
+import { PanelEquipoContable } from '@/components/equipo/PanelEquipoContable';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '@/store/auth.store';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -29,6 +31,7 @@ export default function ConfiguracionContablePage() {
   const { user, setUser } = useAuthStore();
   const qc = useQueryClient();
   const esAdmin = user?.role === 'ADMIN';
+  const puede = usePermisos();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [confirmRegen, setConfirmRegen] = useState(false);
@@ -193,6 +196,11 @@ export default function ConfiguracionContablePage() {
           </form>
         </div>
       )}
+
+      {/* ── Equipo: los auxiliares del contador y sus permisos ─────────────
+          El rol AUXILIAR existía desde el arranque del módulo, pero no había
+          dónde crear uno: había que meterlo a mano en la base. */}
+      {puede('contable.usuarios') && <PanelEquipoContable />}
 
       {/* ── Horario de los avisos de vencimientos ──────────────────────────
           Vivía en el Panel, pero ahí competía con la agenda del día: es algo
