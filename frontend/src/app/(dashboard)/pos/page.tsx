@@ -7,6 +7,7 @@ import { api } from '@/lib/api';
 import { useCartStore, lineKey } from '@/store/cart.store';
 import { useAuthStore } from '@/store/auth.store';
 import { useUpgradeStore } from '@/store/upgrade.store';
+import { usePosViewStore } from '@/store/posView.store';
 import { formatCurrency, formatDate, statusColor, statusLabel, cn } from '@/lib/utils';
 import { calcularDescuentoGlobal, calcularCambio, faltantePorPagar, sumarPagos, puedeConfirmarVenta, montoPagado } from '@/lib/pos';
 import { usePaymentAccounts, labelPago } from '@/lib/usePaymentAccounts';
@@ -21,6 +22,7 @@ import {
   GlassWater, Milk, Leaf, Wheat, ShoppingBasket,
   Beef, Sparkles, Cpu, Shirt, Wrench, Pen, Pill,
   Heart, Droplets, Cookie, Baby, ScanLine, type LucideIcon,
+  Image as ImageIcon, ImageOff,
 } from 'lucide-react';
 import { Receipt, type ReceiptItem } from '@/components/Receipt';
 import { BarcodeScanner } from '@/components/ui/BarcodeScanner';
@@ -94,6 +96,10 @@ export default function POSPage() {
 
   const [search, setSearch]                   = useState('');
   const [showScanner, setShowScanner]         = useState(false);
+  // Ver los productos con foto o solo con el nombre. Es preferencia de quien
+  // vende y se recuerda en su navegador (ver posView.store.ts).
+  const showImages = usePosViewStore((st) => st.showImages);
+  const toggleImages = usePosViewStore((st) => st.toggleImages);
   const [categoryFilter, setCategoryFilter]   = useState('');
   const [customerSearch, setCustomerSearch]   = useState('');
   const [showCustomerList, setShowCustomerList] = useState(false);
@@ -542,8 +548,9 @@ export default function POSPage() {
             />
           )}
 
-          {/* Category chips */}
-          <div className="flex items-center gap-1.5 mt-3 overflow-x-auto pb-1 scrollbar-thin">
+          {/* Category chips + cómo se ven los productos */}
+          <div className="flex items-center gap-2 mt-3">
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-thin flex-1 min-w-0">
             <button
               type="button"
               onClick={() => setCategoryFilter('')}
@@ -573,13 +580,46 @@ export default function POSPage() {
             ))}
           </div>
 
+            {/* Con foto o sin foto. Sin foto caben casi el triple de productos,
+                que es lo que quiere quien se sabe el catálogo de memoria. */}
+            <span className="hidden sm:inline text-[12px] font-medium text-slate-500 dark:text-slate-400 flex-shrink-0 select-none">
+              Fotos
+            </span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={showImages ? 'true' : 'false'}
+              aria-label={showImages ? 'Ocultar las fotos de los productos' : 'Mostrar las fotos de los productos'}
+              title={showImages ? 'Ocultar fotos — se ven más productos' : 'Mostrar fotos de los productos'}
+              onClick={toggleImages}
+              className={cn(
+                'relative flex-shrink-0 w-11 h-6 rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/40',
+                showImages ? 'bg-emerald-500' : 'bg-slate-200 dark:bg-slate-700',
+              )}
+            >
+              <span className={cn(
+                'absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 flex items-center justify-center',
+                showImages ? 'translate-x-5' : 'translate-x-0',
+              )}>
+                {showImages
+                  ? <ImageIcon size={10} className="text-emerald-500" />
+                  : <ImageOff size={10} className="text-slate-400" />}
+              </span>
+            </button>
+          </div>
+
           {/* Product grid */}
           <div className="mt-3 max-h-[272px] overflow-y-auto scrollbar-thin">
             {isLoading ? (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 2xl:grid-cols-6 gap-2.5">
+              <div className={cn(
+                'grid gap-2.5',
+                showImages
+                  ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 2xl:grid-cols-6'
+                  : 'grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-6 2xl:grid-cols-8',
+              )}>
                 {Array.from({ length: 8 }).map((_, i) => (
                   <div key={i} className="flex flex-col rounded-2xl overflow-hidden">
-                    <div className="skeleton aspect-[16/10] w-full" />
+                    {showImages && <div className="skeleton aspect-[16/10] w-full" />}
                     <div className="p-2.5 bg-slate-800/40 space-y-1.5">
                       <div className="skeleton h-3 w-3/4 rounded" />
                       <div className="skeleton h-4 w-1/2 rounded" />
@@ -599,7 +639,12 @@ export default function POSPage() {
                 )}
               </div>
             ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 2xl:grid-cols-6 gap-2.5">
+              <div className={cn(
+                'grid gap-2.5',
+                showImages
+                  ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 2xl:grid-cols-6'
+                  : 'grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-6 2xl:grid-cols-8',
+              )}>
                 {productsData?.map((p: any) => {
                   const cs      = catStyle(p.category?.name);
                   const CatIcon = cs.icon;
@@ -625,6 +670,7 @@ export default function POSPage() {
                       )}
                     >
                       {/* ── Header: image or category color ── */}
+                      {showImages ? (
                       <div className="relative w-full aspect-[16/10] overflow-hidden">
                         {p.image ? (
                           <>
@@ -647,10 +693,22 @@ export default function POSPage() {
                           </span>
                         )}
                       </div>
+                      ) : (
+                        // Sin foto queda una franja con el color de la categoría:
+                        // ocupa 4 px y conserva la pista de color para ubicar el
+                        // producto de un vistazo.
+                        <div className="h-1 w-full flex-shrink-0" style={{ backgroundColor: cs.color }} />
+                      )}
 
                       {/* ── Info ── */}
-                      <div className="pos-card-body px-2.5 pt-2 pb-2.5 flex flex-col gap-1.5">
-                        <p className="text-[12px] font-semibold text-[rgb(var(--text-primary))] leading-tight line-clamp-2 min-h-[2.2em]">
+                      <div className={cn(
+                        'pos-card-body px-2.5 pt-2 pb-2.5 flex flex-col gap-1.5',
+                        !showImages && 'border border-t-0 border-slate-200/60 dark:border-white/[0.06] rounded-b-2xl',
+                      )}>
+                        <p className={cn(
+                          'text-[12px] font-semibold text-[rgb(var(--text-primary))] leading-tight line-clamp-2',
+                          showImages && 'min-h-[2.2em]',
+                        )}>
                           {p.name}
                         </p>
                         <div className="flex items-center justify-between gap-1">
