@@ -486,10 +486,10 @@ export default function POSPage() {
   // ── Main layout ─────────────────────────────────────────────────────────────
   return (
     <>
-    <div className="flex flex-col lg:flex-row gap-4 lg:h-full lg:max-h-[calc(100vh-120px)]">
+    <div className="flex flex-col lg:flex-row lg:items-start gap-4">
 
       {/* ── Left: Products + Cart ─────────────────────────────────────────── */}
-      <div className="flex-1 flex flex-col gap-3 lg:overflow-hidden">
+      <div className="flex-1 min-w-0 flex flex-col gap-3">
         <PosFirstSaleHint />
 
         {/* Search + categories + grid */}
@@ -685,7 +685,7 @@ export default function POSPage() {
         </div>
 
         {/* Cart items */}
-        <div className="lg:flex-1 card overflow-hidden flex flex-col">
+        <div className="card overflow-hidden flex flex-col">
           <div className="px-4 py-3 border-b border-slate-100 dark:border-white/[0.06] flex items-center justify-between">
             <h3 className="text-[14px] font-semibold text-slate-800 dark:text-white flex items-center gap-2">
               <ShoppingBag size={15} className="text-emerald-500" />
@@ -703,7 +703,7 @@ export default function POSPage() {
             )}
           </div>
 
-          <div className="max-h-72 lg:max-h-none lg:flex-1 overflow-y-auto scrollbar-thin">
+          <div className="max-h-72 overflow-y-auto lg:max-h-none lg:overflow-visible scrollbar-thin">
             {items.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full py-10 text-slate-400 dark:text-slate-600 gap-2">
                 <ShoppingBag size={32} strokeWidth={1.5} />
@@ -800,7 +800,7 @@ export default function POSPage() {
       </div>
 
       {/* ── Right: Customer + Totals + Payment ───────────────────────────── */}
-      <div className="w-full lg:w-72 flex flex-col gap-3">
+      <div className="w-full lg:w-72 flex-shrink-0 flex flex-col gap-3 lg:sticky lg:top-0 lg:self-start">
 
         {/* Customer */}
         <div className="card p-4">
