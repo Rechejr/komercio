@@ -574,12 +574,12 @@ export default function POSPage() {
           </div>
 
           {/* Product grid */}
-          <div className="mt-3 max-h-[320px] overflow-y-auto scrollbar-thin">
+          <div className="mt-3 max-h-[272px] overflow-y-auto scrollbar-thin">
             {isLoading ? (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 2xl:grid-cols-6 gap-2.5">
                 {Array.from({ length: 8 }).map((_, i) => (
                   <div key={i} className="flex flex-col rounded-2xl overflow-hidden">
-                    <div className="skeleton aspect-square w-full" />
+                    <div className="skeleton aspect-[16/10] w-full" />
                     <div className="p-2.5 bg-slate-800/40 space-y-1.5">
                       <div className="skeleton h-3 w-3/4 rounded" />
                       <div className="skeleton h-4 w-1/2 rounded" />
@@ -599,7 +599,7 @@ export default function POSPage() {
                 )}
               </div>
             ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 2xl:grid-cols-6 gap-2.5">
                 {productsData?.map((p: any) => {
                   const cs      = catStyle(p.category?.name);
                   const CatIcon = cs.icon;
@@ -625,7 +625,7 @@ export default function POSPage() {
                       )}
                     >
                       {/* ── Header: image or category color ── */}
-                      <div className="relative w-full aspect-square overflow-hidden">
+                      <div className="relative w-full aspect-[16/10] overflow-hidden">
                         {p.image ? (
                           <>
                             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -637,7 +637,7 @@ export default function POSPage() {
                             className="cat-tile w-full h-full flex items-center justify-center"
                             style={{ '--cat-rgb': cs.rgb } as React.CSSProperties}
                           >
-                            <CatIcon size={32} style={{ color: cs.color }} className="opacity-75" />
+                            <CatIcon size={26} style={{ color: cs.color }} className="opacity-75" />
                           </div>
                         )}
                         {/* Category badge */}
