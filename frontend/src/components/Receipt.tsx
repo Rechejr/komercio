@@ -200,12 +200,12 @@ export function Receipt({
         <div style={{ marginBottom: 12 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#64748b', marginBottom: 3 }}>
             <span>Recibido</span>
-            <span style={{ fontVariantNumeric: 'tabular-nums' }}>$ {formatCurrency(paidAmount)}</span>
+            <span style={{ fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(paidAmount)}</span>
           </div>
           {changeAmount > 0 && (
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, fontWeight: 700, color: '#16a34a' }}>
               <span>Cambio</span>
-              <span style={{ fontVariantNumeric: 'tabular-nums' }}>$ {formatCurrency(changeAmount)}</span>
+              <span style={{ fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(changeAmount)}</span>
             </div>
           )}
         </div>

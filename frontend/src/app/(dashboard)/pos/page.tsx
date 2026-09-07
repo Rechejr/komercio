@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { Receipt, type ReceiptItem } from '@/components/Receipt';
 import { BarcodeScanner } from '@/components/ui/BarcodeScanner';
+import { Portal } from '@/components/ui/Portal';
 import { WhatsAppIcon } from '@/components/ui/WhatsAppIcon';
 import { shareSaleViaWhatsApp } from '@/lib/receiptShare';
 import { PosFirstSaleHint } from '@/components/onboarding/PosFirstSaleHint';
@@ -140,6 +141,7 @@ export default function POSPage() {
   // Selector de talla/color al vender un producto de ropa.
   const [variantPicker, setVariantPicker] = useState<{ product: any; variants: any[] } | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+  const montoRef = useRef<HTMLInputElement>(null);
 
   // Medios de pago configurables. paymentMethod/splitMethod/creditPayMethod pasan a
   // guardar el ID del medio (o 'MIXED' para el pago mixto).
@@ -403,6 +405,38 @@ export default function POSPage() {
   }
 
   // ── Success screen ──────────────────────────────────────────────────────────
+  // Cerrar la ventana de cobro deja todo como estaba, sin arrastrar el error
+  // del intento anterior a la próxima venta.
+  function cerrarCobro() {
+    setShowPayment(false);
+    setSaleError('');
+  }
+
+  // Este cliente cobra con mouse y teclado: al abrir, el cursor ya está en el
+  // monto recibido; Enter confirma y Esc cierra, sin sacar la mano del teclado.
+  useEffect(() => {
+    if (!showPayment) return;
+    const t = setTimeout(() => montoRef.current?.select(), 80);
+
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') { cerrarCobro(); return; }
+      if (e.key !== 'Enter') return;
+      // En un textarea o dentro de un botón, Enter significa otra cosa.
+      const el = e.target as HTMLElement | null;
+      if (el && (el.tagName === 'TEXTAREA' || el.tagName === 'BUTTON')) return;
+      if (saleMutation.isPending) return;
+      if (!puedeConfirmarVenta({
+        paymentMethod, paidAmount, total, mixedTotal, isCredit,
+        enviando: saleMutation.isPending,
+      })) return;
+      e.preventDefault();
+      handleSale();
+    }
+    window.addEventListener('keydown', onKey);
+    return () => { clearTimeout(t); window.removeEventListener('keydown', onKey); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showPayment, paymentMethod, paidAmount, total, mixedTotal, isCredit, saleMutation.isPending]);
+
   if (lastSale) {
     return (
       <AnimatePresence>
@@ -1007,394 +1041,430 @@ export default function POSPage() {
           </div>
         </div>
 
-        {/* Payment panel */}
-        {showPayment ? (
-          <div className="card p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="text-[14px] font-semibold text-slate-800 dark:text-white">Cobrar</h3>
-              <button
-                type="button"
-                aria-label="Cerrar cobro"
-                onClick={() => { setShowPayment(false); setSaleError(''); }}
-                className="w-7 h-7 flex items-center justify-center rounded-md text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/[0.06] transition-colors"
-              >
-                <X size={14} />
-              </button>
-            </div>
-
-            {saleError && (
-              <div className="flex items-start gap-2 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 rounded-xl px-3 py-2.5 text-[12px] text-red-700 dark:text-red-400">
-                <AlertCircle size={13} className="flex-shrink-0 mt-0.5" />
-                <div className="flex-1">
-                  <p className="font-semibold">No se pudo registrar</p>
-                  <p className="mt-0.5 opacity-80">{saleError}</p>
-                </div>
-                <button type="button" aria-label="Cerrar error" onClick={() => setSaleError('')} className="opacity-60 hover:opacity-100 transition-opacity">
-                  <X size={13} />
-                </button>
-              </div>
-            )}
-
-            {/* Payment methods */}
-            <div>
-              <label className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2 block">Método de pago</label>
-              <div className="grid grid-cols-2 gap-1.5">
-                {[...paymentAccounts.map((a) => ({ value: a.id, label: a.name })), { value: 'MIXED', label: 'Mixto' }].map((opt) => (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    onClick={() => setPaymentMethod(opt.value)}
-                    className={cn(
-                      'text-[12px] py-2 px-2 rounded-xl border font-semibold transition-all duration-150',
-                      paymentMethod === opt.value
-                        ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
-                        : 'border-slate-200 dark:border-slate-700/60 text-slate-600 dark:text-slate-400 hover:border-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/50',
-                    )}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {paymentMethod === 'MIXED' ? (
-              <div className="space-y-2">
-                <div className="flex gap-1.5">
-                  <select
-                    aria-label="Método de pago"
-                    value={splitMethod}
-                    onChange={(e) => setSplitMethod(e.target.value)}
-                    className="flex-1 min-w-0 px-2 py-2 border border-slate-200 dark:border-slate-700/60 rounded-xl text-[16px] sm:text-[12px] focus:outline-none focus:ring-2 focus:ring-emerald-500/30 bg-slate-50 dark:bg-slate-800/60 dark:text-white"
-                  >
-                    {paymentAccounts.map((a) => (
-                      <option key={a.id} value={a.id}>{a.name}</option>
-                    ))}
-                  </select>
-                  <input
-                    type="number"
-                    inputMode="decimal"
-                    value={splitAmount}
-                    onChange={(e) => setSplitAmount(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && addSplitPayment()}
-                    placeholder={mixedRemaining > 0 ? String(Math.round(mixedRemaining)) : '0'}
-                    className="w-24 px-2 py-2 border border-slate-200 dark:border-slate-700/60 rounded-xl text-[16px] sm:text-[13px] focus:outline-none focus:ring-2 focus:ring-emerald-500/30 dark:bg-slate-800 dark:text-white"
-                  />
-                  <button
-                    type="button"
-                    aria-label="Agregar pago"
-                    onClick={addSplitPayment}
-                    className="px-3 py-2 bg-emerald-600 text-white rounded-xl text-[13px] font-bold hover:bg-emerald-700 transition-colors flex-shrink-0"
-                  >
-                    +
-                  </button>
-                </div>
-                {mixedPayments.length > 0 && (
-                  <div className="bg-slate-50 dark:bg-slate-800/40 rounded-xl overflow-hidden border border-slate-100 dark:border-white/[0.06]">
-                    {mixedPayments.map((p, i) => (
-                      <div key={i} className="flex items-center justify-between px-3 py-2 border-b border-slate-100 dark:border-white/[0.04] last:border-b-0">
-                        <span className="text-[12px] text-slate-600 dark:text-slate-400">{p.name || labelPago(allAccounts, p.paymentAccountId, p.method)}</span>
-                        <div className="flex items-center gap-2">
-                          <span className="text-[13px] font-semibold text-slate-800 dark:text-white tabular">{formatCurrency(p.amount)}</span>
-                          <button type="button" aria-label="Quitar pago" onClick={() => removeSplitPayment(i)} className="text-slate-300 hover:text-red-500 transition-colors">
-                            <X size={12} />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                    <div className="flex items-center justify-between px-3 py-2 border-t border-slate-200 dark:border-white/[0.06] bg-white dark:bg-slate-800/20">
-                      <span className="text-[12px] font-semibold text-slate-700 dark:text-slate-300">Total registrado</span>
-                      <span className={cn(
-                        'text-[13px] font-bold tabular',
-                        mixedTotal >= total ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400',
-                      )}>
-                        {formatCurrency(mixedTotal)}
-                        {mixedTotal >= total ? ' ✓' : ` (falta ${formatCurrency(mixedRemaining)})`}
-                      </span>
-                    </div>
-                  </div>
-                )}
-                {mixedTotal > total && (
-                  <div className="bg-emerald-50 dark:bg-emerald-500/10 rounded-xl p-2.5 text-center border border-emerald-100 dark:border-emerald-500/20">
-                    <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold uppercase tracking-wide">Cambio</p>
-                    <p className="font-bold text-emerald-700 dark:text-emerald-400 text-[18px] tabular">{formatCurrency(mixedTotal - total)}</p>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <>
-                <div>
-                  <label className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5 block">Monto recibido</label>
-                  <input
-                    type="number"
-                    inputMode="decimal"
-                    value={paidAmount}
-                    onChange={(e) => setPaidAmount(e.target.value)}
-                    placeholder={formatCurrency(total)}
-                    className={inputCls}
-                  />
-                  <div className="flex flex-wrap gap-1 mt-1.5">
-                    {[5000, 10000, 20000, 50000, 100000, 200000]
-                      .filter((d) => d >= total)
-                      .slice(0, 4)
-                      .map((d) => (
-                        <button
-                          key={d}
-                          type="button"
-                          onClick={() => setPaidAmount(String(d))}
-                          className="px-2 py-0.5 text-[11px] rounded-full border border-slate-200 dark:border-slate-700/60 text-slate-600 dark:text-slate-400 hover:border-emerald-400 hover:text-emerald-600 transition-colors"
-                        >
-                          ${(d / 1000).toFixed(0)}k
-                        </button>
-                      ))}
-                    <button
-                      type="button"
-                      onClick={() => setPaidAmount(String(Math.ceil(total)))}
-                      className="px-2 py-0.5 text-[11px] rounded-full border border-emerald-200 dark:border-emerald-500/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 transition-colors"
-                    >
-                      Exacto
-                    </button>
-                  </div>
-                </div>
-                {!isCredit && parseFloat(paidAmount || '0') > 0 && parseFloat(paidAmount) < total && (
-                  <div className="bg-amber-50 dark:bg-amber-500/10 rounded-xl p-2.5 text-center border border-amber-100 dark:border-amber-500/20">
-                    <p className="text-[11px] text-amber-700 dark:text-amber-400 font-semibold uppercase tracking-wide">Falta</p>
-                    <p className="font-bold text-amber-700 dark:text-amber-400 text-[18px] tabular">{formatCurrency(total - parseFloat(paidAmount))}</p>
-                  </div>
-                )}
-                {isCashSelected && parseFloat(paidAmount) >= total && parseFloat(paidAmount) > 0 && (
-                  <div className="bg-emerald-50 dark:bg-emerald-500/10 rounded-xl p-2.5 text-center border border-emerald-100 dark:border-emerald-500/20">
-                    <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold uppercase tracking-wide">Cambio</p>
-                    <p className="font-bold text-emerald-700 dark:text-emerald-400 text-[18px] tabular">{formatCurrency(change)}</p>
-                  </div>
-                )}
-              </>
-            )}
-
-            <div>
-              <label className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5 block">Observaciones</label>
-              <input
-                type="text"
-                value={saleNotes}
-                onChange={(e) => setSaleNotes(e.target.value)}
-                placeholder="Opcional..."
-                maxLength={200}
-                className={inputCls}
-              />
-            </div>
-
-            {isFree ? (
-              <button
-                type="button"
-                onClick={openUpgrade}
-                className="flex items-center gap-2 text-[12px] text-amber-600 dark:text-amber-400 hover:text-amber-700 transition-colors"
-              >
-                <Zap size={12} className="fill-amber-500 text-amber-500" />
-                Fiado / Crédito — Solo Plan Pro
-              </button>
-            ) : (
-              <label className="flex items-center gap-2 text-[13px] text-slate-600 dark:text-slate-400 cursor-pointer">
-                <input type="checkbox" checked={isCredit} onChange={(e) => setIsCredit(e.target.checked)} className="rounded accent-emerald-600" />
-                Fiado / Crédito
-              </label>
-            )}
-
-            {/* Forma de pago del fiado: de una sola vez, o a cuotas mensuales. */}
-            {isCredit && (
-              <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 px-3 py-2.5 space-y-2.5">
-                <div className="flex gap-1.5">
-                  <button
-                    type="button" onClick={() => setNumCuotas(0)}
-                    className={`flex-1 text-[12px] font-medium px-2 py-1.5 rounded-lg border transition ${
-                      numCuotas < 2
-                        ? 'bg-emerald-600 border-emerald-600 text-white'
-                        : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300'
-                    }`}
-                  >
-                    Pago único
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setNumCuotas(numCuotas >= 2 ? numCuotas : 3); if (!primeraCuota) setPrimeraCuota(proximoMesISO()); }}
-                    className={`flex-1 text-[12px] font-medium px-2 py-1.5 rounded-lg border transition ${
-                      numCuotas >= 2
-                        ? 'bg-emerald-600 border-emerald-600 text-white'
-                        : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300'
-                    }`}
-                  >
-                    Por cuotas
-                  </button>
-                </div>
-
-                {numCuotas >= 2 && (() => {
-                  const saldo = Math.max(0, Math.round(total - montoPagado({ paymentMethod, paidAmount, total, mixedTotal, isCredit })));
-                  const plan = armarPlan(saldo, numCuotas, Number(tasaInteres) || 0, primeraCuota || proximoMesISO(),
-                    montosCuotas.length === numCuotas ? montosCuotas : undefined);
-                  const suma = plan.cuotas.reduce((s, c) => s + c.monto, 0);
-                  const descuadre = suma - plan.total;
-                  return (
-                    <div className="space-y-2.5">
-                      <div className="grid grid-cols-3 gap-2">
-                        <div>
-                          <label className="block text-[11px] text-slate-500 dark:text-slate-400 mb-1">Cuotas</label>
-                          <input
-                            type="number" min={2} max={MAX_CUOTAS} value={numCuotas}
-                            onChange={(e) => {
-                              const n = Math.max(2, Math.min(MAX_CUOTAS, Number(e.target.value) || 2));
-                              setNumCuotas(n);
-                              setMontosCuotas([]); // cambió el plan: se vuelve al reparto parejo
-                            }}
-                            className="w-full px-2 py-1.5 text-[16px] sm:text-[13px] rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-[11px] text-slate-500 dark:text-slate-400 mb-1">Interés %/mes</label>
-                          <input
-                            type="number" min={0} max={100} step="0.1" value={tasaInteres} placeholder="0"
-                            onChange={(e) => { setTasaInteres(e.target.value); setMontosCuotas([]); }}
-                            className="w-full px-2 py-1.5 text-[16px] sm:text-[13px] rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-[11px] text-slate-500 dark:text-slate-400 mb-1">1ª cuota</label>
-                          <input
-                            type="date" value={primeraCuota || proximoMesISO()}
-                            onChange={(e) => setPrimeraCuota(e.target.value)}
-                            className="w-full px-2 py-1.5 text-[16px] sm:text-[12px] rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
-                          />
-                        </div>
-                      </div>
-
-                      {/* Resumen: el cliente debe saber el total ANTES de firmar. */}
-                      <div className="text-[12px] text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 rounded-lg px-2.5 py-2 space-y-0.5">
-                        <div className="flex justify-between"><span>Saldo a financiar</span><span className="tabular-nums">{formatCurrency(saldo)}</span></div>
-                        {plan.interes > 0 && (
-                          <div className="flex justify-between text-amber-600 dark:text-amber-400">
-                            <span>Interés ({tasaInteres}% × {numCuotas})</span>
-                            <span className="tabular-nums">+{formatCurrency(plan.interes)}</span>
-                          </div>
-                        )}
-                        <div className="flex justify-between font-bold pt-0.5 border-t border-slate-100 dark:border-slate-700">
-                          <span>Total a pagar</span><span className="tabular-nums">{formatCurrency(plan.total)}</span>
-                        </div>
-                      </div>
-
-                      {/* Cada cuota, editable. El vendedor ajusta si quiere una
-                          primera más alta o redondear la última. */}
-                      <div className="max-h-44 overflow-y-auto space-y-1">
-                        {plan.cuotas.map((c, i) => (
-                          <div key={c.numero} className="flex items-center gap-2 text-[12px]">
-                            <span className="w-6 text-slate-400 tabular-nums">{c.numero}.</span>
-                            <span className="flex-1 text-slate-500 dark:text-slate-400">
-                              {c.fecha.toISOString().slice(8, 10)}/{c.fecha.toISOString().slice(5, 7)}/{c.fecha.getUTCFullYear()}
-                            </span>
-                            <input
-                              type="number" min={1} value={c.monto}
-                              onChange={(e) => {
-                                const copia = plan.cuotas.map((x) => x.monto);
-                                copia[i] = Math.max(0, Math.round(Number(e.target.value) || 0));
-                                setMontosCuotas(copia);
-                              }}
-                              className="w-28 px-2 py-1 text-[16px] sm:text-[12px] text-right tabular-nums rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
-                            />
-                          </div>
-                        ))}
-                      </div>
-
-                      {/* Si los montos ajustados no suman el total, se avisa aquí
-                          mismo: el servidor lo rechazaría igual, pero es mejor
-                          verlo antes de intentar cobrar. */}
-                      {descuadre !== 0 && (
-                        <p className="text-[11.5px] text-red-600 dark:text-red-400 leading-snug">
-                          Las cuotas suman {formatCurrency(suma)}: {descuadre > 0 ? 'sobran' : 'faltan'}{' '}
-                          {formatCurrency(Math.abs(descuadre))} para llegar a {formatCurrency(plan.total)}.
-                        </p>
-                      )}
-                      {montosCuotas.length > 0 && (
-                        <button
-                          type="button" onClick={() => setMontosCuotas([])}
-                          className="text-[11.5px] text-emerald-600 hover:underline"
-                        >
-                          Volver al reparto parejo
-                        </button>
-                      )}
-                    </div>
-                  );
-                })()}
-
-                {numCuotas < 2 && (
-                  <>
-                <p className="text-[12px] font-medium text-slate-600 dark:text-slate-300 mb-2">
-                  ¿Cuándo lo paga? <span className="text-slate-400 font-normal">(opcional)</span>
-                </p>
-                <div className="flex flex-wrap gap-1.5 mb-2">
-                  {[
-                    { label: '15 días', dias: 15 },
-                    { label: '30 días', dias: 30 },
-                    { label: '45 días', dias: 45 },
-                  ].map(({ label, dias }) => {
-                    const f = new Date(Date.now() + dias * 86_400_000).toISOString().slice(0, 10);
-                    const activo = creditDueDate === f;
-                    return (
-                      <button
-                        key={dias} type="button"
-                        onClick={() => setCreditDueDate(activo ? '' : f)}
-                        className={`text-[12px] font-medium px-2.5 py-1.5 rounded-lg border transition ${
-                          activo
-                            ? 'bg-emerald-600 border-emerald-600 text-white'
-                            : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:border-emerald-400'
-                        }`}
-                      >
-                        {label}
-                      </button>
-                    );
-                  })}
-                  {creditDueDate && (
-                    <button
-                      type="button" onClick={() => setCreditDueDate('')}
-                      className="text-[12px] text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 px-2 py-1.5"
-                    >
-                      Sin plazo
-                    </button>
-                  )}
-                </div>
-                <input
-                  type="date"
-                  value={creditDueDate}
-                  min={new Date().toISOString().slice(0, 10)}
-                  onChange={(e) => setCreditDueDate(e.target.value)}
-                  aria-label="Fecha en que el cliente pagará el fiado"
-                  className="w-full px-3 py-2 text-[16px] sm:text-[13px] rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
-                />
-                  </>
-                )}
-              </div>
-            )}
-
-            <button
-              type="button"
-              onClick={handleSale}
-              disabled={!puedeConfirmarVenta({
-                paymentMethod, paidAmount, total, mixedTotal, isCredit,
-                enviando: saleMutation.isPending,
-              })}
-              className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-bold py-3 rounded-xl transition-colors flex items-center justify-center gap-2 shadow-sm shadow-emerald-600/25"
-            >
-              {saleMutation.isPending ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle size={16} />}
-              {saleMutation.isPending ? 'Procesando...' : 'Confirmar venta'}
-            </button>
-          </div>
-        ) : (
-          <button
-            type="button"
-            onClick={() => items.length > 0 ? setShowPayment(true) : toast.error('Agrega productos primero')}
+        {/* El cobro se abre en su propia ventana: aquí solo queda el botón. */}
+        <button
+          type="button"
+          onClick={() => items.length > 0 ? setShowPayment(true) : toast.error('Agrega productos primero')}
             className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-4 rounded-xl transition-colors flex items-center justify-center gap-2 text-[15px] shadow-sm shadow-emerald-600/25 active:scale-[0.99]"
           >
             <DollarSign size={18} />
-            Cobrar {total > 0 ? formatCurrency(total) : ''}
-          </button>
-        )}
+          Cobrar {total > 0 ? formatCurrency(total) : ''}
+        </button>
       </div>
     </div>
+
+    {/* ── Ventana de cobro ──────────────────────────────────────────────────
+        Antes esto vivía en la columna de 288 px del resumen: los botones de
+        billete medían 20 px de alto y el cambio se leía en letra de 18 px, en
+        el momento en que hay plata de por medio y un cliente esperando. Ahora
+        el cobro se toma su propia ventana, con el total y el cambio grandes. */}
+    {showPayment && (
+      <Portal>
+        <div
+          className="fixed inset-0 bg-black/60 backdrop-blur-[2px] z-50 flex items-center justify-center p-4"
+          onClick={(e) => { if (e.target === e.currentTarget) cerrarCobro(); }}
+        >
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl w-full max-w-xl shadow-2xl max-h-[92dvh] overflow-hidden flex flex-col">
+
+            {/* Encabezado: el total es lo primero que se mira */}
+            <div className="flex items-start justify-between gap-3 px-6 pt-5 pb-4 border-b border-slate-100 dark:border-white/[0.06] flex-shrink-0">
+              <div className="min-w-0">
+                <p className="text-[12px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+                  Total a pagar
+                </p>
+                <p className="text-[34px] leading-none font-black text-emerald-600 dark:text-emerald-400 tabular-nums mt-1">
+                  {formatCurrency(total)}
+                </p>
+                <p className="text-[12px] text-slate-500 mt-1.5">
+                  {items.length} producto{items.length === 1 ? '' : 's'}
+                  {selectedCustomer?.name ? ` · ${selectedCustomer.name}` : ''}
+                </p>
+              </div>
+              <button
+                type="button"
+                aria-label="Cerrar cobro"
+                onClick={cerrarCobro}
+                className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/[0.06] transition-colors flex-shrink-0"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Cuerpo */}
+            <div className="px-6 py-4 space-y-4 overflow-y-auto min-h-0 flex-1 scrollbar-thin">
+
+        {saleError && (
+          <div className="flex items-start gap-2 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 rounded-xl px-3 py-2.5 text-[12px] text-red-700 dark:text-red-400">
+            <AlertCircle size={13} className="flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="font-semibold">No se pudo registrar</p>
+              <p className="mt-0.5 opacity-80">{saleError}</p>
+            </div>
+            <button type="button" aria-label="Cerrar error" onClick={() => setSaleError('')} className="opacity-60 hover:opacity-100 transition-opacity">
+              <X size={13} />
+            </button>
+          </div>
+        )}
+
+        {/* Payment methods */}
+        <div>
+          <label className="text-[12px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2 block">Método de pago</label>
+          <div className="grid grid-cols-3 gap-2">
+            {[...paymentAccounts.map((a) => ({ value: a.id, label: a.name })), { value: 'MIXED', label: 'Mixto' }].map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => setPaymentMethod(opt.value)}
+                className={cn(
+                  'text-[13px] py-3 px-2 rounded-xl border font-semibold transition-all duration-150',
+                  paymentMethod === opt.value
+                    ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
+                    : 'border-slate-200 dark:border-slate-700/60 text-slate-600 dark:text-slate-400 hover:border-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/50',
+                )}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {paymentMethod === 'MIXED' ? (
+          <div className="space-y-2">
+            <div className="flex gap-1.5">
+              <select
+                aria-label="Método de pago"
+                value={splitMethod}
+                onChange={(e) => setSplitMethod(e.target.value)}
+                className="flex-1 min-w-0 px-2 py-2 border border-slate-200 dark:border-slate-700/60 rounded-xl text-[16px] sm:text-[12px] focus:outline-none focus:ring-2 focus:ring-emerald-500/30 bg-slate-50 dark:bg-slate-800/60 dark:text-white"
+              >
+                {paymentAccounts.map((a) => (
+                  <option key={a.id} value={a.id}>{a.name}</option>
+                ))}
+              </select>
+              <input
+                type="number"
+                inputMode="decimal"
+                value={splitAmount}
+                onChange={(e) => setSplitAmount(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && addSplitPayment()}
+                placeholder={mixedRemaining > 0 ? String(Math.round(mixedRemaining)) : '0'}
+                className="w-24 px-2 py-2 border border-slate-200 dark:border-slate-700/60 rounded-xl text-[16px] sm:text-[13px] focus:outline-none focus:ring-2 focus:ring-emerald-500/30 dark:bg-slate-800 dark:text-white"
+              />
+              <button
+                type="button"
+                aria-label="Agregar pago"
+                onClick={addSplitPayment}
+                className="px-3 py-2 bg-emerald-600 text-white rounded-xl text-[13px] font-bold hover:bg-emerald-700 transition-colors flex-shrink-0"
+              >
+                +
+              </button>
+            </div>
+            {mixedPayments.length > 0 && (
+              <div className="bg-slate-50 dark:bg-slate-800/40 rounded-xl overflow-hidden border border-slate-100 dark:border-white/[0.06]">
+                {mixedPayments.map((p, i) => (
+                  <div key={i} className="flex items-center justify-between px-3 py-2 border-b border-slate-100 dark:border-white/[0.04] last:border-b-0">
+                    <span className="text-[12px] text-slate-600 dark:text-slate-400">{p.name || labelPago(allAccounts, p.paymentAccountId, p.method)}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[13px] font-semibold text-slate-800 dark:text-white tabular">{formatCurrency(p.amount)}</span>
+                      <button type="button" aria-label="Quitar pago" onClick={() => removeSplitPayment(i)} className="text-slate-300 hover:text-red-500 transition-colors">
+                        <X size={12} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                <div className="flex items-center justify-between px-3 py-2 border-t border-slate-200 dark:border-white/[0.06] bg-white dark:bg-slate-800/20">
+                  <span className="text-[12px] font-semibold text-slate-700 dark:text-slate-300">Total registrado</span>
+                  <span className={cn(
+                    'text-[13px] font-bold tabular',
+                    mixedTotal >= total ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400',
+                  )}>
+                    {formatCurrency(mixedTotal)}
+                    {mixedTotal >= total ? ' ✓' : ` (falta ${formatCurrency(mixedRemaining)})`}
+                  </span>
+                </div>
+              </div>
+            )}
+            {mixedTotal > total && (
+              <div className="bg-emerald-50 dark:bg-emerald-500/10 rounded-xl py-4 text-center border border-emerald-100 dark:border-emerald-500/20">
+                <p className="text-[12px] text-emerald-600 dark:text-emerald-400 font-semibold uppercase tracking-wide">Cambio</p>
+                <p className="font-black text-emerald-700 dark:text-emerald-400 text-[36px] leading-none tabular-nums mt-1">{formatCurrency(mixedTotal - total)}</p>
+              </div>
+            )}
+          </div>
+        ) : (
+          <>
+            <div>
+              <label className="text-[12px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5 block">Monto recibido</label>
+              <input
+                ref={montoRef}
+                type="number"
+                inputMode="decimal"
+                value={paidAmount}
+                onChange={(e) => setPaidAmount(e.target.value)}
+                placeholder={formatCurrency(total)}
+                className="w-full px-4 py-3 text-[26px] font-bold tabular-nums rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+              />
+              <div className="flex flex-wrap gap-1.5 mt-2.5">
+                {[5000, 10000, 20000, 50000, 100000, 200000]
+                  .filter((d) => d >= total)
+                  .slice(0, 4)
+                  .map((d) => (
+                    <button
+                      key={d}
+                      type="button"
+                      onClick={() => setPaidAmount(String(d))}
+                      className="px-4 py-2 text-[14px] font-semibold rounded-xl border border-slate-200 dark:border-slate-700/60 text-slate-600 dark:text-slate-300 hover:border-emerald-400 hover:text-emerald-600 transition-colors"
+                    >
+                      ${(d / 1000).toFixed(0)}k
+                    </button>
+                  ))}
+                <button
+                  type="button"
+                  onClick={() => setPaidAmount(String(Math.ceil(total)))}
+                  className="px-4 py-2 text-[14px] font-semibold rounded-xl border border-emerald-300 dark:border-emerald-500/40 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 transition-colors"
+                >
+                  Exacto
+                </button>
+              </div>
+            </div>
+            {!isCredit && parseFloat(paidAmount || '0') > 0 && parseFloat(paidAmount) < total && (
+              <div className="bg-amber-50 dark:bg-amber-500/10 rounded-xl py-4 text-center border border-amber-100 dark:border-amber-500/20">
+                <p className="text-[12px] text-amber-700 dark:text-amber-400 font-semibold uppercase tracking-wide">Falta</p>
+                <p className="font-black text-amber-700 dark:text-amber-400 text-[32px] leading-none tabular-nums mt-1">{formatCurrency(total - parseFloat(paidAmount))}</p>
+              </div>
+            )}
+            {isCashSelected && parseFloat(paidAmount) >= total && parseFloat(paidAmount) > 0 && (
+              <div className="bg-emerald-50 dark:bg-emerald-500/10 rounded-xl py-4 text-center border border-emerald-100 dark:border-emerald-500/20">
+                <p className="text-[12px] text-emerald-600 dark:text-emerald-400 font-semibold uppercase tracking-wide">Cambio</p>
+                <p className="font-black text-emerald-700 dark:text-emerald-400 text-[36px] leading-none tabular-nums mt-1">{formatCurrency(change)}</p>
+              </div>
+            )}
+          </>
+        )}
+
+        <div>
+          <label className="text-[12px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5 block">Observaciones</label>
+          <input
+            type="text"
+            value={saleNotes}
+            onChange={(e) => setSaleNotes(e.target.value)}
+            placeholder="Opcional..."
+            maxLength={200}
+            className={inputCls}
+          />
+        </div>
+
+        {isFree ? (
+          <button
+            type="button"
+            onClick={openUpgrade}
+            className="flex items-center gap-2 text-[12px] text-amber-600 dark:text-amber-400 hover:text-amber-700 transition-colors"
+          >
+            <Zap size={12} className="fill-amber-500 text-amber-500" />
+            Fiado / Crédito — Solo Plan Pro
+          </button>
+        ) : (
+          <label className="flex items-center gap-2 text-[13px] text-slate-600 dark:text-slate-400 cursor-pointer">
+            <input type="checkbox" checked={isCredit} onChange={(e) => setIsCredit(e.target.checked)} className="rounded accent-emerald-600" />
+            Fiado / Crédito
+          </label>
+        )}
+
+        {/* Forma de pago del fiado: de una sola vez, o a cuotas mensuales. */}
+        {isCredit && (
+          <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 px-3 py-2.5 space-y-2.5">
+            <div className="flex gap-1.5">
+              <button
+                type="button" onClick={() => setNumCuotas(0)}
+                className={`flex-1 text-[12px] font-medium px-2 py-1.5 rounded-lg border transition ${
+                  numCuotas < 2
+                    ? 'bg-emerald-600 border-emerald-600 text-white'
+                    : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300'
+                }`}
+              >
+                Pago único
+              </button>
+              <button
+                type="button"
+                onClick={() => { setNumCuotas(numCuotas >= 2 ? numCuotas : 3); if (!primeraCuota) setPrimeraCuota(proximoMesISO()); }}
+                className={`flex-1 text-[12px] font-medium px-2 py-1.5 rounded-lg border transition ${
+                  numCuotas >= 2
+                    ? 'bg-emerald-600 border-emerald-600 text-white'
+                    : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300'
+                }`}
+              >
+                Por cuotas
+              </button>
+            </div>
+
+            {numCuotas >= 2 && (() => {
+              const saldo = Math.max(0, Math.round(total - montoPagado({ paymentMethod, paidAmount, total, mixedTotal, isCredit })));
+              const plan = armarPlan(saldo, numCuotas, Number(tasaInteres) || 0, primeraCuota || proximoMesISO(),
+                montosCuotas.length === numCuotas ? montosCuotas : undefined);
+              const suma = plan.cuotas.reduce((s, c) => s + c.monto, 0);
+              const descuadre = suma - plan.total;
+              return (
+                <div className="space-y-2.5">
+                  <div className="grid grid-cols-3 gap-2">
+                    <div>
+                      <label className="block text-[11px] text-slate-500 dark:text-slate-400 mb-1">Cuotas</label>
+                      <input
+                        type="number" min={2} max={MAX_CUOTAS} value={numCuotas}
+                        onChange={(e) => {
+                          const n = Math.max(2, Math.min(MAX_CUOTAS, Number(e.target.value) || 2));
+                          setNumCuotas(n);
+                          setMontosCuotas([]); // cambió el plan: se vuelve al reparto parejo
+                        }}
+                        className="w-full px-2 py-1.5 text-[16px] sm:text-[13px] rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] text-slate-500 dark:text-slate-400 mb-1">Interés %/mes</label>
+                      <input
+                        type="number" min={0} max={100} step="0.1" value={tasaInteres} placeholder="0"
+                        onChange={(e) => { setTasaInteres(e.target.value); setMontosCuotas([]); }}
+                        className="w-full px-2 py-1.5 text-[16px] sm:text-[13px] rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] text-slate-500 dark:text-slate-400 mb-1">1ª cuota</label>
+                      <input
+                        type="date" value={primeraCuota || proximoMesISO()}
+                        onChange={(e) => setPrimeraCuota(e.target.value)}
+                        className="w-full px-2 py-1.5 text-[16px] sm:text-[12px] rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Resumen: el cliente debe saber el total ANTES de firmar. */}
+                  <div className="text-[12px] text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 rounded-lg px-2.5 py-2 space-y-0.5">
+                    <div className="flex justify-between"><span>Saldo a financiar</span><span className="tabular-nums">{formatCurrency(saldo)}</span></div>
+                    {plan.interes > 0 && (
+                      <div className="flex justify-between text-amber-600 dark:text-amber-400">
+                        <span>Interés ({tasaInteres}% × {numCuotas})</span>
+                        <span className="tabular-nums">+{formatCurrency(plan.interes)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between font-bold pt-0.5 border-t border-slate-100 dark:border-slate-700">
+                      <span>Total a pagar</span><span className="tabular-nums">{formatCurrency(plan.total)}</span>
+                    </div>
+                  </div>
+
+                  {/* Cada cuota, editable. El vendedor ajusta si quiere una
+                      primera más alta o redondear la última. */}
+                  <div className="max-h-44 overflow-y-auto space-y-1">
+                    {plan.cuotas.map((c, i) => (
+                      <div key={c.numero} className="flex items-center gap-2 text-[12px]">
+                        <span className="w-6 text-slate-400 tabular-nums">{c.numero}.</span>
+                        <span className="flex-1 text-slate-500 dark:text-slate-400">
+                          {c.fecha.toISOString().slice(8, 10)}/{c.fecha.toISOString().slice(5, 7)}/{c.fecha.getUTCFullYear()}
+                        </span>
+                        <input
+                          type="number" min={1} value={c.monto}
+                          onChange={(e) => {
+                            const copia = plan.cuotas.map((x) => x.monto);
+                            copia[i] = Math.max(0, Math.round(Number(e.target.value) || 0));
+                            setMontosCuotas(copia);
+                          }}
+                          className="w-28 px-2 py-1 text-[16px] sm:text-[12px] text-right tabular-nums rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+                        />
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Si los montos ajustados no suman el total, se avisa aquí
+                      mismo: el servidor lo rechazaría igual, pero es mejor
+                      verlo antes de intentar cobrar. */}
+                  {descuadre !== 0 && (
+                    <p className="text-[11.5px] text-red-600 dark:text-red-400 leading-snug">
+                      Las cuotas suman {formatCurrency(suma)}: {descuadre > 0 ? 'sobran' : 'faltan'}{' '}
+                      {formatCurrency(Math.abs(descuadre))} para llegar a {formatCurrency(plan.total)}.
+                    </p>
+                  )}
+                  {montosCuotas.length > 0 && (
+                    <button
+                      type="button" onClick={() => setMontosCuotas([])}
+                      className="text-[11.5px] text-emerald-600 hover:underline"
+                    >
+                      Volver al reparto parejo
+                    </button>
+                  )}
+                </div>
+              );
+            })()}
+
+            {numCuotas < 2 && (
+              <>
+            <p className="text-[12px] font-medium text-slate-600 dark:text-slate-300 mb-2">
+              ¿Cuándo lo paga? <span className="text-slate-400 font-normal">(opcional)</span>
+            </p>
+            <div className="flex flex-wrap gap-1.5 mb-2">
+              {[
+                { label: '15 días', dias: 15 },
+                { label: '30 días', dias: 30 },
+                { label: '45 días', dias: 45 },
+              ].map(({ label, dias }) => {
+                const f = new Date(Date.now() + dias * 86_400_000).toISOString().slice(0, 10);
+                const activo = creditDueDate === f;
+                return (
+                  <button
+                    key={dias} type="button"
+                    onClick={() => setCreditDueDate(activo ? '' : f)}
+                    className={`text-[12px] font-medium px-2.5 py-1.5 rounded-lg border transition ${
+                      activo
+                        ? 'bg-emerald-600 border-emerald-600 text-white'
+                        : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:border-emerald-400'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+              {creditDueDate && (
+                <button
+                  type="button" onClick={() => setCreditDueDate('')}
+                  className="text-[12px] text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 px-2 py-1.5"
+                >
+                  Sin plazo
+                </button>
+              )}
+            </div>
+            <input
+              type="date"
+              value={creditDueDate}
+              min={new Date().toISOString().slice(0, 10)}
+              onChange={(e) => setCreditDueDate(e.target.value)}
+              aria-label="Fecha en que el cliente pagará el fiado"
+              className="w-full px-3 py-2 text-[16px] sm:text-[13px] rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+            />
+              </>
+            )}
+          </div>
+        )}
+            </div>
+
+            {/* Pie: confirmar siempre a la vista */}
+            <div className="px-6 py-4 border-t border-slate-100 dark:border-white/[0.06] flex-shrink-0">
+              <button
+                type="button"
+                onClick={handleSale}
+                disabled={!puedeConfirmarVenta({
+                  paymentMethod, paidAmount, total, mixedTotal, isCredit,
+                  enviando: saleMutation.isPending,
+                })}
+                className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-bold py-4 rounded-xl transition-colors flex items-center justify-center gap-2 text-[16px] shadow-sm shadow-emerald-600/25"
+              >
+                {saleMutation.isPending ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle size={18} />}
+                {saleMutation.isPending ? 'Procesando...' : 'Confirmar venta'}
+              </button>
+              <p className="text-[11px] text-slate-400 text-center mt-2">
+                Enter para confirmar · Esc para cerrar
+              </p>
+            </div>
+          </div>
+        </div>
+      </Portal>
+    )}
 
     {/* ── Credit payment modal ───────────────────────────────────────────── */}
     {showCreditPayment && customerId && (
