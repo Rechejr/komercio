@@ -34,7 +34,7 @@ export const creditController = {
           take: limit,
           orderBy: { createdAt: 'desc' },
           include: {
-            customer: { select: { id: true, name: true, phone: true } },
+            customer: { select: { id: true, name: true, document: true, phone: true } },
             sale: { select: { invoiceNumber: true } },
             _count: { select: { payments: true } },
           },

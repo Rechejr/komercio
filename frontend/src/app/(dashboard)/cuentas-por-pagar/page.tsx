@@ -103,9 +103,18 @@ export default function CuentasPorPagarPage() {
     onError: (err: any) => toast.error(err.response?.data?.error || 'Error al registrar el pago'),
   });
 
-  const rows = (data?.data || []).filter((c: any) =>
-    !search || c.supplier?.name?.toLowerCase().includes(search.toLowerCase()) || c.purchase?.invoiceNumber?.toLowerCase().includes(search.toLowerCase()),
-  );
+  // Buscar por NIT es lo más seguro cuando hay proveedores de nombre parecido.
+  // Se comparan solo los dígitos/letras, así da igual si lo escriben con puntos,
+  // guiones o el dígito de verificación pegado.
+  const soloAlfanum = (v: string) => (v || '').replace(/[^0-9a-zA-Z]/g, '').toLowerCase();
+  const buscado = search.trim().toLowerCase();
+  const buscadoId = soloAlfanum(search);
+  const rows = (data?.data || []).filter((c: any) => {
+    if (!buscado) return true;
+    return c.supplier?.name?.toLowerCase().includes(buscado)
+      || c.purchase?.invoiceNumber?.toLowerCase().includes(buscado)
+      || (!!buscadoId && soloAlfanum(c.supplier?.document || '').includes(buscadoId));
+  });
   const pagination = data?.pagination;
 
   // ── Importar desde Excel ───────────────────────────────────────────────────
@@ -172,7 +181,7 @@ export default function CuentasPorPagarPage() {
         </select>
         <div className="relative flex-1 min-w-[200px]">
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por proveedor o factura…" className={`${inputCls} pl-9`} />
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por proveedor, NIT o factura…" className={`${inputCls} pl-9`} />
         </div>
 
         {/* Rango de fechas */}
@@ -247,6 +256,7 @@ export default function CuentasPorPagarPage() {
             <thead>
               <tr className="border-b border-slate-100 dark:border-white/[0.06]">
                 <th className="text-left px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Proveedor</th>
+                <th className="hidden lg:table-cell text-left px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Identificación</th>
                 <th className="hidden md:table-cell text-left px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Factura</th>
                 <th className="text-right px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Total</th>
                 <th className="hidden sm:table-cell text-right px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Abonado</th>
@@ -258,10 +268,10 @@ export default function CuentasPorPagarPage() {
             <tbody className="divide-y divide-slate-50 dark:divide-white/[0.04]">
               {isLoading ? (
                 [...Array(6)].map((_, i) => (
-                  <tr key={i}>{[...Array(7)].map((_, j) => <td key={j} className="px-4 py-3"><div className="h-4 bg-slate-100 dark:bg-slate-800 rounded-lg animate-pulse" /></td>)}</tr>
+                  <tr key={i}>{[...Array(8)].map((_, j) => <td key={j} className="px-4 py-3"><div className="h-4 bg-slate-100 dark:bg-slate-800 rounded-lg animate-pulse" /></td>)}</tr>
                 ))
               ) : rows.length === 0 ? (
-                <tr><td colSpan={7} className="text-center py-16">
+                <tr><td colSpan={8} className="text-center py-16">
                   <div className="flex flex-col items-center gap-3 text-slate-400 dark:text-slate-600">
                     <HandCoins size={36} strokeWidth={1.5} />
                     <p className="text-[13px]">No hay cuentas por pagar</p>
@@ -269,7 +279,13 @@ export default function CuentasPorPagarPage() {
                 </td></tr>
               ) : rows.map((c: any) => (
                 <tr key={c.id} className="hover:bg-slate-50/60 dark:hover:bg-white/[0.02] transition-colors cursor-pointer" onClick={() => openDetail(c)}>
-                  <td className="px-4 py-3 text-[13px] font-medium text-slate-800 dark:text-white">{c.supplier?.name}</td>
+                  <td className="px-4 py-3 text-[13px] font-medium text-slate-800 dark:text-white">
+                    {c.supplier?.name}
+                    {c.supplier?.document && (
+                      <span className="lg:hidden block text-[11px] font-normal text-slate-400 font-mono">{c.supplier.document}</span>
+                    )}
+                  </td>
+                  <td className="hidden lg:table-cell px-4 py-3 text-[12px] text-slate-500 dark:text-slate-400 font-mono">{c.supplier?.document || '—'}</td>
                   <td className="hidden md:table-cell px-4 py-3 text-[12px] text-slate-500 dark:text-slate-400 font-mono">{c.purchase?.invoiceNumber || '—'}</td>
                   <td className="px-4 py-3 text-right text-[13px] text-slate-600 dark:text-slate-300 tabular-nums">{formatCurrency(c.totalAmount)}</td>
                   <td className="hidden sm:table-cell px-4 py-3 text-right text-[13px] text-emerald-600 dark:text-emerald-400 tabular-nums">{formatCurrency(c.paidAmount)}</td>

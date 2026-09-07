@@ -9,6 +9,7 @@ import { getPagination } from '../utils/pagination';
 import { validate } from '../middlewares/validate';
 import { resolvePayment } from '../utils/paymentAccount';
 import { parseBogotaBoundary } from '../utils/bogotaTime';
+import { normalizarIdentificacion } from '../utils/nit';
 import { planLimit } from '../middlewares/planLimit';
 import { AuthRequest } from '../middlewares/auth';
 import ExcelJS from 'exceljs';
@@ -28,6 +29,9 @@ router.get('/import-template', async (_req, res, next) => {
 
     ws.columns = [
       { header: 'Proveedor',   key: 'proveedor', width: 30 },
+      // La identificación va de segunda a propósito: es la que evita cruzar dos
+      // proveedores que se llaman parecido (o igual) al importar.
+      { header: 'NIT / Cédula', key: 'identificacion', width: 18 },
       { header: 'Factura',     key: 'factura',   width: 18 },
       { header: 'Valor total', key: 'total',     width: 16 },
       { header: 'Abonado',     key: 'abonado',   width: 14 },
@@ -42,9 +46,10 @@ router.get('/import-template', async (_req, res, next) => {
     });
 
     // Ejemplos: uno sin abonos, uno con abono parcial y uno sin fecha de pago.
-    ws.addRow({ proveedor: 'Distribuidora El Sol', factura: 'FV-1024', total: 1500000, abonado: 0, vence: '2026-10-15', notas: 'Mercancía de octubre' });
-    ws.addRow({ proveedor: 'Maderas del Norte', factura: 'FV-877', total: 800000, abonado: 300000, vence: '2026-09-30', notas: '' });
-    ws.addRow({ proveedor: 'Textiles Andinos', factura: '', total: 250000, abonado: 0, vence: '', notas: 'Sin plazo acordado' });
+    ws.addRow({ proveedor: 'Distribuidora El Sol', identificacion: '900123456-7', factura: 'FV-1024', total: 1500000, abonado: 0, vence: '2026-10-15', notas: 'Mercancía de octubre' });
+    ws.addRow({ proveedor: 'Maderas del Norte', identificacion: '901987654', factura: 'FV-877', total: 800000, abonado: 300000, vence: '2026-09-30', notas: '' });
+    // Sin identificación también se puede: se empareja por nombre, como antes.
+    ws.addRow({ proveedor: 'Textiles Andinos', identificacion: '', factura: '', total: 250000, abonado: 0, vence: '', notas: 'Sin plazo acordado' });
 
     const buffer = await wb.xlsx.writeBuffer();
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
@@ -77,6 +82,10 @@ const xlsxUpload = multer({
 const PAYABLE_COL_DEFS: Record<string, string[]> = {
   proveedor: ['proveedor', 'supplier', 'nombre', 'razon social', 'razon', 'empresa',
               'acreedor', 'nombre proveedor', 'beneficiario'],
+  // Ojo: aquí NO va "documento" a secas — ese alias ya es de la factura.
+  identificacion: ['nit', 'identificacion', 'cedula', 'cc', 'rut', 'nit proveedor',
+                   'identificacion proveedor', 'documento identidad', 'num identificacion',
+                   'numero identificacion', 'tax id'],
   factura:   ['factura', 'invoice', 'numero factura', 'num factura', 'no factura',
               'n factura', 'documento', 'referencia', 'remision', 'consecutivo'],
   total:     ['valor total', 'total', 'valor', 'monto', 'importe', 'deuda',
@@ -108,9 +117,10 @@ function leerFechaLocal(v: string): Date | null {
 }
 
 const PAYABLE_FIELD_LABELS: Record<string, string> = {
-  proveedor: 'Proveedor', factura: 'Factura', total: 'Valor total',
-  abonado: 'Abonado', vence: 'Vence', notas: 'Notas',
+  proveedor: 'Proveedor', identificacion: 'NIT / Cédula', factura: 'Factura',
+  total: 'Valor total', abonado: 'Abonado', vence: 'Vence', notas: 'Notas',
 };
+
 
 router.get('/', async (req: any, res, next) => {
   try {
@@ -131,7 +141,7 @@ router.get('/', async (req: any, res, next) => {
       prisma.supplierCredit.findMany({
         where, skip, take: limit, orderBy: { createdAt: 'desc' },
         include: {
-          supplier: { select: { id: true, name: true, phone: true, mobile: true } },
+          supplier: { select: { id: true, name: true, document: true, phone: true, mobile: true } },
           purchase: { select: { invoiceNumber: true } },
           _count: { select: { payments: true } },
         },
@@ -197,7 +207,8 @@ router.post('/import',
       }));
 
       interface Fila {
-        rowNum: number; proveedor: string; factura: string | null;
+        rowNum: number; proveedor: string; identificacion: string | null;
+        factura: string | null;
         total: number; abonado: number; vence: Date | null; notas: string | null;
       }
       type Aviso = { row: number; name: string; message: string; type: 'error' | 'warning' };
@@ -236,6 +247,7 @@ router.post('/import',
 
         validRows.push({
           rowNum, proveedor,
+          identificacion: col.identificacion !== -1 ? (cellVal(row, col.identificacion) || null) : null,
           factura: col.factura !== -1 ? (cellVal(row, col.factura) || null) : null,
           total, abonado: abonadoOk, vence,
           notas: col.notas !== -1 ? (cellVal(row, col.notas) || null) : null,
@@ -250,24 +262,46 @@ router.post('/import',
         });
       }
 
-      // Proveedores que ya existen (por nombre, sin distinguir mayúsculas). Los
-      // que no, se crean: es preferible eso a rechazar la fila y dejar al negocio
-      // cargando proveedores a mano antes de poder importar sus cuentas.
+      // Para emparejar con lo que ya existe manda la IDENTIFICACIÓN, no el nombre:
+      // dos proveedores se pueden llamar igual o parecido ("Distribuidora Andina"
+      // y "Distribuidora Andina SAS") y por nombre se cruzaban las facturas de
+      // uno con las del otro. El nombre queda de respaldo para las filas que no
+      // traen NIT. Lo que no exista se crea, como antes: es preferible a rechazar
+      // la fila y obligar a cargar proveedores a mano antes de importar.
       const nombres = Array.from(new Set(validRows.map((r) => r.proveedor)));
-      const existentes = nombres.length > 0
+      const identificaciones = Array.from(new Set(
+        validRows.map((r) => normalizarIdentificacion(r.identificacion || '')).filter(Boolean),
+      ));
+
+      const existentes = (nombres.length > 0 || identificaciones.length > 0)
         ? await prisma.supplier.findMany({
-            where: { businessId, deletedAt: null, name: { in: nombres, mode: 'insensitive' } },
-            select: { id: true, name: true },
+            where: {
+              businessId, deletedAt: null,
+              OR: [
+                { name: { in: nombres, mode: 'insensitive' } },
+                ...(identificaciones.length ? [{ document: { not: null } }] : []),
+              ],
+            },
+            select: { id: true, name: true, document: true },
           })
         : [];
+
       const porNombre = new Map(existentes.map((s) => [s.name.toLowerCase(), s.id]));
+      const porId = new Map<string, string>();
+      for (const s of existentes) {
+        const clave = normalizarIdentificacion(s.document || '');
+        if (clave) porId.set(clave, s.id);
+      }
 
       if (dryRun) {
         return success(res, {
           total: totalRows,
           valid: validRows.length,
           toCreate: validRows.length,
-          proveedoresNuevos: nombres.filter((n) => !porNombre.has(n.toLowerCase())).length,
+          proveedoresNuevos: Array.from(new Set(validRows.map((r) => {
+            const id = normalizarIdentificacion(r.identificacion || '');
+            return id || r.proveedor.toLowerCase();
+          }))).filter((clave) => !porId.has(clave) && !porNombre.has(clave)).length,
           issues,
           detectedColumns: detectedColumnsLabeled,
         }, 'Vista previa generada');
@@ -283,15 +317,29 @@ router.post('/import',
 
       for (const r of validRows) {
         try {
-          let supplierId = porNombre.get(r.proveedor.toLowerCase());
+          const idNorm = normalizarIdentificacion(r.identificacion || '');
+          // Primero por identificación; solo si la fila no la trae se cae al nombre.
+          let supplierId = idNorm ? porId.get(idNorm) : undefined;
+          if (!supplierId && !idNorm) supplierId = porNombre.get(r.proveedor.toLowerCase());
+
           if (!supplierId) {
             const nuevo = await prisma.supplier.create({
-              data: { businessId, name: r.proveedor },
+              data: { businessId, name: r.proveedor, document: r.identificacion?.trim() || null },
               select: { id: true },
             });
             supplierId = nuevo.id;
             porNombre.set(r.proveedor.toLowerCase(), supplierId);
+            if (idNorm) porId.set(idNorm, supplierId);
             results.proveedoresCreados++;
+          } else if (idNorm && !porId.has(idNorm)) {
+            // El proveedor ya estaba (por nombre) pero sin identificación: se le
+            // completa con la del archivo, así la próxima importación ya empareja
+            // por NIT y no por nombre.
+            await prisma.supplier.update({
+              where: { id: supplierId },
+              data: { document: r.identificacion?.trim() || null },
+            }).catch(() => { /* si otro proceso lo puso primero, da igual */ });
+            porId.set(idNorm, supplierId);
           }
 
           const balance = r.total - r.abonado;

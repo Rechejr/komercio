@@ -91,7 +91,7 @@ describe('plantilla de cuentas por pagar', () => {
     const fila = wb.worksheets[0].getRow(1);
     const headers: string[] = [];
     fila.eachCell((c) => headers.push(String(c.value)));
-    expect(headers).toEqual(['Proveedor', 'Factura', 'Valor total', 'Abonado', 'Vence', 'Notas']);
+    expect(headers).toEqual(['Proveedor', 'NIT / Cédula', 'Factura', 'Valor total', 'Abonado', 'Vence', 'Notas']);
   });
 });
 
@@ -162,12 +162,48 @@ describe('importar cuentas por pagar', () => {
     expect(res.body.data.imported).toBe(1);
   });
 
+  it('dos proveedores con el MISMO nombre pero distinto NIT no se cruzan', async () => {
+    // El caso que reportó un cliente: por nombre, las facturas de uno terminaban
+    // en la cuenta del otro.
+    const buf = await excel([
+      ['Proveedor', 'NIT / Cédula', 'Factura', 'Valor total'],
+      ['Distribuidora Andina', '900123456-7', 'FC-1', 104000],
+      ['Distribuidora Andina', '901222333-4', 'FC-2', 250000],
+    ]);
+    const res = await subir(buf);
+
+    expect(res.body.data.proveedoresCreados).toBe(2);
+    const docs = mockPrisma.supplier.create.mock.calls.map((c) => c[0].data.document);
+    expect(docs).toEqual(['900123456-7', '901222333-4']);
+  });
+
+  it('el mismo NIT escrito de dos formas es UN solo proveedor', async () => {
+    const buf = await excel([
+      ['Proveedor', 'NIT / Cédula', 'Factura', 'Valor total'],
+      ['Distribuidora Andina', '900.123.456-7', 'FC-1', 104000],
+      ['Distribuidora Andina SAS', '9001234567', 'FC-2', 250000],
+    ]);
+    const res = await subir(buf);
+
+    // Nombres distintos, pero es el mismo NIT: se crea uno solo.
+    expect(res.body.data.proveedoresCreados).toBe(1);
+    expect(res.body.data.imported).toBe(2);
+  });
+
+  it('sin columna de identificación sigue funcionando como antes (por nombre)', async () => {
+    const buf = await excel([ENCABEZADOS, ['Maderas del Norte', 'FV-1', 500000, 0, '', '']]);
+    const res = await subir(buf);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.imported).toBe(1);
+  });
+
   it('crea el proveedor si no existe', async () => {
     const buf = await excel([ENCABEZADOS, ['Proveedor Nuevo', '', 500000, 0, '', '']]);
     const res = await subir(buf);
 
     expect(mockPrisma.supplier.create).toHaveBeenCalledWith(
-      expect.objectContaining({ data: { businessId: 'biz-1', name: 'Proveedor Nuevo' } }),
+      expect.objectContaining({ data: { businessId: 'biz-1', name: 'Proveedor Nuevo', document: null } }),
     );
     expect(res.body.data.proveedoresCreados).toBe(1);
   });

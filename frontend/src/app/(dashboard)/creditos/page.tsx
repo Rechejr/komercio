@@ -1,6 +1,6 @@
 ﻿'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm, Controller } from 'react-hook-form';
@@ -9,8 +9,9 @@ import { api } from '@/lib/api';
 import { formatCurrency, formatDate, formatDateTime, statusColor, statusLabel } from '@/lib/utils';
 import { usePaymentAccounts, labelPago } from '@/lib/usePaymentAccounts';
 import toast from 'react-hot-toast';
-import { CreditCard, X, Loader2, Plus, DollarSign, ChevronRight, Clock, Search, Ban, MessageCircle, Download } from 'lucide-react';
+import { CreditCard, X, Loader2, Plus, DollarSign, ChevronRight, Clock, Search, Ban, MessageCircle, Download, FileDown, FileUp, Lock } from 'lucide-react';
 import { useAuthStore } from '@/store/auth.store';
+import { useUpgradeStore } from '@/store/upgrade.store';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { WhatsAppIcon } from '@/components/ui/WhatsAppIcon';
 import { EstadoCuentaImage } from '@/components/EstadoCuentaImage';
@@ -242,6 +243,53 @@ export default function CreditosPage() {
   }
   function openPayment(c: any) { setSelected(c); setShowPayment(true); setShowDetail(false); reset(); }
 
+  // ── Importar desde Excel ───────────────────────────────────────────────────
+  // Para cargar de una los fiados que el negocio ya tenía apuntados en un
+  // cuaderno o en su propio Excel, en vez de teclearlos uno por uno.
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [previewData, setPreviewData] = useState<any>(null);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const plan = useAuthStore((st) => st.user?.plan);
+  const isFree = plan !== 'pro';
+  const openUpgrade = useUpgradeStore((st) => st.open);
+
+  const subirArchivo = (file: File, dryRun: boolean) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    return api.post(`/credits/import${dryRun ? '?dryRun=true' : ''}`, fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }).then((r) => r.data.data);
+  };
+
+  const previewMut = useMutation({
+    mutationFn: (file: File) => subirArchivo(file, true),
+    onSuccess: (d) => setPreviewData(d),
+    onError: (err: any) => {
+      setPendingFile(null);
+      toast.error(err.response?.data?.error || 'No se pudo leer el archivo');
+    },
+  });
+
+  const importMut = useMutation({
+    mutationFn: (file: File) => subirArchivo(file, false),
+    onSuccess: (r: any) => {
+      setPreviewData(null);
+      setPendingFile(null);
+      qc.invalidateQueries({ queryKey: ['credits'] });
+      qc.invalidateQueries({ queryKey: ['customers-list'] });
+      toast.success(`${r.imported} fiado(s) importado(s)${r.clientesCreados ? ` y ${r.clientesCreados} cliente(s) nuevo(s)` : ''}`);
+      if (r.errors?.length) toast.error(`${r.errors.length} fila(s) con error`);
+    },
+    onError: (err: any) => toast.error(err.response?.data?.error || 'Error al importar'),
+  });
+
+  function handleFile(file: File) {
+    const ext = file.name.slice(file.name.lastIndexOf('.')).toLowerCase();
+    if (!['.xlsx', '.xls', '.csv'].includes(ext)) { toast.error('Solo archivos .xlsx, .xls o .csv'); return; }
+    setPendingFile(file);
+    previewMut.mutate(file);
+  }
+
   return (
     <>
     <div className="space-y-4 animate-fade-up">
@@ -335,6 +383,49 @@ export default function CreditosPage() {
           {downloading ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />} Descargar
         </button>
 
+        {/* Plantilla e importación. La plantilla va en blanco, pero se muestra
+            bloqueada en el plan gratuito para no ofrecer algo que después no se
+            va a poder importar. */}
+        {isFree ? (
+          <button type="button" onClick={openUpgrade}
+            className="flex items-center gap-2 px-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition">
+            <FileDown size={15} /> Plantilla
+            <span className="px-1.5 py-0.5 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 text-[10px] font-bold rounded-full leading-none">PRO</span>
+          </button>
+        ) : (
+          <a
+            href={`${process.env.NEXT_PUBLIC_API_URL}/credits/import-template`}
+            target="_blank" rel="noopener noreferrer"
+            title="Archivo de ejemplo con las columnas que espera el sistema"
+            className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-sm font-semibold hover:bg-slate-50 dark:hover:bg-slate-700 transition"
+          >
+            <FileDown size={15} /> Plantilla
+          </a>
+        )}
+
+        {isFree ? (
+          <button type="button" onClick={openUpgrade}
+            className="flex items-center gap-2 px-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition">
+            <Lock size={14} /> Importar Excel
+            <span className="px-1.5 py-0.5 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 text-[10px] font-bold rounded-full leading-none">PRO</span>
+          </button>
+        ) : (
+          <button type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={previewMut.isPending || importMut.isPending}
+            className="flex items-center gap-2 px-4 py-2.5 border border-emerald-200 dark:border-emerald-700/50 rounded-xl text-sm font-semibold text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 disabled:opacity-50 transition">
+            {(previewMut.isPending || importMut.isPending)
+              ? <Loader2 size={15} className="animate-spin" />
+              : <FileUp size={15} />}
+            Importar Excel
+          </button>
+        )}
+
+        <input ref={fileInputRef} type="file" aria-label="Seleccionar archivo Excel para importar fiados"
+          accept=".xlsx,.xls,.csv" className="hidden"
+          onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); e.target.value = ''; }}
+        />
+
         <button
           type="button"
           onClick={() => { setShowNewCredit(true); resetNew(); setCustomerSearch(''); }}
@@ -351,6 +442,7 @@ export default function CreditosPage() {
             <thead>
               <tr className="border-b border-slate-100 dark:border-white/[0.06]">
                 <th className="text-left px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Cliente</th>
+                <th className="hidden lg:table-cell text-left px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Identificación</th>
                 <th className="hidden sm:table-cell text-left px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Factura</th>
                 <th className="text-right px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Total</th>
                 <th className="hidden md:table-cell text-right px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Abonado</th>
@@ -364,7 +456,7 @@ export default function CreditosPage() {
               {isLoading ? (
                 [...Array(5)].map((_, i) => (
                   <tr key={i}>
-                    {[...Array(8)].map((_, j) => (
+                    {[...Array(9)].map((_, j) => (
                       <td key={j} className="px-4 py-3">
                         <div className="h-4 bg-slate-100 dark:bg-slate-800 rounded-lg animate-pulse" />
                       </td>
@@ -373,7 +465,7 @@ export default function CreditosPage() {
                 ))
               ) : credits.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="text-center py-16">
+                  <td colSpan={9} className="text-center py-16">
                     <div className="flex flex-col items-center gap-3 text-slate-400 dark:text-slate-600">
                       <CreditCard size={36} strokeWidth={1.5} />
                       <p className="text-[13px]">No hay créditos{statusFilter ? ' con ese estado' : ''}</p>
@@ -388,6 +480,15 @@ export default function CreditosPage() {
                 >
                   <td className="px-4 py-3">
                     <p className="text-[13px] font-medium text-slate-800 dark:text-white">{c.customer?.name}</p>
+                    {/* En pantalla angosta la columna no cabe: la cédula va bajo
+                        el nombre, que es donde hace falta para distinguir a dos
+                        clientes que se llaman igual. */}
+                    {c.customer?.document && (
+                      <p className="lg:hidden text-[11px] text-slate-400 font-mono">{c.customer.document}</p>
+                    )}
+                  </td>
+                  <td className="hidden lg:table-cell px-4 py-3 font-mono text-[12px] text-slate-500 dark:text-slate-400">
+                    {c.customer?.document || '—'}
                   </td>
                   <td className="hidden sm:table-cell px-4 py-3 font-mono text-[12px] text-emerald-600 dark:text-emerald-400">
                     {c.sale?.invoiceNumber || '—'}
@@ -866,6 +967,84 @@ export default function CreditosPage() {
         loading={cancelMutation.isPending}
         variant="danger"
       />
+    {/* Vista previa antes de importar: se lee el archivo y se muestra qué va a
+        pasar, sin escribir nada. Importar a ciegas un archivo mal armado
+        obligaría a borrar fiados a mano uno por uno. */}
+    {previewData && pendingFile && (
+      <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-0 sm:p-4">
+        <div className="bg-white dark:bg-slate-900 w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl shadow-xl max-h-[90dvh] flex flex-col">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-white/[0.06]">
+            <h2 className="text-[15px] font-semibold text-slate-800 dark:text-white">Revisar antes de importar</h2>
+            <button onClick={() => { setPreviewData(null); setPendingFile(null); }} aria-label="Cerrar"
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+              <X size={16} />
+            </button>
+          </div>
+
+          <div className="p-5 space-y-4 overflow-y-auto">
+            <div className="grid grid-cols-3 gap-2 text-center">
+              <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-3">
+                <p className="text-[11px] uppercase tracking-wide text-slate-400 mb-1">Filas</p>
+                <p className="text-[17px] font-bold text-slate-700 dark:text-slate-200">{previewData.total}</p>
+              </div>
+              <div className="bg-emerald-50 dark:bg-emerald-500/10 rounded-xl p-3">
+                <p className="text-[11px] uppercase tracking-wide text-emerald-500 mb-1">Se crean</p>
+                <p className="text-[17px] font-bold text-emerald-700 dark:text-emerald-300">{previewData.toCreate}</p>
+              </div>
+              <div className="bg-blue-50 dark:bg-blue-500/10 rounded-xl p-3">
+                <p className="text-[11px] uppercase tracking-wide text-blue-500 mb-1">Clientes nuevos</p>
+                <p className="text-[17px] font-bold text-blue-700 dark:text-blue-300">{previewData.clientesNuevos}</p>
+              </div>
+            </div>
+
+            {previewData.detectedColumns?.length > 0 && (
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 mb-2">Columnas reconocidas</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {previewData.detectedColumns.map((c: any) => (
+                    <span key={c.field} className="text-[11.5px] px-2 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                      {c.header}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {previewData.issues?.length > 0 && (
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 mb-2">
+                  Avisos ({previewData.issues.length})
+                </p>
+                <div className="space-y-1 max-h-40 overflow-y-auto">
+                  {previewData.issues.map((i: any, n: number) => (
+                    <p key={n} className={`text-[12px] leading-snug ${i.type === 'error' ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'}`}>
+                      Fila {i.row}{i.name ? ` · ${i.name}` : ''}: {i.message}
+                    </p>
+                  ))}
+                </div>
+                <p className="text-[11px] text-slate-400 mt-1.5">
+                  Las filas con error no se importan. Las de advertencia sí.
+                </p>
+              </div>
+            )}
+          </div>
+
+          <div className="flex gap-2 px-5 py-4 border-t border-slate-100 dark:border-white/[0.06]">
+            <button type="button" onClick={() => { setPreviewData(null); setPendingFile(null); }}
+              className="flex-1 px-4 py-2.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl text-[13px] font-semibold hover:bg-slate-200 dark:hover:bg-slate-700 transition">
+              Cancelar
+            </button>
+            <button type="button"
+              onClick={() => importMut.mutate(pendingFile)}
+              disabled={importMut.isPending || previewData.toCreate === 0}
+              className="flex-1 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white rounded-xl text-[13px] font-semibold transition flex items-center justify-center gap-2">
+              {importMut.isPending && <Loader2 size={14} className="animate-spin" />}
+              Importar {previewData.toCreate}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
     </>
   );
 }

@@ -3342,6 +3342,76 @@
         }
       }
     },
+    "/api/v1/credits/import": {
+      "post": {
+        "tags": [
+          "credit"
+        ],
+        "summary": "POST /api/v1/credits/import",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operación exitosa",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespuestaOk"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sin sesión o token vencido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/credits/import-template": {
+      "get": {
+        "tags": [
+          "credit"
+        ],
+        "summary": "Cargar de una los fiados que el negocio ya tenía apuntados. Va ANTES de '/:id' para que no lo capture esa ruta.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operación exitosa",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespuestaOk"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sin sesión o token vencido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/customers": {
       "get": {
         "tags": [

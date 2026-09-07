@@ -71,3 +71,28 @@ export function dosUltimosDigitos(nit: string): number {
   const limpio = soloDigitos(nit);
   return Number(limpio.slice(-2).padStart(2, '0') || '0');
 }
+
+/** Deja una identificación (NIT o cédula) comparable, para saber si dos filas de
+ *  un Excel hablan del mismo tercero: sin puntos, guiones ni espacios, y sin el
+ *  dígito de verificación, que unos anotan y otros no ("900.123.456-7" =
+ *  "900123456").
+ *
+ *  Ojo con las cédulas: quitarle a ciegas el último dígito a todo número de 10
+ *  fundiría dos cédulas que solo se diferencian en él, que es justo el error que
+ *  se quiere evitar. Se usa el mismo criterio de quitarDvPegado(): el NIT de
+ *  empresa tiene 9 dígitos y empieza por 8 o 9, así que 10 dígitos empezando por
+ *  8/9 es NIT con el DV pegado; una cédula de 10 no empieza así y se respeta
+ *  completa. */
+export function normalizarIdentificacion(v: string): string {
+  const texto = String(v ?? '').trim();
+  if (!texto) return '';
+
+  // Escrito con guion, el DV viene separado y no hay nada que adivinar.
+  const { nit, dvExplicito } = separarNitDv(texto);
+  if (dvExplicito !== null && nit) return nit;
+
+  const limpio = texto.replace(/[^0-9a-zA-Z]/g, '').toUpperCase();
+  if (!limpio) return '';
+  if (/^[89]\d{9}$/.test(limpio)) return limpio.slice(0, 9);
+  return limpio;
+}
