@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
@@ -12,7 +12,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Portal } from '@/components/ui/Portal';
 import { CotizacionImage, type CotizacionData } from '@/components/CotizacionImage';
 import { shareImageWhatsApp, downloadImage, printImage } from '@/lib/imageShare';
-import { FileText, Plus, Search, Trash2, X, Loader2, ShoppingCart, Eye, CheckCircle, MessageCircle, Download, Printer } from 'lucide-react';
+import { FileText, Plus, Search, Trash2, X, Loader2, ShoppingCart, Eye, CheckCircle, MessageCircle, Download, Printer, Pencil } from 'lucide-react';
 
 const inputCls =
   'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[16px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition';
@@ -45,10 +45,23 @@ export default function CotizacionesPage() {
   const [showNew, setShowNew] = useState(false);
   const [detailId, setDetailId] = useState<string | null>(null);
   const [delTarget, setDelTarget] = useState<QuoteRow | null>(null);
+  // Cotización que se está modificando (null = no se está editando ninguna).
+  const [editId, setEditId] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+
+  // El filtrado lo hace el servidor: en un negocio con meses de cotizaciones no
+  // sirve traerlas todas y filtrarlas en el navegador.
+  const params = new URLSearchParams({ limit: '100' });
+  if (search.trim()) params.set('search', search.trim());
+  if (startDate) params.set('startDate', startDate);
+  if (endDate) params.set('endDate', endDate);
 
   const { data: quotes = [], isLoading } = useQuery<QuoteRow[]>({
-    queryKey: ['quotes'],
-    queryFn: () => api.get('/quotes?limit=100').then((r) => r.data.data),
+    queryKey: ['quotes', search, startDate, endDate],
+    queryFn: () => api.get(`/quotes?${params.toString()}`).then((r) => r.data.data),
+    placeholderData: (prev) => prev, // no parpadea la tabla mientras se escribe
   });
 
   const delMut = useMutation({
@@ -63,9 +76,44 @@ export default function CotizacionesPage() {
         <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2.5 text-[12px] text-slate-500 dark:text-slate-400">
           Crea una cotización, compártela con el cliente y conviértela en venta con un clic cuando la aprueben.
         </div>
-        <button onClick={() => setShowNew(true)} className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2.5 rounded-xl text-sm transition-colors">
+        <button onClick={() => setShowNew(true)} className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2.5 rounded-xl text-sm transition-colors flex-shrink-0">
           <Plus size={16} /> Nueva cotización
         </button>
+      </div>
+
+      {/* Buscar y filtrar por fecha */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative flex-1 min-w-[200px]">
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar por número o cliente…"
+            className="w-full pl-9 pr-3 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-800 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 transition"
+          />
+        </div>
+        <div className="flex items-center gap-2">
+          <input
+            type="date" aria-label="Desde" value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            className="px-3 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/30 transition"
+          />
+          <span className="text-slate-400 text-sm">→</span>
+          <input
+            type="date" aria-label="Hasta" value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+            className="px-3 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/30 transition"
+          />
+          {(search || startDate || endDate) && (
+            <button
+              type="button" aria-label="Limpiar filtros"
+              onClick={() => { setSearch(''); setStartDate(''); setEndDate(''); }}
+              className="w-9 h-9 flex items-center justify-center rounded-xl text-slate-400 hover:text-slate-600 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+            >
+              <X size={14} />
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="card overflow-hidden">
@@ -87,7 +135,11 @@ export default function CotizacionesPage() {
               ) : quotes.length === 0 ? (
                 <tr><td colSpan={6} className="px-4 py-12 text-center text-slate-400 dark:text-slate-500">
                   <FileText size={30} className="mx-auto mb-2" strokeWidth={1.5} />
-                  <p className="text-sm">Aún no hay cotizaciones. Crea la primera con “Nueva cotización”.</p>
+                  <p className="text-sm">
+                    {search || startDate || endDate
+                      ? 'Ninguna cotización coincide con la búsqueda.'
+                      : 'Aún no hay cotizaciones. Crea la primera con “Nueva cotización”.'}
+                  </p>
                 </td></tr>
               ) : quotes.map((q) => (
                 <tr key={q.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 cursor-pointer" onClick={() => setDetailId(q.id)}>
@@ -103,6 +155,12 @@ export default function CotizacionesPage() {
                   <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
                     <div className="inline-flex items-center gap-1">
                       <button onClick={() => setDetailId(q.id)} title="Ver" className="p-1.5 text-slate-400 hover:text-emerald-600 rounded-lg hover:bg-emerald-50 dark:hover:bg-emerald-900/20"><Eye size={15} /></button>
+                      {/* Una cotización ya convertida en venta no se modifica:
+                          el papel que tiene el cliente y la venta dirían cosas
+                          distintas. */}
+                      {q.status !== 'CONVERTED' && (
+                        <button onClick={() => setEditId(q.id)} title="Modificar" className="p-1.5 text-slate-400 hover:text-emerald-600 rounded-lg hover:bg-emerald-50 dark:hover:bg-emerald-900/20"><Pencil size={15} /></button>
+                      )}
                       <button onClick={() => setDelTarget(q)} title="Eliminar" className="p-1.5 text-slate-400 hover:text-red-600 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20"><Trash2 size={15} /></button>
                     </div>
                   </td>
@@ -114,6 +172,7 @@ export default function CotizacionesPage() {
       </div>
 
       {showNew && <NuevaCotizacionModal onClose={() => setShowNew(false)} />}
+      {editId && <NuevaCotizacionModal editId={editId} onClose={() => setEditId(null)} />}
       {detailId && <DetalleModal id={detailId} onClose={() => setDetailId(null)} />}
 
       <ConfirmDialog
@@ -128,8 +187,10 @@ export default function CotizacionesPage() {
   );
 }
 
-// ─── Modal: crear cotización ───────────────────────────────────────────────────
-function NuevaCotizacionModal({ onClose }: { onClose: () => void }) {
+// ─── Modal: crear o modificar una cotización ──────────────────────────────────
+// Es el mismo formulario para las dos cosas: con `editId` carga la cotización y
+// guarda encima; sin él, crea una nueva.
+function NuevaCotizacionModal({ onClose, editId }: { onClose: () => void; editId?: string }) {
   const qc = useQueryClient();
   const branchId = useAuthStore((s) => s.user?.branchId);
   const [prodSearch, setProdSearch] = useState('');
@@ -138,6 +199,23 @@ function NuevaCotizacionModal({ onClose }: { onClose: () => void }) {
   const [cliSearch, setCliSearch] = useState('');
   const [notes, setNotes] = useState('');
   const [validUntil, setValidUntil] = useState('');
+
+  // Al modificar, se traen los datos que ya tenía y se llena el formulario.
+  const { data: original, isLoading: cargando } = useQuery({
+    queryKey: ['quote', editId],
+    queryFn: () => api.get(`/quotes/${editId}`).then((r) => r.data.data),
+    enabled: !!editId,
+  });
+
+  useEffect(() => {
+    if (!original) return;
+    setItems(Array.isArray(original.items) ? original.items : []);
+    setCliente(original.customerName ? { id: original.customerId || '', name: original.customerName } : null);
+    setNotes(original.notes || '');
+    // La vigencia es una fecha sin hora: se corta el ISO para que el campo de
+    // fecha no la corra un día por la zona horaria.
+    setValidUntil(original.validUntil ? String(original.validUntil).slice(0, 10) : '');
+  }, [original]);
 
   const { data: productos = [] } = useQuery({
     queryKey: ['quote-products', prodSearch, branchId],
@@ -165,12 +243,21 @@ function NuevaCotizacionModal({ onClose }: { onClose: () => void }) {
   const removeItem = (i: number) => setItems((prev) => prev.filter((_, idx) => idx !== i));
 
   const saveMut = useMutation({
-    mutationFn: () => api.post('/quotes', {
-      customerId: cliente?.id || null, customerName: cliente?.name || null,
-      items, notes: notes || null, validUntil: validUntil || null,
-    }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['quotes'] }); toast.success('Cotización creada'); onClose(); },
-    onError: (e: any) => toast.error(e.response?.data?.error || 'No se pudo crear'),
+    mutationFn: () => {
+      const cuerpo = {
+        customerId: cliente?.id || null, customerName: cliente?.name || null,
+        items, notes: notes || null, validUntil: validUntil || null,
+      };
+      // Al modificar se conserva el número: el cliente ya tiene ese papel.
+      return editId ? api.put(`/quotes/${editId}`, cuerpo) : api.post('/quotes', cuerpo);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['quotes'] });
+      if (editId) qc.invalidateQueries({ queryKey: ['quote', editId] });
+      toast.success(editId ? 'Cotización actualizada' : 'Cotización creada');
+      onClose();
+    },
+    onError: (e: any) => toast.error(e.response?.data?.error || (editId ? 'No se pudo modificar' : 'No se pudo crear')),
   });
 
   return (
@@ -179,7 +266,9 @@ function NuevaCotizacionModal({ onClose }: { onClose: () => void }) {
         <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" />
         <div className="relative bg-white dark:bg-slate-900 rounded-2xl shadow-modal w-full max-w-lg max-h-[92vh] overflow-hidden flex flex-col animate-scale-in" onClick={(e) => e.stopPropagation()}>
           <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-slate-100 dark:border-white/[0.06] flex-shrink-0">
-            <h2 className="text-lg font-bold text-slate-900 dark:text-white">Nueva cotización</h2>
+            <h2 className="text-lg font-bold text-slate-900 dark:text-white">
+              {editId ? `Modificar ${original?.number ?? 'cotización'}` : 'Nueva cotización'}
+            </h2>
             <button onClick={onClose} className="text-slate-400 hover:text-slate-600 p-1"><X size={20} /></button>
           </div>
 
@@ -262,8 +351,8 @@ function NuevaCotizacionModal({ onClose }: { onClose: () => void }) {
 
           <div className="px-6 py-4 border-t border-slate-100 dark:border-white/[0.06] flex gap-2 flex-shrink-0">
             <button onClick={onClose} className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-sm font-medium text-slate-600 dark:text-slate-300">Cancelar</button>
-            <button onClick={() => { if (!items.length) return toast.error('Agrega al menos un producto'); saveMut.mutate(); }} disabled={saveMut.isPending} className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-60">
-              {saveMut.isPending ? <Loader2 size={15} className="animate-spin" /> : null} Crear cotización
+            <button onClick={() => { if (!items.length) return toast.error('Agrega al menos un producto'); saveMut.mutate(); }} disabled={saveMut.isPending || cargando} className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-60">
+              {saveMut.isPending ? <Loader2 size={15} className="animate-spin" /> : null} {editId ? 'Guardar cambios' : 'Crear cotización'}
             </button>
           </div>
         </div>

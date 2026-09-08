@@ -10,7 +10,7 @@ import { AuthRequest } from '../../middlewares/auth';
 
 jest.mock('../../config/database', () => ({
   prisma: {
-    quote: { findMany: jest.fn(), count: jest.fn(), findFirst: jest.fn(), create: jest.fn(), updateMany: jest.fn() },
+    quote: { findMany: jest.fn(), count: jest.fn(), findFirst: jest.fn(), create: jest.fn(), update: jest.fn(), updateMany: jest.fn() },
     customer: { findFirst: jest.fn() },
   },
 }));
@@ -202,6 +202,119 @@ describe('quoteController.create', () => {
 });
 
 // ─── markConverted / remove ──────────────────────────────────────────────────
+
+describe('quoteController.update', () => {
+  // Modificar una cotización: el cliente pidió otra cantidad o cambió un precio.
+  // Antes tocaba borrarla y hacerla de nuevo, con número nuevo.
+  const items = [{ name: 'Café', quantity: 5, unitPrice: 10000, discountPct: 10, taxRate: 0 }];
+
+  it('404 si la cotización es de otro negocio', async () => {
+    mockPrisma.quote.findFirst.mockResolvedValue(null);
+    const next = makeNext();
+
+    await quoteController.update(makeReq({ params: { id: 'q-ajena' }, body: { items } }), makeRes().res, next);
+
+    expect(errorDe(next).statusCode).toBe(404);
+    expect(mockPrisma.quote.update).not.toHaveBeenCalled();
+  });
+
+  it('409 si ya se convirtió en venta', async () => {
+    // Editarla dejaría el papel que tiene el cliente diciendo una cosa y la
+    // venta registrada otra.
+    mockPrisma.quote.findFirst.mockResolvedValue({ id: 'q-1', status: 'CONVERTED' });
+    const next = makeNext();
+
+    await quoteController.update(makeReq({ params: { id: 'q-1' }, body: { items } }), makeRes().res, next);
+
+    expect(errorDe(next).statusCode).toBe(409);
+    expect(mockPrisma.quote.update).not.toHaveBeenCalled();
+  });
+
+  it('recalcula los totales en el servidor, ignorando lo que mande el navegador', async () => {
+    mockPrisma.quote.findFirst.mockResolvedValue({ id: 'q-1', status: 'PENDING' });
+    mockPrisma.quote.update.mockResolvedValue({ id: 'q-1' });
+
+    await quoteController.update(
+      // El navegador manda un total de 1 peso a propósito.
+      makeReq({ params: { id: 'q-1' }, body: { items, total: 1, subtotal: 1 } }),
+      makeRes().res, makeNext(),
+    );
+
+    const data = mockPrisma.quote.update.mock.calls[0][0].data;
+    expect(data.subtotal).toBe(50000);        // 5 x 10.000
+    expect(data.discountAmount).toBe(5000);   // 10%
+    expect(data.total).toBe(45000);
+  });
+
+  it('no cambia el número: el cliente ya tiene ese papel', async () => {
+    mockPrisma.quote.findFirst.mockResolvedValue({ id: 'q-1', status: 'PENDING' });
+    mockPrisma.quote.update.mockResolvedValue({ id: 'q-1' });
+
+    await quoteController.update(makeReq({ params: { id: 'q-1' }, body: { items } }), makeRes().res, makeNext());
+
+    expect(mockPrisma.quote.update.mock.calls[0][0].data.number).toBeUndefined();
+  });
+
+  it('rechaza una cotización sin productos', async () => {
+    mockPrisma.quote.findFirst.mockResolvedValue({ id: 'q-1', status: 'PENDING' });
+    const next = makeNext();
+
+    await quoteController.update(makeReq({ params: { id: 'q-1' }, body: { items: [] } }), makeRes().res, next);
+
+    expect(errorDe(next).statusCode).toBe(400);
+    expect(mockPrisma.quote.update).not.toHaveBeenCalled();
+  });
+
+  it('rechaza cantidades en cero o negativas', async () => {
+    mockPrisma.quote.findFirst.mockResolvedValue({ id: 'q-1', status: 'PENDING' });
+    const next = makeNext();
+
+    await quoteController.update(
+      makeReq({ params: { id: 'q-1' }, body: { items: [{ name: 'X', quantity: 0, unitPrice: 100 }] } }),
+      makeRes().res, next,
+    );
+
+    expect(errorDe(next).statusCode).toBe(400);
+  });
+});
+
+describe('quoteController.list · búsqueda y fechas', () => {
+  beforeEach(() => {
+    mockPrisma.quote.findMany.mockResolvedValue([]);
+    mockPrisma.quote.count.mockResolvedValue(0);
+  });
+
+  it('busca por número o por nombre de cliente', async () => {
+    await quoteController.list(makeReq({ query: { search: 'Marta' } }), makeRes().res, makeNext());
+
+    const where = mockPrisma.quote.findMany.mock.calls[0][0].where;
+    expect(where.OR).toEqual([
+      { number: { contains: 'Marta', mode: 'insensitive' } },
+      { customerName: { contains: 'Marta', mode: 'insensitive' } },
+    ]);
+  });
+
+  it('el rango de fechas se ancla al día colombiano', async () => {
+    await quoteController.list(
+      makeReq({ query: { startDate: '2026-09-01', endDate: '2026-09-30' } }),
+      makeRes().res, makeNext(),
+    );
+
+    const where = mockPrisma.quote.findMany.mock.calls[0][0].where;
+    // Medianoche de Bogotá = 05:00 UTC. Sin esto, lo del día 1 antes de las
+    // 7 p.m. quedaba por fuera del rango.
+    expect(where.createdAt.gte.toISOString()).toBe('2026-09-01T05:00:00.000Z');
+    expect(where.createdAt.lte.toISOString()).toBe('2026-10-01T04:59:59.999Z');
+  });
+
+  it('sin filtros no arma condiciones de más', async () => {
+    await quoteController.list(makeReq(), makeRes().res, makeNext());
+
+    const where = mockPrisma.quote.findMany.mock.calls[0][0].where;
+    expect(where.OR).toBeUndefined();
+    expect(where.createdAt).toBeUndefined();
+  });
+});
 
 describe('quoteController.markConverted', () => {
   it('marca como convertida solo dentro del negocio del token', async () => {

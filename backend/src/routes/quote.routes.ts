@@ -10,6 +10,7 @@ router.use(authenticate);
 router.get('/', requirePermission('cotizaciones.gestionar'), quoteController.list);
 router.get('/:id', requirePermission('cotizaciones.gestionar'), quoteController.getOne);
 router.post('/', requirePermission('cotizaciones.gestionar'), quoteController.create);
+router.put('/:id', requirePermission('cotizaciones.gestionar'), quoteController.update);
 router.patch('/:id/converted', requirePermission('cotizaciones.gestionar'), quoteController.markConverted);
 router.delete('/:id', requirePermission('cotizaciones.gestionar'), quoteController.remove);
 
