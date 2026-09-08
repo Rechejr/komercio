@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { LEGAL, LEGAL_READY } from '@/lib/legal';
 import { LegalTitle, Section, Bullets, Callout, DraftNotice } from '@/components/legal/LegalDoc';
@@ -12,6 +13,14 @@ export const metadata: Metadata = {
 };
 
 export default function TerminosPage() {
+  // Mientras falten los datos del prestador, el documento no existe para nadie.
+  // Ya estaba fuera del pie de página y del sitemap (ver LEGAL_READY); esto
+  // cierra la última puerta: quien acierte la URL a mano no ve un documento a
+  // medio llenar, que ante la SIC no cumple el deber de identificar al
+  // Responsable y para un cliente que va a comprar da mala espina. En cuanto se
+  // completen los datos, la página se publica sola.
+  if (!LEGAL_READY) notFound();
+
   return (
     <article>
       <DraftNotice />
