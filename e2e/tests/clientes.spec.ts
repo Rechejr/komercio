@@ -79,7 +79,9 @@ test.describe('Clientes', () => {
     const nameInput = page.locator('input[name="name"]');
     await nameInput.clear();
     await nameInput.fill(`${TEST_NAME}_EDITADO`);
-    await page.click('button:has-text("Actualizar")');
+    // Anclado al modal: "Actualizar a Pro" del menú lateral también dice
+    // "Actualizar" y va antes en la página (aparece solo en plan gratuito).
+    await page.locator('.fixed.inset-0 button[type="submit"]:has-text("Actualizar")').click();
     await page.waitForSelector('.fixed.inset-0', { state: 'hidden', timeout: 10_000 });
     await expect(page.getByText(`${TEST_NAME}_EDITADO`).first()).toBeVisible({ timeout: 8_000 });
   });
