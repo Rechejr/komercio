@@ -9,7 +9,8 @@ import { normalizarResponsabilidades, obligacionesSugeridas } from '../utils/cal
 import { periodosPila, periodosNomina } from '../utils/pila';
 import { periodosExogena } from '../utils/exogena';
 import { encrypt, decrypt } from '../utils/crypto';
-import { uploadDocument, deleteImage } from '../config/cloudinary';
+import { uploadDocument, deleteDocument, deleteImage, extractPublicId } from '../config/cloudinary';
+import { logger } from '../config/logger';
 import ExcelJS from 'exceljs';
 import { findDataSheet, findHeaderRow, mapColumns, cellVal, normalizeHeader } from '../utils/excelParser';
 import {
@@ -1121,9 +1122,15 @@ export const contableController = {
     try {
       const businessId = req.user!.businessId!;
       await getClientOfBusiness(req.params.id, businessId);
+      // Sin la URL a propósito: es la llave firmada del archivo. El navegador
+      // pide el contenido por /documentos/:id/archivo, que valida la sesión.
       const docs = await prisma.clientDocument.findMany({
         where: { taxClientId: req.params.id },
         orderBy: { createdAt: 'desc' },
+        select: {
+          id: true, taxClientId: true, nombre: true, categoria: true,
+          mimeType: true, size: true, createdAt: true,
+        },
       });
       return success(res, docs);
     } catch (err) { next(err); }
@@ -1138,7 +1145,8 @@ export const contableController = {
       if (!file) throw new AppError('No se envió ningún archivo', 400);
 
       const { nombre, categoria } = req.body as { nombre?: string; categoria?: string };
-      const url = await uploadDocument(file.buffer).catch(() => {
+      const subido = await uploadDocument(file.buffer).catch((err) => {
+        logger.error(`[boveda] Cloudinary rechazó el archivo "${file.originalname}" (${file.mimetype}, ${file.size} bytes): ${err?.message || err}`);
         throw new AppError('No se pudo subir el documento. Verifica tu conexión e intenta de nuevo.', 502);
       });
 
@@ -1147,12 +1155,47 @@ export const contableController = {
           taxClientId: req.params.id,
           nombre: (nombre?.trim() || file.originalname || 'Documento').slice(0, 120),
           categoria: categoria?.trim() || null,
-          url,
+          url: subido.url,
+          publicId: subido.publicId,
+          resourceType: subido.resourceType,
           mimeType: file.mimetype,
           size: file.size,
         },
       });
       return created(res, doc, 'Documento subido');
+    } catch (err) { next(err); }
+  },
+
+  /**
+   * Entrega el contenido del documento a quien tenga sesión y permiso.
+   *
+   * El servidor lo baja de Cloudinary con su URL firmada y lo retransmite. Así
+   * el enlace del archivo nunca sale de aquí: antes la URL era pública y con
+   * solo tenerla se abría el RUT o la declaración de un cliente del contador,
+   * sin necesidad de iniciar sesión.
+   */
+  async getDocumentoArchivo(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const businessId = req.user!.businessId!;
+      const doc = await prisma.clientDocument.findFirst({
+        where: { id: req.params.id, taxClient: { businessId } },
+      });
+      if (!doc) throw new AppError('Documento no encontrado', 404);
+
+      const upstream = await fetch(doc.url).catch(() => null);
+      if (!upstream || !upstream.ok || !upstream.body) {
+        throw new AppError('No se pudo leer el documento. Intenta de nuevo.', 502);
+      }
+
+      res.setHeader('Content-Type', doc.mimeType || upstream.headers.get('content-type') || 'application/octet-stream');
+      // inline: los PDF se abren en el visor del navegador en vez de bajarse.
+      // El nombre va entre comillas por si trae espacios.
+      res.setHeader('Content-Disposition', `inline; filename="${doc.nombre.replace(/["\r\n]/g, '')}"`);
+      // Es información de un tercero: que no quede en cachés intermedias.
+      res.setHeader('Cache-Control', 'private, no-store');
+
+      const buffer = Buffer.from(await upstream.arrayBuffer());
+      return res.send(buffer);
     } catch (err) { next(err); }
   },
 
@@ -1164,8 +1207,15 @@ export const contableController = {
       });
       if (!doc) throw new AppError('Documento no encontrado', 404);
       await prisma.clientDocument.delete({ where: { id: doc.id } });
-      // Limpieza del archivo en Cloudinary (best-effort).
-      deleteImage(doc.url).catch(() => {});
+      // Limpieza del archivo en Cloudinary (best-effort). Los privados viven
+      // bajo otro `type`, así que no sirve el borrado de imágenes normales;
+      // para los subidos antes del cambio se cae a ese como respaldo.
+      const pid = doc.publicId || extractPublicId(doc.url);
+      if (pid && doc.publicId) {
+        deleteDocument(pid, doc.resourceType || 'image').catch(() => {});
+      } else {
+        deleteImage(doc.url).catch(() => {});
+      }
       return success(res, null, 'Documento eliminado');
     } catch (err) { next(err); }
   },

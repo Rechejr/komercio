@@ -136,6 +136,8 @@ router.delete('/credenciales/:id', requirePermission('contable.boveda.ver'), ...
 // ─── Bóveda de documentos (RUT, cámara de comercio, declaraciones…) ────────────
 router.get('/clients/:id/documentos', requirePermission('contable.documentos.gestionar'), contableController.listDocumentos);
 router.post('/clients/:id/documentos', requirePermission('contable.documentos.gestionar'), ...ESCRIBIR, docUpload.single('file'), contableController.uploadDocumento);
+// El contenido del archivo, solo con sesión y permiso (ver getDocumentoArchivo).
+router.get('/documentos/:id/archivo', requirePermission('contable.documentos.gestionar'), contableController.getDocumentoArchivo);
 router.delete('/documentos/:id', requirePermission('contable.documentos.gestionar'), ...ESCRIBIR, contableController.deleteDocumento);
 
 // ─── Horario de los avisos de vencimientos ────────────────────────────────────

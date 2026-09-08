@@ -7,7 +7,9 @@ import toast from 'react-hot-toast';
 import { Portal } from '@/components/ui/Portal';
 import { X, Upload, Trash2, FileText, ExternalLink, Loader2, Paperclip } from 'lucide-react';
 
-interface Doc { id: string; nombre: string; categoria: string | null; url: string; mimeType: string | null; size: number | null; createdAt: string }
+// Sin `url`: el archivo se pide por /contable/documentos/:id/archivo, que exige
+// sesión. La URL firmada de Cloudinary se queda en el servidor.
+interface Doc { id: string; nombre: string; categoria: string | null; mimeType: string | null; size: number | null; createdAt: string }
 
 const CATEGORIAS = ['RUT', 'Cámara de comercio', 'Declaración', 'Certificado', 'Otro'];
 const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[16px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition';
@@ -53,6 +55,27 @@ export function DocumentosCliente({ taxClientId, clientName, onClose }: { taxCli
     setFile(f);
     if (!nombre) setNombre(f.name.replace(/\.[^.]+$/, ''));
   };
+
+  // El archivo se pide al servidor con la sesión puesta y se abre desde la
+  // memoria del navegador. Antes el enlace apuntaba directo a Cloudinary y
+  // cualquiera que lo tuviera abría el RUT o la declaración sin iniciar sesión.
+  const [abriendo, setAbriendo] = useState<string | null>(null);
+
+  async function abrir(d: { id: string; nombre: string }) {
+    setAbriendo(d.id);
+    try {
+      const r = await api.get(`/contable/documentos/${d.id}/archivo`, { responseType: 'blob' });
+      const url = URL.createObjectURL(r.data as Blob);
+      const w = window.open(url, '_blank', 'noopener,noreferrer');
+      if (!w) toast.error('El navegador bloqueó la ventana. Permite las ventanas emergentes.');
+      // Se libera después de que el visor alcanzó a cargarlo.
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch {
+      toast.error('No se pudo abrir el documento');
+    } finally {
+      setAbriendo(null);
+    }
+  }
 
   return (
     <Portal>
@@ -114,7 +137,15 @@ export function DocumentosCliente({ taxClientId, clientName, onClose }: { taxCli
                       <p className="text-[13px] font-medium text-slate-900 dark:text-white truncate">{d.nombre}</p>
                       <p className="text-[11px] text-slate-400">{d.categoria || 'Sin categoría'}{d.size ? ` · ${fmtSize(d.size)}` : ''}</p>
                     </div>
-                    <a href={d.url} target="_blank" rel="noopener noreferrer" title="Abrir" className="p-1.5 text-slate-400 hover:text-emerald-600 rounded-lg hover:bg-emerald-50 dark:hover:bg-emerald-900/20"><ExternalLink size={15} /></a>
+                    <button
+                      type="button"
+                      onClick={() => abrir(d)}
+                      disabled={abriendo === d.id}
+                      title="Abrir"
+                      className="p-1.5 text-slate-400 hover:text-emerald-600 rounded-lg hover:bg-emerald-50 dark:hover:bg-emerald-900/20 disabled:opacity-50"
+                    >
+                      {abriendo === d.id ? <Loader2 size={15} className="animate-spin" /> : <ExternalLink size={15} />}
+                    </button>
                     <button onClick={() => delMut.mutate(d.id)} title="Eliminar" className="p-1.5 text-slate-400 hover:text-red-600 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20"><Trash2 size={15} /></button>
                   </div>
                 ))}

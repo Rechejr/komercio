@@ -1,7 +1,7 @@
 import { Response, NextFunction } from 'express';
 import { contableController } from '../../controllers/contable.controller';
 import { prisma } from '../../config/database';
-import { uploadDocument, deleteImage } from '../../config/cloudinary';
+import { uploadDocument, deleteImage, deleteDocument } from '../../config/cloudinary';
 import { encrypt } from '../../utils/crypto';
 import { AuthRequest } from '../../middlewares/auth';
 
@@ -28,8 +28,16 @@ jest.mock('../../utils/pagination', () => ({
 }));
 
 jest.mock('../../config/cloudinary', () => ({
-  uploadDocument: jest.fn().mockResolvedValue('https://cloudinary/doc.pdf'),
+  // Cloudinary devuelve la URL FIRMADA (privada) más el identificador del
+  // archivo, que hace falta para poder borrarlo después.
+  uploadDocument: jest.fn().mockResolvedValue({
+    url: 'https://cloudinary/authenticated/s--abc--/doc.pdf',
+    publicId: 'komercio/contable-docs/doc',
+    resourceType: 'image',
+  }),
   deleteImage: jest.fn().mockResolvedValue(undefined),
+  deleteDocument: jest.fn().mockResolvedValue(undefined),
+  extractPublicId: jest.fn((u: string) => (u.includes('doc.pdf') ? 'doc' : null)),
 }));
 
 const mockPrisma = prisma as any;
@@ -50,7 +58,9 @@ function makeReq(overrides: Record<string, unknown> = {}): AuthRequest {
 function makeRes() {
   const json = jest.fn();
   const status = jest.fn().mockReturnThis();
-  return { res: { json, status } as unknown as Response, json, status };
+  const send = jest.fn().mockReturnThis();
+  const setHeader = jest.fn().mockReturnThis();
+  return { res: { json, status, send, setHeader } as unknown as Response, json, status, send, setHeader };
 }
 
 function makeNext() {
@@ -72,7 +82,11 @@ beforeEach(() => {
   mockPrisma.clientDocument.findMany.mockResolvedValue([]);
   mockPrisma.vencimiento.findMany.mockResolvedValue([]);
   mockPrisma.resolucionDian.findMany.mockResolvedValue([]);
-  (uploadDocument as jest.Mock).mockResolvedValue('https://cloudinary/doc.pdf');
+  (uploadDocument as jest.Mock).mockResolvedValue({
+    url: 'https://cloudinary/authenticated/s--abc--/doc.pdf',
+    publicId: 'komercio/contable-docs/doc',
+    resourceType: 'image',
+  });
 });
 
 // ─── Credenciales ────────────────────────────────────────────────────────────
@@ -301,7 +315,9 @@ describe('contableController.uploadDocumento', () => {
 
     const data = mockPrisma.clientDocument.create.mock.calls[0][0].data;
     expect(data.nombre).toBe('RUT.pdf');
-    expect(data.url).toBe('https://cloudinary/doc.pdf');
+    expect(data.url).toBe('https://cloudinary/authenticated/s--abc--/doc.pdf');
+    // El identificador se guarda para poder borrar o volver a firmar el archivo.
+    expect(data.publicId).toBe('komercio/contable-docs/doc');
     expect(data.taxClientId).toBe('tc-1');
     expect(status).toHaveBeenCalledWith(201);
   });
@@ -330,6 +346,62 @@ describe('contableController.uploadDocumento', () => {
   });
 });
 
+describe('contableController.getDocumentoArchivo', () => {
+  // Este endpoint es el que sustituye al enlace público: antes la URL de
+  // Cloudinary se le entregaba al navegador y con solo tenerla se abría el RUT o
+  // la declaración de un tercero, sin sesión.
+  const original = global.fetch;
+  afterEach(() => { global.fetch = original; });
+
+  it('404 si el documento es de otra oficina', async () => {
+    mockPrisma.clientDocument.findFirst.mockResolvedValue(null);
+    const { res } = makeRes();
+    const next = makeNext();
+
+    await contableController.getDocumentoArchivo(makeReq({ params: { id: 'doc-ajeno' } }), res, next);
+
+    expect(errorDe(next).statusCode).toBe(404);
+  });
+
+  it('entrega el archivo sin revelar la URL de Cloudinary', async () => {
+    mockPrisma.clientDocument.findFirst.mockResolvedValue({
+      id: 'doc-1', nombre: 'RUT.pdf', mimeType: 'application/pdf',
+      url: 'https://cloudinary/authenticated/s--secreta--/doc.pdf',
+    });
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true, body: {}, headers: { get: () => 'application/pdf' },
+      arrayBuffer: async () => new TextEncoder().encode('contenido').buffer,
+    }) as unknown as typeof fetch;
+
+    const { res, send, setHeader } = makeRes();
+    await contableController.getDocumentoArchivo(makeReq({ params: { id: 'doc-1' } }), res, makeNext());
+
+    // El servidor lo bajó él mismo, con la URL firmada que solo él conoce.
+    expect(global.fetch).toHaveBeenCalledWith('https://cloudinary/authenticated/s--secreta--/doc.pdf');
+    expect(send).toHaveBeenCalled();
+    const enviado = (send as jest.Mock).mock.calls[0][0];
+    expect(Buffer.from(enviado).toString()).toBe('contenido');
+
+    const cabeceras = Object.fromEntries((setHeader as jest.Mock).mock.calls);
+    expect(cabeceras['Content-Type']).toBe('application/pdf');
+    // Información de un tercero: no debe quedar en cachés intermedias.
+    expect(cabeceras['Cache-Control']).toContain('no-store');
+  });
+
+  it('502 si Cloudinary no responde, sin filtrar el detalle', async () => {
+    mockPrisma.clientDocument.findFirst.mockResolvedValue({
+      id: 'doc-1', nombre: 'RUT.pdf', mimeType: 'application/pdf', url: 'https://cloudinary/x',
+    });
+    global.fetch = jest.fn().mockResolvedValue({ ok: false, status: 401 }) as unknown as typeof fetch;
+
+    const { res } = makeRes();
+    const next = makeNext();
+    await contableController.getDocumentoArchivo(makeReq({ params: { id: 'doc-1' } }), res, next);
+
+    expect(errorDe(next).statusCode).toBe(502);
+  });
+});
+
 describe('contableController.deleteDocumento', () => {
   it('404 si el documento es de otra oficina', async () => {
     mockPrisma.clientDocument.findFirst.mockResolvedValue(null);
@@ -343,13 +415,18 @@ describe('contableController.deleteDocumento', () => {
   });
 
   it('borra la fila y de paso el archivo en Cloudinary', async () => {
-    mockPrisma.clientDocument.findFirst.mockResolvedValue({ id: 'doc-1', url: 'https://cloudinary/doc.pdf' });
+    mockPrisma.clientDocument.findFirst.mockResolvedValue({
+      id: 'doc-1', url: 'https://cloudinary/authenticated/s--abc--/doc.pdf',
+      publicId: 'komercio/contable-docs/doc', resourceType: 'image',
+    });
     const { res } = makeRes();
 
     await contableController.deleteDocumento(makeReq({ params: { id: 'doc-1' } }), res, makeNext());
 
     expect(mockPrisma.clientDocument.delete).toHaveBeenCalledWith({ where: { id: 'doc-1' } });
-    expect(deleteImage).toHaveBeenCalledWith('https://cloudinary/doc.pdf');
+    // Un documento con identificador es privado: se borra por la vía de los
+    // privados, que le dice a Cloudinary bajo qué `type` está guardado.
+    expect(deleteDocument).toHaveBeenCalledWith('komercio/contable-docs/doc', 'image');
   });
 
   it('si Cloudinary falla al limpiar, el borrado igual responde bien', async () => {

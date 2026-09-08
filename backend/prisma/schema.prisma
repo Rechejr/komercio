@@ -1291,7 +1291,15 @@ model ClientDocument {
   taxClient   TaxClient @relation(fields: [taxClientId], references: [id], onDelete: Cascade)
   nombre      String
   categoria   String? // "RUT" | "Cámara de comercio" | "Declaración" | "Otro"
+  // URL FIRMADA de Cloudinary (tipo "authenticated"). Nunca se le manda al
+  // navegador: el archivo se sirve por /contable/documentos/:id/archivo, que
+  // exige sesión y permiso. Antes se guardaba una URL pública y bastaba tener el
+  // enlace para abrir el RUT o la declaración de renta de un tercero.
   url         String
+  // Identificador del archivo en Cloudinary, para poder borrarlo o volver a
+  // firmarlo sin tener que adivinarlo desde la URL.
+  publicId    String?
+  resourceType String? // "image" | "raw" — lo decide Cloudinary según el archivo
   mimeType    String?
   size        Int?
   createdAt   DateTime  @default(now())
