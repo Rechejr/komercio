@@ -10,6 +10,14 @@ import { planLimit } from '../middlewares/planLimit';
 import multer from 'multer';
 
 const router = Router();
+
+// La plantilla va ANTES de exigir sesión, igual que la de cuentas por pagar: el
+// botón que la descarga es un enlace normal y el navegador no manda en él la
+// cabecera con el token, así que detrás del login respondía "No autorizado". El
+// archivo va en blanco —solo los encabezados y tres filas de ejemplo—, así que
+// no expone nada del negocio.
+router.get('/import-template', creditImportController.template);
+
 router.use(authenticate);
 
 const xlsxUpload = multer({
@@ -31,7 +39,6 @@ const xlsxUpload = multer({
 
 // Cargar de una los fiados que el negocio ya tenía apuntados. Va ANTES de
 // '/:id' para que no lo capture esa ruta.
-router.get('/import-template', requirePermission('creditos.ver'), creditImportController.template);
 router.post('/import',
   requirePermission('creditos.gestionar'),
   planLimit.bulkImport(),

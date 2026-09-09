@@ -3392,7 +3392,7 @@
         "tags": [
           "credit"
         ],
-        "summary": "POST /api/v1/credits/import",
+        "summary": "Cargar de una los fiados que el negocio ya tenía apuntados. Va ANTES de '/:id' para que no lo capture esa ruta.",
         "security": [
           {
             "bearerAuth": []
@@ -3427,7 +3427,7 @@
         "tags": [
           "credit"
         ],
-        "summary": "Cargar de una los fiados que el negocio ya tenía apuntados. Va ANTES de '/:id' para que no lo capture esa ruta.",
+        "summary": "La plantilla va ANTES de exigir sesión, igual que la de cuentas por pagar: el botón que la descarga es un enlace normal y el navegador no manda en él la cabecera con el token, así que detrás del login respondía \"No autorizado\". El archivo va en blanco —solo los encabezados y tres filas de ejemplo—, ",
         "security": [
           {
             "bearerAuth": []

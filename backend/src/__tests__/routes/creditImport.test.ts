@@ -67,6 +67,26 @@ beforeEach(() => {
 });
 
 describe('plantilla de fiados', () => {
+  it('se descarga SIN sesión: el botón es un enlace y no manda el token', async () => {
+    // Aquí se rompió una vez: la ruta quedó detrás del login y el navegador,
+    // que en un <a href> no manda la cabecera de autorización, recibía
+    // {"success":false,"error":"No autorizado"} en vez del archivo.
+    const res = await request(app)
+      .get('/api/v1/credits/import-template')
+      .buffer(true)
+      .parse((r, cb) => {
+        const trozos: Buffer[] = [];
+        r.on('data', (t: Buffer) => trozos.push(t));
+        r.on('end', () => cb(null, Buffer.concat(trozos)));
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.headers['content-disposition']).toContain('plantilla-fiados.xlsx');
+    // Firma de un .xlsx (es un ZIP): descarta que venga un JSON de error.
+    expect((res.body as Buffer).slice(0, 2).toString('hex')).toBe('504b');
+  });
+
+
   it('trae las columnas que el import espera, con la identificación', async () => {
     const res = await request(app)
       .get('/api/v1/credits/import-template')
