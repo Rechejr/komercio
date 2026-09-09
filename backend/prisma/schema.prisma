@@ -806,23 +806,27 @@ model PurchaseDetail {
 // crédito (espejo de Credit/CreditPayment de clientes). Abonar saca plata de la
 // caja (a diferencia del fiado de cliente, que la mete).
 model SupplierCredit {
-  id          String                  @id @default(uuid())
-  purchaseId  String?                 @unique
-  purchase    Purchase?               @relation(fields: [purchaseId], references: [id])
-  supplierId  String
-  supplier    Supplier                @relation(fields: [supplierId], references: [id])
-  businessId  String
-  business    Business                @relation(fields: [businessId], references: [id])
-  totalAmount Decimal
-  paidAmount  Decimal                 @default(0)
-  balance     Decimal
-  status      CreditStatus            @default(PENDING)
-  dueDate     DateTime?
-  notes       String?
-  payments    SupplierCreditPayment[]
-  createdAt   DateTime                @default(now())
-  updatedAt   DateTime                @updatedAt
-  deletedAt   DateTime?
+  id            String                  @id @default(uuid())
+  purchaseId    String?                 @unique
+  purchase      Purchase?               @relation(fields: [purchaseId], references: [id])
+  supplierId    String
+  supplier      Supplier                @relation(fields: [supplierId], references: [id])
+  businessId    String
+  business      Business                @relation(fields: [businessId], references: [id])
+  totalAmount   Decimal
+  paidAmount    Decimal                 @default(0)
+  balance       Decimal
+  // Número de factura del proveedor cuando la cuenta NO viene de una compra
+  // registrada (las importadas desde Excel). Si viene de una compra, sale de
+  // `purchase`.
+  invoiceNumber String?
+  status        CreditStatus            @default(PENDING)
+  dueDate       DateTime?
+  notes         String?
+  payments      SupplierCreditPayment[]
+  createdAt     DateTime                @default(now())
+  updatedAt     DateTime                @updatedAt
+  deletedAt     DateTime?
 
   @@index([supplierId])
   @@index([businessId])
@@ -909,6 +913,9 @@ model Credit {
   // pagar: así los avisos, el estado "En mora" y los filtros que ya existían
   // siguen funcionando igual, sin saber que hay cuotas debajo.
   dueDate         DateTime?
+  // Número de factura cuando el fiado NO viene de una venta del sistema (los
+  // importados desde Excel). Si viene de una venta, el número sale de `sale`.
+  invoiceNumber   String?
   // ── Financiación (solo cuando se vende a cuotas) ──────────────────────────
   // Interés que se cobra POR DAR EL PLAZO: se suma al saldo desde el principio
   // y queda repartido en las cuotas, así el cliente sabe desde el primer día
@@ -1286,23 +1293,23 @@ model ClientCredential {
 // el cliente (el archivo en Cloudinary queda huérfano — se limpia best-effort en
 // el borrado explícito).
 model ClientDocument {
-  id          String    @id @default(uuid())
-  taxClientId String
-  taxClient   TaxClient @relation(fields: [taxClientId], references: [id], onDelete: Cascade)
-  nombre      String
-  categoria   String? // "RUT" | "Cámara de comercio" | "Declaración" | "Otro"
+  id           String    @id @default(uuid())
+  taxClientId  String
+  taxClient    TaxClient @relation(fields: [taxClientId], references: [id], onDelete: Cascade)
+  nombre       String
+  categoria    String? // "RUT" | "Cámara de comercio" | "Declaración" | "Otro"
   // URL FIRMADA de Cloudinary (tipo "authenticated"). Nunca se le manda al
   // navegador: el archivo se sirve por /contable/documentos/:id/archivo, que
   // exige sesión y permiso. Antes se guardaba una URL pública y bastaba tener el
   // enlace para abrir el RUT o la declaración de renta de un tercero.
-  url         String
+  url          String
   // Identificador del archivo en Cloudinary, para poder borrarlo o volver a
   // firmarlo sin tener que adivinarlo desde la URL.
-  publicId    String?
+  publicId     String?
   resourceType String? // "image" | "raw" — lo decide Cloudinary según el archivo
-  mimeType    String?
-  size        Int?
-  createdAt   DateTime  @default(now())
+  mimeType     String?
+  size         Int?
+  createdAt    DateTime  @default(now())
 
   @@index([taxClientId])
   @@map("client_documents")

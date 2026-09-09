@@ -193,14 +193,14 @@ export const planLimit = {
     };
   },
 
-  bulkImport() {
+  bulkImport(que = 'datos') {
     return async (req: AuthRequest, res: Response, next: NextFunction) => {
       try {
         const business = await getBusinessWithPlan(req);
         if (!business) return next();
         const limits = getPlan(business.plan);
         if (!limits.canBulkImport) {
-          return next(new AppError('La importación masiva de productos está disponible solo en el plan Pro.', 403));
+          return next(new AppError(`La importación masiva de ${que} está disponible solo en el plan Pro.`, 403));
         }
         next();
       } catch (err) { next(err); }

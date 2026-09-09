@@ -41,7 +41,7 @@ const xlsxUpload = multer({
 // '/:id' para que no lo capture esa ruta.
 router.post('/import',
   requirePermission('creditos.gestionar'),
-  planLimit.bulkImport(),
+  planLimit.bulkImport('fiados'),
   xlsxUpload.single('file'),
   creditImportController.importar,
 );

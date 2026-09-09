@@ -251,12 +251,14 @@ describe('importar cuentas por pagar', () => {
     expect(res.body.data.imported).toBe(1);
   });
 
-  it('guarda el número de factura en las notas', async () => {
+  it('guarda el número de factura en su propia columna, no dentro de las notas', async () => {
     const buf = await excel([ENCABEZADOS, ['Maderas', 'FV-1024', 500000, 0, '', 'Mercancía de octubre']]);
     await subir(buf);
 
-    expect(mockPrisma.supplierCredit.create.mock.calls[0][0].data.notes)
-      .toBe('Factura FV-1024 — Mercancía de octubre');
+    const data = mockPrisma.supplierCredit.create.mock.calls[0][0].data;
+    expect(data.invoiceNumber).toBe('FV-1024');
+    // Y las notas quedan con lo que escribió el negocio, sin el "Factura ..." pegado.
+    expect(data.notes).toBe('Mercancía de octubre');
   });
 
   it('salta las filas sin proveedor en vez de contarlas', async () => {

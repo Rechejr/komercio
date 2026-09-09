@@ -173,7 +173,7 @@ router.get('/:id', async (req: any, res, next) => {
 // sus proveedores, en vez de teclearlas una por una al empezar a usar Ventrix.
 router.post('/import',
   requirePermission('compras.gestionar'),
-  planLimit.bulkImport(),
+  planLimit.bulkImport('cuentas por pagar'),
   xlsxUpload.single('file'),
   async (req: AuthRequest, res, next) => {
     try {
@@ -351,7 +351,10 @@ router.post('/import',
               balance,
               status: balance <= 0 ? 'PAID' : r.abonado > 0 ? 'PARTIAL' : 'PENDING',
               dueDate: r.vence,
-              notes: [r.factura ? `Factura ${r.factura}` : null, r.notas].filter(Boolean).join(' — ') || null,
+              // La factura va en su propia columna: metida en las notas no se
+              // veía en el listado ni se podía buscar.
+              invoiceNumber: r.factura || null,
+              notes: r.notas || null,
             },
           });
           results.imported++;

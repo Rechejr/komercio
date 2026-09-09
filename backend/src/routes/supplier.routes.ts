@@ -98,7 +98,7 @@ const SUPPLIER_FIELD_LABELS: Record<string, string> = {
 // ── Bulk import (supports ?dryRun=true for preview) ──────────────────────────
 router.post('/import',
   requirePermission('proveedores.gestionar'),
-  planLimit.bulkImport(),
+  planLimit.bulkImport('proveedores'),
   xlsxUpload.single('file'),
   async (req: AuthRequest, res, next) => {
     try {

@@ -282,7 +282,10 @@ export const creditImportController = {
                 balance,
                 status: balance <= 0 ? 'PAID' : r.abonado > 0 ? 'PARTIAL' : 'PENDING',
                 dueDate: r.vence,
-                notes: [r.factura ? `Factura ${r.factura}` : null, r.notas].filter(Boolean).join(' — ') || null,
+                // La factura va en su propia columna: metida en las notas no se
+                // veía en el listado ni se podía buscar.
+                invoiceNumber: r.factura || null,
+                notes: r.notas || null,
               },
             });
             // Lo que queda debiendo, no el total: si la fila ya trae abonos, esa

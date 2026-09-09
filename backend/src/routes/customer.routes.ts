@@ -94,7 +94,7 @@ const CUSTOMER_FIELD_LABELS: Record<string, string> = {
 // ── Bulk import (supports ?dryRun=true for preview) ──────────────────────────
 router.post('/import',
   requirePermission('clientes.gestionar'),
-  planLimit.bulkImport(),
+  planLimit.bulkImport('clientes'),
   xlsxUpload.single('file'),
   async (req: AuthRequest, res, next) => {
     try {

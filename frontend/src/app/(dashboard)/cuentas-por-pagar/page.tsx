@@ -113,6 +113,7 @@ export default function CuentasPorPagarPage() {
     if (!buscado) return true;
     return c.supplier?.name?.toLowerCase().includes(buscado)
       || c.purchase?.invoiceNumber?.toLowerCase().includes(buscado)
+      || c.invoiceNumber?.toLowerCase().includes(buscado)
       || (!!buscadoId && soloAlfanum(c.supplier?.document || '').includes(buscadoId));
   });
   const pagination = data?.pagination;
@@ -286,7 +287,9 @@ export default function CuentasPorPagarPage() {
                     )}
                   </td>
                   <td className="hidden lg:table-cell px-4 py-3 text-[12px] text-slate-500 dark:text-slate-400 font-mono">{c.supplier?.document || '—'}</td>
-                  <td className="hidden md:table-cell px-4 py-3 text-[12px] text-slate-500 dark:text-slate-400 font-mono">{c.purchase?.invoiceNumber || '—'}</td>
+                  {/* En las importadas no hay compra registrada: el número
+                      viene del archivo. */}
+                  <td className="hidden md:table-cell px-4 py-3 text-[12px] text-slate-500 dark:text-slate-400 font-mono">{c.purchase?.invoiceNumber || c.invoiceNumber || '—'}</td>
                   <td className="px-4 py-3 text-right text-[13px] text-slate-600 dark:text-slate-300 tabular-nums">{formatCurrency(c.totalAmount)}</td>
                   <td className="hidden sm:table-cell px-4 py-3 text-right text-[13px] text-emerald-600 dark:text-emerald-400 tabular-nums">{formatCurrency(c.paidAmount)}</td>
                   <td className="px-4 py-3 text-right text-[13px] font-semibold text-red-600 dark:text-red-400 tabular-nums">{formatCurrency(c.balance)}</td>

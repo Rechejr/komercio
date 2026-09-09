@@ -491,7 +491,7 @@ export default function CreditosPage() {
                     {c.customer?.document || '—'}
                   </td>
                   <td className="hidden sm:table-cell px-4 py-3 font-mono text-[12px] text-emerald-600 dark:text-emerald-400">
-                    {c.sale?.invoiceNumber || '—'}
+                    {c.sale?.invoiceNumber || c.invoiceNumber || '—'}
                   </td>
                   <td className="px-4 py-3 text-right text-[13px] text-slate-600 dark:text-slate-300 tabular-nums">
                     {formatCurrency(c.totalAmount)}

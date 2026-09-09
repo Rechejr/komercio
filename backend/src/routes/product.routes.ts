@@ -73,7 +73,7 @@ const xlsxUpload = multer({
 // ── Bulk import (supports ?dryRun=true for preview) ──────────────────────────
 router.post('/import',
   requirePermission('productos.importar'),
-  planLimit.bulkImport(),
+  planLimit.bulkImport('productos'),
   xlsxUpload.single('file'),
   async (req: AuthRequest, res, next) => {
     try {
