@@ -57,8 +57,26 @@ async function main() {
           dismissedAt: new Date().toISOString(),
           legacy: true,
         },
+        // Plan Pro en el entorno sembrado. Compras, Reportes, Proveedores,
+        // Fiados y Cuentas por pagar son modulos de pago: con el plan gratuito
+        // el servidor responde 403 y las pruebas de pantalla de esos modulos no
+        // pueden pasar. Para probar a mano los limites del plan gratuito, se le
+        // cambia el plan al negocio desde el panel de superadmin.
+        plan: 'pro',
+        planExpiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
       },
     });
+
+  // El negocio pudo haberse creado antes de que el seed pusiera el plan, o
+  // haberse quedado con un Pro vencido —que bloquea igual que el gratuito—. Se
+  // asegura en cada corrida para que el entorno quede siempre igual.
+  const proVencido = business.planExpiresAt != null && business.planExpiresAt < new Date();
+  if (business.plan !== 'pro' || proVencido) {
+    await prisma.business.update({
+      where: { id: business.id },
+      data: { plan: 'pro', planExpiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000) },
+    });
+  }
 
   const branch = await prisma.branch.findFirst({ where: { businessId: business.id } })
     ?? await prisma.branch.create({

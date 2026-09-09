@@ -1,0 +1,120 @@
+# Suite E2E completa: los 14 specs de pantalla, no solo los 5 de humo.
+#
+# Por qué va aparte del CI de cada push: la suite entera tarda cerca de media
+# hora, y con varios commits al día eso es demasiada espera para algo que rara
+# vez cambia el resultado. El CI de cada push corre los 5 de humo (auth,
+# dashboard, POS, inventario, ventas), que atrapan lo grave en ~12 minutos;
+# esta corre de noche y revisa el resto: clientes, proveedores, compras,
+# créditos, gastos, caja, reportes, cotizaciones y transferencias.
+#
+# También se puede lanzar a mano desde la pestaña Actions ("Run workflow"),
+# que es lo práctico antes de un despliegue grande.
+name: E2E completo
+
+on:
+  schedule:
+    # 07:00 UTC = 2:00 a.m. en Colombia: la corrida está lista al empezar el día.
+    - cron: '0 7 * * *'
+  workflow_dispatch:
+
+jobs:
+  e2e-completo:
+    name: Los 14 specs de pantalla
+    runs-on: ubuntu-latest
+    # La corrida local tardó 35 min contra una base remota; aquí la base está en
+    # el mismo runner, pero se deja margen para los builds y el navegador.
+    timeout-minutes: 50
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: ventrix_e2e
+        ports: ['5432:5432']
+        options: --health-cmd pg_isready --health-interval 10s
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: --health-cmd "redis-cli ping" --health-interval 10s
+
+    env:
+      DATABASE_URL: postgresql://test:test@localhost:5432/ventrix_e2e
+      JWT_SECRET: test-secret-ci-at-least-32-characters-long
+      JWT_REFRESH_SECRET: test-refresh-secret-ci-at-least-32-characters-long
+      # NODE_ENV=test a propósito: en production el límite de intentos de login
+      # baja a 5 por cuarto de hora y los E2E, que inician sesión muchas veces,
+      # se bloquearían solos. Pasó de verdad en una corrida local.
+      NODE_ENV: test
+      PORT: '4000'
+      CORS_ORIGIN: http://localhost:3001
+      NEXT_PUBLIC_API_URL: http://localhost:4000/api/v1
+      NEXT_PUBLIC_SOCKET_URL: http://localhost:4000
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22' }
+
+      # ── Backend ──
+      - name: Backend — dependencias y build
+        run: |
+          cd backend
+          npm ci
+          npx prisma generate
+          npx prisma migrate deploy
+          npm run build
+
+      - name: Backend — datos de prueba
+        # El seed crea admin@komercio.app, su negocio (en plan Pro, que es lo que
+        # necesitan los specs de Compras, Reportes, Proveedores y Fiados) y
+        # productos de ejemplo.
+        run: cd backend && npm run db:seed
+
+      - name: Backend — arrancar
+        run: |
+          cd backend
+          node dist/index.js > /tmp/backend.log 2>&1 &
+          for i in $(seq 1 60); do
+            curl -sf http://localhost:4000/health > /dev/null && echo "backend arriba" && exit 0
+            sleep 2
+          done
+          echo "El backend no arrancó:"; cat /tmp/backend.log; exit 1
+
+      # ── Frontend ──
+      - name: Frontend — dependencias y build
+        run: |
+          cd frontend
+          npm ci
+          npm run build
+
+      - name: Frontend — arrancar
+        run: |
+          cd frontend
+          npm start > /tmp/frontend.log 2>&1 &
+          for i in $(seq 1 60); do
+            curl -sf http://localhost:3001/login > /dev/null && echo "frontend arriba" && exit 0
+            sleep 2
+          done
+          echo "El frontend no arrancó:"; cat /tmp/frontend.log; exit 1
+
+      # ── Pruebas ──
+      - name: Playwright — instalar navegador
+        run: cd e2e && npm ci && npx playwright install --with-deps chromium
+
+      - name: Correr la suite completa
+        # Sin lista de archivos: corre todo lo que haya en tests/, salvo
+        # prod-verification.spec.ts, que el propio config excluye porque apunta
+        # a producción.
+        run: cd e2e && npx playwright test --reporter=list
+
+      - name: Guardar el reporte si algo falla
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reporte-e2e-completo
+          path: |
+            e2e/playwright-report/
+            e2e/test-results/
+          retention-days: 14
