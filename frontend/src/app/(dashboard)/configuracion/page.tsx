@@ -70,14 +70,16 @@ const BRANCH_LIMIT: Record<string, number> = { free: 1, pro: 3 };
 // Medios de pago (PaymentAccount). El "tipo" define cuáles son EFECTIVO (los
 // únicos que alimentan la caja física); el resto es informativo.
 const PAY_TYPES = [
-  { value: 'CASH',  label: 'Efectivo',        hint: 'Entra a la caja física' },
-  { value: 'BANK',  label: 'Banco / Tarjeta', hint: 'Cuenta bancaria o datáfono' },
-  { value: 'OTHER', label: 'Otro',            hint: 'Nequi, Daviplata, billeteras…' },
+  { value: 'CASH',      label: 'Efectivo',        hint: 'Entra a la caja física' },
+  { value: 'BANK',      label: 'Banco / Tarjeta', hint: 'Cuenta bancaria o datáfono' },
+  { value: 'FINANCING', label: 'Financiación',    hint: 'Addi, Sistecrédito: giran después, no entran a caja' },
+  { value: 'OTHER',     label: 'Otro',            hint: 'Nequi, Daviplata, billeteras…' },
 ] as const;
-const PAY_TYPE_LABEL: Record<string, string> = { CASH: 'Efectivo', BANK: 'Banco', OTHER: 'Otro' };
+const PAY_TYPE_LABEL: Record<string, string> = { CASH: 'Efectivo', BANK: 'Banco', FINANCING: 'Financiación', OTHER: 'Otro' };
 const PAY_TYPE_BADGE: Record<string, string> = {
   CASH:  'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400',
   BANK:  'bg-sky-50 text-sky-700 dark:bg-sky-500/10 dark:text-sky-400',
+  FINANCING: 'bg-violet-50 text-violet-700 dark:bg-violet-500/10 dark:text-violet-400',
   OTHER: 'bg-violet-50 text-violet-700 dark:bg-violet-500/10 dark:text-violet-400',
 };
 

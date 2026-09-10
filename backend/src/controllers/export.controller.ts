@@ -43,6 +43,20 @@ function safeStr(val: unknown): string {
   return /^[=+\-@\t\r]/.test(s) ? `'${s}` : s;
 }
 
+// Nombre del medio de pago en español. Si el movimiento apunta a una cuenta
+// configurable (Addi, Sistecrédito, Bancolombia…), manda el nombre que le puso
+// el negocio; esto es solo el respaldo para los registros viejos, que guardaban
+// un enum.
+const METODO_ES: Record<string, string> = {
+  CASH: 'Efectivo', TRANSFER: 'Transferencia', NEQUI: 'Nequi',
+  DAVIPLATA: 'Daviplata', CARD: 'Tarjeta', MIXED: 'Mixto',
+};
+
+// Cómo se llama cada tipo de cuenta en la hoja de cálculo.
+const TIPO_ES: Record<string, string> = {
+  CASH: 'Efectivo', BANK: 'Banco', FINANCING: 'Financiación', OTHER: 'Otro',
+};
+
 function initStreamWriter(res: Response, filename: string) {
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
@@ -111,6 +125,7 @@ export const exportController = {
           include: {
             customer: { select: { name: true } },
             user: { select: { name: true } },
+            paymentAccount: { select: { name: true } },
             details: { include: { product: { select: { name: true, code: true } } } },
           },
         });
@@ -123,7 +138,9 @@ export const exportController = {
             date: fmtDate(s.createdAt),
             customer: safeStr(s.customer?.name || 'Mostrador'),
             seller: safeStr(s.user?.name || ''),
-            method: String(s.paymentMethod),
+            // El nombre de la cuenta, no el enum: así se distingue una venta con
+            // Addi de una por Nequi, que ambas se guardan como TRANSFER.
+            method: safeStr(s.paymentAccount?.name || METODO_ES[String(s.paymentMethod)] || String(s.paymentMethod)),
             status: s.status,
             subtotal: fmtMoney(s.subtotal),
             discount: fmtMoney(s.discountAmount),
@@ -644,6 +661,153 @@ export const exportController = {
     } catch (err) { next(err); }
   },
 
+  /**
+   * Ventas por medio de pago, en Excel.
+   *
+   * Para qué: cuadrar contra lo que gira cada plataforma. Addi y Sistecrédito
+   * consignan días después y por su lado, así que el dueño necesita la lista de
+   * "estas son las ventas que me tiene que pagar Addi este mes" — con el export
+   * de ventas normal no se podía, porque todas salían como "TRANSFER".
+   *
+   * Trae dos hojas: el resumen por medio (lo mismo que se ve en pantalla) y el
+   * detalle factura por factura. En el detalle, una venta con pago mixto ocupa
+   * una fila por cada medio, y al efectivo se le descuenta el vuelto —igual que
+   * en la caja— para que la suma del detalle dé exactamente el resumen.
+   */
+  async exportPaymentMethods(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const { start, end, start0, end0 } = resolveExportRange(req.query.startDate, req.query.endDate);
+      if ((end.getTime() - start.getTime()) / 86_400_000 > MAX_EXPORT_DAYS) {
+        return next(new AppError(`El rango de exportación no puede superar ${MAX_EXPORT_DAYS} días`, 400));
+      }
+
+      const businessId = req.user!.businessId!;
+      const cuentas = await prisma.paymentAccount.findMany({
+        where: { businessId },
+        select: { id: true, name: true, type: true, legacyEnum: true, order: true },
+        orderBy: { order: 'asc' },
+      });
+      // El desglose de un pago mixto guarda el enum viejo, no el id de la cuenta.
+      const porLegacy = new Map<string, { id: string; name: string; type: string }>();
+      for (const c of cuentas) {
+        if (c.legacyEnum && !porLegacy.has(c.legacyEnum)) porLegacy.set(c.legacyEnum, c);
+      }
+
+      const wb = initStreamWriter(res, `ventas-por-medio-de-pago-${start0}-${end0}.xlsx`);
+
+      const resumen = wb.addWorksheet('Resumen');
+      resumen.columns = [
+        { header: 'Medio de pago', key: 'medio',  width: 26 },
+        { header: 'Tipo',          key: 'tipo',   width: 16 },
+        { header: 'Ventas',        key: 'ventas', width: 12 },
+        { header: 'Total ($)',     key: 'total',  width: 18 },
+      ];
+      styleHeaderStream(resumen);
+
+      const detalle = wb.addWorksheet('Detalle');
+      detalle.columns = [
+        { header: 'N° Factura',        key: 'invoice',  width: 20 },
+        { header: 'Fecha',             key: 'date',     width: 14 },
+        { header: 'Cliente',           key: 'customer', width: 24 },
+        { header: 'Medio de pago',     key: 'medio',    width: 22 },
+        { header: 'Tipo',              key: 'tipo',     width: 16 },
+        { header: 'Valor ($)',         key: 'valor',    width: 16 },
+        { header: 'Total factura ($)', key: 'total',    width: 18 },
+      ];
+      styleHeaderStream(detalle);
+
+      const acumulado = new Map<string, { medio: string; tipo: string; ventas: Set<string>; total: number }>();
+      const sumar = (clave: string, medio: string, tipo: string, valor: number, ventaId: string) => {
+        let fila = acumulado.get(clave);
+        if (!fila) { fila = { medio, tipo, ventas: new Set(), total: 0 }; acumulado.set(clave, fila); }
+        fila.total += valor;
+        fila.ventas.add(ventaId);
+      };
+
+      const where = {
+        createdAt: { gte: start, lte: end },
+        status: 'COMPLETED' as const,
+        deletedAt: null,
+        branch: { businessId },
+      };
+      let lastId: string | undefined;
+      let fetched = 0;
+
+      while (fetched < MAX_EXPORT_ROWS) {
+        const batch = await prisma.sale.findMany({
+          where,
+          orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+          take: Math.min(BATCH_SIZE, MAX_EXPORT_ROWS - fetched),
+          ...(lastId ? { skip: 1, cursor: { id: lastId } } : {}),
+          select: {
+            id: true, invoiceNumber: true, createdAt: true, total: true,
+            changeAmount: true, paymentMethod: true, paymentDetails: true,
+            customer: { select: { name: true } },
+            paymentAccount: { select: { id: true, name: true, type: true } },
+          },
+        });
+        if (batch.length === 0) break;
+
+        for (const v of batch) {
+          const base = {
+            invoice: v.invoiceNumber,
+            date: fmtDate(v.createdAt),
+            customer: safeStr(v.customer?.name || 'Mostrador'),
+            total: fmtMoney(v.total),
+          };
+
+          if (v.paymentMethod === 'MIXED') {
+            const partes = (v.paymentDetails as { splits?: Array<{ method: string; amount: number }> } | null)?.splits || [];
+            const vuelto = Number(v.changeAmount || 0);
+            for (const parte of partes) {
+              const cuenta = porLegacy.get(parte.method);
+              const nombre = cuenta?.name || METODO_ES[parte.method] || parte.method;
+              const tipo = TIPO_ES[cuenta?.type || ''] || '';
+              // El vuelto sale del cajón: se descuenta de la parte en efectivo.
+              const valor = parte.method === 'CASH'
+                ? Math.max(0, Number(parte.amount || 0) - vuelto)
+                : Number(parte.amount || 0);
+              if (valor <= 0) continue;
+              detalle.addRow({ ...base, medio: safeStr(nombre), tipo, valor: fmtMoney(valor) }).commit();
+              sumar(cuenta?.id || `legacy:${parte.method}`, nombre, tipo, valor, v.id);
+            }
+          } else {
+            const nombre = v.paymentAccount?.name
+              || METODO_ES[String(v.paymentMethod)] || String(v.paymentMethod);
+            const tipo = TIPO_ES[v.paymentAccount?.type || ''] || '';
+            detalle.addRow({ ...base, medio: safeStr(nombre), tipo, valor: fmtMoney(v.total) }).commit();
+            sumar(v.paymentAccount?.id || `legacy:${v.paymentMethod}`, nombre, tipo, Number(v.total), v.id);
+          }
+        }
+
+        fetched += batch.length;
+        lastId = batch[batch.length - 1].id;
+        if (batch.length < BATCH_SIZE) break;
+      }
+
+      // Los medios que no movieron nada en el rango también van, en cero: ver
+      // "Addi: $0 este mes" es información, no un vacío.
+      for (const c of cuentas) {
+        if (!acumulado.has(c.id)) {
+          acumulado.set(c.id, { medio: c.name, tipo: TIPO_ES[c.type] || '', ventas: new Set(), total: 0 });
+        }
+      }
+
+      const filas = Array.from(acumulado.values()).sort((a, b) => b.total - a.total);
+      for (const f of filas) {
+        resumen.addRow({ medio: safeStr(f.medio), tipo: f.tipo, ventas: f.ventas.size, total: fmtMoney(f.total) }).commit();
+      }
+      const total = filas.reduce((a, f) => a + f.total, 0);
+      const totalRow = resumen.addRow({ medio: 'TOTAL', tipo: '', ventas: '', total: fmtMoney(total) });
+      totalRow.font = { bold: true };
+      totalRow.commit();
+
+      resumen.commit();
+      detalle.commit();
+      await wb.commit();
+    } catch (err) { next(err); }
+  },
+
   async exportExpenses(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const { start, end, start0, end0 } = resolveExportRange(req.query.startDate, req.query.endDate);
@@ -666,13 +830,6 @@ export const exportController = {
         { header: 'Notas',          key: 'notes',    width: 28 },
       ];
       styleHeaderStream(ws);
-
-      // Método de pago en español: si el gasto usa una cuenta configurable, su
-      // nombre (ya en español) manda; si no, se traduce el enum viejo.
-      const METODO_ES: Record<string, string> = {
-        CASH: 'Efectivo', TRANSFER: 'Transferencia', NEQUI: 'Nequi',
-        DAVIPLATA: 'Daviplata', CARD: 'Tarjeta', MIXED: 'Mixto',
-      };
 
       const where = { date: { gte: start, lte: end }, deletedAt: null, businessId: req.user!.businessId };
       let lastId: string | undefined;

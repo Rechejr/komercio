@@ -7,10 +7,11 @@ const ENDPOINT_FILENAMES: Record<string, string> = {
   expenses: 'gastos',
   financial: 'estado-resultados',
   products: 'inventario',
+  'payment-methods': 'ventas-por-medio-de-pago',
 };
 
 export async function downloadExcel(
-  endpoint: 'sales' | 'purchases' | 'expenses' | 'financial' | 'products',
+  endpoint: 'sales' | 'purchases' | 'expenses' | 'financial' | 'products' | 'payment-methods',
   startDate: string,
   endDate: string,
 ) {

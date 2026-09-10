@@ -24,6 +24,9 @@ router.get('/sales', requirePermission('reportes.exportar'), exportController.ex
 router.get('/purchases', requirePermission('reportes.exportar'), exportController.exportPurchases);
 router.get('/expenses', requirePermission('reportes.exportar'), exportController.exportExpenses);
 router.get('/products', requirePermission('reportes.exportar'), exportController.exportProducts);
+// Ventas por medio de pago: la lista para cuadrar contra lo que gira Addi,
+// Sistecredito o el banco.
+router.get('/payment-methods', requirePermission('reportes.exportar'), exportController.exportPaymentMethods);
 // A diferencia de los de arriba (mismos datos transaccionales que ya se ven
 // fila por fila en pantalla para esos roles), este trae costPrice/utilidad/
 // cartera consolidados — el mismo nivel de detalle que report.routes.ts, que

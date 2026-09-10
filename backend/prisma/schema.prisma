@@ -989,6 +989,11 @@ model PaymentAccount {
 enum PaymentAccountType {
   CASH
   BANK
+  // Plataformas de financiación al cliente (Addi, Sistecrédito y las que el
+  // negocio agregue). La venta se cierra hoy, pero la plata la gira la
+  // plataforma después: no entra a la caja física y conviene poder mirarla
+  // aparte para cuadrar contra lo que cada plataforma consigna.
+  FINANCING
   OTHER
 }
 

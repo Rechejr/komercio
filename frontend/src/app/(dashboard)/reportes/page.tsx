@@ -8,7 +8,7 @@ import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
-import { TrendingUp, TrendingDown, DollarSign, ShoppingCart, Package, Users, FileSpreadsheet, CalendarRange, Receipt } from 'lucide-react';
+import { TrendingUp, TrendingDown, DollarSign, ShoppingCart, Package, Users, FileSpreadsheet, CalendarRange, Receipt, CreditCard, Banknote, Landmark, Wallet } from 'lucide-react';
 import { downloadExcel } from '@/lib/exportExcel';
 
 // Tope del backend para exportaciones (MAX_EXPORT_DAYS) — se valida aquí para
@@ -58,7 +58,32 @@ const TABS = [
   { id: 'products',  label: 'Productos',  icon: Package      },
   { id: 'customers', label: 'Clientes',   icon: Users        },
   { id: 'profit',    label: 'Utilidades', icon: TrendingUp   },
+  { id: 'payments',  label: 'Medios de pago', icon: CreditCard },
 ] as const;
+
+// Los cuatro tipos de medio, en el orden en que el dueño piensa la plata:
+// primero lo que ya tiene en el cajón, después lo que está en el banco, luego lo
+// que le deben las plataformas de financiación.
+const TIPOS_MEDIO = [
+  { key: 'efectivo',    label: 'Efectivo',     icon: Banknote, nota: 'Entra a la caja',
+    bg: 'bg-emerald-50 dark:bg-emerald-500/10', ic: 'text-emerald-600 dark:text-emerald-400' },
+  { key: 'bancos',      label: 'Bancos',       icon: Landmark, nota: 'Transferencias y datáfono',
+    bg: 'bg-blue-50 dark:bg-blue-500/10',       ic: 'text-blue-600 dark:text-blue-400' },
+  { key: 'financiacion', label: 'Financiación', icon: CreditCard, nota: 'Addi, Sistecrédito: giran después',
+    bg: 'bg-violet-50 dark:bg-violet-500/10',   ic: 'text-violet-600 dark:text-violet-400' },
+  { key: 'otros',       label: 'Otros',        icon: Wallet,   nota: 'Nequi, Daviplata y demás',
+    bg: 'bg-slate-100 dark:bg-white/[0.06]',    ic: 'text-slate-500 dark:text-slate-400' },
+] as const;
+
+const BADGE_TIPO: Record<string, string> = {
+  CASH:      'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400',
+  BANK:      'bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-400',
+  FINANCING: 'bg-violet-50 text-violet-700 dark:bg-violet-500/10 dark:text-violet-400',
+  OTHER:     'bg-slate-100 text-slate-600 dark:bg-white/[0.06] dark:text-slate-300',
+};
+const NOMBRE_TIPO: Record<string, string> = {
+  CASH: 'Efectivo', BANK: 'Banco', FINANCING: 'Financiación', OTHER: 'Otro',
+};
 
 function presetRange(period: string) {
   const start = new Date();
@@ -68,7 +93,7 @@ function presetRange(period: string) {
 
 export default function ReportesPage() {
   const [period, setPeriod] = useState('30d');
-  const [tab, setTab]   = useState<'sales' | 'products' | 'customers' | 'profit'>('sales');
+  const [tab, setTab]   = useState<'sales' | 'products' | 'customers' | 'profit' | 'payments'>('sales');
   // Rango manual: se guarda como "YYYY-MM-DD" (lo que produce <input type="date">)
   // y así viaja al backend, que lo interpreta como día calendario colombiano.
   const [customStart, setCustomStart] = useState('');
@@ -104,6 +129,13 @@ export default function ReportesPage() {
   const { data: topProducts  } = useQuery({ enabled: rangeReady, queryKey: ['report-products',  dates.startDate, dates.endDate], queryFn: () => api.get(`/reports/top-products?${q}&limit=10`).then((r) => r.data.data) });
   const { data: topCustomers } = useQuery({ enabled: rangeReady, queryKey: ['report-customers', dates.startDate, dates.endDate], queryFn: () => api.get(`/reports/top-customers?${q}&limit=10`).then((r) => r.data.data) });
   const { data: profitData   } = useQuery({ enabled: rangeReady, queryKey: ['report-profit',    dates.startDate, dates.endDate], queryFn: () => api.get(`/reports/profit?${q}`).then((r) => r.data.data) });
+  // Solo se pide al abrir la pestaña: es una consulta pesada (abre el desglose de
+  // cada pago mixto) y la mayoría de las visitas a Reportes no la necesitan.
+  const { data: medios } = useQuery({
+    enabled: rangeReady && tab === 'payments',
+    queryKey: ['report-payment-methods', dates.startDate, dates.endDate],
+    queryFn: () => api.get(`/reports/payment-methods?${q}`).then((r) => r.data.data),
+  });
 
   return (
     <div className="space-y-5 animate-fade-up">
@@ -342,6 +374,114 @@ export default function ReportesPage() {
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ── Tab: Medios de pago ───────────────────────────────────────────── */}
+      {tab === 'payments' && medios && (
+        <div className="space-y-4">
+
+          {/* Cuánto entró por cada tipo. La financiación va aparte a propósito:
+              es plata vendida que todavía no está en ninguna cuenta. */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            {TIPOS_MEDIO.map((t) => (
+              <div key={t.key} className="card p-4">
+                <div className="flex items-center gap-2.5 mb-2">
+                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 ${t.bg}`}>
+                    <t.icon size={15} className={t.ic} />
+                  </div>
+                  <p className="text-[12px] font-medium text-slate-600 dark:text-slate-300">{t.label}</p>
+                </div>
+                <p className="text-[18px] font-bold text-slate-800 dark:text-white tabular-nums">
+                  {formatCurrency(medios.porTipo?.[t.key] ?? 0)}
+                </p>
+                <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">{t.nota}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Detalle por medio */}
+          <div className="card overflow-hidden">
+            <div className="px-5 py-3.5 border-b border-slate-100 dark:border-white/[0.06] flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h3 className="text-[14px] font-semibold text-slate-800 dark:text-white">Ventas por medio de pago</h3>
+                <p className="text-[11.5px] text-slate-400 dark:text-slate-500 mt-0.5">
+                  {formatNumber(medios.totals?.ventas ?? 0)} ventas · {formatCurrency(medios.totals?.totalVendido ?? 0)} en el período
+                </p>
+              </div>
+              <button
+                type="button"
+                disabled={!rangeReady}
+                onClick={() => downloadExcel('payment-methods', dates.startDate, dates.endDate)}
+                className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-[13px] font-medium bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white transition shadow-sm shadow-emerald-600/25"
+              >
+                <FileSpreadsheet size={15} />
+                Descargar Excel
+              </button>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-100 dark:border-white/[0.06]">
+                    <th className="text-left px-5 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Medio</th>
+                    <th className="text-left px-5 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Tipo</th>
+                    <th className="text-center px-5 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Ventas</th>
+                    <th className="text-right px-5 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Total</th>
+                    <th className="text-right px-5 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 w-32">Participación</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50 dark:divide-white/[0.04]">
+                  {/* Un medio desactivado que no movió nada solo estorba; si movió
+                      plata en el período sí se muestra, marcado como inactivo. */}
+                  {(medios.medios || [])
+                    .filter((m: any) => m.active || m.total > 0)
+                    .map((m: any) => {
+                      const share = medios.totals?.totalVendido
+                        ? (m.total / medios.totals.totalVendido) * 100 : 0;
+                      return (
+                        <tr key={m.id} className="hover:bg-slate-50/60 dark:hover:bg-white/[0.02] transition-colors">
+                          <td className="px-5 py-3 text-[13px] font-medium text-slate-800 dark:text-white">
+                            {m.name}
+                            {!m.active && (
+                              <span className="ml-2 text-[10.5px] text-slate-400 dark:text-slate-500">(inactivo)</span>
+                            )}
+                          </td>
+                          <td className="px-5 py-3">
+                            <span className={`px-2 py-0.5 rounded-lg text-[11px] font-medium ${BADGE_TIPO[m.type] || BADGE_TIPO.OTHER}`}>
+                              {NOMBRE_TIPO[m.type] || m.type}
+                            </span>
+                          </td>
+                          <td className="px-5 py-3 text-center text-[13px] text-slate-500 dark:text-slate-400 tabular-nums">{m.count}</td>
+                          <td className="px-5 py-3 text-right text-[13px] font-bold text-slate-800 dark:text-white tabular-nums">{formatCurrency(m.total)}</td>
+                          <td className="px-5 py-3">
+                            <div className="flex items-center gap-2 justify-end">
+                              <div className="w-16 h-1.5 rounded-full bg-slate-100 dark:bg-white/[0.08] overflow-hidden">
+                                <div className="h-full rounded-full bg-emerald-500" style={{ width: `${Math.min(100, share)}%` }} />
+                              </div>
+                              <span className="text-[12px] text-slate-500 dark:text-slate-400 tabular-nums w-10 text-right">
+                                {share.toFixed(0)}%
+                              </span>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                </tbody>
+              </table>
+            </div>
+
+            {medios.totals?.sinAtribuir > 0 && (
+              <div className="px-5 py-3 border-t border-slate-100 dark:border-white/[0.06] text-[12px] text-amber-600 dark:text-amber-400">
+                {formatCurrency(medios.totals.sinAtribuir)} de pagos mixtos usan un medio que ya no está configurado.
+              </div>
+            )}
+          </div>
+
+          <p className="text-[11.5px] text-slate-400 dark:text-slate-500 px-1">
+            Las ventas con Addi o Sistecrédito no entran a la caja: la plataforma gira el dinero después.
+            En los pagos mixtos, el vuelto se descuenta de la parte en efectivo.
+          </p>
         </div>
       )}
     </div>

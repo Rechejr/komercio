@@ -164,6 +164,11 @@ export async function createBusinessForOwner(
         { name: 'Nequi',         type: 'OTHER', legacyEnum: 'NEQUI',     order: 2 },
         { name: 'Daviplata',     type: 'OTHER', legacyEnum: 'DAVIPLATA', order: 3 },
         { name: 'Tarjeta',       type: 'BANK',  legacyEnum: 'CARD',      order: 4 },
+        // Financiación al cliente: la venta se cierra hoy y la plataforma gira
+        // después. Vienen listas porque medio comercio del país las usa; el que
+        // no, las desactiva en Configuración → Medios de pago.
+        { name: 'Addi',          type: 'FINANCING', legacyEnum: 'TRANSFER', order: 5 },
+        { name: 'Sistecrédito',  type: 'FINANCING', legacyEnum: 'TRANSFER', order: 6 },
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
       ].map((a) => ({ ...a, type: a.type as any, legacyEnum: a.legacyEnum as any, businessId: business.id })),
     });

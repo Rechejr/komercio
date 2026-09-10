@@ -198,6 +198,149 @@ export const reportController = {
     }
   },
 
+  /**
+   * Ventas por medio de pago, en el rango pedido.
+   *
+   * Para qué sirve: un negocio que vende con Addi o Sistecrédito necesita saber
+   * cuánto le tiene que girar cada plataforma, y eso no se ve en el reporte de
+   * ventas normal. Lo mismo con los bancos: qué entró por transferencia y qué
+   * por datáfono.
+   *
+   * Ojo con las ventas MIXTAS: ahí `paymentAccountId` queda null y el desglose
+   * vive en `paymentDetails.splits`. Si solo se contaran las de un solo medio,
+   * el reporte no cuadraría con el total vendido, así que los splits se reparten
+   * y se suman a la cuenta que les corresponde.
+   */
+  async paymentMethodsReport(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const { startDate, endDate } = req.query;
+      const businessId = req.user!.businessId!;
+      const { start, end, startStr, endStr } = resolveRange(startDate, endDate);
+
+      const cacheKey = `report:medios:${businessId}:${startStr}:${endStr}`;
+      const cached = await cache.get<object>(cacheKey);
+      if (cached) return success(res, cached);
+
+      const [cuentas, porCuenta, mixtas, totalVendido] = await Promise.all([
+        // Todas las cuentas del negocio, incluso las que no vendieron nada en el
+        // rango: ver "Addi: $0 este mes" también es información.
+        prisma.paymentAccount.findMany({
+          where: { businessId },
+          select: { id: true, name: true, type: true, active: true, legacyEnum: true, order: true },
+          orderBy: { order: 'asc' },
+        }),
+
+        // Ventas de un solo medio.
+        prisma.$queryRaw<Array<{ account_id: string; total: number; count: number }>>`
+          SELECT s."paymentAccountId" AS account_id,
+                 SUM(s.total)::float  AS total,
+                 COUNT(*)::int        AS count
+            FROM sales s
+            JOIN branches br ON s."branchId" = br.id
+           WHERE s."createdAt" BETWEEN ${start} AND ${end}
+             AND s.status = 'COMPLETED'
+             AND s."deletedAt" IS NULL
+             AND br."businessId" = ${businessId}
+             AND s."paymentAccountId" IS NOT NULL
+           GROUP BY s."paymentAccountId"
+        `,
+
+        // Ventas mixtas: se abre el desglose y se suma cada parte por su método.
+        //
+        // El vuelto se descuenta de la parte en efectivo, igual que hace la caja
+        // (computeCashAmount en sale.controller): si el cliente paga $50.000 en
+        // efectivo y $12.000 con tarjeta por una compra de $60.000, esos $2.000
+        // de cambio volvieron a su bolsillo y no son venta. Sin descontarlos el
+        // reporte no cuadraba con el total vendido.
+        prisma.$queryRaw<Array<{ metodo: string; total: number; count: number }>>`
+          SELECT metodo,
+                 SUM(monto)::float         AS total,
+                 COUNT(DISTINCT venta)::int AS count
+            FROM (
+              SELECT s.id                AS venta,
+                     parte->>'method'    AS metodo,
+                     GREATEST(0, SUM((parte->>'amount')::numeric)
+                       - CASE WHEN parte->>'method' = 'CASH'
+                              THEN MAX(s."changeAmount") ELSE 0 END) AS monto
+                FROM sales s
+                JOIN branches br ON s."branchId" = br.id,
+                     jsonb_array_elements(s."paymentDetails"->'splits') AS parte
+               WHERE s."createdAt" BETWEEN ${start} AND ${end}
+                 AND s.status = 'COMPLETED'
+                 AND s."deletedAt" IS NULL
+                 AND br."businessId" = ${businessId}
+                 AND s."paymentMethod" = 'MIXED'
+                 AND s."paymentDetails" IS NOT NULL
+               GROUP BY s.id, parte->>'method'
+            ) partes
+           GROUP BY metodo
+        `,
+
+        prisma.sale.aggregate({
+          where: {
+            createdAt: { gte: start, lte: end },
+            status: 'COMPLETED', deletedAt: null,
+            branch: { businessId },
+          },
+          _sum: { total: true },
+          _count: { id: true },
+        }),
+      ]);
+
+      // Se arranca con todas las cuentas en cero y se les va sumando.
+      const acumulado = new Map<string, { id: string; name: string; type: string; active: boolean; total: number; count: number }>();
+      for (const c of cuentas) {
+        acumulado.set(c.id, { id: c.id, name: c.name, type: c.type, active: c.active, total: 0, count: 0 });
+      }
+
+      for (const fila of porCuenta) {
+        const item = acumulado.get(fila.account_id);
+        if (item) { item.total += Number(fila.total || 0); item.count += Number(fila.count || 0); }
+      }
+
+      // El desglose de las mixtas viene con el enum viejo (CASH, TRANSFER…), no
+      // con el id de la cuenta: se empareja por `legacyEnum`.
+      const porLegacy = new Map<string, string>();
+      for (const c of cuentas) {
+        if (c.legacyEnum && !porLegacy.has(c.legacyEnum)) porLegacy.set(c.legacyEnum, c.id);
+      }
+      let sinCuenta = 0;
+      for (const fila of mixtas) {
+        const cuentaId = porLegacy.get(fila.metodo);
+        const item = cuentaId ? acumulado.get(cuentaId) : undefined;
+        if (item) { item.total += Number(fila.total || 0); item.count += Number(fila.count || 0); }
+        else sinCuenta += Number(fila.total || 0);
+      }
+
+      const medios = Array.from(acumulado.values());
+      const sumaPor = (tipo: string) =>
+        medios.filter((m) => m.type === tipo).reduce((a, m) => a + m.total, 0);
+
+      const data = {
+        period: { start, end },
+        // Por tipo: es como el negocio piensa la plata ("cuánto en efectivo,
+        // cuánto me giran las plataformas, cuánto está en bancos").
+        porTipo: {
+          efectivo: sumaPor('CASH'),
+          bancos: sumaPor('BANK'),
+          financiacion: sumaPor('FINANCING'),
+          otros: sumaPor('OTHER'),
+        },
+        medios: medios.sort((a, b) => b.total - a.total),
+        totals: {
+          totalVendido: Number(totalVendido._sum.total || 0),
+          ventas: totalVendido._count.id,
+          // Lo que no se pudo atribuir a ningún medio (un método del desglose
+          // que ya no tiene cuenta configurada). Si sale > 0, algo hay que mirar.
+          sinAtribuir: sinCuenta,
+        },
+      };
+
+      await cache.set(cacheKey, data, 300);
+      return success(res, data);
+    } catch (err) { next(err); }
+  },
+
   async profitReport(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const { startDate, endDate } = req.query;

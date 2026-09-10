@@ -21,6 +21,9 @@ router.use(reportLimiter);
 router.get('/sales', requirePermission('reportes.ver'), reportController.salesReport);
 router.get('/top-products', requirePermission('reportes.ver'), reportController.topProducts);
 router.get('/top-customers', requirePermission('reportes.ver'), reportController.topCustomers);
+// Cuánto entró por cada medio de pago: para cuadrar contra lo que giran Addi,
+// Sistecrédito o el banco.
+router.get('/payment-methods', requirePermission('reportes.ver'), reportController.paymentMethodsReport);
 // La utilidad expone costos y margen: va aparte de los demas reportes.
 router.get('/profit', requirePermission('reportes.financiero'), reportController.profitReport);
 

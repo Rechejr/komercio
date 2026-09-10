@@ -12,6 +12,7 @@ jest.mock('../../config/database', () => ({
       groupBy: jest.fn(),
     },
     saleDetail: { groupBy: jest.fn() },
+    paymentAccount: { findMany: jest.fn() },
     product: { findMany: jest.fn() },
     customer: { findMany: jest.fn() },
     expense: { aggregate: jest.fn() },
@@ -225,5 +226,124 @@ describe('reportController.profitReport', () => {
     expect(data.netProfit).toBe(200000);
     expect(data.grossMargin).toBeCloseTo(33.33, 1);
     expect(data.netMargin).toBeCloseTo(22.22, 1);
+  });
+});
+
+// ─── paymentMethodsReport ────────────────────────────────────────────────────
+
+describe('reportController.paymentMethodsReport', () => {
+  // Los medios que tiene un POS recién abierto, más un banco.
+  const CUENTAS = [
+    { id: 'ac-efe',  name: 'Efectivo',      type: 'CASH',      active: true, legacyEnum: 'CASH',     order: 1 },
+    { id: 'ac-nequi', name: 'Nequi',        type: 'OTHER',     active: true, legacyEnum: 'NEQUI',    order: 2 },
+    { id: 'ac-banco', name: 'Bancolombia',  type: 'BANK',      active: true, legacyEnum: 'TRANSFER', order: 3 },
+    { id: 'ac-addi',  name: 'Addi',         type: 'FINANCING', active: true, legacyEnum: 'TRANSFER', order: 5 },
+    { id: 'ac-siste', name: 'Sistecrédito', type: 'FINANCING', active: true, legacyEnum: 'TRANSFER', order: 6 },
+  ];
+
+  function preparar({ porCuenta = [] as any[], mixtas = [] as any[], total = 0, ventas = 0 } = {}) {
+    mockCache.get.mockResolvedValue(null);
+    mockCache.set.mockResolvedValue('OK' as any);
+    (mockPrisma.paymentAccount.findMany as jest.Mock).mockResolvedValue(CUENTAS);
+    // Primero la consulta de ventas de un solo medio, después la de las mixtas.
+    (mockPrisma.$queryRaw as jest.Mock)
+      .mockResolvedValueOnce(porCuenta)
+      .mockResolvedValueOnce(mixtas);
+    (mockPrisma.sale.aggregate as jest.Mock).mockResolvedValue({ _sum: { total }, _count: { id: ventas } });
+  }
+
+  const pedir = async () => {
+    const { res, json } = makeRes();
+    await reportController.paymentMethodsReport(
+      makeReq({ query: { startDate: '2026-09-01', endDate: '2026-09-30' } }), res, next,
+    );
+    return json.mock.calls[0][0].data;
+  };
+
+  beforeEach(() => jest.clearAllMocks());
+
+  it('separa la financiación del efectivo y de los bancos', async () => {
+    // Lo que pidió el cliente: saber cuánto le tiene que girar Addi, sin que se
+    // mezcle con lo que ya está en el cajón o en el banco.
+    preparar({
+      porCuenta: [
+        { account_id: 'ac-efe',   total: 100000, count: 4 },
+        { account_id: 'ac-banco', total: 50000,  count: 1 },
+        { account_id: 'ac-addi',  total: 300000, count: 2 },
+        { account_id: 'ac-siste', total: 200000, count: 1 },
+      ],
+      total: 650000, ventas: 8,
+    });
+
+    const data = await pedir();
+
+    expect(data.porTipo).toEqual({ efectivo: 100000, bancos: 50000, financiacion: 500000, otros: 0 });
+    expect(data.totals).toEqual({ totalVendido: 650000, ventas: 8, sinAtribuir: 0 });
+  });
+
+  it('reparte el pago mixto entre los medios de cada parte', async () => {
+    // El desglose de un mixto guarda el enum viejo (CASH, TRANSFER…), no el id
+    // de la cuenta: si no se emparejara, el reporte no cuadraría con el total.
+    preparar({
+      porCuenta: [{ account_id: 'ac-efe', total: 40000, count: 2 }],
+      mixtas: [
+        { metodo: 'CASH', total: 30000, count: 1 },
+        { metodo: 'NEQUI', total: 20000, count: 1 },
+      ],
+      total: 90000, ventas: 3,
+    });
+
+    const data = await pedir();
+    const porNombre = Object.fromEntries(data.medios.map((m: any) => [m.name, m.total]));
+
+    expect(porNombre['Efectivo']).toBe(70000);
+    expect(porNombre['Nequi']).toBe(20000);
+    // La suma de los medios tiene que dar el total vendido: si no, el dueño ve
+    // un descuadre y no sabe a quién creerle.
+    const suma = data.medios.reduce((a: number, m: any) => a + m.total, 0);
+    expect(suma).toBe(data.totals.totalVendido);
+  });
+
+  it('un medio que no vendió nada igual aparece, en cero', async () => {
+    preparar({ porCuenta: [{ account_id: 'ac-efe', total: 10000, count: 1 }], total: 10000, ventas: 1 });
+
+    const data = await pedir();
+    const addi = data.medios.find((m: any) => m.name === 'Addi');
+
+    expect(addi).toMatchObject({ total: 0, count: 0, type: 'FINANCING' });
+  });
+
+  it('avisa cuando una parte del mixto usa un medio que ya no existe', async () => {
+    // Si alguien borró la cuenta de Daviplata, esa plata no se puede atribuir:
+    // se reporta aparte en vez de desaparecer del total.
+    preparar({ mixtas: [{ metodo: 'DAVIPLATA', total: 15000, count: 1 }], total: 15000, ventas: 1 });
+
+    const data = await pedir();
+
+    expect(data.totals.sinAtribuir).toBe(15000);
+  });
+
+  it('ordena los medios de mayor a menor', async () => {
+    preparar({
+      porCuenta: [
+        { account_id: 'ac-efe',  total: 10000, count: 1 },
+        { account_id: 'ac-addi', total: 90000, count: 1 },
+      ],
+      total: 100000, ventas: 2,
+    });
+
+    const data = await pedir();
+
+    expect(data.medios[0].name).toBe('Addi');
+  });
+
+  it('no vuelve a consultar si el reporte está en caché', async () => {
+    mockCache.get.mockResolvedValue({ porTipo: { efectivo: 1 } } as any);
+
+    const { res, json } = makeRes();
+    await reportController.paymentMethodsReport(makeReq({ query: {} }), res, next);
+
+    expect(mockPrisma.paymentAccount.findMany).not.toHaveBeenCalled();
+    expect(json).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
   });
 });

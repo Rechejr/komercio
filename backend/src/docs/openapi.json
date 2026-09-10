@@ -4413,6 +4413,41 @@
         }
       }
     },
+    "/api/v1/exports/payment-methods": {
+      "get": {
+        "tags": [
+          "export"
+        ],
+        "summary": "Ventas por medio de pago: la lista para cuadrar contra lo que gira Addi, Sistecredito o el banco.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operación exitosa",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespuestaOk"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sin sesión o token vencido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/exports/products": {
       "get": {
         "tags": [
@@ -6461,6 +6496,41 @@
             }
           }
         ]
+      }
+    },
+    "/api/v1/reports/payment-methods": {
+      "get": {
+        "tags": [
+          "report"
+        ],
+        "summary": "Cuánto entró por cada medio de pago: para cuadrar contra lo que giran Addi, Sistecrédito o el banco.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operación exitosa",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespuestaOk"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sin sesión o token vencido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/reports/profit": {
