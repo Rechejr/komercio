@@ -32,12 +32,18 @@ async function bootstrap() {
     await prisma.$connect();
     logger.info('Database connected');
 
-    // Redis es opcional — si falla, la app sigue sin cache
+    // Redis es opcional — si falla, la app sigue sin cache.
+    //
+    // Ojo con el catch: antes cerraba la conexión con disconnect(), y una
+    // conexión cerrada a mano no la revive ningún reintento. Resultado: si
+    // Redis no estaba disponible en el segundo exacto del arranque, la
+    // instancia se quedaba sin cache hasta el siguiente despliegue. Ahora solo
+    // se avisa; ioredis sigue reintentando por su cuenta y el cache se
+    // reconecta solo cuando Redis vuelve.
     try {
       await redis.connect();
     } catch {
-      logger.warn('Redis no disponible — corriendo sin cache');
-      redis.disconnect();
+      logger.warn('Redis no disponible al arrancar — se sigue sin cache y se reintenta en segundo plano');
     }
 
     const httpServer = createServer(app);

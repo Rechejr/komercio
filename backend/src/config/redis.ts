@@ -42,14 +42,9 @@ redis.on('connect', () => {
   }
 });
 
-// Se conecta al arrancar en vez de esperar la primera consulta, para que el
-// estado de la conexión (y el /health/ready) diga la verdad desde el minuto uno
-// y no dependa de que alguien haya pedido un reporte.
-if (!enPruebas) {
-  redis.connect().catch(() => {
-    // El propio retryStrategy se encarga de volver a intentar.
-  });
-}
+// La conexión se abre en el arranque (bootstrap de index.ts), no aquí: si los
+// dos llamaran connect(), el segundo fallaría con "ya está conectando" y el
+// manejo de ese error terminaba cerrando una conexión que estaba sana.
 
 // Redis is optional (see redisAvailable above) — every method fails silently
 // so the app keeps working without cache when Redis isn't reachable.
