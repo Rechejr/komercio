@@ -50,6 +50,17 @@ test.describe('Clientes', () => {
     await page.locator('input[placeholder*="Buscar"]').clear();
     await page.waitForTimeout(400);
 
+    // Si la limpieza de arriba dejó un diálogo abierto (sus clics se tragan los
+    // errores a propósito), el modal tapa el botón y el clic siguiente espera
+    // hasta que se acaba el tiempo de la prueba entera: 90 segundos perdidos
+    // para terminar en un "no se pudo hacer clic" que no dice la verdad. Se
+    // cierra antes de seguir.
+    const overlay = page.locator('.fixed.inset-0').first();
+    if (await overlay.isVisible().catch(() => false)) {
+      await page.keyboard.press('Escape');
+      await overlay.waitFor({ state: 'hidden', timeout: 5_000 }).catch(() => {});
+    }
+
     await page.click('button:has-text("Nuevo cliente")');
     await page.waitForSelector('.fixed.inset-0', { timeout: 5_000 });
 

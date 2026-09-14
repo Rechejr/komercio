@@ -18,6 +18,12 @@ export default defineConfig({
     video: 'retain-on-failure',
     trace: 'on-first-retry',
     locale: 'es-CO',
+    // Las pruebas corren en horario de Colombia, como los negocios que usan el
+    // sistema. Sin esto el navegador hereda la zona de la máquina —aquí
+    // Colombia, en el runner de GitHub UTC—, y una prueba que depende de "hoy"
+    // podía pasar local y fallar allá sin que el código tuviera nada malo.
+    // TZ_E2E deja reproducir a propósito la zona del CI (TZ_E2E=UTC).
+    timezoneId: process.env.TZ_E2E || 'America/Bogota',
   },
   projects: [
     // Auth tests run WITHOUT storageState (they test the login flow itself)

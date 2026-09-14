@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { useAuthStore } from '@/store/auth.store';
-import { api } from '@/lib/api';
+import { api, sesionInvalida } from '@/lib/api';
 import { ContableSidebar } from '@/components/contable/ContableSidebar';
 import { AgendaAlertas } from '@/components/contable/AgendaAlertas';
 import { Header } from '@/components/layout/Header';
@@ -36,10 +36,12 @@ export default function ContableLayout({ children }: { children: React.ReactNode
       return;
     }
 
-    const safetyTimer = setTimeout(() => {
-      setIsRestoring(false);
-      expireSession();
-    }, 10000);
+    // Red de seguridad: si la restauración se demora, se quita la pantalla de
+    // espera para no dejar al usuario mirando un spinner eterno. Antes también
+    // lo sacaba al login, y eso es lo que rompía sesiones buenas en conexiones
+    // lentas. Si la sesión de verdad no sirve, la primera petición devolverá
+    // 401 y el interceptor sí lo mandará al login.
+    const safetyTimer = setTimeout(() => setIsRestoring(false), 15000);
 
     api
       .post('/auth/refresh-token')
@@ -59,7 +61,9 @@ export default function ContableLayout({ children }: { children: React.ReactNode
           }, newToken, userData.accounts);
         }
       })
-      .catch(() => expireSession())
+      // Solo si el servidor dijo que la sesión murió. Un fallo de red deja al
+      // usuario donde está en vez de mandarlo al login.
+      .catch((err) => { if (sesionInvalida(err)) expireSession(); })
       .finally(() => { clearTimeout(safetyTimer); setIsRestoring(false); });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

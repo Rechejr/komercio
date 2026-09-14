@@ -12,6 +12,23 @@ export const api = axios.create({
   headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
 });
 
+/**
+ * ¿El servidor dijo que la sesión ya no sirve, o simplemente no se pudo hablar
+ * con él?
+ *
+ * La diferencia importa: si el backend responde 401/403 al renovar, la sesión
+ * de verdad murió y hay que ir al login. Pero si no hubo respuesta —red caída,
+ * servidor frío, timeout, la petición cancelada porque el usuario cambió de
+ * pantalla— la sesión sigue perfectamente viva y sacarlo al login es castigar
+ * al usuario por un problema que no es suyo. Pasaba en el celular con mala
+ * señal y también en las pruebas del CI, donde la máquina va cargada y la
+ * primera carga se pasa de los segundos que esperábamos.
+ */
+export function sesionInvalida(error: unknown): boolean {
+  const status = (error as AxiosError)?.response?.status;
+  return status === 401 || status === 403;
+}
+
 let isRefreshing = false;
 let failedQueue: Array<{ resolve: (v: string) => void; reject: (e: unknown) => void }> = [];
 
@@ -70,7 +87,12 @@ api.interceptors.response.use(
       // NO usar logout() (que borra el refresh token en el servidor): un fallo
       // pasajero mataría la sesión para siempre. expireSession limpia local y
       // manda a /login, donde se reintenta revivir con la cookie aún vigente.
-      useAuthStore.getState().expireSession();
+      //
+      // Y solo si el servidor DIJO que la sesión no sirve. Si fue la red, el
+      // usuario se queda donde está: la petición falla, se muestra el error de
+      // esa pantalla, y el siguiente intento vuelve a renovar. Antes, un bache
+      // de conexión lo mandaba al login con la sesión intacta.
+      if (sesionInvalida(err)) useAuthStore.getState().expireSession();
       return Promise.reject(err);
     } finally {
       isRefreshing = false;
