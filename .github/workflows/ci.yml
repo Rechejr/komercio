@@ -202,7 +202,9 @@ jobs:
       - name: Correr los E2E de humo
         run: |
           cd e2e
-          npx playwright test             tests/auth.spec.ts             tests/dashboard.spec.ts             tests/pos.spec.ts             tests/inventario.spec.ts             tests/ventas.spec.ts
+          # --reporter=list,github: la falla queda escrita como anotación del job,
+          # a la vista en la pantalla de la corrida, sin descargar el reporte.
+          npx playwright test --reporter=list,github             tests/auth.spec.ts             tests/dashboard.spec.ts             tests/pos.spec.ts             tests/inventario.spec.ts             tests/ventas.spec.ts
 
       - name: Guardar el reporte si algo falla
         if: failure()

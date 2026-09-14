@@ -98,6 +98,26 @@ async function main() {
     }).catch(() => prisma.expenseCategory.create({ data: { name } }).catch(() => {}));
   }
 
+  // Medios de pago. Un negocio real los recibe al registrarse
+  // (createBusinessForOwner), pero el seed crea el negocio directamente, así que
+  // aquí quedaba sin ninguno: el punto de venta se abría sin opciones de cobro y
+  // el entorno sembrado no se parecía a ningún negocio de verdad.
+  const mediosDePago = [
+    { name: 'Efectivo',      type: 'CASH'      as const, legacyEnum: 'CASH'      as const, order: 0 },
+    { name: 'Transferencia', type: 'BANK'      as const, legacyEnum: 'TRANSFER'  as const, order: 1 },
+    { name: 'Nequi',         type: 'OTHER'     as const, legacyEnum: 'NEQUI'     as const, order: 2 },
+    { name: 'Daviplata',     type: 'OTHER'     as const, legacyEnum: 'DAVIPLATA' as const, order: 3 },
+    { name: 'Tarjeta',       type: 'BANK'      as const, legacyEnum: 'CARD'      as const, order: 4 },
+    { name: 'Addi',          type: 'FINANCING' as const, legacyEnum: 'TRANSFER'  as const, order: 5 },
+    { name: 'Sistecrédito',  type: 'FINANCING' as const, legacyEnum: 'TRANSFER'  as const, order: 6 },
+  ];
+  for (const medio of mediosDePago) {
+    const yaEsta = await prisma.paymentAccount.findFirst({
+      where: { businessId: business.id, name: medio.name },
+    });
+    if (!yaEsta) await prisma.paymentAccount.create({ data: { ...medio, businessId: business.id } });
+  }
+
   // Default categories (scoped to this business, idempotent)
   const categories = ['Alimentos', 'Bebidas', 'Aseo', 'Electrónica', 'Ropa', 'Papelería', 'Salud', 'General'];
   for (const name of categories) {

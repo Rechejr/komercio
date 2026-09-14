@@ -107,7 +107,12 @@ jobs:
         # Sin lista de archivos: corre todo lo que haya en tests/, salvo
         # prod-verification.spec.ts, que el propio config excluye porque apunta
         # a producción.
-        run: cd e2e && npx playwright test --reporter=list
+        #
+        # El reporter "github" escribe cada falla como anotación del job: el
+        # nombre de la prueba y el motivo quedan a la vista en la pantalla de la
+        # corrida (y en el correo de aviso), sin tener que descargar el reporte
+        # ni abrir el log paso por paso. Antes solo decía "exit code 1".
+        run: cd e2e && npx playwright test --reporter=list,github
 
       - name: Guardar el reporte si algo falla
         if: failure()
