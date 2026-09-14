@@ -42,6 +42,11 @@ function computeCashAmount(
   paidAmount: number,
   changeAmount: number,
   paymentDetails: any,
+  // Parte de la factura cubierta con un anticipo previo. Esa plata entró a la
+  // caja el día en que el cliente dejó el anticipo, así que hoy no entra otra
+  // vez: se descuenta igual que el vuelto. Sin esto, un anticipo de $500.000
+  // aplicado a una venta en efectivo le sumaría $500.000 de más al arqueo.
+  advanceApplied = 0,
 ): number {
   if (paymentMethod === 'MIXED') {
     const splits: Array<{ method: string; amount: number }> = paymentDetails?.splits || [];
@@ -51,7 +56,7 @@ function computeCashAmount(
     return Math.max(0, cashSplits - changeAmount);
   }
   if (paymentMethod === 'CASH' || !paymentMethod) {
-    return paidAmount - changeAmount;
+    return Math.max(0, paidAmount - changeAmount - advanceApplied);
   }
   return 0;
 }
@@ -506,8 +511,48 @@ export const saleController = {
         const total = subtotal + taxAmount - discAmt;
         if (total < 0) throw new AppError('El descuento no puede ser mayor al total de la venta', 400);
 
-        const paid = (paidAmount != null && !isNaN(parseFloat(paidAmount))) ? parseFloat(paidAmount) : total;
-        if (paid < 0) throw new AppError('El monto pagado no puede ser negativo', 400);
+        const pagadoHoy = (paidAmount != null && !isNaN(parseFloat(paidAmount))) ? parseFloat(paidAmount) : total;
+        if (pagadoHoy < 0) throw new AppError('El monto pagado no puede ser negativo', 400);
+
+        // ── Anticipo del cliente ────────────────────────────────────────────
+        // El caso: dejó $500.000 la semana pasada y hoy se lleva la mercancía.
+        // Esa plata ya entró a la caja ese día, así que aquí solo descuenta lo
+        // que tiene que pagar hoy — no vuelve a entrar.
+        let anticipoAplicado = 0;
+        if (req.body.advanceId) {
+          // Se bloquea la fila: dos cajeros facturando al mismo cliente no
+          // pueden gastar el mismo saldo y dejarlo en negativo.
+          const bloqueo = await tx.$queryRaw<Array<{ id: string }>>`
+            SELECT id FROM advances
+             WHERE id = ${req.body.advanceId} AND "businessId" = ${req.user!.businessId!} AND "deletedAt" IS NULL
+             FOR UPDATE
+          `;
+          if (bloqueo.length === 0) throw new AppError('Anticipo no encontrado', 404);
+
+          const anticipo = await tx.advance.findUniqueOrThrow({ where: { id: req.body.advanceId } });
+          if (anticipo.type !== 'CUSTOMER') throw new AppError('Ese anticipo es de un proveedor', 400);
+          if (anticipo.status === 'REFUNDED' || anticipo.status === 'CANCELLED') {
+            throw new AppError('Ese anticipo ya no está disponible', 400);
+          }
+          // El anticipo es de un cliente concreto: aplicarlo a la factura de
+          // otro sería regalarle la plata a quien no la puso.
+          if (!customerId || anticipo.customerId !== customerId) {
+            throw new AppError('El anticipo es de otro cliente', 400);
+          }
+          const saldo = Number(anticipo.balance);
+          if (saldo <= 0) throw new AppError('Ese anticipo ya no tiene saldo', 400);
+
+          const pedido = req.body.advanceAmount != null ? Math.round(Number(req.body.advanceAmount)) : saldo;
+          if (!isFinite(pedido) || pedido <= 0) throw new AppError('El monto del anticipo a aplicar debe ser mayor a 0', 400);
+          if (pedido > saldo) {
+            throw new AppError(`El anticipo solo tiene $${saldo.toLocaleString('es-CO')} disponibles`, 400);
+          }
+          // Nunca más que la factura: el resto le queda a favor para la próxima.
+          anticipoAplicado = Math.min(pedido, total);
+        }
+
+        // Lo que queda cubierto entre lo que paga hoy y el anticipo.
+        const paid = pagadoHoy + anticipoAplicado;
 
         // Una venta que no se marca como fiado/crédito debe quedar cubierta por completo —
         // de lo contrario la diferencia no queda como deuda del cliente ni como error,
@@ -530,6 +575,7 @@ export const saleController = {
             total,
             paidAmount: paid,
             changeAmount: changeAmt,
+            advanceApplied: anticipoAplicado,
             paymentMethod: effectivePaymentMethod as any,
             paymentAccountId: effectivePaymentAccountId,
             paymentDetails: paymentDetails || null,
@@ -667,10 +713,35 @@ export const saleController = {
           });
         }
 
+        // Queda el cruce registrado y el anticipo con menos saldo. Va en la misma
+        // transacción que la venta: si algo falla, no puede quedar un anticipo
+        // gastado sin la factura que lo gastó.
+        if (anticipoAplicado > 0 && req.body.advanceId) {
+          await tx.advanceApplication.create({
+            data: {
+              advanceId: req.body.advanceId,
+              saleId: newSale.id,
+              amount: anticipoAplicado,
+              createdById: req.user!.userId,
+            },
+          });
+          const anticipo = await tx.advance.findUniqueOrThrow({ where: { id: req.body.advanceId } });
+          const aplicado = Number(anticipo.applied) + anticipoAplicado;
+          const montoAnticipo = Number(anticipo.amount);
+          await tx.advance.update({
+            where: { id: anticipo.id },
+            data: {
+              applied: aplicado,
+              balance: Math.max(0, montoAnticipo - aplicado),
+              status: aplicado >= montoAnticipo ? 'APPLIED' : 'PARTIAL',
+            },
+          });
+        }
+
         // Registrar ingreso en caja abierta — dentro de la misma transacción que la
         // venta (antes corría después, "best effort": si el proceso caía justo en ese
         // instante, la venta quedaba completa pero el ingreso en caja se perdía sin dejar rastro).
-        const cashAmount = computeCashAmount(effectivePaymentMethod, paid, changeAmt, paymentDetails);
+        const cashAmount = computeCashAmount(effectivePaymentMethod, paid, changeAmt, paymentDetails, anticipoAplicado);
         if (cashAmount > 0 && effectiveBranchId) {
           const openRegister = await tx.cashRegister.findFirst({
             where: { branchId: effectiveBranchId, status: 'OPEN' },
@@ -818,7 +889,32 @@ export const saleController = {
         // revertía CASH puro, dejando la caja descuadrada tras anular una mixta).
         const netCash = computeCashAmount(
           sale.paymentMethod, Number(sale.paidAmount), Number(sale.changeAmount), sale.paymentDetails,
+          Number(sale.advanceApplied ?? 0),
         );
+
+        // El anticipo vuelve a quedar disponible: la venta se anuló, pero la
+        // plata que el cliente dejó sigue siendo suya. Si no se devolviera el
+        // saldo, el cliente perdería su anticipo por una anulación.
+        const cruces = await tx.advanceApplication.findMany({ where: { saleId: id } });
+        for (const cruce of cruces) {
+          const anticipo = await tx.advance.findUnique({ where: { id: cruce.advanceId } });
+          if (!anticipo) continue;
+          const aplicado = Math.max(0, Number(anticipo.applied) - Number(cruce.amount));
+          const montoAnticipo = Number(anticipo.amount);
+          await tx.advance.update({
+            where: { id: anticipo.id },
+            data: {
+              applied: aplicado,
+              balance: Math.max(0, montoAnticipo - aplicado),
+              // Devuelto o anulado se quedan como están: ahí ya no hay saldo que
+              // revivir, y cambiarles el estado borraría lo que de verdad pasó.
+              ...(anticipo.status === 'APPLIED' || anticipo.status === 'PARTIAL'
+                ? { status: aplicado <= 0 ? ('PENDING' as const) : ('PARTIAL' as const) }
+                : {}),
+            },
+          });
+        }
+        await tx.advanceApplication.deleteMany({ where: { saleId: id } });
         if (sale.branchId && netCash > 0) {
           const openRegister = await tx.cashRegister.findFirst({
             where: { branchId: sale.branchId, status: 'OPEN' },

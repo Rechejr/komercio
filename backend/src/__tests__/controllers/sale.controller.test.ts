@@ -388,6 +388,10 @@ describe('saleController.cancel', () => {
       inventoryMovement: { create: jest.fn().mockResolvedValue({}) },
       cashRegister: { findFirst: jest.fn().mockResolvedValue(null) },
       cashMovement: { create: jest.fn() },
+      // Al anular se devuelve el saldo de los anticipos que se hubieran cruzado
+      // con esta venta; aquí no hay ninguno.
+      advanceApplication: { findMany: jest.fn().mockResolvedValue([]), deleteMany: jest.fn() },
+      advance: { findUnique: jest.fn(), update: jest.fn() },
     };
     (mockPrisma.$transaction as jest.Mock).mockImplementation(async (fn: any) => fn(tx));
     mockCache.del.mockResolvedValue(1 as any);

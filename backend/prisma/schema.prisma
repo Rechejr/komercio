@@ -101,6 +101,7 @@ model User {
   createdAt            DateTime           @default(now())
   updatedAt            DateTime           @updatedAt
   deletedAt            DateTime?
+  Advance              Advance[]
 
   @@index([email])
   @@index([branchId])
@@ -197,6 +198,7 @@ model Business {
   createdAt          DateTime          @default(now())
   updatedAt          DateTime          @updatedAt
   deletedAt          DateTime?
+  Advance            Advance[]
 
   @@index([ownerId])
   @@index([createdBySellerId])
@@ -328,6 +330,7 @@ model Branch {
   createdAt            DateTime              @default(now())
   updatedAt            DateTime              @updatedAt
   deletedAt            DateTime?
+  Advance              Advance[]
 
   @@index([businessId])
   @@map("branches")
@@ -576,6 +579,7 @@ model Customer {
   isActive      Boolean   @default(true)
   sales         Sale[]
   credits       Credit[]
+  advances      Advance[]
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   deletedAt     DateTime?
@@ -614,6 +618,7 @@ model Supplier {
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
   deletedAt       DateTime?
+  Advance         Advance[]
 
   @@unique([businessId, document])
   @@index([businessId])
@@ -623,34 +628,41 @@ model Supplier {
 
 // ─── SALES ────────────────────────────────────────────────────────────────────
 model Sale {
-  id               String          @id @default(uuid())
-  invoiceNumber    String
-  customerId       String?
-  customer         Customer?       @relation(fields: [customerId], references: [id])
-  userId           String
-  user             User            @relation(fields: [userId], references: [id])
-  branchId         String
-  branch           Branch          @relation(fields: [branchId], references: [id])
-  status           SaleStatus      @default(COMPLETED)
-  subtotal         Decimal
-  taxAmount        Decimal         @default(0)
-  discountAmount   Decimal         @default(0)
-  total            Decimal
-  paidAmount       Decimal
-  changeAmount     Decimal         @default(0)
-  paymentMethod    PaymentMethod   @default(CASH)
+  id                  String               @id @default(uuid())
+  invoiceNumber       String
+  customerId          String?
+  customer            Customer?            @relation(fields: [customerId], references: [id])
+  userId              String
+  user                User                 @relation(fields: [userId], references: [id])
+  branchId            String
+  branch              Branch               @relation(fields: [branchId], references: [id])
+  status              SaleStatus           @default(COMPLETED)
+  subtotal            Decimal
+  taxAmount           Decimal              @default(0)
+  discountAmount      Decimal              @default(0)
+  total               Decimal
+  paidAmount          Decimal
+  changeAmount        Decimal              @default(0)
+  // Cuánto de esta factura se cubrió con un anticipo que el cliente ya había
+  // dejado. Va aparte de paidAmount porque esa plata NO entra a la caja hoy:
+  // entró el día del anticipo. Sin este dato, anular la venta le devolveria a la
+  // caja un efectivo que nunca estuvo ahí.
+  advanceApplied      Decimal              @default(0)
+  paymentMethod       PaymentMethod        @default(CASH)
   // Medio de pago configurable (nullable durante la transición; convive con el
   // enum de arriba). En ventas MIXTAS queda null: el desglose va en paymentDetails.
-  paymentAccountId String?
-  paymentAccount   PaymentAccount? @relation(fields: [paymentAccountId], references: [id])
-  paymentDetails   Json?
-  notes            String?
-  details          SaleDetail[]
-  credit           Credit?
-  returns          Return[]
-  createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @updatedAt
-  deletedAt        DateTime?
+  paymentAccountId    String?
+  paymentAccount      PaymentAccount?      @relation(fields: [paymentAccountId], references: [id])
+  paymentDetails      Json?
+  notes               String?
+  details             SaleDetail[]
+  credit              Credit?
+  returns             Return[]
+  // Anticipos del cliente cruzados contra esta factura.
+  advanceApplications AdvanceApplication[]
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  deletedAt           DateTime?
 
   @@unique([branchId, invoiceNumber])
   @@index([customerId])
@@ -737,35 +749,37 @@ model ReturnDetail {
 
 // ─── PURCHASES ────────────────────────────────────────────────────────────────
 model Purchase {
-  id               String           @id @default(uuid())
-  businessId       String
-  business         Business         @relation(fields: [businessId], references: [id])
-  invoiceNumber    String?
-  supplierId       String
-  supplier         Supplier         @relation(fields: [supplierId], references: [id])
-  status           PurchaseStatus   @default(COMPLETED)
-  subtotal         Decimal
-  taxAmount        Decimal          @default(0)
-  total            Decimal
-  paymentMethod    PaymentMethod    @default(CASH)
-  paymentAccountId String?
-  paymentAccount   PaymentAccount?  @relation(fields: [paymentAccountId], references: [id])
+  id                  String               @id @default(uuid())
+  businessId          String
+  business            Business             @relation(fields: [businessId], references: [id])
+  invoiceNumber       String?
+  supplierId          String
+  supplier            Supplier             @relation(fields: [supplierId], references: [id])
+  status              PurchaseStatus       @default(COMPLETED)
+  subtotal            Decimal
+  taxAmount           Decimal              @default(0)
+  total               Decimal
+  paymentMethod       PaymentMethod        @default(CASH)
+  paymentAccountId    String?
+  paymentAccount      PaymentAccount?      @relation(fields: [paymentAccountId], references: [id])
   // Pago dividido: monto pagado AHORA (suma de los medios no-crédito) y el
   // desglose { splits: [{ method, amount, paymentAccountId? }] }. En pago simple
   // paidAmount = total y paymentDetails queda null (comportamiento de siempre).
-  paidAmount       Decimal          @default(0)
-  paymentDetails   Json?
-  supplierCredit   SupplierCredit?
-  invoicePdf       String?
-  notes            String?
-  purchaseDate     DateTime         @default(now())
-  details          PurchaseDetail[]
+  paidAmount          Decimal              @default(0)
+  paymentDetails      Json?
+  supplierCredit      SupplierCredit?
+  // Anticipos girados al proveedor cruzados contra esta compra.
+  advanceApplications AdvanceApplication[]
+  invoicePdf          String?
+  notes               String?
+  purchaseDate        DateTime             @default(now())
+  details             PurchaseDetail[]
   // Nullable — compras históricas (antes de esta función) quedan sin bodega.
-  branchId         String?
-  branch           Branch?          @relation(fields: [branchId], references: [id])
-  createdAt        DateTime         @default(now())
-  updatedAt        DateTime         @updatedAt
-  deletedAt        DateTime?
+  branchId            String?
+  branch              Branch?              @relation(fields: [branchId], references: [id])
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  deletedAt           DateTime?
 
   @@index([supplierId])
   @@index([businessId])
@@ -981,6 +995,7 @@ model PaymentAccount {
   supplierCreditPayments SupplierCreditPayment[]
   createdAt              DateTime                @default(now())
   updatedAt              DateTime                @updatedAt
+  Advance                Advance[]
 
   @@index([businessId])
   @@map("payment_accounts")
@@ -1113,6 +1128,102 @@ model SaleNumberCounter {
 // Los ítems se guardan como JSON (snapshot): una cotización es un documento y no
 // se consulta por ítem, así se evita una tabla puente y sobrevive a cambios del
 // producto. customerId/branchId/createdById son ids sueltos (sin FK) a propósito.
+// ─── ANTICIPOS ────────────────────────────────────────────────────────────────
+//
+// Plata que se mueve ANTES de la factura: el cliente deja una parte para apartar
+// (la mueblería cobra la mitad y entrega en ocho días) o el negocio le gira por
+// adelantado al proveedor.
+//
+// La regla que manda: recibir un anticipo NO es una venta. Es plata a cuenta —
+// entra a la caja pero no suma a los ingresos. La venta se registra completa el
+// día de la entrega y el anticipo descuenta lo que el cliente paga ESE día, sin
+// volver a entrar a la caja (esa plata ya entró cuando se recibió). Contarlo dos
+// veces inflaría las ventas del mes y le cuadraría mal al contador.
+enum AdvanceType {
+  // Lo dejó el cliente: el negocio le debe mercancía.
+  CUSTOMER
+  // Se le giró al proveedor: el proveedor le debe mercancía al negocio.
+  SUPPLIER
+}
+
+enum AdvanceStatus {
+  // Con saldo entero, sin cruzar contra ninguna factura.
+  PENDING
+  // Ya se cruzó una parte; todavía queda saldo.
+  PARTIAL
+  // Saldo en cero: todo cruzado contra facturas.
+  APPLIED
+  // Se le devolvió la plata (sale de la caja si fue en efectivo).
+  REFUNDED
+  // Anulado sin devolver: el saldo queda a favor del tercero para después.
+  CANCELLED
+}
+
+model Advance {
+  id               String               @id @default(uuid())
+  businessId       String
+  business         Business             @relation(fields: [businessId], references: [id])
+  // Nullable como en Purchase: los movimientos de caja dependen de la bodega y
+  // un anticipo registrado sin bodega no puede tocarla.
+  branchId         String?
+  branch           Branch?              @relation(fields: [branchId], references: [id])
+  number           String
+  type             AdvanceType
+  // Exactamente uno de los dos según el tipo; el controlador lo exige.
+  customerId       String?
+  customer         Customer?            @relation(fields: [customerId], references: [id])
+  supplierId       String?
+  supplier         Supplier?            @relation(fields: [supplierId], references: [id])
+  amount           Decimal
+  // Cuánto se ha cruzado ya contra facturas. balance = amount - applied.
+  applied          Decimal              @default(0)
+  balance          Decimal
+  status           AdvanceStatus        @default(PENDING)
+  paymentMethod    PaymentMethod        @default(CASH)
+  paymentAccountId String?
+  paymentAccount   PaymentAccount?      @relation(fields: [paymentAccountId], references: [id])
+  // Con qué medio se devolvió y cuándo, para poder explicar el movimiento de
+  // caja meses después.
+  refundedAt       DateTime?
+  refundMethod     PaymentMethod?
+  notes            String?
+  applications     AdvanceApplication[]
+  createdById      String?
+  createdBy        User?                @relation(fields: [createdById], references: [id])
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  deletedAt        DateTime?
+
+  @@unique([businessId, number])
+  @@index([businessId, type, status])
+  @@index([customerId])
+  @@index([supplierId])
+  @@index([createdAt])
+  @@map("advances")
+}
+
+// Cada cruce contra una factura. Se guarda uno por aplicación (y no solo el
+// total en Advance) para poder responder "¿en qué se me fue el anticipo?" con
+// las facturas en la mano, y para poder deshacer una sola si se anula esa venta.
+model AdvanceApplication {
+  id          String    @id @default(uuid())
+  advanceId   String
+  advance     Advance   @relation(fields: [advanceId], references: [id], onDelete: Cascade)
+  // Uno de los dos, según el tipo del anticipo.
+  saleId      String?
+  sale        Sale?     @relation(fields: [saleId], references: [id])
+  purchaseId  String?
+  purchase    Purchase? @relation(fields: [purchaseId], references: [id])
+  amount      Decimal
+  createdById String?
+  createdAt   DateTime  @default(now())
+
+  @@index([advanceId])
+  @@index([saleId])
+  @@index([purchaseId])
+  @@map("advance_applications")
+}
+
 model Quote {
   id             String    @id @default(uuid())
   businessId     String

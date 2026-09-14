@@ -44,6 +44,10 @@ export interface EstadoCobro {
   isCredit: boolean;
   /** La venta ya se está enviando al servidor. */
   enviando: boolean;
+  /** Parte del total que cubre un anticipo que el cliente ya había dejado. Esa
+   *  plata no se recibe hoy —entró el día del anticipo—, así que el cajero solo
+   *  tiene que cobrar la diferencia. */
+  anticipo?: number;
 }
 
 /** Monto que se registra como pagado en la venta. De este número salen las
@@ -51,9 +55,12 @@ export interface EstadoCobro {
  *  - MIXTO: la suma de los pagos registrados.
  *  - Fiado: solo lo que el cliente abonó (vacío = no abonó nada).
  *  - Contado: lo recibido, o el total exacto si el cajero no escribió nada. */
-export function montoPagado(e: Pick<EstadoCobro, 'paymentMethod' | 'paidAmount' | 'total' | 'mixedTotal' | 'isCredit'>): number {
+export function montoPagado(e: Pick<EstadoCobro, 'paymentMethod' | 'paidAmount' | 'total' | 'mixedTotal' | 'isCredit' | 'anticipo'>): number {
   if (e.paymentMethod === 'MIXED') return e.mixedTotal;
-  const texto = e.isCredit ? e.paidAmount || '0' : e.paidAmount || String(e.total);
+  // Con anticipo, "pagar justo" es pagar la diferencia: el resto ya lo dejó el
+  // cliente. Si se tomara el total, el cajero recibiría dos veces esa plata.
+  const porCobrar = Math.max(0, e.total - (e.anticipo || 0));
+  const texto = e.isCredit ? e.paidAmount || '0' : e.paidAmount || String(porCobrar);
   const valor = parseFloat(texto);
   return isNaN(valor) ? 0 : valor;
 }
@@ -64,8 +71,10 @@ export function montoPagado(e: Pick<EstadoCobro, 'paymentMethod' | 'paidAmount' 
 export function puedeConfirmarVenta(e: EstadoCobro): boolean {
   if (e.enviando) return false;
   if (e.isCredit) return true;
-  if (e.paymentMethod === 'MIXED') return e.mixedTotal >= e.total;
-  // Campo vacío = paga exacto: se compara el total contra sí mismo.
-  const recibido = parseFloat(e.paidAmount || String(e.total));
-  return !isNaN(recibido) && recibido >= e.total;
+  // Lo que falta por cobrar hoy, ya descontado el anticipo del cliente.
+  const porCobrar = Math.max(0, e.total - (e.anticipo || 0));
+  if (e.paymentMethod === 'MIXED') return e.mixedTotal >= porCobrar;
+  // Campo vacío = paga exacto: se compara contra sí mismo.
+  const recibido = parseFloat(e.paidAmount || String(porCobrar));
+  return !isNaN(recibido) && recibido >= porCobrar;
 }

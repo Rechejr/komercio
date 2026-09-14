@@ -38,6 +38,10 @@ interface ReceiptProps {
   total: number;
   paidAmount: number;
   changeAmount: number;
+  /** Parte del total cubierta con un anticipo que el cliente dejó antes. Se
+   *  muestra aparte para que no parezca que pagó de menos: en el recibo, un
+   *  "Recibido" menor al total sin explicación se lee como un error. */
+  advanceApplied?: number;
   paymentMethod: string;
   customerName?: string | null;
   cashierName?: string | null;
@@ -58,7 +62,7 @@ function Dash() {
 
 export function Receipt({
   invoiceNumber, createdAt, items, subtotal, discountAmount, taxAmount,
-  total, paidAmount, changeAmount, paymentMethod,
+  total, paidAmount, changeAmount, paymentMethod, advanceApplied = 0,
   customerName, cashierName, business, animated = false,
   status, paymentDetails, paymentLabel,
 }: ReceiptProps) {
@@ -198,9 +202,15 @@ export function Receipt({
       {/* ── Payment ────────────────────────────────────── */}
       {!isFiado ? (
         <div style={{ marginBottom: 12 }}>
+          {advanceApplied > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#7c3aed', marginBottom: 3 }}>
+              <span>Anticipo aplicado</span>
+              <span style={{ fontVariantNumeric: 'tabular-nums' }}>− {formatCurrency(advanceApplied)}</span>
+            </div>
+          )}
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#64748b', marginBottom: 3 }}>
             <span>Recibido</span>
-            <span style={{ fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(paidAmount)}</span>
+            <span style={{ fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(Math.max(0, paidAmount - advanceApplied))}</span>
           </div>
           {changeAmount > 0 && (
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, fontWeight: 700, color: '#16a34a' }}>

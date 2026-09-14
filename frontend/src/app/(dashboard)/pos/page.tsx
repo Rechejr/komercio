@@ -188,6 +188,17 @@ export default function POSPage() {
     enabled: customerSearch.length > 0 || showCustomerList,
   });
 
+  // ── Anticipo del cliente ──────────────────────────────────────────────────
+  // Si dejó plata antes (para apartar mercancía), hoy solo paga la diferencia.
+  // Se consulta al abrir el cobro y no antes: en la mayoría de las ventas no hay
+  // anticipo y sería una consulta al servidor por cada cliente seleccionado.
+  const [anticipoId, setAnticipoId] = useState<string | null>(null);
+  const { data: anticiposCliente } = useQuery<{ anticipos: Array<{ id: string; number: string; balance: string }>; total: number }>({
+    queryKey: ['anticipos-disponibles', customerId],
+    queryFn: () => api.get(`/advances/available?customerId=${customerId}`).then((r) => r.data.data),
+    enabled: !!customerId && showPayment,
+  });
+
   const { data: selectedCustomer } = useQuery({
     queryKey: ['customer', customerId],
     queryFn: () => api.get(`/customers/${customerId}`).then((r) => r.data.data),
@@ -301,9 +312,14 @@ export default function POSPage() {
     setGlobalDiscount(calcularDescuentoGlobal(discInput, discMode, subtotal + taxes));
   }, [discInput, discMode, subtotal, taxes, setGlobalDiscount]);
 
-  const change         = calcularCambio(paidAmount, total);
+  // El anticipo elegido cubre hasta el total de esta factura; lo que sobre le
+  // queda a favor para la próxima compra.
+  const anticipoElegido = (anticiposCliente?.anticipos || []).find((a) => a.id === anticipoId) || null;
+  const anticipoAplicado = anticipoElegido ? Math.min(Number(anticipoElegido.balance), total) : 0;
+  const totalPorCobrar = Math.max(0, total - anticipoAplicado);
+  const change         = calcularCambio(paidAmount, totalPorCobrar);
   const mixedTotal     = sumarPagos(mixedPayments);
-  const mixedRemaining = faltantePorPagar(total, mixedTotal);
+  const mixedRemaining = faltantePorPagar(totalPorCobrar, mixedTotal);
 
   function addSplitPayment() {
     const amount = parseFloat(splitAmount);
@@ -381,9 +397,10 @@ export default function POSPage() {
     if (items.length === 0) { toast.error('Agrega productos'); return; }
     if (isCredit && !customerId) { toast.error('Selecciona un cliente para registrar un fiado'); return; }
     if (paymentMethod === 'MIXED' && mixedPayments.length === 0) { toast.error('Agrega al menos un método de pago'); return; }
-    const paid = montoPagado({ paymentMethod, paidAmount, total, mixedTotal, isCredit });
+    const paid = montoPagado({ paymentMethod, paidAmount, total, mixedTotal, isCredit, anticipo: anticipoAplicado });
     saleMutation.mutate({
       customerId: customerId || undefined,
+      ...(anticipoElegido ? { advanceId: anticipoElegido.id, advanceAmount: anticipoAplicado } : {}),
       items: items.map((i) => ({ productId: i.productId, productVariantId: i.productVariantId, quantity: i.quantity, discountPct: i.discountPct })),
       // Pago simple → paymentAccountId (el backend deriva el enum). MIXTO conserva
       // el flujo por splits (paymentMethod='MIXED').
@@ -427,7 +444,7 @@ export default function POSPage() {
       if (saleMutation.isPending) return;
       if (!puedeConfirmarVenta({
         paymentMethod, paidAmount, total, mixedTotal, isCredit,
-        enviando: saleMutation.isPending,
+        enviando: saleMutation.isPending, anticipo: anticipoAplicado,
       })) return;
       e.preventDefault();
       handleSale();
@@ -435,7 +452,7 @@ export default function POSPage() {
     window.addEventListener('keydown', onKey);
     return () => { clearTimeout(t); window.removeEventListener('keydown', onKey); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showPayment, paymentMethod, paidAmount, total, mixedTotal, isCredit, saleMutation.isPending]);
+  }, [showPayment, paymentMethod, paidAmount, total, mixedTotal, isCredit, saleMutation.isPending, anticipoAplicado]);
 
   if (lastSale) {
     return (
@@ -464,6 +481,7 @@ export default function POSPage() {
               total={Number(lastSale.total)}
               paidAmount={Number(lastSale.paidAmount)}
               changeAmount={Number(lastSale.changeAmount)}
+              advanceApplied={Number(lastSale.advanceApplied || 0)}
               paymentMethod={lastSale.paymentMethod}
               paymentLabel={labelPago(allAccounts, lastSale.paymentAccountId, lastSale.paymentMethod)}
               customerName={selectedCustomer?.name || null}
@@ -1106,6 +1124,68 @@ export default function POSPage() {
           </div>
         )}
 
+        {/* Anticipo del cliente: lo primero que hay que ver, porque cambia
+            cuánto se le cobra hoy. Solo aparece si de verdad tiene saldo. */}
+        {(anticiposCliente?.total ?? 0) > 0 && !isCredit && (
+          <div className="rounded-xl border border-violet-200 dark:border-violet-500/25 bg-violet-50/60 dark:bg-violet-500/[0.07] px-3.5 py-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[12.5px] font-semibold text-violet-800 dark:text-violet-300">
+                  Este cliente tiene {formatCurrency(anticiposCliente!.total)} en anticipos
+                </p>
+                <p className="text-[11.5px] text-violet-700/70 dark:text-violet-300/70 mt-0.5">
+                  Esa plata ya la recibió el negocio: al aplicarla, hoy solo cobra la diferencia.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAnticipoId(anticipoId ? null : (anticiposCliente!.anticipos[0]?.id ?? null))}
+                className={`px-3 py-1.5 rounded-lg text-[12px] font-semibold transition flex-shrink-0 ${
+                  anticipoId
+                    ? 'bg-violet-600 text-white hover:bg-violet-700'
+                    : 'border border-violet-300 dark:border-violet-500/40 text-violet-700 dark:text-violet-300 hover:bg-violet-100 dark:hover:bg-violet-500/10'
+                }`}
+              >
+                {anticipoId ? 'Quitar' : 'Aplicar'}
+              </button>
+            </div>
+
+            {/* Con varios anticipos se elige cuál usar; con uno solo no se
+                pregunta nada, que es el caso de siempre. */}
+            {anticipoId && (anticiposCliente!.anticipos.length > 1) && (
+              <select
+                value={anticipoId}
+                onChange={(e) => setAnticipoId(e.target.value)}
+                aria-label="Anticipo a aplicar"
+                className="mt-2.5 w-full px-3 py-2 rounded-lg bg-white dark:bg-slate-800 border border-violet-200 dark:border-violet-500/30 text-[13px] text-slate-700 dark:text-slate-200"
+              >
+                {anticiposCliente!.anticipos.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.number} — {formatCurrency(Number(a.balance))} disponibles
+                  </option>
+                ))}
+              </select>
+            )}
+
+            {anticipoAplicado > 0 && (
+              <div className="mt-2.5 pt-2.5 border-t border-violet-200/70 dark:border-violet-500/20 flex items-center justify-between text-[13px]">
+                <span className="text-violet-700 dark:text-violet-300">Se aplica</span>
+                <span className="font-bold text-violet-800 dark:text-violet-200 tabular-nums">
+                  − {formatCurrency(anticipoAplicado)}
+                </span>
+              </div>
+            )}
+            {anticipoAplicado > 0 && (
+              <div className="mt-1 flex items-center justify-between text-[13px]">
+                <span className="font-semibold text-slate-700 dark:text-slate-200">Queda por cobrar</span>
+                <span className="font-black text-emerald-600 dark:text-emerald-400 tabular-nums text-[15px]">
+                  {formatCurrency(totalPorCobrar)}
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Payment methods */}
         <div>
           <label className="text-[12px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2 block">Método de pago</label>
@@ -1184,10 +1264,10 @@ export default function POSPage() {
                 </div>
               </div>
             )}
-            {mixedTotal > total && (
+            {mixedTotal > totalPorCobrar && (
               <div className="bg-emerald-50 dark:bg-emerald-500/10 rounded-xl py-4 text-center border border-emerald-100 dark:border-emerald-500/20">
                 <p className="text-[12px] text-emerald-600 dark:text-emerald-400 font-semibold uppercase tracking-wide">Cambio</p>
-                <p className="font-black text-emerald-700 dark:text-emerald-400 text-[36px] leading-none tabular-nums mt-1">{formatCurrency(mixedTotal - total)}</p>
+                <p className="font-black text-emerald-700 dark:text-emerald-400 text-[36px] leading-none tabular-nums mt-1">{formatCurrency(mixedTotal - totalPorCobrar)}</p>
               </div>
             )}
           </div>
@@ -1201,12 +1281,12 @@ export default function POSPage() {
                 inputMode="decimal"
                 value={paidAmount}
                 onChange={(e) => setPaidAmount(e.target.value)}
-                placeholder={formatCurrency(total)}
+                placeholder={formatCurrency(totalPorCobrar)}
                 className="w-full px-4 py-3 text-[26px] font-bold tabular-nums rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
               />
               <div className="flex flex-wrap gap-1.5 mt-2.5">
                 {[5000, 10000, 20000, 50000, 100000, 200000]
-                  .filter((d) => d >= total)
+                  .filter((d) => d >= totalPorCobrar)
                   .slice(0, 4)
                   .map((d) => (
                     <button
@@ -1220,14 +1300,14 @@ export default function POSPage() {
                   ))}
                 <button
                   type="button"
-                  onClick={() => setPaidAmount(String(Math.ceil(total)))}
+                  onClick={() => setPaidAmount(String(Math.ceil(totalPorCobrar)))}
                   className="px-4 py-2 text-[14px] font-semibold rounded-xl border border-emerald-300 dark:border-emerald-500/40 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 transition-colors"
                 >
                   Exacto
                 </button>
               </div>
             </div>
-            {!isCredit && parseFloat(paidAmount || '0') > 0 && parseFloat(paidAmount) < total && (
+            {!isCredit && parseFloat(paidAmount || '0') > 0 && parseFloat(paidAmount) < totalPorCobrar && (
               <div className="bg-amber-50 dark:bg-amber-500/10 rounded-xl py-4 text-center border border-amber-100 dark:border-amber-500/20">
                 <p className="text-[12px] text-amber-700 dark:text-amber-400 font-semibold uppercase tracking-wide">Falta</p>
                 <p className="font-black text-amber-700 dark:text-amber-400 text-[32px] leading-none tabular-nums mt-1">{formatCurrency(total - parseFloat(paidAmount))}</p>
@@ -1450,7 +1530,7 @@ export default function POSPage() {
                 onClick={handleSale}
                 disabled={!puedeConfirmarVenta({
                   paymentMethod, paidAmount, total, mixedTotal, isCredit,
-                  enviando: saleMutation.isPending,
+                  enviando: saleMutation.isPending, anticipo: anticipoAplicado,
                 })}
                 className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-bold py-4 rounded-xl transition-colors flex items-center justify-center gap-2 text-[16px] shadow-sm shadow-emerald-600/25"
               >

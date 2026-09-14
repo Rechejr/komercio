@@ -28,6 +28,7 @@ const NAV_GROUPS = [
       { href: '/pos',        icon: Calculator,      label: 'Punto de Venta',   permiso: 'ventas.crear',           pro: false },
       { href: '/ventas',     icon: ShoppingCart,    label: 'Ventas',           permiso: 'ventas.ver',             pro: false },
       { href: '/cotizaciones', icon: FileText,      label: 'Cotizaciones',     permiso: 'cotizaciones.gestionar', pro: false },
+      { href: '/anticipos',  icon: HandCoins,       label: 'Anticipos',        permiso: 'anticipos.ver',          pro: false },
       { href: '/inventario', icon: Package,         label: 'Inventario',       permiso: 'productos.gestionar',    pro: false },
       { href: '/compras',    icon: ShoppingBag,     label: 'Compras',          permiso: 'compras.ver',            pro: true  },
       { href: '/transferencias', icon: ArrowLeftRight, label: 'Transferencias', permiso: 'inventario.transferir', pro: false },

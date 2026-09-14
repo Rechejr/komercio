@@ -31,6 +31,9 @@ export const PERMISOS: Permiso[] = [
   { key: 'ventas.anular', label: 'Anular y devolver', hint: 'Anular una venta o hacer una devolución', modulo: 'Ventas', producto: 'pos' },
   { key: 'ventas.eliminar', label: 'Eliminar ventas', hint: 'Borrado definitivo — normalmente solo el dueño', modulo: 'Ventas', producto: 'pos' },
   { key: 'cotizaciones.gestionar', label: 'Cotizaciones', hint: 'Crear y enviar cotizaciones', modulo: 'Ventas', producto: 'pos' },
+  { key: 'anticipos.ver', label: 'Ver anticipos', hint: 'Anticipos de clientes y a proveedores', modulo: 'Ventas', producto: 'pos' },
+  { key: 'anticipos.gestionar', label: 'Registrar y cruzar anticipos', hint: 'Recibir un anticipo y cruzarlo contra una factura', modulo: 'Ventas', producto: 'pos' },
+  { key: 'anticipos.devolver', label: 'Devolver y anular anticipos', hint: 'Sacar plata de la caja para devolver un anticipo', modulo: 'Ventas', producto: 'pos' },
 
   // ── POS · Caja ──
   { key: 'caja.operar', label: 'Abrir y cerrar caja', hint: 'Arqueo, entradas y salidas de efectivo', modulo: 'Caja', producto: 'pos' },
@@ -125,6 +128,7 @@ export const DEFAULTS_POR_ROL: Record<string, string[]> = {
   SUPERVISOR: [
     ...POS_TODOS,
     'ventas.anular', 'cotizaciones.gestionar',
+    'anticipos.ver', 'anticipos.gestionar', 'anticipos.devolver',
     'caja.operar', 'caja.historial',
     'productos.gestionar', 'productos.eliminar', 'productos.importar',
     'inventario.transferir', 'categorias.gestionar',
@@ -138,6 +142,9 @@ export const DEFAULTS_POR_ROL: Record<string, string[]> = {
   CASHIER: [
     ...POS_TODOS,
     'caja.operar',
+    // Recibe y cruza anticipos, pero devolver plata de la caja necesita un
+    // permiso aparte: es sacar efectivo del cajón.
+    'anticipos.ver', 'anticipos.gestionar',
     'clientes.ver', 'clientes.gestionar',
     'creditos.ver', 'creditos.gestionar',
     'compras.gestionar', 'proveedores.gestionar', 'cuentas_por_pagar.pagar',
