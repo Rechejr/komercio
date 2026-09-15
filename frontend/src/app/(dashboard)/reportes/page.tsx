@@ -159,15 +159,29 @@ export default function ReportesPage() {
           </button>
         ))}
         </div>
-        <button
-          type="button"
-          disabled={!rangeReady}
-          onClick={() => downloadExcel('financial', dates.startDate, dates.endDate)}
-          className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-[13px] font-medium bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:hover:bg-emerald-600 text-white transition shadow-sm shadow-emerald-600/25"
-        >
-          <FileSpreadsheet size={15} />
-          Estado de Resultados
-        </button>
+        {/* Los dos Excel usan el mismo rango de fechas que se elige arriba:
+            un período para todo, sin tener que fijarlo dos veces. */}
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            disabled={!rangeReady}
+            onClick={() => downloadExcel('payment-methods', dates.startDate, dates.endDate)}
+            title="Ventas por medio de pago: cuánto entró por Addi, Sistecrédito, bancos y efectivo"
+            className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-[13px] font-medium border border-emerald-600 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 disabled:opacity-50 transition"
+          >
+            <CreditCard size={15} />
+            Ventas por medio de pago
+          </button>
+          <button
+            type="button"
+            disabled={!rangeReady}
+            onClick={() => downloadExcel('financial', dates.startDate, dates.endDate)}
+            className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-[13px] font-medium bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:hover:bg-emerald-600 text-white transition shadow-sm shadow-emerald-600/25"
+          >
+            <FileSpreadsheet size={15} />
+            Estado de Resultados
+          </button>
+        </div>
       </div>
 
       {/* ── Rango manual ──────────────────────────────────────────────────── */}
