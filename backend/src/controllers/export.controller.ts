@@ -23,7 +23,7 @@ function resolveExportRange(startDate: unknown, endDate: unknown): { start: Date
   return { start, end, start0: bogotaDateString(start), end0: bogotaDateString(end) };
 }
 
-function fmtDate(d: Date | null | undefined): string {
+export function fmtDate(d: Date | null | undefined): string {
   if (!d) return '';
   // timeZone explícito: el servidor corre en UTC, así que sin esto una venta de
   // las 8 p.m. en Colombia se imprimía con la fecha del día siguiente.
@@ -38,7 +38,7 @@ function fmtMoney(n: unknown): number {
 // producto/cliente/proveedor/categoría que empiece por =, +, -, @ o tab se
 // interpreta como fórmula al abrir el archivo — se antepone un apóstrofe para
 // forzar que se trate como texto plano.
-function safeStr(val: unknown): string {
+export function safeStr(val: unknown): string {
   const s = val == null ? '' : String(val);
   return /^[=+\-@\t\r]/.test(s) ? `'${s}` : s;
 }
@@ -57,13 +57,13 @@ const TIPO_ES: Record<string, string> = {
   CASH: 'Efectivo', BANK: 'Banco', FINANCING: 'Financiación', OTHER: 'Otro',
 };
 
-function initStreamWriter(res: Response, filename: string) {
+export function initStreamWriter(res: Response, filename: string) {
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
   return new ExcelJS.stream.xlsx.WorkbookWriter({ stream: res });
 }
 
-function styleHeaderStream(ws: ExcelJS.Worksheet) {
+export function styleHeaderStream(ws: ExcelJS.Worksheet) {
   const row = ws.getRow(1);
   row.font = { bold: true, color: { argb: 'FFFFFFFF' } };
   row.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2563EB' } };

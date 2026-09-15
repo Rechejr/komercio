@@ -45,3 +45,27 @@ export async function downloadExcel(
     toast.error('Error al exportar. Intenta con un rango de fechas menor.', { id: toastId });
   }
 }
+
+/**
+ * Descarga un Excel desde cualquier ruta de la API que responda un .xlsx.
+ *
+ * Para los reportes que viven dentro de su propia sección (como el de anticipos)
+ * y no en /exports: la ruta ya trae sus filtros en la query, así que aquí solo
+ * se pide, se guarda y se avisa.
+ */
+export async function descargarExcel(ruta: string, nombreArchivo: string) {
+  const toastId = toast.loading('Generando Excel...');
+  try {
+    const res = await api.get(ruta, { responseType: 'blob', timeout: 120000 });
+    const url = URL.createObjectURL(new Blob([res.data]));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = nombreArchivo.endsWith('.xlsx') ? nombreArchivo : `${nombreArchivo}.xlsx`;
+    document.body.appendChild(a);
+    try { a.click(); } finally { a.remove(); }
+    URL.revokeObjectURL(url);
+    toast.success('Descargado', { id: toastId });
+  } catch {
+    toast.error('No se pudo generar el Excel. Intenta con un rango de fechas menor.', { id: toastId });
+  }
+}

@@ -482,6 +482,41 @@
         }
       }
     },
+    "/api/v1/advances/export": {
+      "get": {
+        "tags": [
+          "advance"
+        ],
+        "summary": "El Excel con los mismos filtros de la pantalla. También antes de /:id.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operación exitosa",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespuestaOk"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sin sesión o token vencido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/auth/activar-producto": {
       "post": {
         "tags": [

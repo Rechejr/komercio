@@ -361,3 +361,60 @@ describe('advanceController.available', () => {
     expect(errorDe(next as unknown as jest.Mock).statusCode).toBe(400);
   });
 });
+
+// ─── Buscador ────────────────────────────────────────────────────────────────
+
+describe('advanceController.list — buscador', () => {
+  beforeEach(() => {
+    mockPrisma.advance.findMany.mockResolvedValue([]);
+    mockPrisma.advance.count.mockResolvedValue(0);
+    mockPrisma.advance.groupBy.mockResolvedValue([]);
+  });
+
+  const whereUsado = () => mockPrisma.advance.findMany.mock.calls[0][0].where;
+
+  it('con una cédula escrita con puntos busca por los dígitos', async () => {
+    // La gente escribe "1.085.248.963"; en la base está "1085248963".
+    const { res } = makeRes();
+    await advanceController.list(makeReq({ query: { search: '1.085.248.963' } }), res, next);
+
+    const or = whereUsado().OR as Array<Record<string, unknown>>;
+    expect(or).toEqual(expect.arrayContaining([
+      { customer: { document: { contains: '1085248963' } } },
+      { supplier: { document: { contains: '1085248963' } } },
+    ]));
+  });
+
+  it('con solo texto NO agrega la condición de identificación', async () => {
+    // `contains: ''` emparejaría con todos los terceros: la búsqueda por nombre
+    // devolvería la lista completa.
+    const { res } = makeRes();
+    await advanceController.list(makeReq({ query: { search: 'Marta' } }), res, next);
+
+    const or = whereUsado().OR as Array<Record<string, unknown>>;
+    expect(or.some((c) => 'customer' in c && 'document' in (c.customer as object))).toBe(false);
+    expect(or).toEqual(expect.arrayContaining([
+      { number: { contains: 'Marta', mode: 'insensitive' } },
+      { customer: { name: { contains: 'Marta', mode: 'insensitive' } } },
+    ]));
+  });
+
+  it('el consecutivo se busca tal cual', async () => {
+    const { res } = makeRes();
+    await advanceController.list(makeReq({ query: { search: 'ANT-0012' } }), res, next);
+
+    const or = whereUsado().OR as Array<Record<string, unknown>>;
+    expect(or).toEqual(expect.arrayContaining([{ number: { contains: 'ANT-0012', mode: 'insensitive' } }]));
+  });
+
+  it('informa cuánto hay pendiente de cruzar por tipo', async () => {
+    mockPrisma.advance.groupBy.mockResolvedValue([
+      { type: 'CUSTOMER', _sum: { balance: 750000 } },
+      { type: 'SUPPLIER', _sum: { balance: 120000 } },
+    ]);
+    const { res, json } = makeRes();
+    await advanceController.list(makeReq({ query: {} }), res, next);
+
+    expect(json.mock.calls[0][0].saldosPendientes).toEqual({ CUSTOMER: 750000, SUPPLIER: 120000 });
+  });
+});

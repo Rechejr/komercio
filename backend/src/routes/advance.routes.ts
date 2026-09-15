@@ -9,6 +9,8 @@ router.use(authenticate);
 // Saldo a favor de un tercero. Va antes de /:id para que "available" no se
 // confunda con el id de un anticipo.
 router.get('/available', requirePermission('anticipos.ver'), advanceController.available);
+// El Excel con los mismos filtros de la pantalla. También antes de /:id.
+router.get('/export', requirePermission('anticipos.ver'), advanceController.exportar);
 
 router.get('/', requirePermission('anticipos.ver'), advanceController.list);
 // Facturas del tercero contra las que se puede cruzar este anticipo.

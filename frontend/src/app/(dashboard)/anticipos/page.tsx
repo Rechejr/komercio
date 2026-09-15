@@ -6,11 +6,12 @@ import { api } from '@/lib/api';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import { usePaymentAccounts } from '@/lib/usePaymentAccounts';
+import { descargarExcel } from '@/lib/exportExcel';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Portal } from '@/components/ui/Portal';
 import { PriceInput } from '@/components/ui/PriceInput';
 import {
-  HandCoins, Plus, Search, X, Loader2, Users, Truck, Eye, Undo2, Ban, FileText, Link2,
+  HandCoins, Plus, Search, X, Loader2, Users, Truck, Eye, Undo2, Ban, FileText, Link2, FileSpreadsheet,
 } from 'lucide-react';
 
 // Anticipos: plata que se mueve ANTES de la factura.
@@ -54,19 +55,25 @@ export default function AnticiposPage() {
   const [search, setSearch] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [estado, setEstado] = useState('');
   const [showNew, setShowNew] = useState(false);
   const [detalle, setDetalle] = useState<Anticipo | null>(null);
   const [devolver, setDevolver] = useState<Anticipo | null>(null);
   const [anular, setAnular] = useState<Anticipo | null>(null);
   const [cruzar, setCruzar] = useState<Anticipo | null>(null);
 
-  const params = new URLSearchParams({ limit: '100', type: tipo });
+  // Los mismos filtros van a la lista y al Excel: lo que se descarga es
+  // exactamente lo que se está mirando.
+  const params = new URLSearchParams({ type: tipo });
   if (search.trim()) params.set('search', search.trim());
   if (startDate) params.set('startDate', startDate);
   if (endDate) params.set('endDate', endDate);
+  if (estado) params.set('status', estado);
+  const filtros = params.toString();
+  params.set('limit', '100');
 
   const { data, isLoading } = useQuery({
-    queryKey: ['advances', tipo, search, startDate, endDate],
+    queryKey: ['advances', tipo, search, startDate, endDate, estado],
     queryFn: () => api.get(`/advances?${params.toString()}`).then((r) => r.data),
     placeholderData: (prev) => prev, // la tabla no parpadea mientras se escribe
   });
@@ -142,12 +149,23 @@ export default function AnticiposPage() {
             </button>
           ))}
         </div>
-        <button
-          onClick={() => setShowNew(true)}
-          className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2.5 rounded-xl text-sm transition-colors"
-        >
-          <Plus size={16} /> {esCliente ? 'Recibir anticipo' : 'Girar anticipo'}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => descargarExcel(`/advances/export?${filtros}`, `anticipos-${esCliente ? 'clientes' : 'proveedores'}${startDate ? `-${startDate}` : ''}${endDate ? `-${endDate}` : ''}`)}
+            disabled={anticipos.length === 0}
+            title="Descarga lo que se está viendo, con los mismos filtros"
+            className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-sm font-medium border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:border-emerald-300 hover:text-emerald-700 dark:hover:text-emerald-400 disabled:opacity-50 disabled:hover:border-slate-200 transition"
+          >
+            <FileSpreadsheet size={15} /> Descargar Excel
+          </button>
+          <button
+            onClick={() => setShowNew(true)}
+            className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2.5 rounded-xl text-sm transition-colors"
+          >
+            <Plus size={16} /> {esCliente ? 'Recibir anticipo' : 'Girar anticipo'}
+          </button>
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
@@ -156,7 +174,7 @@ export default function AnticiposPage() {
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder={esCliente ? 'Buscar por número o cliente…' : 'Buscar por número o proveedor…'}
+            placeholder={esCliente ? 'Buscar por nombre, cédula o número (ANT-0001)…' : 'Buscar por nombre, NIT o número (ANTP-0001)…'}
             className="w-full pl-9 pr-3 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-800 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 transition"
           />
         </div>
@@ -166,9 +184,22 @@ export default function AnticiposPage() {
           <span className="text-slate-400 text-sm">→</span>
           <input type="date" aria-label="Hasta" value={endDate} onChange={(e) => setEndDate(e.target.value)}
             className="px-3 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/30 transition" />
-          {(search || startDate || endDate) && (
+          <select
+            value={estado}
+            onChange={(e) => setEstado(e.target.value)}
+            aria-label="Estado"
+            className="px-3 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/30 transition"
+          >
+            <option value="">Todos los estados</option>
+            <option value="PENDING">Disponibles</option>
+            <option value="PARTIAL">Usados en parte</option>
+            <option value="APPLIED">Aplicados</option>
+            <option value="REFUNDED">Devueltos</option>
+            <option value="CANCELLED">Anulados</option>
+          </select>
+          {(search || startDate || endDate || estado) && (
             <button type="button" aria-label="Limpiar filtros"
-              onClick={() => { setSearch(''); setStartDate(''); setEndDate(''); }}
+              onClick={() => { setSearch(''); setStartDate(''); setEndDate(''); setEstado(''); }}
               className="w-9 h-9 flex items-center justify-center rounded-xl text-slate-400 hover:text-slate-600 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition">
               <X size={14} />
             </button>

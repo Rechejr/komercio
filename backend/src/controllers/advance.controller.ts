@@ -6,6 +6,7 @@ import { AuthRequest } from '../middlewares/auth';
 import { parseBogotaBoundary } from '../utils/bogotaTime';
 import { resolvePayment } from '../utils/paymentAccount';
 import { logger } from '../config/logger';
+import { initStreamWriter, styleHeaderStream, safeStr, fmtDate } from './export.controller';
 
 /**
  * Anticipos de cliente y de proveedor.
@@ -60,6 +61,39 @@ async function moverCaja(
   }
 }
 
+/**
+ * Filtros comunes a la lista y al Excel: si el Excel filtrara distinto de lo que
+ * se ve en pantalla, el usuario descargaría algo que no es lo que está mirando.
+ *
+ * Se busca por número, por nombre o por identificación del tercero, que son
+ * las tres formas en que la gente lo recuerda ("el ANT-0012", "el de doña
+ * Marta", "el de la cédula 1085…"). La cédula se compara solo por dígitos,
+ * porque la gente la escribe con puntos y en la base está sin ellos.
+ */
+function filtrosDeBusqueda(query: Record<string, unknown>): Prisma.AdvanceWhereInput {
+  const where: Prisma.AdvanceWhereInput = {};
+  const search = typeof query.search === 'string' ? query.search.trim() : '';
+  if (search) {
+    const digitos = search.replace(/\D/g, '');
+    where.OR = [
+      { number: { contains: search, mode: 'insensitive' } },
+      { customer: { name: { contains: search, mode: 'insensitive' } } },
+      { supplier: { name: { contains: search, mode: 'insensitive' } } },
+      // Solo si hay dígitos: `contains: ''` emparejaría con todo.
+      ...(digitos ? [
+        { customer: { document: { contains: digitos } } },
+        { supplier: { document: { contains: digitos } } },
+      ] : []),
+    ];
+  }
+  // Día calendario colombiano: sin esto "del 1 al 30" deja por fuera lo del
+  // día 1 antes de las 7 p.m. (medianoche UTC = 7 p.m. de acá).
+  const gte = parseBogotaBoundary(query.startDate, 'start');
+  const lte = parseBogotaBoundary(query.endDate, 'end');
+  if (gte || lte) where.createdAt = { ...(gte && { gte }), ...(lte && { lte }) };
+  return where;
+}
+
 const INCLUIR = {
   customer: { select: { id: true, name: true, document: true, phone: true } },
   supplier: { select: { id: true, name: true, document: true, phone: true } },
@@ -81,20 +115,7 @@ export const advanceController = {
       if (status) where.status = status as Prisma.AdvanceWhereInput['status'];
       if (customerId) where.customerId = customerId;
       if (supplierId) where.supplierId = supplierId;
-      // Se busca por número o por el nombre del tercero, que es como se recuerda
-      // ("el anticipo de doña Marta", "el ANT-0012").
-      if (search) {
-        where.OR = [
-          { number: { contains: search, mode: 'insensitive' } },
-          { customer: { name: { contains: search, mode: 'insensitive' } } },
-          { supplier: { name: { contains: search, mode: 'insensitive' } } },
-        ];
-      }
-      // Día calendario colombiano: sin esto "del 1 al 30" deja por fuera lo del
-      // día 1 antes de las 7 p.m. (medianoche UTC = 7 p.m. de acá).
-      const gte = parseBogotaBoundary(req.query.startDate, 'start');
-      const lte = parseBogotaBoundary(req.query.endDate, 'end');
-      if (gte || lte) where.createdAt = { ...(gte && { gte }), ...(lte && { lte }) };
+      Object.assign(where, filtrosDeBusqueda(req.query));
 
       const [items, total, disponibles] = await Promise.all([
         prisma.advance.findMany({
@@ -478,6 +499,110 @@ export const advanceController = {
         .filter((f) => f.porCubrir > 0);
 
       return success(res, { facturas: disponibles, saldo: Number(anticipo.balance) });
+    } catch (err) { next(err); }
+  },
+
+  /**
+   * El reporte de anticipos en Excel, con los MISMOS filtros de la pantalla.
+   *
+   * Para qué: al cierre del mes el contador pide "cuánta plata de clientes tengo
+   * comprometida en mercancía" (para él es un pasivo) y "cuánto me deben
+   * despachar los proveedores". Y el dueño quiere ver cuáles llevan semanas sin
+   * entregarse. La pantalla lo muestra; esto lo deja llevar.
+   *
+   * Una fila por anticipo, con las facturas contra las que se cruzó en la misma
+   * fila, para que se pueda seguir el rastro sin abrir cada uno.
+   */
+  async exportar(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const businessId = req.user!.businessId!;
+      const { type, status } = req.query as Record<string, string>;
+      const where: Prisma.AdvanceWhereInput = { businessId, deletedAt: null, ...filtrosDeBusqueda(req.query) };
+      if (type === 'CUSTOMER' || type === 'SUPPLIER') where.type = type;
+      if (status) where.status = status as Prisma.AdvanceWhereInput['status'];
+
+      const anticipos = await prisma.advance.findMany({
+        where,
+        include: {
+          ...INCLUIR,
+          applications: {
+            include: {
+              sale: { select: { invoiceNumber: true } },
+              purchase: { select: { invoiceNumber: true } },
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 5_000,
+      });
+
+      const ESTADO: Record<string, string> = {
+        PENDING: 'Disponible', PARTIAL: 'Usado en parte', APPLIED: 'Aplicado',
+        REFUNDED: 'Devuelto', CANCELLED: 'Anulado',
+      };
+      const METODO: Record<string, string> = {
+        CASH: 'Efectivo', TRANSFER: 'Transferencia', NEQUI: 'Nequi',
+        DAVIPLATA: 'Daviplata', CARD: 'Tarjeta', MIXED: 'Mixto',
+      };
+
+      const hoy = new Date().toISOString().slice(0, 10);
+      const sufijo = type === 'CUSTOMER' ? 'clientes' : type === 'SUPPLIER' ? 'proveedores' : 'todos';
+      const wb = initStreamWriter(res, `anticipos-${sufijo}-${hoy}.xlsx`);
+      const ws = wb.addWorksheet('Anticipos');
+      ws.columns = [
+        { header: 'Número',          key: 'numero',   width: 12 },
+        { header: 'Tipo',            key: 'tipo',     width: 12 },
+        { header: 'Tercero',         key: 'tercero',  width: 28 },
+        { header: 'Identificación',  key: 'doc',      width: 16 },
+        { header: 'Teléfono',        key: 'tel',      width: 14 },
+        { header: 'Fecha',           key: 'fecha',    width: 12 },
+        { header: 'Monto ($)',       key: 'monto',    width: 16 },
+        { header: 'Cruzado ($)',     key: 'cruzado',  width: 16 },
+        { header: 'Saldo ($)',       key: 'saldo',    width: 16 },
+        { header: 'Estado',          key: 'estado',   width: 15 },
+        { header: 'Medio de pago',   key: 'medio',    width: 16 },
+        { header: 'Facturas',        key: 'facturas', width: 28 },
+        { header: 'Devuelto el',     key: 'devuelto', width: 12 },
+        { header: 'Nota',            key: 'nota',     width: 32 },
+        { header: 'Registró',        key: 'quien',    width: 20 },
+      ];
+      styleHeaderStream(ws);
+
+      let totalMonto = 0, totalCruzado = 0, totalSaldo = 0;
+      for (const a of anticipos) {
+        const tercero = a.customer ?? a.supplier;
+        const facturas = a.applications
+          .map((ap) => ap.sale?.invoiceNumber || ap.purchase?.invoiceNumber || '')
+          .filter(Boolean)
+          .join(', ');
+        totalMonto += Number(a.amount);
+        totalCruzado += Number(a.applied);
+        totalSaldo += Number(a.balance);
+        ws.addRow({
+          numero: a.number,
+          tipo: a.type === 'CUSTOMER' ? 'Cliente' : 'Proveedor',
+          tercero: safeStr(tercero?.name || ''),
+          doc: safeStr(tercero?.document || ''),
+          tel: safeStr(tercero?.phone || ''),
+          fecha: fmtDate(a.createdAt),
+          monto: Number(a.amount),
+          cruzado: Number(a.applied),
+          saldo: Number(a.balance),
+          estado: ESTADO[a.status] || a.status,
+          medio: safeStr(a.paymentAccount?.name || METODO[a.paymentMethod] || a.paymentMethod),
+          facturas: safeStr(facturas),
+          devuelto: fmtDate(a.refundedAt),
+          nota: safeStr(a.notes || ''),
+          quien: safeStr(a.createdBy?.name || ''),
+        }).commit();
+      }
+
+      const fila = ws.addRow({ numero: 'TOTAL', monto: totalMonto, cruzado: totalCruzado, saldo: totalSaldo });
+      fila.font = { bold: true };
+      fila.commit();
+
+      ws.commit();
+      await wb.commit();
     } catch (err) { next(err); }
   },
 
