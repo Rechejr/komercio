@@ -84,6 +84,9 @@ describe('POST /api/v1/purchases', () => {
     const txExecuteRawUnsafe = jest.fn().mockResolvedValue(0);
     const txMovementCreate = jest.fn().mockResolvedValue({});
     const tx = {
+      // Al eliminar se devuelve el saldo de los anticipos cruzados con la compra;
+      // en estas pruebas no hay ninguno.
+      advanceApplication: { findMany: jest.fn().mockResolvedValue([]), deleteMany: jest.fn() },
       purchase: { create: txPurchaseCreate },
       $queryRawUnsafe: jest.fn().mockResolvedValue([{ id: PROD, stock: 10, minStock: 2, lowStockNotifiedAt: null }]),
       $executeRawUnsafe: txExecuteRawUnsafe,
@@ -115,6 +118,9 @@ describe('POST /api/v1/purchases', () => {
     const txPurchaseCreate = jest.fn().mockResolvedValue({ id: 'purch-1' });
     const txExecuteRawUnsafe = jest.fn().mockResolvedValue(0);
     const tx = {
+      // Al eliminar se devuelve el saldo de los anticipos cruzados con la compra;
+      // en estas pruebas no hay ninguno.
+      advanceApplication: { findMany: jest.fn().mockResolvedValue([]), deleteMany: jest.fn() },
       purchase: { create: txPurchaseCreate },
       $queryRawUnsafe: jest.fn()
         .mockResolvedValueOnce([{ id: PROD, stock: 10, minStock: 2, lowStockNotifiedAt: null }])
@@ -154,6 +160,9 @@ describe('POST /api/v1/purchases', () => {
     (mockPrisma.branch.findFirst as jest.Mock).mockImplementation(({ where }: any) => Promise.resolve({ id: where.id }));
 
     const tx = {
+      // Al eliminar se devuelve el saldo de los anticipos cruzados con la compra;
+      // en estas pruebas no hay ninguno.
+      advanceApplication: { findMany: jest.fn().mockResolvedValue([]), deleteMany: jest.fn() },
       purchase: { create: jest.fn().mockResolvedValue({ id: 'purch-1' }) },
       $queryRawUnsafe: jest.fn().mockResolvedValue([{ id: PROD, stock: 10, minStock: 2, lowStockNotifiedAt: null }]),
       $executeRawUnsafe: jest.fn().mockResolvedValue(0),
@@ -182,6 +191,9 @@ describe('POST /api/v1/purchases', () => {
     (mockPrisma.cashRegister.findFirst as jest.Mock).mockResolvedValue({ id: 'reg-1' });
 
     const tx = {
+      // Al eliminar se devuelve el saldo de los anticipos cruzados con la compra;
+      // en estas pruebas no hay ninguno.
+      advanceApplication: { findMany: jest.fn().mockResolvedValue([]), deleteMany: jest.fn() },
       purchase: { create: jest.fn().mockResolvedValue({ id: 'purch-1', total: 5000 }) },
       $queryRawUnsafe: jest.fn().mockResolvedValue([{ id: PROD, stock: 10, minStock: 2, lowStockNotifiedAt: null }]),
       $executeRawUnsafe: jest.fn().mockResolvedValue(0),
@@ -209,6 +221,9 @@ describe('POST /api/v1/purchases', () => {
     (mockPrisma.cashRegister.findFirst as jest.Mock).mockRejectedValue(new Error('db down'));
 
     const tx = {
+      // Al eliminar se devuelve el saldo de los anticipos cruzados con la compra;
+      // en estas pruebas no hay ninguno.
+      advanceApplication: { findMany: jest.fn().mockResolvedValue([]), deleteMany: jest.fn() },
       purchase: { create: jest.fn().mockResolvedValue({ id: 'purch-1', total: 5000 }) },
       $queryRawUnsafe: jest.fn().mockResolvedValue([{ id: PROD, stock: 10, minStock: 2, lowStockNotifiedAt: null }]),
       $executeRawUnsafe: jest.fn().mockResolvedValue(0),
@@ -244,6 +259,9 @@ describe('POST /api/v1/purchases', () => {
     (mockPrisma.branch.findFirst as jest.Mock).mockImplementation(({ where }: any) => Promise.resolve({ id: where.id }));
 
     const tx = {
+      // Al eliminar se devuelve el saldo de los anticipos cruzados con la compra;
+      // en estas pruebas no hay ninguno.
+      advanceApplication: { findMany: jest.fn().mockResolvedValue([]), deleteMany: jest.fn() },
       purchase: { create: jest.fn().mockResolvedValue({ id: 'purch-1', total: 178000 }) },
       $queryRawUnsafe: jest.fn()
         .mockResolvedValueOnce([{ id: PROD, stock: 10, minStock: 2, lowStockNotifiedAt: null }])
@@ -275,6 +293,9 @@ describe('POST /api/v1/purchases', () => {
     (mockPrisma.product.count as jest.Mock).mockResolvedValue(1);
     const txProductUpdate = jest.fn().mockResolvedValue({});
     const tx = {
+      // Al eliminar se devuelve el saldo de los anticipos cruzados con la compra;
+      // en estas pruebas no hay ninguno.
+      advanceApplication: { findMany: jest.fn().mockResolvedValue([]), deleteMany: jest.fn() },
       purchase: { create: jest.fn().mockResolvedValue({ id: 'purch-1', total: 11200 }) },
       $queryRawUnsafe: jest.fn().mockResolvedValue([{ id: PROD, stock: 10, minStock: 2, lowStockNotifiedAt: null }]),
       $executeRawUnsafe: jest.fn().mockResolvedValue(0),
@@ -317,6 +338,9 @@ describe('PUT /api/v1/purchases/:id', () => {
     const txProductStockUpdate = jest.fn().mockResolvedValue({});
     const txPurchaseUpdate = jest.fn().mockResolvedValue({});
     const tx = {
+      // Al eliminar se devuelve el saldo de los anticipos cruzados con la compra;
+      // en estas pruebas no hay ninguno.
+      advanceApplication: { findMany: jest.fn().mockResolvedValue([]), deleteMany: jest.fn() },
       branch: { findFirst: jest.fn().mockResolvedValue({ id: BR2 }) },
       $queryRawUnsafe: jest.fn()
         // key vieja (PROD, BR1): lock del producto + upsert de stock en BR1
@@ -369,6 +393,9 @@ describe('PUT /api/v1/purchases/:id', () => {
     const txProductStockUpdate = jest.fn().mockResolvedValue({});
     const txProductUpdate = jest.fn().mockResolvedValue({});
     const tx = {
+      // Al eliminar se devuelve el saldo de los anticipos cruzados con la compra;
+      // en estas pruebas no hay ninguno.
+      advanceApplication: { findMany: jest.fn().mockResolvedValue([]), deleteMany: jest.fn() },
       branch: { findFirst: jest.fn().mockResolvedValue({ id: BR1 }) },
       // Una sola clave (PROD, BR1): delta 0 -> solo entra al lock del producto,
       // sin tocar product_stocks (branchStockRow no debería ni consultarse).
@@ -416,6 +443,9 @@ describe('PUT /api/v1/purchases/:id', () => {
     (mockPrisma.cashMovement.findFirst as jest.Mock).mockResolvedValue({ id: 'mov-1', cashRegister: { status: 'OPEN' } });
 
     const tx = {
+      // Al eliminar se devuelve el saldo de los anticipos cruzados con la compra;
+      // en estas pruebas no hay ninguno.
+      advanceApplication: { findMany: jest.fn().mockResolvedValue([]), deleteMany: jest.fn() },
       branch: { findFirst: jest.fn().mockResolvedValue({ id: BR1 }) },
       // Misma bodega y cantidad — delta 0, solo entra al lock del producto.
       $queryRawUnsafe: jest.fn().mockResolvedValue([{ id: PROD, stock: 100, allowNegativeStock: false, name: 'Producto X', minStock: 2, lowStockNotifiedAt: null }]),
@@ -503,6 +533,9 @@ describe('DELETE /api/v1/purchases/:id', () => {
     });
 
     const tx = {
+      // Al eliminar se devuelve el saldo de los anticipos cruzados con la compra;
+      // en estas pruebas no hay ninguno.
+      advanceApplication: { findMany: jest.fn().mockResolvedValue([]), deleteMany: jest.fn() },
       $queryRawUnsafe: jest.fn()
         // Lock de products: el total del negocio (100) sí alcanza para restar 8
         .mockResolvedValueOnce([{ id: PROD, stock: 100, allowNegativeStock: false, name: 'Producto X' }])
@@ -534,6 +567,9 @@ describe('DELETE /api/v1/purchases/:id', () => {
     const txProductStockUpdate = jest.fn().mockResolvedValue({});
     const txPurchaseUpdate = jest.fn().mockResolvedValue({});
     const tx = {
+      // Al eliminar se devuelve el saldo de los anticipos cruzados con la compra;
+      // en estas pruebas no hay ninguno.
+      advanceApplication: { findMany: jest.fn().mockResolvedValue([]), deleteMany: jest.fn() },
       $queryRawUnsafe: jest.fn()
         .mockResolvedValueOnce([{ id: PROD, stock: 100, allowNegativeStock: false, name: 'Producto X' }])
         .mockResolvedValueOnce([{ stock: 20 }]),
@@ -568,6 +604,9 @@ describe('DELETE /api/v1/purchases/:id', () => {
     (mockPrisma.cashMovement.findFirst as jest.Mock).mockResolvedValue({ id: 'mov-1', cashRegister: { status: 'OPEN' } });
 
     const tx = {
+      // Al eliminar se devuelve el saldo de los anticipos cruzados con la compra;
+      // en estas pruebas no hay ninguno.
+      advanceApplication: { findMany: jest.fn().mockResolvedValue([]), deleteMany: jest.fn() },
       $queryRawUnsafe: jest.fn()
         .mockResolvedValueOnce([{ id: PROD, stock: 100, allowNegativeStock: false, name: 'Producto X' }])
         .mockResolvedValueOnce([{ stock: 20 }]),

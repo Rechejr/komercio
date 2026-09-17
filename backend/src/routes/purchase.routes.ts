@@ -41,21 +41,32 @@ const roundCOP = (n: number) => Math.round(n);
 // como siempre) o pago DIVIDIDO (payments[] + credit). Devuelve todo lo que la
 // compra necesita: método, cuenta, monto pagado, desglose, efectivo para la caja
 // y el monto que queda a crédito con el proveedor.
-async function buildPurchasePayment(body: any, businessId: string, total: number): Promise<{
+async function buildPurchasePayment(
+  body: any,
+  businessId: string,
+  total: number,
+  // Parte del total ya cubierta con un anticipo girado antes al proveedor. Esa
+  // plata salió de la caja el día del anticipo, así que hoy solo se paga (o se
+  // deja a crédito) la diferencia. Sin esto, el negocio pagaría dos veces.
+  anticipoAplicado = 0,
+): Promise<{
   paymentMethod: string; paymentAccountId: string | null; paidAmount: number;
   paymentDetails: { splits: Array<{ method: string; amount: number; paymentAccountId: string | null }> } | null;
   cashAmount: number; creditAmount: number; creditDueDate: Date | null;
 }> {
   const payments: Array<{ paymentAccountId?: string; amount: number | string }> = Array.isArray(body.payments) ? body.payments : [];
   const hasSplit = payments.length > 0 || (body.credit && Number(body.credit.amount) > 0);
+  // Lo que falta por pagar hoy, ya descontado el anticipo.
+  const porPagar = roundCOP(Math.max(0, total - anticipoAplicado));
 
   if (!hasSplit) {
-    // Pago simple (comportamiento de siempre): un solo medio cubre el total.
+    // Pago simple (comportamiento de siempre): un solo medio cubre lo que falta.
     const resolved = await resolvePayment({ paymentAccountId: body.paymentAccountId, paymentMethod: body.paymentMethod }, businessId);
     return {
       paymentMethod: resolved.paymentMethod, paymentAccountId: resolved.paymentAccountId,
+      // paidAmount = lo cubierto sin crédito: lo de hoy más el anticipo.
       paidAmount: total, paymentDetails: null,
-      cashAmount: resolved.paymentMethod === 'CASH' ? total : 0,
+      cashAmount: resolved.paymentMethod === 'CASH' ? porPagar : 0,
       creditAmount: 0, creditDueDate: null,
     };
   }
@@ -69,13 +80,20 @@ async function buildPurchasePayment(body: any, businessId: string, total: number
     splits.push({ method: resolved.paymentMethod, amount, paymentAccountId: resolved.paymentAccountId });
   }
   const paidSum = roundCOP(splits.reduce((s, x) => s + x.amount, 0));
-  const creditAmount = body.credit?.amount != null ? roundCOP(Number(body.credit.amount)) : roundCOP(total - paidSum);
+  const creditAmount = body.credit?.amount != null ? roundCOP(Number(body.credit.amount)) : roundCOP(porPagar - paidSum);
 
   if (paidSum < 0 || creditAmount < 0) throw new AppError('Los montos de pago no pueden ser negativos', 400);
-  if (Math.abs(paidSum + creditAmount - total) > 1) {
-    throw new AppError('La suma de los pagos y el crédito no coincide con el total de la compra', 400);
+  // Los medios más el crédito tienen que cubrir lo que falta (no el total: el
+  // anticipo ya cubrió su parte).
+  if (Math.abs(paidSum + creditAmount - porPagar) > 1) {
+    throw new AppError(
+      anticipoAplicado > 0
+        ? `La suma de los pagos y el crédito debe ser $${porPagar.toLocaleString('es-CO')} (el total menos el anticipo aplicado)`
+        : 'La suma de los pagos y el crédito no coincide con el total de la compra',
+      400,
+    );
   }
-  if (paidSum === 0 && creditAmount === 0) throw new AppError('Indica cómo se paga la compra', 400);
+  if (paidSum === 0 && creditAmount === 0 && porPagar > 0) throw new AppError('Indica cómo se paga la compra', 400);
 
   const cashAmount = roundCOP(splits.filter((s) => s.method === 'CASH').reduce((s, x) => s + x.amount, 0));
   const creditDueDate = body.credit?.dueDate ? new Date(body.credit.dueDate) : null;
@@ -90,9 +108,49 @@ async function buildPurchasePayment(body: any, businessId: string, total: number
   }
 
   return {
-    paymentMethod: 'MIXED', paymentAccountId: null, paidAmount: paidSum,
+    paymentMethod: 'MIXED', paymentAccountId: null,
+    // Lo cubierto sin crédito: los medios de hoy más el anticipo.
+    paidAmount: roundCOP(paidSum + anticipoAplicado),
     paymentDetails: { splits }, cashAmount, creditAmount, creditDueDate,
   };
+}
+
+/**
+ * Cuánto del anticipo del proveedor se aplica a esta compra.
+ *
+ * Se valida ANTES de la transacción para calcular el pago, y se vuelve a
+ * bloquear y validar ADENTRO (ver el handler) por si el saldo cambió entre
+ * una cosa y la otra: dos compras del mismo proveedor registrándose al tiempo
+ * no pueden gastar el mismo anticipo.
+ */
+async function resolverAnticipoProveedor(
+  tx: { advance: { findFirst: typeof prisma.advance.findFirst } },
+  body: any,
+  businessId: string,
+  supplierId: string,
+  total: number,
+): Promise<number> {
+  if (!body.advanceId) return 0;
+  const anticipo = await tx.advance.findFirst({
+    where: { id: String(body.advanceId), businessId, deletedAt: null },
+    select: { type: true, supplierId: true, status: true, balance: true },
+  });
+  if (!anticipo) throw new AppError('Anticipo no encontrado', 404);
+  if (anticipo.type !== 'SUPPLIER') throw new AppError('Ese anticipo es de un cliente', 400);
+  if (anticipo.status === 'REFUNDED' || anticipo.status === 'CANCELLED') {
+    throw new AppError('Ese anticipo ya no está disponible', 400);
+  }
+  // El anticipo se le giró a un proveedor concreto: aplicarlo a la compra de
+  // otro sería regalarle la plata a quien no la recibió.
+  if (anticipo.supplierId !== supplierId) throw new AppError('El anticipo es de otro proveedor', 400);
+  const saldo = Number(anticipo.balance);
+  if (saldo <= 0) throw new AppError('Ese anticipo ya no tiene saldo', 400);
+
+  const pedido = body.advanceAmount != null ? roundCOP(Number(body.advanceAmount)) : saldo;
+  if (!isFinite(pedido) || pedido <= 0) throw new AppError('El monto del anticipo a aplicar debe ser mayor a 0', 400);
+  if (pedido > saldo) throw new AppError(`El anticipo solo tiene $${saldo.toLocaleString('es-CO')} disponibles`, 400);
+  // Nunca más que la compra: el resto queda a favor para la próxima.
+  return Math.min(pedido, roundCOP(total));
 }
 
 // Compras de antes de esta función quedaron con branchId null — al editarlas o
@@ -206,7 +264,9 @@ router.post('/', requirePermission('compras.gestionar'), planLimit.purchases(),
       return s + lineSub + lineSub * ((parseFloat(it.taxRate) || 0) / 100);
     }, 0));
     // Resuelve el pago: simple (un medio) o dividido (payments[] + crédito).
-    const pay = await buildPurchasePayment(req.body, businessId!, computedTotal);
+    // Anticipo girado antes al proveedor: hoy solo se paga la diferencia.
+    const anticipoAplicado = await resolverAnticipoProveedor(prisma, req.body, businessId!, supplierId, computedTotal);
+    const pay = await buildPurchasePayment(req.body, businessId!, computedTotal, anticipoAplicado);
 
     // Validate all products belong to this business before starting the transaction.
     // Dedupe primero — con bodega por línea, un mismo producto puede repetirse en
@@ -268,6 +328,7 @@ router.post('/', requirePermission('compras.gestionar'), planLimit.purchases(),
           paymentMethod: pay.paymentMethod as any,
           paymentAccountId: pay.paymentAccountId,
           paidAmount: pay.paidAmount,
+          advanceApplied: anticipoAplicado,
           paymentDetails: (pay.paymentDetails ?? undefined) as any,
           details: { create: details },
           // Valor de referencia/compat: la bodega de la primera línea. No se
@@ -334,6 +395,37 @@ router.post('/', requirePermission('compras.gestionar'), planLimit.purchases(),
             unitCost: parseFloat(item.unitCost),
             totalCost: parseFloat(item.unitCost) * qty,
             branchId: lineBranchId,
+          },
+        });
+      }
+
+      // El anticipo se cruza con la compra en la misma transacción: si algo
+      // falla, no puede quedar un anticipo gastado sin la compra que lo gastó.
+      // La fila se bloquea para que dos compras del mismo proveedor no gasten
+      // el mismo saldo al tiempo, y se vuelve a comprobar el saldo por si
+      // cambió desde que se calculó el pago.
+      if (anticipoAplicado > 0) {
+        await tx.$queryRaw`SELECT id FROM advances WHERE id = ${String(req.body.advanceId)} FOR UPDATE`;
+        const anticipo = await tx.advance.findUniqueOrThrow({ where: { id: String(req.body.advanceId) } });
+        if (Number(anticipo.balance) < anticipoAplicado) {
+          throw new AppError('El saldo del anticipo cambió mientras se registraba la compra. Intente de nuevo.', 409);
+        }
+        await tx.advanceApplication.create({
+          data: {
+            advanceId: anticipo.id,
+            purchaseId: newPurchase.id,
+            amount: anticipoAplicado,
+            createdById: req.user!.userId,
+          },
+        });
+        const aplicado = roundCOP(Number(anticipo.applied) + anticipoAplicado);
+        const montoAnticipo = Number(anticipo.amount);
+        await tx.advance.update({
+          where: { id: anticipo.id },
+          data: {
+            applied: aplicado,
+            balance: Math.max(0, roundCOP(montoAnticipo - aplicado)),
+            status: aplicado >= montoAnticipo ? 'APPLIED' : 'PARTIAL',
           },
         });
       }
@@ -409,6 +501,13 @@ router.put('/:id', requirePermission('compras.gestionar'), purchaseItemValidator
     // caja + abonos: se prefiere anularla y volver a registrarla (evita descuadres).
     if (existing.supplierCredit && existing.supplierCredit.status !== 'CANCELLED') {
       throw new AppError('Esta compra tiene un saldo a crédito con el proveedor. Anúlala y regístrala de nuevo para cambiar el pago.', 400);
+    }
+    // Mismo criterio con un anticipo cruzado: cambiar los montos con el anticipo
+    // encima dejaría el saldo del anticipo sin relación con la compra real. Al
+    // eliminarla el anticipo vuelve a quedar disponible, así que el camino es el
+    // mismo que con el crédito.
+    if (Number(existing.advanceApplied ?? 0) > 0) {
+      throw new AppError('Esta compra tiene un anticipo cruzado. Elimínala y regístrala de nuevo para cambiarla; el anticipo vuelve a quedar disponible.', 400);
     }
 
     // Validate new items' products belong to this business (dedupe — ver nota
@@ -654,6 +753,28 @@ router.delete('/:id', requirePermission('compras.eliminar'), async (req: AuthReq
     await prisma.$transaction(async (tx) => {
       // Fallback solo para detalles legados sin branchId propio.
       const legacyBranchId = await resolvePurchaseBranchId(tx, req.user!.businessId!, existing.branchId);
+
+      // El anticipo que se cruzó con esta compra vuelve a quedar disponible: la
+      // compra se eliminó, pero la plata girada al proveedor sigue girada.
+      const cruces = await tx.advanceApplication.findMany({ where: { purchaseId: existing.id } });
+      for (const cruce of cruces) {
+        const anticipo = await tx.advance.findUnique({ where: { id: cruce.advanceId } });
+        if (!anticipo) continue;
+        const aplicado = Math.max(0, Number(anticipo.applied) - Number(cruce.amount));
+        const montoAnticipo = Number(anticipo.amount);
+        await tx.advance.update({
+          where: { id: anticipo.id },
+          data: {
+            applied: aplicado,
+            balance: Math.max(0, montoAnticipo - aplicado),
+            // Devuelto o anulado se quedan así: ya no hay saldo que revivir.
+            ...(anticipo.status === 'APPLIED' || anticipo.status === 'PARTIAL'
+              ? { status: aplicado <= 0 ? ('PENDING' as const) : ('PARTIAL' as const) }
+              : {}),
+          },
+        });
+      }
+      await tx.advanceApplication.deleteMany({ where: { purchaseId: existing.id } });
 
       // Si la compra dejó un saldo a crédito con el proveedor, se anula y se baja
       // su deuda por el SALDO pendiente (los abonos ya hechos son reales y quedan).

@@ -15,25 +15,31 @@ interface Props {
   setValue: UseFormSetValue<any>;
   paymentAccounts: Array<{ id: string; name: string }>;
   total: number;
+  /** Parte del total cubierta con un anticipo girado antes al proveedor. Esa
+   *  plata ya salió, así que los medios de hoy (y el crédito) solo tienen que
+   *  cubrir la diferencia. */
+  anticipo?: number;
 }
 
 // Pago de una compra: uno o varios medios a la vez + opción de quedar debiendo
 // al proveedor (crédito). Con un solo medio y sin crédito se comporta como antes
 // (paga el total); solo al agregar medios o activar crédito se editan los montos.
-export function PurchasePaymentSplit({ control, register, watch, setValue, paymentAccounts, total }: Props) {
+export function PurchasePaymentSplit({ control, register, watch, setValue, paymentAccounts, total, anticipo = 0 }: Props) {
   const { fields, append, remove } = useFieldArray({ control, name: 'payments' });
   const payments: Array<{ paymentAccountId?: string; amount?: string }> = watch('payments') || [];
   const credit: boolean = watch('credit');
 
+  // Lo que falta por pagar hoy, ya descontado el anticipo.
+  const porPagar = Math.max(0, roundCOP(total - anticipo));
   const paidSum = roundCOP(payments.reduce((s, p) => s + (parseFloat(String(p?.amount)) || 0), 0));
-  const creditAmount = Math.max(0, roundCOP(total - paidSum));
+  const creditAmount = Math.max(0, roundCOP(porPagar - paidSum));
   const singleSimple = fields.length === 1 && !credit;
 
-  // Caso común (un medio, sin crédito): el monto sigue al total automáticamente.
+  // Caso común (un medio, sin crédito): el monto sigue a lo que falta automáticamente.
   useEffect(() => {
-    if (singleSimple) setValue('payments.0.amount', total ? String(roundCOP(total)) : '');
+    if (singleSimple) setValue('payments.0.amount', porPagar ? String(porPagar) : '');
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [total, singleSimple]);
+  }, [porPagar, singleSimple]);
 
   // Primer medio por defecto = primera cuenta activa.
   useEffect(() => {
@@ -43,7 +49,7 @@ export function PurchasePaymentSplit({ control, register, watch, setValue, payme
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [paymentAccounts]);
 
-  const descuadre = !credit && total > 0 && Math.abs(paidSum - total) > 1;
+  const descuadre = !credit && porPagar > 0 && Math.abs(paidSum - porPagar) > 1;
 
   return (
     <div>
@@ -95,11 +101,18 @@ export function PurchasePaymentSplit({ control, register, watch, setValue, payme
       {/* Resumen */}
       <div className="mt-3 rounded-xl bg-slate-50 dark:bg-white/[0.03] px-3 py-2.5 text-[12px] flex flex-wrap gap-x-4 gap-y-1">
         <span className="text-slate-500 dark:text-slate-400">Total: <b className="text-slate-800 dark:text-white tabular-nums">{formatCurrency(total || 0)}</b></span>
+        {anticipo > 0 && (
+          <span className="text-violet-700 dark:text-violet-300">Anticipo: <b className="tabular-nums">− {formatCurrency(anticipo)}</b></span>
+        )}
         <span className="text-slate-500 dark:text-slate-400">Pagado ahora: <b className="text-slate-800 dark:text-white tabular-nums">{formatCurrency(paidSum)}</b></span>
         {credit && <span className="text-amber-600 dark:text-amber-400">A crédito: <b className="tabular-nums">{formatCurrency(creditAmount)}</b></span>}
       </div>
       {descuadre && (
-        <p className="mt-1.5 text-[12px] text-red-500">Los pagos deben sumar el total, o marca que queda a crédito.</p>
+        <p className="mt-1.5 text-[12px] text-red-500">
+          {anticipo > 0
+            ? `Los pagos deben sumar ${formatCurrency(porPagar)} (el total menos el anticipo), o marca que queda a crédito.`
+            : 'Los pagos deben sumar el total, o marca que queda a crédito.'}
+        </p>
       )}
     </div>
   );

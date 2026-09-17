@@ -766,6 +766,10 @@ model Purchase {
   // desglose { splits: [{ method, amount, paymentAccountId? }] }. En pago simple
   // paidAmount = total y paymentDetails queda null (comportamiento de siempre).
   paidAmount          Decimal              @default(0)
+  // Cuánto de esta compra se cubrió con un anticipo que ya se le había girado
+  // al proveedor. Aparte de paidAmount porque esa plata NO sale de la caja hoy:
+  // salió el día del anticipo. Espejo de Sale.advanceApplied.
+  advanceApplied      Decimal              @default(0)
   paymentDetails      Json?
   supplierCredit      SupplierCredit?
   // Anticipos girados al proveedor cruzados contra esta compra.

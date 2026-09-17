@@ -1,6 +1,6 @@
 ﻿'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm, useFieldArray, Controller } from 'react-hook-form';
 import { api } from '@/lib/api';
@@ -109,6 +109,22 @@ export default function ComprasPage() {
     return acc + sub + sub * ((parseFloat(item.taxRate) || 0) / 100);
   }, 0);
 
+  // ── Anticipo al proveedor ────────────────────────────────────────────────
+  // Si ya se le giró plata por adelantado, hoy solo se paga la diferencia. Se
+  // consulta al elegir el proveedor y solo al registrar (no al editar).
+  const watchSupplierId = watch('supplierId');
+  const [anticipoId, setAnticipoId] = useState<string | null>(null);
+  const { data: anticiposProveedor } = useQuery<{ anticipos: Array<{ id: string; number: string; balance: string }>; total: number }>({
+    queryKey: ['anticipos-proveedor', watchSupplierId],
+    queryFn: () => api.get(`/advances/available?supplierId=${watchSupplierId}`).then((r) => r.data.data),
+    enabled: !!watchSupplierId && showForm && !editItem,
+  });
+  // Al cambiar de proveedor, el anticipo elegido deja de tener sentido.
+  useEffect(() => { setAnticipoId(null); }, [watchSupplierId]);
+  const anticipoElegido = (anticiposProveedor?.anticipos || []).find((a) => a.id === anticipoId) || null;
+  // Cubre hasta el total de esta compra; el resto queda a favor para la próxima.
+  const anticipoAplicado = anticipoElegido ? Math.min(Number(anticipoElegido.balance), Math.round(total || 0)) : 0;
+
   const saveMutation = useMutation({
     mutationFn: (data: any) => editItem
       ? api.put(`/purchases/${editItem.id}`, data)
@@ -141,16 +157,20 @@ export default function ComprasPage() {
         .filter((p: any) => p.paymentAccountId && parseFloat(p.amount) > 0)
         .map((p: any) => ({ paymentAccountId: p.paymentAccountId, amount: Math.round(parseFloat(p.amount)) }));
       const paidSum = payments.reduce((s: number, p: any) => s + p.amount, 0);
-      const creditAmount = d.credit ? Math.max(0, Math.round(total - paidSum)) : 0;
-      if (!d.credit && Math.abs(paidSum - total) > 1) {
-        toast.error('Los pagos deben sumar el total, o marca que queda a crédito.');
+      // Los medios y el crédito cubren lo que falta después del anticipo.
+      const porPagar = Math.max(0, Math.round(total - anticipoAplicado));
+      const creditAmount = d.credit ? Math.max(0, Math.round(porPagar - paidSum)) : 0;
+      if (!d.credit && Math.abs(paidSum - porPagar) > 1) {
+        toast.error(anticipoAplicado > 0
+          ? `Los pagos deben sumar ${formatCurrency(porPagar)} (el total menos el anticipo), o marca que queda a crédito.`
+          : 'Los pagos deben sumar el total, o marca que queda a crédito.');
         return;
       }
       if (d.credit && creditAmount <= 0) {
-        toast.error('No queda saldo a crédito: los pagos ya cubren el total.');
+        toast.error('No queda saldo a crédito: los pagos ya cubren lo que falta.');
         return;
       }
-      if (payments.length === 0 && creditAmount <= 0) {
+      if (payments.length === 0 && creditAmount <= 0 && porPagar > 0) {
         toast.error('Indica cómo se paga la compra.');
         return;
       }
@@ -158,6 +178,7 @@ export default function ComprasPage() {
         supplierId: d.supplierId, invoiceNumber: d.invoiceNumber, notes: d.notes,
         purchaseDate: d.purchaseDate, items: d.items, payments,
         ...(d.credit ? { credit: { amount: creditAmount, dueDate: d.creditDueDate || undefined } } : {}),
+        ...(anticipoElegido && anticipoAplicado > 0 ? { advanceId: anticipoElegido.id, advanceAmount: anticipoAplicado } : {}),
       };
     }
 
@@ -641,8 +662,53 @@ export default function ComprasPage() {
                     </select>
                   </div>
                 ) : (
-                  <div className="sm:col-span-2">
-                    <PurchasePaymentSplit control={control as any} register={register as any} watch={watch as any} setValue={setValue as any} paymentAccounts={paymentAccounts} total={total} />
+                  <div className="sm:col-span-2 space-y-3">
+                    {/* Anticipo girado antes a este proveedor. Solo aparece si de
+                        verdad tiene saldo: cambia cuánto hay que pagar hoy. */}
+                    {(anticiposProveedor?.total ?? 0) > 0 && (
+                      <div className="rounded-xl border border-violet-200 dark:border-violet-500/25 bg-violet-50/60 dark:bg-violet-500/[0.07] px-3.5 py-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-[12.5px] font-semibold text-violet-800 dark:text-violet-300">
+                              A este proveedor ya se le giraron {formatCurrency(anticiposProveedor!.total)} en anticipos
+                            </p>
+                            <p className="text-[11.5px] text-violet-700/70 dark:text-violet-300/70 mt-0.5">
+                              Esa plata ya salió: al aplicarla, hoy solo se paga la diferencia.
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setAnticipoId(anticipoId ? null : (anticiposProveedor!.anticipos[0]?.id ?? null))}
+                            className={`px-3 py-1.5 rounded-lg text-[12px] font-semibold transition flex-shrink-0 ${
+                              anticipoId
+                                ? 'bg-violet-600 text-white hover:bg-violet-700'
+                                : 'border border-violet-300 dark:border-violet-500/40 text-violet-700 dark:text-violet-300 hover:bg-violet-100 dark:hover:bg-violet-500/10'
+                            }`}
+                          >
+                            {anticipoId ? 'Quitar' : 'Aplicar'}
+                          </button>
+                        </div>
+                        {anticipoId && anticiposProveedor!.anticipos.length > 1 && (
+                          <select
+                            value={anticipoId}
+                            onChange={(e) => setAnticipoId(e.target.value)}
+                            aria-label="Anticipo a aplicar"
+                            className="mt-2.5 w-full px-3 py-2 rounded-lg bg-white dark:bg-slate-800 border border-violet-200 dark:border-violet-500/30 text-[13px] text-slate-700 dark:text-slate-200"
+                          >
+                            {anticiposProveedor!.anticipos.map((a) => (
+                              <option key={a.id} value={a.id}>{a.number} — {formatCurrency(Number(a.balance))} disponibles</option>
+                            ))}
+                          </select>
+                        )}
+                        {anticipoAplicado > 0 && (
+                          <div className="mt-2.5 pt-2.5 border-t border-violet-200/70 dark:border-violet-500/20 flex items-center justify-between text-[13px]">
+                            <span className="text-violet-700 dark:text-violet-300">Se aplica</span>
+                            <span className="font-bold text-violet-800 dark:text-violet-200 tabular-nums">− {formatCurrency(anticipoAplicado)}</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    <PurchasePaymentSplit control={control as any} register={register as any} watch={watch as any} setValue={setValue as any} paymentAccounts={paymentAccounts} total={total} anticipo={anticipoAplicado} />
                   </div>
                 )}
 
