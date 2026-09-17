@@ -54,6 +54,19 @@ interface ReceiptProps {
   paymentDetails?: { splits?: { method: string; amount: number; name?: string }[] } | null;
   /** Nombre del medio de pago configurable (si se conoce); reemplaza la etiqueta del enum. */
   paymentLabel?: string;
+  /** Plan de pagos de un fiado a cuotas: el cliente se lleva por escrito cuándo
+   *  y cuánto paga. Vacío o ausente en ventas de contado o fiado a una sola fecha. */
+  cuotas?: Array<{ numero: number; monto: number | string; dueDate: string | Date; paidAmount?: number | string; status?: string }> | null;
+  /** Fecha única de pago de un fiado sin cuotas. */
+  creditDueDate?: string | Date | null;
+}
+
+// Fechas de cuota (@db.Date): se formatean en UTC para que el 15 no salga como
+// 14 por la diferencia horaria de Colombia.
+const FECHA_CUOTA = new Intl.DateTimeFormat('es-CO', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' });
+function fmtFecha(d: string | Date): string {
+  const fecha = new Date(d);
+  return isNaN(fecha.getTime()) ? '' : FECHA_CUOTA.format(fecha);
 }
 
 function Dash() {
@@ -64,7 +77,7 @@ export function Receipt({
   invoiceNumber, createdAt, items, subtotal, discountAmount, taxAmount,
   total, paidAmount, changeAmount, paymentMethod, advanceApplied = 0,
   customerName, cashierName, business, animated = false,
-  status, paymentDetails, paymentLabel,
+  status, paymentDetails, paymentLabel, cuotas, creditDueDate,
 }: ReceiptProps) {
   const date     = new Date(createdAt);
   const dateStr  = date.toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -91,9 +104,23 @@ export function Receipt({
             style={{ width: 52, height: 52, objectFit: 'contain', borderRadius: '50%', margin: '0 auto 8px' }}
           />
         )}
-        <h1 style={{ fontSize: 22, fontWeight: 900, letterSpacing: '0.08em', textTransform: 'uppercase', margin: 0, color: '#0f172a' }}>
-          {business?.name || 'Mi Negocio'}
-        </h1>
+        {/* El tamaño baja con el largo del nombre: "ELECTRODOMÉSTICOS VARIOS" a
+            22px con el espaciado ancho no cabía en el papel y se cortaba por los
+            lados. Se mide la palabra más larga, que es la que no se puede partir. */}
+        {(() => {
+          const nombre = business?.name || 'Mi Negocio';
+          const palabraMasLarga = Math.max(...nombre.split(/\s+/).map((w) => w.length));
+          const fontSize = palabraMasLarga > 16 ? 15 : palabraMasLarga > 12 ? 18 : nombre.length > 22 ? 18 : 22;
+          return (
+            <h1 style={{
+              fontSize, fontWeight: 900, letterSpacing: fontSize >= 22 ? '0.08em' : '0.04em',
+              textTransform: 'uppercase', margin: 0, color: '#0f172a', lineHeight: 1.15,
+              overflowWrap: 'anywhere', wordBreak: 'break-word',
+            }}>
+              {nombre}
+            </h1>
+          );
+        })()}
         {(business?.address || business?.city) && (
           <p style={{ fontSize: 11, color: '#64748b', margin: '2px 0 0' }}>
             {[business?.address, business?.city].filter(Boolean).join(' · ')}
@@ -231,6 +258,33 @@ export function Receipt({
             <span>Saldo pendiente</span>
             <span style={{ fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(total - paidAmount)}</span>
           </div>
+
+          {/* Plan de pagos: cada cuota con su fecha y su valor. Es lo que el
+              cliente se lleva para saber cuándo volver. */}
+          {cuotas && cuotas.length > 0 ? (
+            <div style={{ marginTop: 8, borderTop: '1px dashed #e2e8f0', paddingTop: 6 }}>
+              <p style={{ fontSize: 11, fontWeight: 700, color: '#334155', margin: '0 0 4px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                Plan de pagos · {cuotas.length} cuota{cuotas.length === 1 ? '' : 's'}
+              </p>
+              {cuotas.map((c) => {
+                const pagada = c.status === 'PAID' || (c.paidAmount != null && Number(c.paidAmount) >= Number(c.monto));
+                return (
+                  <div key={c.numero} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5, color: pagada ? '#16a34a' : '#475569', marginBottom: 2 }}>
+                    <span>
+                      {pagada ? '✓ ' : ''}Cuota {c.numero}
+                      <span style={{ color: '#94a3b8' }}> · vence {fmtFecha(c.dueDate)}</span>
+                    </span>
+                    <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>{formatCurrency(Number(c.monto))}</span>
+                  </div>
+                );
+              })}
+            </div>
+          ) : creditDueDate ? (
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5, color: '#475569', marginTop: 4 }}>
+              <span>Fecha de pago</span>
+              <span style={{ fontWeight: 600 }}>{fmtFecha(creditDueDate)}</span>
+            </div>
+          ) : null}
         </div>
       )}
 
@@ -283,7 +337,7 @@ export function Receipt({
         }}>
           {paymentLabel || PM_LABEL[paymentMethod] || paymentMethod}
         </span>
-        {paymentMethod === 'MIXED' && paymentDetails?.splits && paymentDetails.splits.length > 0 && (
+        {paymentDetails?.splits && paymentDetails.splits.length > 0 && (
           <div style={{ marginTop: 6 }}>
             {paymentDetails.splits.map((s, i) => (
               <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#64748b', maxWidth: 200, margin: '0 auto' }}>

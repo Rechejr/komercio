@@ -182,7 +182,9 @@ export const saleController = {
           details: {
             include: { product: { select: { id: true, name: true, code: true, unit: true } } },
           },
-          credit: true,
+          // Con sus cuotas: el recibo que se reimprime desde Ventas muestra el
+          // plan de pagos igual que el que salió en el momento de la venta.
+          credit: { include: { installments: { orderBy: { numero: 'asc' } } } },
           returns: { include: { details: true }, orderBy: { createdAt: 'desc' } },
         },
       });
@@ -310,6 +312,9 @@ export const saleController = {
       // sale_number_counters guarantees uniqueness atomically; retry loop kept as
       // a safety net for unrelated P2002 collisions (e.g. concurrent product lock timeouts).
       let result: any;
+      // Plan de cuotas de la venta, si lo hubo: viaja con la respuesta para el recibo.
+      let cuotasDelRecibo: Array<{ numero: number; monto: number; dueDate: Date }> = [];
+      let fechaFiadoDelRecibo: Date | null = null;
       let attempt = 0;
       while (true) {
         try {
@@ -705,7 +710,11 @@ export const saleController = {
                 dueDate: c.dueDate,
               })),
             });
+            // El recibo que se imprime al cerrar la venta necesita el plan de
+            // pagos: el cliente se lleva por escrito cuándo y cuánto paga.
+            cuotasDelRecibo = plan.cuotas.map((c) => ({ numero: c.numero, monto: c.monto, dueDate: c.dueDate }));
           }
+          fechaFiadoDelRecibo = nuevoCredito.dueDate ?? null;
 
           await tx.customer.update({
             where: { id: customerId },
@@ -760,7 +769,7 @@ export const saleController = {
           }
         }
 
-          return { newSale, lowStockProducts };
+          return { newSale: { ...newSale, cuotas: cuotasDelRecibo, credit: fechaFiadoDelRecibo ? { dueDate: fechaFiadoDelRecibo } : undefined }, lowStockProducts };
           }, { timeout: 30000 });
           break; // success — exit retry loop
         } catch (err: any) {

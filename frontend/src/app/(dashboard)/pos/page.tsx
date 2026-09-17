@@ -484,6 +484,15 @@ export default function POSPage() {
               advanceApplied={Number(lastSale.advanceApplied || 0)}
               paymentMethod={lastSale.paymentMethod}
               paymentLabel={labelPago(allAccounts, lastSale.paymentAccountId, lastSale.paymentMethod)}
+              // El desglose del pago mixto con el nombre del medio de cada parte,
+              // y el plan de cuotas si fue fiado a plazos.
+              paymentDetails={lastSale.paymentDetails?.splits ? {
+                splits: lastSale.paymentDetails.splits.map((sp: { method: string; amount: number }) => ({
+                  ...sp, name: labelPago(allAccounts, null, sp.method),
+                })),
+              } : null}
+              cuotas={lastSale.cuotas || null}
+              creditDueDate={lastSale.credit?.dueDate || null}
               customerName={selectedCustomer?.name || null}
               cashierName={cashierName || null}
               business={businessInfo}

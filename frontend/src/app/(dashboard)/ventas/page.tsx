@@ -381,7 +381,14 @@ export default function VentasPage() {
                   cashierName={detail.user?.name || null}
                   business={businessInfo}
                   status={detail.status}
-                  paymentDetails={detail.paymentDetails}
+                  advanceApplied={Number(detail.advanceApplied || 0)}
+                  paymentDetails={detail.paymentDetails?.splits ? {
+                    splits: detail.paymentDetails.splits.map((sp: { method: string; amount: number }) => ({
+                      ...sp, name: labelPago(allAccounts, null, sp.method),
+                    })),
+                  } : null}
+                  cuotas={detail.credit?.installments || null}
+                  creditDueDate={detail.credit?.dueDate || null}
                 />
               </div>
 
