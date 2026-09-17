@@ -150,12 +150,22 @@ export default function AnticiposPage() {
           ))}
         </div>
         <div className="flex items-center gap-2">
+          {/* Nunca deshabilitado: un botón gris sin explicación se lee como
+              "está dañado". Si no hay nada que bajar, lo dice al pulsarlo. */}
           <button
             type="button"
-            onClick={() => descargarExcel(`/advances/export?${filtros}`, `anticipos-${esCliente ? 'clientes' : 'proveedores'}${startDate ? `-${startDate}` : ''}${endDate ? `-${endDate}` : ''}`)}
-            disabled={anticipos.length === 0}
+            onClick={() => {
+              if (anticipos.length === 0) {
+                toast('No hay anticipos para descargar con estos filtros');
+                return;
+              }
+              descargarExcel(
+                `/advances/export?${filtros}`,
+                `anticipos-${esCliente ? 'clientes' : 'proveedores'}${startDate ? `-${startDate}` : ''}${endDate ? `-${endDate}` : ''}`,
+              );
+            }}
             title="Descarga lo que se está viendo, con los mismos filtros"
-            className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-sm font-medium border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:border-emerald-300 hover:text-emerald-700 dark:hover:text-emerald-400 disabled:opacity-50 disabled:hover:border-slate-200 transition"
+            className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-sm font-medium border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:border-emerald-300 hover:text-emerald-700 dark:hover:text-emerald-400 transition"
           >
             <FileSpreadsheet size={15} /> Descargar Excel
           </button>

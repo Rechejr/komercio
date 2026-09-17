@@ -418,3 +418,100 @@ describe('advanceController.list — buscador', () => {
     expect(json.mock.calls[0][0].saldosPendientes).toEqual({ CUSTOMER: 750000, SUPPLIER: 120000 });
   });
 });
+
+// ─── El Excel del reporte ────────────────────────────────────────────────────
+//
+// Se arma el archivo DE VERDAD (ExcelJS escribiendo sobre un stream) y se lee de
+// vuelta: así se prueba lo que el usuario descarga, no una llamada simulada.
+describe('advanceController.exportar', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { PassThrough } = require('stream');
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const ExcelJS = require('exceljs');
+
+  function resStream() {
+    const stream = new PassThrough();
+    stream.headers = {} as Record<string, string>;
+    stream.setHeader = jest.fn((k: string, v: string) => { stream.headers[k] = v; });
+    const trozos: Buffer[] = [];
+    stream.on('data', (t: Buffer) => trozos.push(t));
+    // La promesa se crea AQUÍ, antes de generar el archivo: si se esperara
+    // después, el stream ya habría terminado y el 'end' nunca llegaría.
+    const terminado = new Promise<void>((resolve) => stream.on('end', () => resolve()));
+    return { stream, terminado, buffer: () => Buffer.concat(trozos) };
+  }
+
+  const ANTICIPO_PROV = {
+    id: 'ant-p', number: 'ANTP-0001', type: 'SUPPLIER', amount: 1200000, applied: 0,
+    balance: 1200000, status: 'PENDING', paymentMethod: 'CASH', notes: 'pedido madera',
+    createdAt: new Date('2026-09-10T15:00:00Z'), refundedAt: null,
+    customer: null, supplier: { id: 'prov-1', name: 'Maderas del Valle', document: '900123456', phone: '3001112233' },
+    paymentAccount: { id: 'acct-efectivo', name: 'Efectivo' },
+    createdBy: { id: 'u-1', name: 'Cristian' },
+    applications: [],
+  };
+
+  it('la pestaña de proveedores pide SOLO los de proveedor', async () => {
+    mockPrisma.advance.findMany.mockResolvedValue([]);
+    const { stream } = resStream();
+    await advanceController.exportar(
+      makeReq({ query: { type: 'SUPPLIER' } }), stream as unknown as Response, next,
+    );
+
+    expect(mockPrisma.advance.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ type: 'SUPPLIER' }) }),
+    );
+  });
+
+  it('el archivo se llama por la pestaña que se está viendo', async () => {
+    mockPrisma.advance.findMany.mockResolvedValue([]);
+    const { stream } = resStream();
+    await advanceController.exportar(
+      makeReq({ query: { type: 'SUPPLIER' } }), stream as unknown as Response, next,
+    );
+
+    expect(stream.headers['Content-Disposition']).toMatch(/anticipos-proveedores-\d{4}-\d{2}-\d{2}\.xlsx/);
+  });
+
+  it('el Excel trae al proveedor con su NIT, su saldo y el TOTAL', async () => {
+    mockPrisma.advance.findMany.mockResolvedValue([ANTICIPO_PROV]);
+    const { stream, terminado, buffer } = resStream();
+    await advanceController.exportar(
+      makeReq({ query: { type: 'SUPPLIER' } }), stream as unknown as Response, next,
+    );
+    await terminado;
+
+    const wb = new ExcelJS.Workbook();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (wb.xlsx.load as any)(buffer());
+    const ws = wb.worksheets[0];
+    const filas: unknown[][] = [];
+    ws.eachRow((r: { values: unknown }, i: number) => { if (i > 1) filas.push(r.values as unknown[]); });
+
+    const fila = filas[0];
+    expect(fila[1]).toBe('ANTP-0001');
+    expect(fila[2]).toBe('Proveedor');
+    expect(fila[3]).toBe('Maderas del Valle');
+    expect(fila[4]).toBe('900123456');
+    expect(fila[9]).toBe(1200000); // saldo
+    // La fila final suma, que es lo que el contador mira primero.
+    expect(filas[filas.length - 1][1]).toBe('TOTAL');
+    expect(filas[filas.length - 1][9]).toBe(1200000);
+  });
+
+  it('los filtros de la pantalla viajan al Excel', async () => {
+    mockPrisma.advance.findMany.mockResolvedValue([]);
+    const { stream } = resStream();
+    await advanceController.exportar(
+      makeReq({ query: { type: 'SUPPLIER', status: 'PENDING', search: '900.123.456' } }),
+      stream as unknown as Response, next,
+    );
+
+    const where = mockPrisma.advance.findMany.mock.calls[0][0].where;
+    expect(where.type).toBe('SUPPLIER');
+    expect(where.status).toBe('PENDING');
+    expect(where.OR).toEqual(expect.arrayContaining([
+      { supplier: { document: { contains: '900123456' } } },
+    ]));
+  });
+});
