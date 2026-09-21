@@ -22,7 +22,7 @@ import {
   GlassWater, Milk, Leaf, Wheat, ShoppingBasket,
   Beef, Sparkles, Cpu, Shirt, Wrench, Pen, Pill,
   Heart, Droplets, Cookie, Baby, ScanLine, type LucideIcon,
-  Image as ImageIcon, ImageOff,
+  Image as ImageIcon, ImageOff, ListChecks,
 } from 'lucide-react';
 import { Receipt, type ReceiptItem } from '@/components/Receipt';
 import { BarcodeScanner } from '@/components/ui/BarcodeScanner';
@@ -100,7 +100,12 @@ export default function POSPage() {
   // Ver los productos con foto o solo con el nombre. Es preferencia de quien
   // vende y se recuerda en su navegador (ver posView.store.ts).
   const showImages = usePosViewStore((st) => st.showImages);
-  const toggleImages = usePosViewStore((st) => st.toggleImages);
+  const viewMode = usePosViewStore((st) => st.mode);
+  const setViewMode = usePosViewStore((st) => st.setMode);
+  // En "solo lista" el catálogo se esconde y el carrito ocupa la pantalla. Los
+  // productos aparecen únicamente mientras se está buscando o escaneando, que
+  // es la forma de agregarlos sin catálogo a la vista.
+  const catalogoOculto = viewMode === 'lista' && !search.trim();
   const [categoryFilter, setCategoryFilter]   = useState('');
   const [customerSearch, setCustomerSearch]   = useState('');
   const [showCustomerList, setShowCustomerList] = useState(false);
@@ -611,7 +616,12 @@ export default function POSPage() {
 
           {/* Category chips + cómo se ven los productos */}
           <div className="flex items-center gap-2 mt-3">
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-thin flex-1 min-w-0">
+          <div className={cn(
+            'flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-thin flex-1 min-w-0',
+            // Sin catálogo, las categorías no filtran nada visible: se esconden y
+            // el selector se va a la derecha.
+            catalogoOculto && 'invisible',
+          )}>
             <button
               type="button"
               onClick={() => setCategoryFilter('')}
@@ -641,35 +651,48 @@ export default function POSPage() {
             ))}
           </div>
 
-            {/* Con foto o sin foto. Sin foto caben casi el triple de productos,
-                que es lo que quiere quien se sabe el catálogo de memoria. */}
-            <span className="hidden sm:inline text-[12px] font-medium text-slate-500 dark:text-slate-400 flex-shrink-0 select-none">
-              Fotos
-            </span>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={showImages ? 'true' : 'false'}
-              aria-label={showImages ? 'Ocultar las fotos de los productos' : 'Mostrar las fotos de los productos'}
-              title={showImages ? 'Ocultar fotos — se ven más productos' : 'Mostrar fotos de los productos'}
-              onClick={toggleImages}
-              className={cn(
-                'relative flex-shrink-0 w-11 h-6 rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/40',
-                showImages ? 'bg-emerald-500' : 'bg-slate-200 dark:bg-slate-700',
-              )}
+            {/* Cómo se ve el catálogo. Tres opciones porque son tres formas
+                reales de trabajar: quien vende por foto (ropa, repuestos),
+                quien se sabe el catálogo y quiere ver más productos, y quien
+                en un mostrador con fila prefiere ver el carrito completo y
+                agregar buscando o escaneando. */}
+            <div
+              role="radiogroup"
+              aria-label="Cómo ver los productos"
+              className="flex-shrink-0 flex items-center rounded-lg border border-slate-200 dark:border-slate-700/60 p-0.5 bg-slate-50 dark:bg-slate-800/60"
             >
-              <span className={cn(
-                'absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 flex items-center justify-center',
-                showImages ? 'translate-x-5' : 'translate-x-0',
-              )}>
-                {showImages
-                  ? <ImageIcon size={10} className="text-emerald-500" />
-                  : <ImageOff size={10} className="text-slate-400" />}
-              </span>
-            </button>
+              {([
+                ['fotos',    'Fotos',      ImageIcon,  'Tarjetas con foto'],
+                ['compacto', 'Compacto',   ImageOff,   'Tarjetas sin foto: caben más productos'],
+                ['lista',    'Solo lista', ListChecks, 'Sin catálogo: solo la búsqueda y el carrito'],
+              ] as const).map(([valor, etiqueta, Icono, ayuda]) => (
+                <button
+                  key={valor}
+                  type="button"
+                  role="radio"
+                  aria-checked={viewMode === valor ? 'true' : 'false'}
+                  title={ayuda}
+                  onClick={() => setViewMode(valor)}
+                  className={cn(
+                    'flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[12px] font-semibold transition-all duration-150',
+                    viewMode === valor
+                      ? 'bg-white dark:bg-slate-700 text-emerald-700 dark:text-emerald-400 shadow-sm'
+                      : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200',
+                  )}
+                >
+                  <Icono size={13} />
+                  <span className="hidden md:inline">{etiqueta}</span>
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Product grid */}
+          {catalogoOculto ? (
+            <p className="mt-3 text-[12px] text-slate-400 dark:text-slate-500 text-center py-2">
+              Busca o escanea un producto para agregarlo al carrito.
+            </p>
+          ) : (
           <div className="mt-3 max-h-[272px] overflow-y-auto scrollbar-thin">
             {isLoading ? (
               <div className={cn(
@@ -801,6 +824,7 @@ export default function POSPage() {
               </div>
             )}
           </div>
+          )}
         </div>
 
         {/* Cart items */}
