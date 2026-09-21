@@ -38,7 +38,7 @@ function flatten(data: SearchResult): FlatResult[] {
     out.push({ category: 'Productos', label: p.name, sub: `${p.code ? p.code + ' · ' : ''}${formatCurrency(p.salePrice)} · Stock: ${p.stock}`, href: `/inventario?search=${encodeURIComponent(p.name)}` });
   }
   for (const s of data.sales) {
-    out.push({ category: 'Ventas', label: s.invoiceNumber, sub: `${s.customer?.name || 'Mostrador'} · ${formatCurrency(s.total)}`, href: `/ventas?search=${encodeURIComponent(s.invoiceNumber)}` });
+    out.push({ category: 'Ventas', label: s.invoiceNumber, sub: `${s.customer?.name || 'Clientes varios'} · ${formatCurrency(s.total)}`, href: `/ventas?search=${encodeURIComponent(s.invoiceNumber)}` });
   }
   for (const sp of data.suppliers) {
     out.push({ category: 'Proveedores', label: sp.name, sub: [sp.contactName, sp.phone].filter(Boolean).join(' · ') || '', href: `/proveedores?search=${encodeURIComponent(sp.name)}` });

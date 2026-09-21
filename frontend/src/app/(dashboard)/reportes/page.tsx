@@ -343,7 +343,7 @@ export default function ReportesPage() {
               {topCustomers.map((c: any, i: number) => (
                 <tr key={i} className="hover:bg-slate-50/60 dark:hover:bg-white/[0.02] transition-colors">
                   <td className="px-5 py-3 text-slate-400 font-mono text-[12px]">{i + 1}</td>
-                  <td className="px-5 py-3 text-[13px] font-medium text-slate-800 dark:text-white">{c.customer?.name || 'Mostrador'}</td>
+                  <td className="px-5 py-3 text-[13px] font-medium text-slate-800 dark:text-white">{c.customer?.name || 'Clientes varios'}</td>
                   <td className="px-5 py-3 text-center text-[13px] text-slate-500 dark:text-slate-400 tabular-nums">{c.visitCount}</td>
                   <td className="px-5 py-3 text-right text-[13px] font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">{formatCurrency(c.totalPurchases)}</td>
                 </tr>

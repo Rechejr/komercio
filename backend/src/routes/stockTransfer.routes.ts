@@ -224,7 +224,7 @@ router.get('/:id', requirePermission('productos.ver'), async (req: AuthRequest, 
         items: { include: { product: { select: { id: true, name: true, code: true } } } },
       },
     });
-    if (!transfer) throw new AppError('Transferencia no encontrada', 404);
+    if (!transfer) throw new AppError('Traslado no encontrado', 404);
     return success(res, transfer);
   } catch (err) { next(err); }
 });
@@ -254,7 +254,7 @@ router.post('/', requirePermission('inventario.transferir'), transferValidators,
       const deltas: DeltaMap = new Map();
       collectTransferDeltas(deltas, items, fromBranchId, toBranchId, 1);
       await applyStockDeltas(tx, deltas, {
-        reason: 'Transferencia entre bodegas',
+        reason: 'Traslado entre bodegas',
         referenceId: newTransfer.id,
         branchNames,
       });
@@ -262,7 +262,7 @@ router.post('/', requirePermission('inventario.transferir'), transferValidators,
       return newTransfer;
     });
 
-    return created(res, transfer, 'Transferencia registrada');
+    return created(res, transfer, 'Traslado registrado');
   } catch (err) { next(err); }
 });
 
@@ -279,7 +279,7 @@ router.put('/:id', requirePermission('inventario.transferir'), transferValidator
         toBranch: { select: { id: true, name: true } },
       },
     });
-    if (!existing) throw new AppError('Transferencia no encontrada', 404);
+    if (!existing) throw new AppError('Traslado no encontrado', 404);
 
     const branchNames = await assertBranches(businessId!, fromBranchId, toBranchId);
     await assertProducts(businessId!, items);
@@ -293,10 +293,10 @@ router.put('/:id', requirePermission('inventario.transferir'), transferValidator
       collectTransferDeltas(deltas, existing.items, existing.fromBranchId, existing.toBranchId, -1);
       collectTransferDeltas(deltas, items, fromBranchId, toBranchId, 1);
       await applyStockDeltas(tx, deltas, {
-        reason: 'Edición de transferencia',
+        reason: 'Edición de traslado',
         referenceId: existing.id,
         branchNames,
-        errorPrefix: 'No se puede editar la transferencia: ',
+        errorPrefix: 'No se puede editar el traslado: ',
       });
 
       await tx.stockTransferItem.deleteMany({ where: { transferId: existing.id } });
@@ -311,7 +311,7 @@ router.put('/:id', requirePermission('inventario.transferir'), transferValidator
       });
     });
 
-    return success(res, updated, 'Transferencia actualizada');
+    return success(res, updated, 'Traslado actualizado');
   } catch (err) { next(err); }
 });
 
@@ -325,7 +325,7 @@ router.delete('/:id', requirePermission('inventario.transferir'), async (req: Au
         toBranch: { select: { id: true, name: true } },
       },
     });
-    if (!existing) throw new AppError('Transferencia no encontrada', 404);
+    if (!existing) throw new AppError('Traslado no encontrado', 404);
 
     await prisma.$transaction(async (tx) => {
       // Revertir puede dejar el DESTINO en negativo si ya se vendió desde allí
@@ -334,19 +334,19 @@ router.delete('/:id', requirePermission('inventario.transferir'), async (req: Au
       const deltas: DeltaMap = new Map();
       collectTransferDeltas(deltas, existing.items, existing.fromBranchId, existing.toBranchId, -1);
       await applyStockDeltas(tx, deltas, {
-        reason: 'Anulación de transferencia',
+        reason: 'Anulación de traslado',
         referenceId: existing.id,
         branchNames: new Map([
           [existing.fromBranch.id, existing.fromBranch.name],
           [existing.toBranch.id, existing.toBranch.name],
         ]),
-        errorPrefix: 'No se puede eliminar la transferencia: ',
+        errorPrefix: 'No se puede eliminar el traslado: ',
       });
 
       await tx.stockTransfer.update({ where: { id: existing.id }, data: { deletedAt: new Date() } });
     });
 
-    return success(res, null, 'Transferencia eliminada y stock revertido');
+    return success(res, null, 'Traslado eliminado y stock revertido');
   } catch (err) { next(err); }
 });
 

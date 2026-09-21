@@ -994,7 +994,7 @@ export default function POSPage() {
                     onMouseDown={() => { setCustomer(null); setCustomerSearch(''); setShowCustomerList(false); }}
                     className="w-full text-left px-3 py-2.5 text-[13px] text-slate-500 hover:bg-slate-50 dark:hover:bg-white/[0.04] border-b border-slate-100 dark:border-white/[0.06] transition-colors"
                   >
-                    Mostrador (sin cliente)
+                    Clientes varios (sin cliente)
                   </button>
                   {customersData?.length === 0 && customerSearch && (
                     <p className="px-3 py-2.5 text-[12px] text-slate-400">Sin resultados</p>

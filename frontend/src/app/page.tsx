@@ -40,7 +40,7 @@ const RECEIPT_ITEMS = [
 
 const CHIPS    = ['Tiendas de barrio','Minimarkets','Restaurantes','Cafeterías','Papelerías','Licoreras','Fruver'];
 const FREE_FTS = ['Hasta 50 ventas al mes','Hasta 50 productos y 50 clientes','1 usuario y 1 bodega','Sin tarjeta de crédito'];
-const PRO_FTS  = ['Ventas, productos y clientes ilimitados','Varios cajeros con permisos','Fiados y créditos con aviso por WhatsApp','Compras, proveedores y cuentas por pagar','Reportes de ganancias y Excel','Hasta 3 bodegas + transferencias','Resumen de tu negocio con IA','Soporte prioritario'];
+const PRO_FTS  = ['Ventas, productos y clientes ilimitados','Varios cajeros con permisos','Fiados y créditos con aviso por WhatsApp','Compras, proveedores y cuentas por pagar','Reportes de ganancias y Excel','Hasta 3 bodegas + traslados','Resumen de tu negocio con IA','Soporte prioritario'];
 
 const BENEFITS = [
   {
@@ -71,7 +71,7 @@ const FEATURES = [
   { icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="20" height="20"><path d="M6 2h9l5 5v15H6z"/><path d="M9 9h6M9 13h6M9 17h4"/></svg>, label: 'Contabilidad' },
   { icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="20" height="20"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg>, label: 'Control de Pagos' },
   { icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="20" height="20"><path d="M22 12h-4l-3 9-6-18-3 9H2"/></svg>, label: 'Dashboard en Tiempo Real' },
-  { icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="20" height="20"><path d="M17 3l4 4-4 4M21 7H9M7 21l-4-4 4-4M3 17h12"/></svg>, label: 'Bodegas y Transferencias' },
+  { icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="20" height="20"><path d="M17 3l4 4-4 4M21 7H9M7 21l-4-4 4-4M3 17h12"/></svg>, label: 'Bodegas y Traslados' },
   { icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="20" height="20"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>, label: 'Recibos por WhatsApp' },
 ];
 

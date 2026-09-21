@@ -245,7 +245,7 @@ describe('PUT /api/v1/stock-transfers/:id', () => {
       .send(validBody({ items: [{ productId: PROD, quantity: 1 }] }));
 
     expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/no se puede editar la transferencia/i);
+    expect(res.body.error).toMatch(/no se puede editar el traslado/i);
     expect(res.body.error).toContain('Bodega B');
     expect(txProductStockUpdate).not.toHaveBeenCalled();
   });
@@ -299,7 +299,7 @@ describe('DELETE /api/v1/stock-transfers/:id', () => {
       .set(authHeader('ADMIN'));
 
     expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/no se puede eliminar la transferencia/i);
+    expect(res.body.error).toMatch(/no se puede eliminar el traslado/i);
     expect(txProductStockUpdate).not.toHaveBeenCalled();
     expect(txStockTransferUpdate).not.toHaveBeenCalled();
   });

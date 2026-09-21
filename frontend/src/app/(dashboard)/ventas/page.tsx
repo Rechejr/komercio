@@ -222,7 +222,7 @@ export default function VentasPage() {
                   onClick={() => setSelected(s)}
                 >
                   <td className="px-4 py-3 font-mono text-[12px] text-emerald-600 dark:text-emerald-400 font-medium">{s.invoiceNumber}</td>
-                  <td className="px-4 py-3 text-[13px] text-slate-700 dark:text-slate-300">{s.customer?.name || <span className="text-slate-400">Mostrador</span>}</td>
+                  <td className="px-4 py-3 text-[13px] text-slate-700 dark:text-slate-300">{s.customer?.name || <span className="text-slate-400">Clientes varios</span>}</td>
                   <td className="hidden md:table-cell px-4 py-3 text-[13px] text-slate-500 dark:text-slate-400">{s.user?.name}</td>
                   <td className="hidden sm:table-cell px-4 py-3 text-center text-[13px] text-slate-500 dark:text-slate-400 tabular-nums">{s._count?.details}</td>
                   <td className="px-4 py-3 text-right text-[13px] font-semibold text-slate-900 dark:text-white tabular-nums">{formatCurrency(s.total)}</td>
@@ -337,7 +337,7 @@ export default function VentasPage() {
               <div className="grid grid-cols-2 gap-4 print-hide">
                 <div>
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-1">Cliente</p>
-                  <p className="text-[13px] font-medium text-slate-800 dark:text-white">{detail.customer?.name || 'Mostrador'}</p>
+                  <p className="text-[13px] font-medium text-slate-800 dark:text-white">{detail.customer?.name || 'Clientes varios'}</p>
                 </div>
                 <div>
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-1">Estado</p>

@@ -11,12 +11,12 @@ test.describe('Transferencias entre bodegas', () => {
   test('carga la página de transferencias', async ({ page }) => {
     await expect(page).toHaveURL(/\/transferencias/);
     const table = page.locator('table');
-    const emptyMsg = page.getByText(/No hay transferencias/);
+    const emptyMsg = page.getByText(/No hay traslados/);
     await expect(table.or(emptyMsg).first()).toBeVisible({ timeout: 10_000 });
   });
 
   test('abrir formulario de nueva transferencia (si hay 2+ bodegas)', async ({ page }) => {
-    const newBtn = page.locator('button:has-text("Nueva transferencia")');
+    const newBtn = page.locator('button:has-text("Nuevo traslado")');
     await expect(newBtn.first()).toBeVisible({ timeout: 8_000 });
 
     // Con solo 1 bodega el botón queda deshabilitado y se muestra un aviso —

@@ -44,7 +44,7 @@ export const PERMISOS: Permiso[] = [
   { key: 'productos.gestionar', label: 'Crear y editar productos', hint: 'Incluye precios y ajustes de stock', modulo: 'Inventario', producto: 'pos' },
   { key: 'productos.eliminar', label: 'Eliminar productos', modulo: 'Inventario', producto: 'pos' },
   { key: 'productos.importar', label: 'Importar desde Excel', modulo: 'Inventario', producto: 'pos' },
-  { key: 'inventario.transferir', label: 'Transferir entre bodegas', modulo: 'Inventario', producto: 'pos' },
+  { key: 'inventario.transferir', label: 'Trasladar entre bodegas', modulo: 'Inventario', producto: 'pos' },
   { key: 'categorias.gestionar', label: 'Categorías y marcas', modulo: 'Inventario', producto: 'pos' },
 
   // ── POS · Clientes y fiados ──

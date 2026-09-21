@@ -136,7 +136,7 @@ export const exportController = {
           ws1.addRow({
             invoice: s.invoiceNumber,
             date: fmtDate(s.createdAt),
-            customer: safeStr(s.customer?.name || 'Mostrador'),
+            customer: safeStr(s.customer?.name || 'Clientes varios'),
             seller: safeStr(s.user?.name || ''),
             // El nombre de la cuenta, no el enum: así se distingue una venta con
             // Addi de una por Nequi, que ambas se guardan como TRANSFER.
@@ -151,7 +151,7 @@ export const exportController = {
             ws2.addRow({
               invoice: s.invoiceNumber,
               date: fmtDate(s.createdAt),
-              customer: safeStr(s.customer?.name || 'Mostrador'),
+              customer: safeStr(s.customer?.name || 'Clientes varios'),
               code: safeStr(d.product?.code || ''),
               product: safeStr(d.product?.name || ''),
               qty: d.quantity,
@@ -752,7 +752,7 @@ export const exportController = {
           const base = {
             invoice: v.invoiceNumber,
             date: fmtDate(v.createdAt),
-            customer: safeStr(v.customer?.name || 'Mostrador'),
+            customer: safeStr(v.customer?.name || 'Clientes varios'),
             total: fmtMoney(v.total),
           };
 

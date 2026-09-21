@@ -31,7 +31,7 @@ const NAV_GROUPS = [
       { href: '/anticipos',  icon: HandCoins,       label: 'Anticipos',        permiso: 'anticipos.ver',          pro: false },
       { href: '/inventario', icon: Package,         label: 'Inventario',       permiso: 'productos.gestionar',    pro: false },
       { href: '/compras',    icon: ShoppingBag,     label: 'Compras',          permiso: 'compras.ver',            pro: true  },
-      { href: '/transferencias', icon: ArrowLeftRight, label: 'Transferencias', permiso: 'inventario.transferir', pro: false },
+      { href: '/transferencias', icon: ArrowLeftRight, label: 'Traslados', permiso: 'inventario.transferir', pro: false },
       { href: '/gastos',     icon: Receipt,         label: 'Gastos',           permiso: 'gastos.ver',             pro: false },
       { href: '/caja',       icon: DollarSign,      label: 'Caja',             permiso: 'caja.operar',            pro: false },
       { href: '/reportes',   icon: TrendingUp,      label: 'Reportes',         permiso: 'reportes.ver',           pro: true  },

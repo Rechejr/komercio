@@ -357,7 +357,7 @@ export default function DashboardPage() {
                     {sale.invoiceNumber}
                   </td>
                   <td className="px-5 py-3 text-[13px] text-slate-700 dark:text-slate-300">
-                    {sale.customer?.name || <span className="text-slate-400">Mostrador</span>}
+                    {sale.customer?.name || <span className="text-slate-400">Clientes varios</span>}
                   </td>
                   <td className="px-5 py-3 text-[13px] text-slate-500 dark:text-slate-400">
                     {sale.user?.name}

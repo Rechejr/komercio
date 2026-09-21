@@ -88,22 +88,22 @@ export default function TransferenciasPage() {
       : api.post('/stock-transfers', data),
     onSuccess: () => {
       invalidateStock();
-      toast.success(editItem ? 'Transferencia actualizada' : 'Transferencia registrada');
+      toast.success(editItem ? 'Traslado actualizado' : 'Traslado registrado');
       setShowForm(false);
       setEditItem(null);
       reset();
     },
-    onError: (err: any) => toast.error(err.response?.data?.error || 'Error al guardar la transferencia'),
+    onError: (err: any) => toast.error(err.response?.data?.error || 'Error al guardar el traslado'),
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.delete(`/stock-transfers/${id}`),
     onSuccess: () => {
       invalidateStock();
-      toast.success('Transferencia eliminada y stock revertido');
+      toast.success('Traslado eliminado y stock revertido');
       setDeleteTarget(null);
     },
-    onError: (err: any) => toast.error(err.response?.data?.error || 'Error al eliminar la transferencia'),
+    onError: (err: any) => toast.error(err.response?.data?.error || 'Error al eliminar el traslado'),
   });
 
   // Se relee el detalle completo (la fila de la tabla solo trae el conteo de
@@ -120,7 +120,7 @@ export default function TransferenciasPage() {
         items: t.items.map((i: any) => ({ productId: i.productId, quantity: i.quantity })),
       });
       setShowForm(true);
-    }).catch((err: any) => toast.error(err.response?.data?.error || 'No se pudo cargar la transferencia'));
+    }).catch((err: any) => toast.error(err.response?.data?.error || 'No se pudo cargar el traslado'));
   }
 
   function handleDelete(transfer: any) {
@@ -169,7 +169,7 @@ export default function TransferenciasPage() {
           title={!hasMultipleBranches ? 'Necesitas al menos 2 bodegas para transferir' : undefined}
           className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-semibold hover:bg-emerald-700 disabled:opacity-50 shadow-sm shadow-emerald-600/25 transition"
         >
-          <Plus size={15} /> Nueva transferencia
+          <Plus size={15} /> Nuevo traslado
         </button>
       </div>
 
@@ -233,7 +233,7 @@ export default function TransferenciasPage() {
                   <td colSpan={6} className="text-center py-16">
                     <div className="flex flex-col items-center gap-3 text-slate-400 dark:text-slate-600">
                       <ArrowLeftRight size={36} strokeWidth={1.5} />
-                      <p className="text-[13px]">{hayFiltros ? 'Sin resultados para los filtros' : 'No hay transferencias registradas'}</p>
+                      <p className="text-[13px]">{hayFiltros ? 'Sin resultados para los filtros' : 'No hay traslados registrados'}</p>
                     </div>
                   </td>
                 </tr>
@@ -254,7 +254,7 @@ export default function TransferenciasPage() {
                         <>
                           <button
                             type="button"
-                            aria-label="Editar transferencia"
+                            aria-label="Editar traslado"
                             title="Editar"
                             onClick={() => openEdit(t)}
                             className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 transition"
@@ -263,7 +263,7 @@ export default function TransferenciasPage() {
                           </button>
                           <button
                             type="button"
-                            aria-label="Eliminar transferencia"
+                            aria-label="Eliminar traslado"
                             title="Eliminar"
                             onClick={() => handleDelete(t)}
                             className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 transition"
@@ -290,7 +290,7 @@ export default function TransferenciasPage() {
 
         {pagination && pagination.totalPages > 1 && (
           <div className="flex items-center justify-between px-4 py-3 border-t border-slate-100 dark:border-white/[0.06] text-[13px] text-slate-500">
-            <span>{pagination.total} transferencias</span>
+            <span>{pagination.total} traslados</span>
             <div className="flex gap-2">
               <button
                 type="button"
@@ -392,9 +392,9 @@ export default function TransferenciasPage() {
       <ConfirmDialog
         open={!!deleteTarget}
         onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
-        title="Eliminar transferencia"
+        title="Eliminar traslado"
         description={deleteTarget
-          ? `¿Eliminar la transferencia de ${deleteTarget.fromBranch?.name} a ${deleteTarget.toBranch?.name}? La mercancía volverá a la bodega de origen.`
+          ? `¿Eliminar el traslado de ${deleteTarget.fromBranch?.name} a ${deleteTarget.toBranch?.name}? La mercancía volverá a la bodega de origen.`
           : undefined}
         confirmLabel="Eliminar"
         onConfirm={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
@@ -409,7 +409,7 @@ export default function TransferenciasPage() {
 
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-white/[0.06] flex-shrink-0 bg-white dark:bg-slate-900">
               <h2 className="text-[15px] font-semibold text-slate-800 dark:text-white">
-                {editItem ? 'Editar transferencia' : 'Nueva transferencia'}
+                {editItem ? 'Editar traslado' : 'Nuevo traslado'}
               </h2>
               <button
                 type="button"
@@ -527,7 +527,7 @@ export default function TransferenciasPage() {
                   className="px-6 py-2.5 bg-emerald-600 text-white rounded-xl text-[13px] font-semibold hover:bg-emerald-700 disabled:opacity-60 shadow-sm shadow-emerald-600/25 flex items-center gap-2 transition"
                 >
                   {saveMutation.isPending && <Loader2 size={14} className="animate-spin" />}
-                  {editItem ? 'Guardar cambios' : 'Registrar transferencia'}
+                  {editItem ? 'Guardar cambios' : 'Registrar traslado'}
                 </button>
               </div>
             </form>
