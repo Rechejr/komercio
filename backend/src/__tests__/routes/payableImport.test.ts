@@ -12,7 +12,7 @@ import * as jwtUtils from '../../utils/jwt';
 jest.mock('../../config/database', () => ({
   prisma: {
     supplier: { findMany: jest.fn(), create: jest.fn() },
-    supplierCredit: { create: jest.fn() },
+    supplierCredit: { create: jest.fn(), findFirst: jest.fn(), update: jest.fn() },
     business: { findUnique: jest.fn() },
     user: { findFirst: jest.fn() },
   },
@@ -26,7 +26,7 @@ jest.mock('../../config/redis', () => ({
 
 const mockPrisma = prisma as unknown as {
   supplier: { findMany: jest.Mock; create: jest.Mock };
-  supplierCredit: { create: jest.Mock };
+  supplierCredit: { create: jest.Mock; findFirst: jest.Mock; update: jest.Mock };
   business: { findUnique: jest.Mock };
 };
 
@@ -51,6 +51,10 @@ const subir = (buf: Buffer, query = '') =>
     .attach('file', buf, 'cuentas.xlsx');
 
 beforeEach(() => {
+  // Sin cuenta previa: cada fila se crea. La reimportación (que actualiza en
+  // vez de duplicar) tiene sus propias pruebas.
+  mockPrisma.supplierCredit.findFirst.mockResolvedValue(null);
+  mockPrisma.supplierCredit.update.mockResolvedValue({});
   jest.clearAllMocks();
   // Plan Pro: la importación masiva es función de pago.
   mockPrisma.business.findUnique.mockResolvedValue({ plan: 'pro', planExpiresAt: null });
@@ -297,5 +301,76 @@ describe('importar cuentas por pagar', () => {
 
     expect(res.status).toBe(403);
     expect(mockPrisma.supplierCredit.create).not.toHaveBeenCalled();
+  });
+});
+
+// ─── Reimportar el mismo archivo ─────────────────────────────────────────────
+//
+// El caso real: se corrige una fecha o un valor en el Excel y se vuelve a subir
+// completo. Antes eso creaba la cuenta otra vez y el proveedor aparecía
+// debiendo el doble.
+describe('reimportar no duplica', () => {
+  beforeEach(() => {
+    mockPrisma.supplier.findMany.mockResolvedValue([
+      { id: 'prov-1', name: 'Distribuidora El Sol', document: '900123456' },
+    ]);
+  });
+
+  it('con la misma factura del mismo proveedor, ACTUALIZA en vez de crear', async () => {
+    mockPrisma.supplierCredit.findFirst.mockResolvedValue({ id: 'cxp-1', _count: { payments: 0 } });
+
+    const buf = await excel([ENCABEZADOS, ['Distribuidora El Sol', 'FV-1024', 620000, 100000, '2026-11-20', 'corregido']]);
+    const res = await subir(buf);
+
+    expect(res.body.data.imported).toBe(0);
+    expect(res.body.data.actualizadas).toBe(1);
+    expect(mockPrisma.supplierCredit.create).not.toHaveBeenCalled();
+    expect(mockPrisma.supplierCredit.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'cxp-1' },
+      data: expect.objectContaining({ totalAmount: 620000, balance: 520000 }),
+    }));
+  });
+
+  it('la factura se busca sin distinguir mayúsculas', async () => {
+    mockPrisma.supplierCredit.findFirst.mockResolvedValue(null);
+    const buf = await excel([ENCABEZADOS, ['Distribuidora El Sol', 'fv-1024', 100000, 0, '', '']]);
+    await subir(buf);
+
+    expect(mockPrisma.supplierCredit.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        invoiceNumber: { equals: 'fv-1024', mode: 'insensitive' },
+      }),
+    }));
+  });
+
+  it('si la cuenta ya tiene ABONOS registrados, no le pisa la plata', async () => {
+    // Esos pagos son reales y el Excel no los conoce: sobrescribirlos haría que
+    // el proveedor apareciera debiendo algo que ya se le pagó.
+    mockPrisma.supplierCredit.findFirst.mockResolvedValue({ id: 'cxp-1', _count: { payments: 2 } });
+
+    const buf = await excel([ENCABEZADOS, ['Distribuidora El Sol', 'FV-1024', 999999, 0, '2026-12-01', '']]);
+    const res = await subir(buf);
+
+    expect(res.body.data.omitidas).toBe(1);
+    // Solo el vencimiento y la nota; ni total ni abonado ni saldo.
+    const data = mockPrisma.supplierCredit.update.mock.calls[0][0].data;
+    expect(Object.keys(data).sort()).toEqual(['dueDate', 'notes']);
+  });
+
+  it('una fila SIN número de factura siempre crea (no hay con qué emparejarla)', async () => {
+    const buf = await excel([ENCABEZADOS, ['Distribuidora El Sol', '', 250000, 0, '', 'sin factura']]);
+    const res = await subir(buf);
+
+    expect(mockPrisma.supplierCredit.findFirst).not.toHaveBeenCalled();
+    expect(res.body.data.imported).toBe(1);
+  });
+
+  it('toma la fecha de vencimiento del Excel', async () => {
+    mockPrisma.supplierCredit.findFirst.mockResolvedValue(null);
+    const buf = await excel([ENCABEZADOS, ['Distribuidora El Sol', 'FV-99', 100000, 0, '2026-10-15', '']]);
+    await subir(buf);
+
+    const data = mockPrisma.supplierCredit.create.mock.calls[0][0].data;
+    expect((data.dueDate as Date).toISOString().slice(0, 10)).toBe('2026-10-15');
   });
 });

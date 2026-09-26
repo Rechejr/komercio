@@ -11,7 +11,7 @@ import * as jwtUtils from '../../utils/jwt';
 jest.mock('../../config/database', () => ({
   prisma: {
     customer: { findMany: jest.fn(), create: jest.fn(), update: jest.fn() },
-    credit: { create: jest.fn() },
+    credit: { create: jest.fn(), findFirst: jest.fn(), update: jest.fn() },
     business: { findUnique: jest.fn() },
     user: { findFirst: jest.fn() },
     $transaction: jest.fn(),
@@ -26,7 +26,7 @@ jest.mock('../../config/redis', () => ({
 
 const mockPrisma = prisma as unknown as {
   customer: { findMany: jest.Mock; create: jest.Mock; update: jest.Mock };
-  credit: { create: jest.Mock };
+  credit: { create: jest.Mock; findFirst: jest.Mock; update: jest.Mock };
   business: { findUnique: jest.Mock };
   $transaction: jest.Mock;
 };
@@ -60,6 +60,10 @@ beforeEach(() => {
   mockPrisma.customer.update.mockResolvedValue({});
   mockPrisma.credit.create.mockResolvedValue({ id: 'cr-1' });
   // La transacción corre el callback con el mismo cliente simulado.
+  // Sin fiado previo: cada fila se crea. La reimportación (que actualiza en vez
+  // de duplicar) tiene sus propias pruebas.
+  mockPrisma.credit.findFirst.mockResolvedValue(null);
+  mockPrisma.credit.update.mockResolvedValue({});
   mockPrisma.$transaction.mockImplementation((fn: (tx: unknown) => unknown) => fn({
     credit: mockPrisma.credit,
     customer: mockPrisma.customer,
@@ -239,5 +243,68 @@ describe('importar fiados', () => {
     expect(mockPrisma.customer.create).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ phone: '3001112233' }) }),
     );
+  });
+});
+
+// ─── Reimportar el mismo archivo ─────────────────────────────────────────────
+//
+// Igual que en Cuentas por pagar: se corrige el Excel y se vuelve a subir
+// completo. Antes eso duplicaba el fiado y el cliente aparecía debiendo el doble.
+describe('reimportar no duplica', () => {
+  beforeEach(() => {
+    mockPrisma.customer.findMany.mockResolvedValue([
+      { id: 'cli-1', name: 'María Gómez', document: '1085248963' },
+    ]);
+  });
+
+  it('con la misma factura del mismo cliente, ACTUALIZA en vez de crear', async () => {
+    mockPrisma.credit.findFirst.mockResolvedValue({ id: 'cr-1', balance: 200000, _count: { payments: 0 } });
+
+    const buf = await excel([ENCABEZADOS, ['María Gómez', '1085248963', '', 'FAC-1', 350000, 0, '2026-11-05', 'corregido']]);
+    const res = await subir(buf);
+
+    expect(res.body.data.imported).toBe(0);
+    expect(res.body.data.actualizados).toBe(1);
+    expect(mockPrisma.credit.create).not.toHaveBeenCalled();
+    expect(mockPrisma.credit.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'cr-1' },
+      data: expect.objectContaining({ totalAmount: 350000, balance: 350000 }),
+    }));
+  });
+
+  it('la deuda del cliente se mueve por la DIFERENCIA, no se suma otra vez', async () => {
+    // Pasó de deber 200.000 a deber 350.000: sube 150.000. Sumar los 350.000
+    // completos dejaría al cliente debiendo 550.000 por reimportar el archivo.
+    mockPrisma.credit.findFirst.mockResolvedValue({ id: 'cr-1', balance: 200000, _count: { payments: 0 } });
+
+    const buf = await excel([ENCABEZADOS, ['María Gómez', '1085248963', '', 'FAC-1', 350000, 0, '', '']]);
+    await subir(buf);
+
+    expect(mockPrisma.customer.update).toHaveBeenCalledWith(expect.objectContaining({
+      data: { currentDebt: { increment: 150000 } },
+    }));
+  });
+
+  it('si el fiado ya tiene ABONOS registrados, no le pisa la plata', async () => {
+    mockPrisma.credit.findFirst.mockResolvedValue({ id: 'cr-1', balance: 50000, _count: { payments: 3 } });
+
+    const buf = await excel([ENCABEZADOS, ['María Gómez', '1085248963', '', 'FAC-1', 999999, 0, '2026-12-01', '']]);
+    const res = await subir(buf);
+
+    expect(res.body.data.omitidos).toBe(1);
+    const data = mockPrisma.credit.update.mock.calls[0][0].data;
+    expect(Object.keys(data).sort()).toEqual(['dueDate', 'notes']);
+    // Y la deuda del cliente no se toca.
+    expect(mockPrisma.customer.update).not.toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ currentDebt: expect.anything() }) }),
+    );
+  });
+
+  it('una fila SIN número de factura siempre crea (no hay con qué emparejarla)', async () => {
+    const buf = await excel([ENCABEZADOS, ['María Gómez', '1085248963', '', '', 50000, 0, '', '']]);
+    const res = await subir(buf);
+
+    expect(mockPrisma.credit.findFirst).not.toHaveBeenCalled();
+    expect(res.body.data.imported).toBe(1);
   });
 });

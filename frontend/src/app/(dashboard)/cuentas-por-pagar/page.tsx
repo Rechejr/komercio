@@ -16,6 +16,16 @@ import { downloadCsv } from '@/lib/exportCsv';
 const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[16px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition';
 const filterCls = 'px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[16px] sm:text-[13px] focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition';
 
+// Vencida solo si todavía se debe: una factura pagada tarde ya no es un
+// problema, y pintarla de rojo para siempre sería ruido.
+function vencida(c: { dueDate?: string | null; balance?: number | string; status?: string }): boolean {
+  if (!c.dueDate || Number(c.balance) <= 0 || c.status === 'PAID' || c.status === 'CANCELLED') return false;
+  // Se compara por día calendario, no por hora: una factura que vence hoy no
+  // está vencida a las 8 de la mañana.
+  const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+  return new Date(c.dueDate) < hoy;
+}
+
 export default function CuentasPorPagarPage() {
   const qc = useQueryClient();
   const [statusFilter, setStatusFilter] = useState('');
@@ -64,10 +74,13 @@ export default function CuentasPorPagarPage() {
       const suffix = startDate || endDate ? `-${startDate || 'inicio'}-${endDate || 'hoy'}` : `-${new Date().toISOString().slice(0, 10)}`;
       downloadCsv(
         `cuentas-por-pagar${suffix}`,
-        ['Proveedor', 'Factura', 'Total', 'Abonado', 'Saldo', 'Estado', 'Vencimiento', 'Fecha'],
+        ['Proveedor', 'Identificación', 'Factura', 'Total', 'Abonado', 'Saldo', 'Estado', 'Vencimiento', 'Fecha'],
         list.map((c: any) => [
           c.supplier?.name || '',
-          c.purchase?.invoiceNumber || '',
+          c.supplier?.document || '',
+          // En las importadas no hay compra: el número viene del archivo. Antes
+          // solo se leía el de la compra y esas salían con la columna vacía.
+          c.purchase?.invoiceNumber || c.invoiceNumber || '',
           Math.round(Number(c.totalAmount) || 0),
           Math.round(Number(c.paidAmount) || 0),
           Math.round(Number(c.balance) || 0),
@@ -262,6 +275,7 @@ export default function CuentasPorPagarPage() {
                 <th className="text-right px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Total</th>
                 <th className="hidden sm:table-cell text-right px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Abonado</th>
                 <th className="text-right px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Saldo</th>
+                <th className="text-left px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Vencimiento</th>
                 <th className="text-left px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Estado</th>
                 <th className="px-4 py-3" />
               </tr>
@@ -269,10 +283,10 @@ export default function CuentasPorPagarPage() {
             <tbody className="divide-y divide-slate-50 dark:divide-white/[0.04]">
               {isLoading ? (
                 [...Array(6)].map((_, i) => (
-                  <tr key={i}>{[...Array(8)].map((_, j) => <td key={j} className="px-4 py-3"><div className="h-4 bg-slate-100 dark:bg-slate-800 rounded-lg animate-pulse" /></td>)}</tr>
+                  <tr key={i}>{[...Array(9)].map((_, j) => <td key={j} className="px-4 py-3"><div className="h-4 bg-slate-100 dark:bg-slate-800 rounded-lg animate-pulse" /></td>)}</tr>
                 ))
               ) : rows.length === 0 ? (
-                <tr><td colSpan={8} className="text-center py-16">
+                <tr><td colSpan={9} className="text-center py-16">
                   <div className="flex flex-col items-center gap-3 text-slate-400 dark:text-slate-600">
                     <HandCoins size={36} strokeWidth={1.5} />
                     <p className="text-[13px]">No hay cuentas por pagar</p>
@@ -293,6 +307,17 @@ export default function CuentasPorPagarPage() {
                   <td className="px-4 py-3 text-right text-[13px] text-slate-600 dark:text-slate-300 tabular-nums">{formatCurrency(c.totalAmount)}</td>
                   <td className="hidden sm:table-cell px-4 py-3 text-right text-[13px] text-emerald-600 dark:text-emerald-400 tabular-nums">{formatCurrency(c.paidAmount)}</td>
                   <td className="px-4 py-3 text-right text-[13px] font-semibold text-red-600 dark:text-red-400 tabular-nums">{formatCurrency(c.balance)}</td>
+                  {/* Vencida y con saldo: en rojo. Es la cuenta que hay que
+                      pagar ya, y en una lista larga tiene que saltar a la vista. */}
+                  <td className="px-4 py-3 text-[12.5px] tabular-nums">
+                    {c.dueDate ? (
+                      <span className={vencida(c) ? 'text-red-600 dark:text-red-400 font-semibold' : 'text-slate-600 dark:text-slate-300'}>
+                        {formatDate(c.dueDate)}
+                      </span>
+                    ) : (
+                      <span className="text-slate-300 dark:text-slate-600">—</span>
+                    )}
+                  </td>
                   <td className="px-4 py-3"><span className={`badge ${statusColor(c.status)}`}>{statusLabel(c.status)}</span></td>
                   <td className="px-4 py-3 text-right">
                     {c.status !== 'PAID' && c.status !== 'CANCELLED' && (

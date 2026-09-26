@@ -234,6 +234,8 @@ export const creditImportController = {
 
       const results = {
         imported: 0,
+        actualizados: 0,
+        omitidos: 0,
         clientesCreados: 0,
         errors: issues
           .filter((i) => i.type === 'error')
@@ -271,9 +273,62 @@ export const creditImportController = {
           }
 
           const balance = r.total - r.abonado;
+
+          // ── ¿Ya existe este fiado? ────────────────────────────────────────
+          // Pasa seguido: se corrige el Excel y se vuelve a subir completo.
+          // Antes eso creaba un fiado duplicado y el cliente aparecía debiendo
+          // el doble. Se empareja por número de factura + cliente, que es lo
+          // que identifica la venta en la vida real.
+          const yaExiste = r.factura
+            ? await prisma.credit.findFirst({
+                where: {
+                  customerId: customerId!,
+                  invoiceNumber: { equals: r.factura, mode: 'insensitive' },
+                  deletedAt: null,
+                },
+                select: { id: true, balance: true, _count: { select: { payments: true } } },
+              })
+            : null;
+
           // El fiado y la deuda del cliente se escriben juntos: si se cae a la
           // mitad, el negocio vería un saldo que no cuadra con sus fiados.
           await prisma.$transaction(async (tx) => {
+            if (yaExiste) {
+              // Con abonos registrados en el sistema no se toca la plata: esos
+              // pagos son reales y el Excel no los conoce. Sobrescribirlos le
+              // volvería a cobrar al cliente algo que ya pagó.
+              if (yaExiste._count.payments > 0) {
+                await tx.credit.update({
+                  where: { id: yaExiste.id },
+                  data: { dueDate: r.vence, notes: r.notas || null },
+                });
+                results.omitidos++;
+                return;
+              }
+              await tx.credit.update({
+                where: { id: yaExiste.id },
+                data: {
+                  totalAmount: r.total,
+                  paidAmount: r.abonado,
+                  balance,
+                  status: balance <= 0 ? 'PAID' : r.abonado > 0 ? 'PARTIAL' : 'PENDING',
+                  dueDate: r.vence,
+                  notes: r.notas || null,
+                },
+              });
+              // La deuda del cliente se mueve por la DIFERENCIA: si la factura
+              // pasó de 100.000 a 120.000, debe 20.000 más, no 120.000 más.
+              const delta = balance - Number(yaExiste.balance);
+              if (delta !== 0) {
+                await tx.customer.update({
+                  where: { id: customerId! },
+                  data: { currentDebt: { increment: delta } },
+                });
+              }
+              results.actualizados++;
+              return;
+            }
+
             await tx.credit.create({
               data: {
                 customerId: customerId!,
@@ -296,8 +351,8 @@ export const creditImportController = {
                 data: { currentDebt: { increment: balance } },
               });
             }
+            results.imported++;
           });
-          results.imported++;
         } catch (err) {
           const msg = err instanceof Error ? err.message : 'Error desconocido';
           results.errors.push({ row: r.rowNum, message: `"${r.cliente}": ${msg}` });
@@ -305,7 +360,11 @@ export const creditImportController = {
       }
 
       await cache.del(`dashboard:${businessId}`).catch(() => {});
-      return success(res, results, `Importación: ${results.imported} fiados creados${results.clientesCreados ? `, ${results.clientesCreados} clientes nuevos` : ''}`);
+      const partes = [`${results.imported} fiados creados`];
+      if (results.actualizados) partes.push(`${results.actualizados} actualizados`);
+      if (results.omitidos) partes.push(`${results.omitidos} con abonos: solo se actualizó el vencimiento`);
+      if (results.clientesCreados) partes.push(`${results.clientesCreados} clientes nuevos`);
+      return success(res, results, `Importación: ${partes.join(', ')}`);
     } catch (err) { next(err); }
   },
 };

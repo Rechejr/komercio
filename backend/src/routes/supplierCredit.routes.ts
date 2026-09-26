@@ -1,3 +1,4 @@
+import { CreditStatus } from '@prisma/client';
 import { Router } from 'express';
 import { body } from 'express-validator';
 import { prisma } from '../config/database';
@@ -309,6 +310,8 @@ router.post('/import',
 
       const results = {
         imported: 0,
+        actualizadas: 0,
+        omitidas: 0,
         proveedoresCreados: 0,
         errors: issues
           .filter((i) => i.type === 'error')
@@ -343,21 +346,58 @@ router.post('/import',
           }
 
           const balance = r.total - r.abonado;
-          await prisma.supplierCredit.create({
-            data: {
-              businessId, supplierId,
-              totalAmount: r.total,
-              paidAmount: r.abonado,
-              balance,
-              status: balance <= 0 ? 'PAID' : r.abonado > 0 ? 'PARTIAL' : 'PENDING',
-              dueDate: r.vence,
-              // La factura va en su propia columna: metida en las notas no se
-              // veía en el listado ni se podía buscar.
-              invoiceNumber: r.factura || null,
-              notes: r.notas || null,
-            },
-          });
-          results.imported++;
+          const datos = {
+            totalAmount: r.total,
+            paidAmount: r.abonado,
+            balance,
+            status: (balance <= 0 ? 'PAID' : r.abonado > 0 ? 'PARTIAL' : 'PENDING') as CreditStatus,
+            dueDate: r.vence,
+            notes: r.notas || null,
+          };
+
+          // ── ¿Ya existe esta factura de este proveedor? ────────────────────
+          // Pasa seguido: se corrige el Excel (una fecha de vencimiento, un
+          // valor) y se vuelve a subir el archivo completo. Antes eso creaba
+          // una cuenta duplicada y el proveedor aparecía debiendo el doble.
+          // Se empareja por número de factura + proveedor, que es lo que
+          // identifica una factura en la vida real.
+          const yaExiste = r.factura
+            ? await prisma.supplierCredit.findFirst({
+                where: {
+                  businessId, supplierId,
+                  invoiceNumber: { equals: r.factura, mode: 'insensitive' },
+                  deletedAt: null,
+                },
+                select: { id: true, _count: { select: { payments: true } } },
+              })
+            : null;
+
+          if (yaExiste) {
+            // Con abonos registrados en el sistema no se toca la plata: esos
+            // pagos son reales y el Excel no los conoce. Sobrescribirlos haría
+            // que el proveedor apareciera debiendo algo que ya se le pagó.
+            if (yaExiste._count.payments > 0) {
+              await prisma.supplierCredit.update({
+                where: { id: yaExiste.id },
+                data: { dueDate: r.vence, notes: r.notas || null },
+              });
+              results.omitidas++;
+            } else {
+              await prisma.supplierCredit.update({ where: { id: yaExiste.id }, data: datos });
+              results.actualizadas++;
+            }
+          } else {
+            await prisma.supplierCredit.create({
+              data: {
+                businessId, supplierId,
+                // La factura va en su propia columna: metida en las notas no se
+                // veía en el listado ni se podía buscar.
+                invoiceNumber: r.factura || null,
+                ...datos,
+              },
+            });
+            results.imported++;
+          }
         } catch (err) {
           const msg = err instanceof Error ? err.message : 'Error desconocido';
           results.errors.push({ row: r.rowNum, message: `"${r.proveedor}": ${msg}` });
@@ -365,7 +405,11 @@ router.post('/import',
       }
 
       await cache.del(`dashboard:${businessId}`).catch(() => {});
-      return success(res, results, `Importación: ${results.imported} cuentas creadas${results.proveedoresCreados ? `, ${results.proveedoresCreados} proveedores nuevos` : ''}`);
+      const partes = [`${results.imported} cuentas creadas`];
+      if (results.actualizadas) partes.push(`${results.actualizadas} actualizadas`);
+      if (results.omitidas) partes.push(`${results.omitidas} con abonos: solo se actualizó el vencimiento`);
+      if (results.proveedoresCreados) partes.push(`${results.proveedoresCreados} proveedores nuevos`);
+      return success(res, results, `Importación: ${partes.join(', ')}`);
     } catch (err) { next(err); }
   },
 );
