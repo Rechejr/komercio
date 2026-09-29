@@ -859,6 +859,53 @@ export const contableController = {
     } catch (err) { next(err); }
   },
 
+  /**
+   * Corregir una resolución ya registrada.
+   *
+   * Para qué: los datos se copian a mano del documento de la DIAN y un dígito
+   * mal puesto en el número o una fecha de vigencia equivocada hacían que la
+   * única salida fuera borrarla y volver a crearla. Con el mismo cuidado que al
+   * crearla: el cliente tiene que ser de este negocio y las fechas, válidas.
+   */
+  async updateResolucion(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const businessId = req.user!.businessId!;
+      const existente = await prisma.resolucionDian.findFirst({
+        where: { id: req.params.id, taxClient: { businessId } },
+        select: { id: true },
+      });
+      if (!existente) throw new AppError('Resolución no encontrada', 404);
+
+      const { taxClientId, tipo, clase, numero, fechaExpedicion, fechaVigencia, prefijo, rangoDesde, rangoHasta, modalidad, notas } = req.body;
+
+      // Se puede mover a otro cliente (se registró en el que no era), pero solo
+      // dentro de los clientes de esta oficina contable.
+      if (taxClientId) await getClientOfBusiness(taxClientId, businessId);
+
+      const TIPOS = ['factura_electronica', 'pos_electronico', 'documento_soporte', 'otra'];
+      if (tipo !== undefined && !TIPOS.includes(tipo)) throw new AppError('Tipo de resolución inválido', 400);
+      if (numero !== undefined && !numero?.trim()) throw new AppError('El número es requerido', 400);
+
+      const reso = await prisma.resolucionDian.update({
+        where: { id: req.params.id },
+        data: {
+          ...(taxClientId ? { taxClientId } : {}),
+          ...(tipo !== undefined ? { tipo } : {}),
+          ...(clase !== undefined ? { clase: clase === 'autorizacion' || clase === 'habilitacion' ? clase : null } : {}),
+          ...(numero !== undefined ? { numero: numero.trim() } : {}),
+          ...(fechaExpedicion !== undefined ? { fechaExpedicion: fechaValida(fechaExpedicion, 'fecha de expedición') } : {}),
+          ...(fechaVigencia !== undefined ? { fechaVigencia: fechaValida(fechaVigencia, 'fecha de vigencia') } : {}),
+          ...(prefijo !== undefined ? { prefijo: prefijo?.trim() || null } : {}),
+          ...(rangoDesde !== undefined ? { rangoDesde: enteroValido(rangoDesde, 'rango desde') } : {}),
+          ...(rangoHasta !== undefined ? { rangoHasta: enteroValido(rangoHasta, 'rango hasta') } : {}),
+          ...(modalidad !== undefined ? { modalidad: ['pos', 'electronica', 'contingencia'].includes(modalidad) ? modalidad : null } : {}),
+          ...(notas !== undefined ? { notas: notas?.trim() || null } : {}),
+        },
+      });
+      return success(res, reso, 'Resolución actualizada');
+    } catch (err) { next(err); }
+  },
+
   async deleteResolucion(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const businessId = req.user!.businessId!;

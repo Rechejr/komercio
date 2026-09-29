@@ -13,7 +13,7 @@ jest.mock('../../config/database', () => {
     taxClient: { findFirst: jest.fn(), findMany: jest.fn().mockResolvedValue([]) },
     resolucionDian: {
       findMany: jest.fn().mockResolvedValue([]), findFirst: jest.fn(),
-      create: jest.fn(), delete: jest.fn(), deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+      create: jest.fn(), update: jest.fn(), delete: jest.fn(), deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
     },
     responsabilidadManual: {
       findMany: jest.fn().mockResolvedValue([]), findFirst: jest.fn(),
@@ -486,5 +486,89 @@ describe('contableController.regenerarAgendaTodos', () => {
     await contableController.regenerarAgendaTodos(makeReq(), res, makeNext());
 
     expect(json.mock.calls[0][0].message).toContain('ya estaban registrados');
+  });
+});
+
+// ─── Corregir una resolución ─────────────────────────────────────────────────
+//
+// Los datos se copian a mano del documento de la DIAN: un dígito mal puesto en
+// el número o una fecha de vigencia equivocada obligaban a borrarla y volver a
+// crearla. Lo que hay que sostener es lo mismo que al crearla: las validaciones
+// y el encierro por oficina.
+describe('contableController.updateResolucion', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockPrisma.resolucionDian.findFirst.mockResolvedValue({ id: 'reso-1' });
+    mockPrisma.resolucionDian.update.mockImplementation(({ data }: any) => Promise.resolve({ id: 'reso-1', ...data }));
+    mockPrisma.taxClient.findFirst.mockResolvedValue({ id: 'cli-1', businessId: 'ofi-1' });
+  });
+
+  it('corrige el número y la vigencia', async () => {
+    const { res } = makeRes();
+    await contableController.updateResolucion(
+      makeReq({ params: { id: 'reso-1' }, body: { numero: ' 18764089227059 ', fechaVigencia: '2027-06-30' } }),
+      res, makeNext(),
+    );
+
+    const data = mockPrisma.resolucionDian.update.mock.calls[0][0].data;
+    expect(data.numero).toBe('18764089227059'); // sin los espacios de sobra
+    expect((data.fechaVigencia as Date).toISOString().slice(0, 10)).toBe('2027-06-30');
+  });
+
+  it('lo que no se manda NO se borra', async () => {
+    // Guardar solo el número no puede dejar la resolución sin tipo ni fechas.
+    const { res } = makeRes();
+    await contableController.updateResolucion(
+      makeReq({ params: { id: 'reso-1' }, body: { numero: 'ABC-1' } }), res, makeNext(),
+    );
+
+    expect(Object.keys(mockPrisma.resolucionDian.update.mock.calls[0][0].data)).toEqual(['numero']);
+  });
+
+  it('NO deja tocar la resolución de otra oficina contable', async () => {
+    // El findFirst filtra por taxClient.businessId; si no es de esta oficina,
+    // no existe para ella.
+    mockPrisma.resolucionDian.findFirst.mockResolvedValue(null);
+    const next = makeNext();
+    const { res } = makeRes();
+    await contableController.updateResolucion(
+      makeReq({ params: { id: 'ajena' }, body: { numero: 'HACKEADA' } }), res, next,
+    );
+
+    expect((next as jest.Mock).mock.calls[0][0].statusCode).toBe(404);
+    expect(mockPrisma.resolucionDian.update).not.toHaveBeenCalled();
+  });
+
+  it('mover a otro cliente valida que el cliente sea de la misma oficina', async () => {
+    mockPrisma.taxClient.findFirst.mockResolvedValue(null); // cliente de otra oficina
+    const next = makeNext();
+    const { res } = makeRes();
+    await contableController.updateResolucion(
+      makeReq({ params: { id: 'reso-1' }, body: { taxClientId: 'cli-ajeno' } }), res, next,
+    );
+
+    expect((next as jest.Mock).mock.calls.length).toBe(1);
+    expect(mockPrisma.resolucionDian.update).not.toHaveBeenCalled();
+  });
+
+  it('rechaza el número vacío y el tipo inválido', async () => {
+    for (const body of [{ numero: '   ' }, { tipo: 'inventado' }]) {
+      jest.clearAllMocks();
+      mockPrisma.resolucionDian.findFirst.mockResolvedValue({ id: 'reso-1' });
+      const next = makeNext();
+      const { res } = makeRes();
+      await contableController.updateResolucion(makeReq({ params: { id: 'reso-1' }, body }), res, next);
+      expect((next as jest.Mock).mock.calls[0][0].statusCode).toBe(400);
+      expect(mockPrisma.resolucionDian.update).not.toHaveBeenCalled();
+    }
+  });
+
+  it('una clase que no existe se guarda como vacía, no rompe', async () => {
+    const { res } = makeRes();
+    await contableController.updateResolucion(
+      makeReq({ params: { id: 'reso-1' }, body: { clase: 'loquesea' } }), res, makeNext(),
+    );
+
+    expect(mockPrisma.resolucionDian.update.mock.calls[0][0].data.clase).toBeNull();
   });
 });

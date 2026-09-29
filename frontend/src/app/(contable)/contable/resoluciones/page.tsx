@@ -8,7 +8,7 @@ import toast from 'react-hot-toast';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Portal } from '@/components/ui/Portal';
 import { formatNit, formatFecha, situacionPorFecha } from '@/lib/contable';
-import { Plus, Search, Trash2, X, Loader2, FileText } from 'lucide-react';
+import { Plus, Search, Trash2, Pencil, X, Loader2, FileText } from 'lucide-react';
 
 const inputCls =
   'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[16px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:bg-slate-800 dark:border-slate-700 dark:text-white transition';
@@ -76,6 +76,9 @@ export default function ResolucionesPage() {
 
   const hayFiltros = !!(search.trim() || fTipo || fClase || fSituacion);
   const limpiarFiltros = () => { setSearch(''); setFTipo(''); setFClase(''); setFSituacion(''); };
+
+  // Resolución que se está corrigiendo (null = se está creando una nueva).
+  const [editItem, setEditItem] = useState<any>(null);
 
   const delMut = useMutation({
     mutationFn: (id: string) => api.delete(`/contable/resoluciones/${id}`),
@@ -177,9 +180,17 @@ export default function ResolucionesPage() {
                       })()}
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <button onClick={() => setDelTarget(r)} className="p-1.5 text-slate-400 hover:text-red-600 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20" aria-label="Eliminar">
-                        <Trash2 size={15} />
-                      </button>
+                      <div className="flex items-center justify-end gap-0.5">
+                        {/* Los datos se copian a mano del documento de la DIAN:
+                            un dígito mal puesto o una fecha equivocada obligaba
+                            a borrar la resolución y volver a crearla. */}
+                        <button onClick={() => setEditItem(r)} className="p-1.5 text-slate-400 hover:text-emerald-600 rounded-lg hover:bg-emerald-50 dark:hover:bg-emerald-900/20" aria-label="Editar">
+                          <Pencil size={15} />
+                        </button>
+                        <button onClick={() => setDelTarget(r)} className="p-1.5 text-slate-400 hover:text-red-600 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20" aria-label="Eliminar">
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -189,7 +200,12 @@ export default function ResolucionesPage() {
         </div>
       </div>
 
-      {modalOpen && <NuevaResolucionModal onClose={() => setModalOpen(false)} />}
+      {(modalOpen || editItem) && (
+        <NuevaResolucionModal
+          editItem={editItem}
+          onClose={() => { setModalOpen(false); setEditItem(null); }}
+        />
+      )}
 
       <ConfirmDialog
         open={!!delTarget}
@@ -205,13 +221,24 @@ export default function ResolucionesPage() {
   );
 }
 
-function NuevaResolucionModal({ onClose }: { onClose: () => void }) {
+// El mismo cuadro sirve para registrar y para corregir: los campos son los
+// mismos y mantenerlos en un solo sitio evita que se desincronicen.
+function NuevaResolucionModal({ onClose, editItem }: { onClose: () => void; editItem?: any }) {
   const qc = useQueryClient();
+  const editando = !!editItem;
   const [clienteSearch, setClienteSearch] = useState('');
-  const [cliente, setCliente] = useState<{ id: string; razonSocial: string; nit: string; dv: number } | null>(null);
+  const [cliente, setCliente] = useState<{ id: string; razonSocial: string; nit: string; dv: number } | null>(
+    editItem?.taxClient ?? null,
+  );
   const [form, setForm] = useState({
-    tipo: 'factura_electronica', clase: 'autorizacion', numero: '', prefijo: '',
-    fechaExpedicion: '', fechaVigencia: '', modalidad: '',
+    tipo: editItem?.tipo ?? 'factura_electronica',
+    clase: editItem?.clase ?? 'autorizacion',
+    numero: editItem?.numero ?? '',
+    prefijo: editItem?.prefijo ?? '',
+    // Las fechas llegan en ISO; el <input type="date"> espera YYYY-MM-DD.
+    fechaExpedicion: editItem?.fechaExpedicion ? String(editItem.fechaExpedicion).slice(0, 10) : '',
+    fechaVigencia: editItem?.fechaVigencia ? String(editItem.fechaVigencia).slice(0, 10) : '',
+    modalidad: editItem?.modalidad ?? '',
   });
 
   const { data: clientes = [] } = useQuery({
@@ -221,14 +248,16 @@ function NuevaResolucionModal({ onClose }: { onClose: () => void }) {
   });
 
   const saveMut = useMutation({
-    mutationFn: () => api.post('/contable/resoluciones', { taxClientId: cliente!.id, ...form }),
+    mutationFn: () => (editando
+      ? api.put(`/contable/resoluciones/${editItem.id}`, { taxClientId: cliente!.id, ...form })
+      : api.post('/contable/resoluciones', { taxClientId: cliente!.id, ...form })),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['contable-resoluciones'] });
       qc.invalidateQueries({ queryKey: ['contable-panel'] });
-      toast.success('Resolución registrada');
+      toast.success(editando ? 'Resolución actualizada' : 'Resolución registrada');
       onClose();
     },
-    onError: (e: any) => toast.error(e.response?.data?.error || 'No se pudo registrar'),
+    onError: (e: any) => toast.error(e.response?.data?.error || (editando ? 'No se pudo actualizar' : 'No se pudo registrar')),
   });
 
   function submit() {
@@ -244,7 +273,7 @@ function NuevaResolucionModal({ onClose }: { onClose: () => void }) {
       <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" />
       <div className="relative bg-white dark:bg-slate-900 rounded-2xl shadow-modal w-full max-w-md max-h-[90vh] overflow-hidden flex flex-col animate-scale-in" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 pt-5 pb-4 flex-shrink-0 border-b border-slate-100 dark:border-white/[0.06]">
-          <h2 className="text-lg font-bold text-slate-900 dark:text-white">Nueva resolución</h2>
+          <h2 className="text-lg font-bold text-slate-900 dark:text-white">{editando ? 'Editar resolución' : 'Nueva resolución'}</h2>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 p-1"><X size={20} /></button>
         </div>
 
@@ -317,7 +346,7 @@ function NuevaResolucionModal({ onClose }: { onClose: () => void }) {
         <div className="px-6 py-4 border-t border-slate-100 dark:border-white/[0.06] flex-shrink-0 flex gap-2">
           <button onClick={onClose} className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-sm font-medium text-slate-600 dark:text-slate-300">Cancelar</button>
           <button onClick={submit} disabled={saveMut.isPending} className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-60">
-            {saveMut.isPending ? <Loader2 size={15} className="animate-spin" /> : null} Registrar
+            {saveMut.isPending ? <Loader2 size={15} className="animate-spin" /> : null} {editando ? 'Guardar cambios' : 'Registrar'}
           </button>
         </div>
       </div>

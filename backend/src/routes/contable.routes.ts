@@ -119,6 +119,7 @@ router.delete('/vencimientos/:id', requirePermission('contable.vencimientos.gest
 // ─── Resoluciones DIAN ──────────────────────────────────────────────────────
 router.get('/resoluciones', requirePermission('contable.clientes.ver'), contableController.listResoluciones);
 router.post('/resoluciones', requirePermission('contable.clientes.gestionar'), ...ESCRIBIR, contableController.createResolucion);
+router.put('/resoluciones/:id', requirePermission('contable.clientes.gestionar'), ...ESCRIBIR, contableController.updateResolucion);
 router.delete('/resoluciones/:id', requirePermission('contable.clientes.gestionar'), ...ESCRIBIR, contableController.deleteResolucion);
 
 // ─── Responsabilidades manuales (Información Exógena / Otras Responsabilidades) ─
