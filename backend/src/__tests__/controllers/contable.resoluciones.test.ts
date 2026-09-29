@@ -572,3 +572,42 @@ describe('contableController.updateResolucion', () => {
     expect(mockPrisma.resolucionDian.update.mock.calls[0][0].data.clase).toBeNull();
   });
 });
+
+// ─── Los tipos que ofrece la pantalla tienen que existir en la base ──────────
+//
+// De dónde sale esta prueba: el desplegable ofrecía "POS Electrónico" y el
+// validador del servidor lo aceptaba, pero el enum de la base no lo tenía. Al
+// guardar, Postgres rechazaba el valor y el contador veía "Error interno del
+// servidor". Un desajuste así no lo atrapa ningún type-check: son tres listas
+// en tres sitios distintos.
+describe('tipos de resolución: pantalla, validador y base de datos', () => {
+  // Los mismos códigos que ofrece el desplegable (frontend TIPOS).
+  const TIPOS_DE_LA_PANTALLA = ['factura_electronica', 'pos_electronico', 'documento_soporte', 'otra'];
+
+  it('el enum de Prisma conoce todos los tipos del desplegable', () => {
+    // TipoResolucion sale del schema, que es lo que se aplica a la base: si un
+    // tipo no está aquí, la base lo rechaza al guardar.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { TipoResolucion } = require('@prisma/client');
+    expect(Object.keys(TipoResolucion).sort()).toEqual([...TIPOS_DE_LA_PANTALLA].sort());
+  });
+
+  it('el validador acepta cada uno de ellos al crear', async () => {
+    for (const tipo of TIPOS_DE_LA_PANTALLA) {
+      jest.clearAllMocks();
+      mockPrisma.taxClient.findFirst.mockResolvedValue({ id: 'cli-1', businessId: 'ofi-1' });
+      mockPrisma.resolucionDian.create.mockResolvedValue({ id: 'reso-1' });
+      const next = makeNext();
+      const { res } = makeRes();
+      await contableController.createResolucion(makeReq({
+        body: {
+          taxClientId: 'cli-1', tipo, numero: '123',
+          fechaExpedicion: '2026-09-16', fechaVigencia: '2027-09-28',
+        },
+      }), res, next);
+
+      expect((next as jest.Mock).mock.calls.length).toBe(0);
+      expect(mockPrisma.resolucionDian.create.mock.calls[0][0].data.tipo).toBe(tipo);
+    }
+  });
+});

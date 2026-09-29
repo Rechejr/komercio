@@ -1323,6 +1323,10 @@ enum EstadoVencimiento {
 
 enum TipoResolucion {
   factura_electronica
+  // Resolución de numeración del POS electrónico. La pantalla y el validador ya
+  // la ofrecían, pero faltaba aquí: al guardarla, la base la rechazaba y el
+  // contador veía "Error interno del servidor".
+  pos_electronico
   documento_soporte
   otra
 
