@@ -153,6 +153,93 @@ router.get('/', async (req: any, res, next) => {
   } catch (err) { next(err); }
 });
 
+/**
+ * Cuánto le debe el negocio a cada proveedor EN TOTAL, no factura por factura.
+ *
+ * Para qué: con tres facturas abiertas de un mismo proveedor, tocaba sumarlas a
+ * mano para saber cuánto se le debe. Esta vista responde la pregunta que se hace
+ * al ir a pagar: "¿cuánto le debo a Distribuidora Andina?".
+ *
+ * Usa los MISMOS filtros que el listado detallado, así que lo acumulado es la
+ * suma exacta de lo detallado — nunca dos cifras distintas para el mismo filtro.
+ *
+ * Va ANTES de /:id para que "saldos" no se tome como el id de una cuenta.
+ */
+router.get('/saldos', async (req: any, res, next) => {
+  try {
+    const { status, supplierId, startDate, endDate } = req.query;
+    const businessId = req.user.businessId;
+
+    const where: any = { deletedAt: null, businessId };
+    if (status) where.status = status;
+    if (supplierId) where.supplierId = supplierId;
+    const gte = parseBogotaBoundary(startDate, 'start');
+    const lte = parseBogotaBoundary(endDate, 'end');
+    if (gte || lte) where.createdAt = { ...(gte && { gte }), ...(lte && { lte }) };
+
+    const [grupos, porVencer, facturas] = await Promise.all([
+      prisma.supplierCredit.groupBy({
+        by: ['supplierId'],
+        where,
+        _sum: { totalAmount: true, paidAmount: true, balance: true },
+        _count: { _all: true },
+      }),
+      // El próximo vencimiento se saca SOLO de lo que todavía se debe: mostrar
+      // la fecha de una factura ya pagada haría pagar primero al que no urge.
+      prisma.supplierCredit.groupBy({
+        by: ['supplierId'],
+        where: { ...where, balance: { gt: 0 } },
+        _min: { dueDate: true },
+      }),
+      // Los números de factura, para que el buscador por factura también sirva
+      // en esta vista aunque aquí no se vea una fila por factura.
+      prisma.supplierCredit.findMany({
+        where,
+        select: { supplierId: true, invoiceNumber: true, purchase: { select: { invoiceNumber: true } } },
+        take: 20000,
+      }),
+    ]);
+
+    const proveedores = await prisma.supplier.findMany({
+      where: { id: { in: grupos.map((g) => g.supplierId).filter(Boolean) as string[] } },
+      select: { id: true, name: true, document: true, phone: true, mobile: true },
+    });
+    const porId = new Map(proveedores.map((p) => [p.id, p]));
+    const vencePorId = new Map(porVencer.map((g) => [g.supplierId, g._min.dueDate]));
+    const numerosPorId = new Map<string, string[]>();
+    for (const f of facturas) {
+      const num = f.purchase?.invoiceNumber || f.invoiceNumber;
+      if (!num || !f.supplierId) continue;
+      const lista = numerosPorId.get(f.supplierId) || [];
+      lista.push(num);
+      numerosPorId.set(f.supplierId, lista);
+    }
+
+    const filas = grupos.map((g) => ({
+      supplier: porId.get(g.supplierId as string) ?? { id: g.supplierId, name: '—', document: null, phone: null, mobile: null },
+      facturas: g._count._all,
+      numeros: numerosPorId.get(g.supplierId as string) || [],
+      totalAmount: Number(g._sum.totalAmount || 0),
+      paidAmount: Number(g._sum.paidAmount || 0),
+      balance: Number(g._sum.balance || 0),
+      proximoVencimiento: vencePorId.get(g.supplierId) ?? null,
+    }))
+      // De mayor a menor deuda: arriba queda a quien más se le debe.
+      .sort((a, b) => b.balance - a.balance);
+
+    return success(res, {
+      proveedores: filas,
+      totals: {
+        proveedores: filas.length,
+        facturas: filas.reduce((a, f) => a + f.facturas, 0),
+        totalAmount: filas.reduce((a, f) => a + f.totalAmount, 0),
+        paidAmount: filas.reduce((a, f) => a + f.paidAmount, 0),
+        balance: filas.reduce((a, f) => a + f.balance, 0),
+      },
+    });
+  } catch (err) { next(err); }
+});
+
 router.get('/:id', async (req: any, res, next) => {
   try {
     const credit = await prisma.supplierCredit.findFirst({

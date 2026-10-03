@@ -700,20 +700,25 @@ describe('creditController.saldosPorCliente', () => {
   // Tres facturas de Marta y una de Pedro: la pregunta que responde esta vista
   // es "¿cuánto me debe Marta?", no "¿qué dice la factura 3?".
   function conCartera() {
-    (mockPrisma.credit.groupBy as jest.Mock).mockResolvedValue([
-      {
-        customerId: 'cli-pedro',
-        _sum: { totalAmount: 100000, paidAmount: 100000, balance: 0 },
-        _count: { _all: 1 },
-        _min: { dueDate: new Date('2026-10-20') },
-      },
-      {
-        customerId: 'cli-marta',
-        _sum: { totalAmount: 600000, paidAmount: 150000, balance: 450000 },
-        _count: { _all: 3 },
-        _min: { dueDate: new Date('2026-10-05') },
-      },
-    ]);
+    // El controlador hace DOS agrupaciones: la de las cifras (todas las
+    // facturas) y la del próximo vencimiento (solo las que aún deben).
+    (mockPrisma.credit.groupBy as jest.Mock)
+      .mockResolvedValueOnce([
+        {
+          customerId: 'cli-pedro',
+          _sum: { totalAmount: 100000, paidAmount: 100000, balance: 0 },
+          _count: { _all: 1 },
+        },
+        {
+          customerId: 'cli-marta',
+          _sum: { totalAmount: 600000, paidAmount: 150000, balance: 450000 },
+          _count: { _all: 3 },
+        },
+      ])
+      // Pedro no aparece: ya pagó todo, no tiene nada por vencer.
+      .mockResolvedValueOnce([
+        { customerId: 'cli-marta', _min: { dueDate: new Date('2026-10-05') } },
+      ]);
     (mockPrisma.customer.findMany as jest.Mock).mockResolvedValue([
       { id: 'cli-marta', name: 'Marta Ruiz', document: '41234567', phone: '3001112233' },
       { id: 'cli-pedro', name: 'Pedro Gil', document: null, phone: null },
@@ -752,6 +757,23 @@ describe('creditController.saldosPorCliente', () => {
 
     const marta = json.mock.calls[0][0].data.clientes[0];
     expect(marta.proximoVencimiento).toEqual(new Date('2026-10-05'));
+  });
+
+  it('el próximo vencimiento sale solo de lo que todavía se debe', async () => {
+    // Una factura vieja YA PAGADA no puede aparecer como "próximo a vencer":
+    // haría cobrarle primero a quien no urge.
+    conCartera();
+    const { res, json } = makeRes();
+
+    await creditController.saldosPorCliente(makeReq({ query: {} }), res, next);
+
+    const segundaConsulta = (mockPrisma.credit.groupBy as jest.Mock).mock.calls[1][0];
+    expect(segundaConsulta.where.balance).toEqual({ gt: 0 });
+    expect(segundaConsulta._min).toEqual({ dueDate: true });
+
+    // Pedro ya pagó todo: sin nada por vencer, la columna queda vacía.
+    const pedro = json.mock.calls[0][0].data.clientes.find((c: any) => c.customer.id === 'cli-pedro');
+    expect(pedro.proximoVencimiento).toBeNull();
   });
 
   it('los totales suman toda la cartera filtrada', async () => {

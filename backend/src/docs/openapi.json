@@ -8943,6 +8943,41 @@
         }
       }
     },
+    "/api/v1/supplier-credits/saldos": {
+      "get": {
+        "tags": [
+          "supplierCredit"
+        ],
+        "summary": "Cuánto le debe el negocio a cada proveedor EN TOTAL, no factura por factura. Para qué: con tres facturas abiertas de un mismo proveedor, tocaba sumarlas a mano para saber cuánto se le debe. Esta vista responde la pregunta que se hace al ir a pagar: \"¿cuánto le debo a Distribuidora Andina?\". Usa los ",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operación exitosa",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespuestaOk"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sin sesión o token vencido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/suppliers": {
       "get": {
         "tags": [

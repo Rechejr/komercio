@@ -72,13 +72,22 @@ export const creditController = {
       const lte = parseBogotaBoundary(endDate, 'end');
       if (gte || lte) where.createdAt = { ...(gte && { gte }), ...(lte && { lte }) };
 
-      const grupos = await prisma.credit.groupBy({
-        by: ['customerId'],
-        where,
-        _sum: { totalAmount: true, paidAmount: true, balance: true },
-        _count: { _all: true },
-        _min: { dueDate: true },
-      });
+      const [grupos, porVencer] = await Promise.all([
+        prisma.credit.groupBy({
+          by: ['customerId'],
+          where,
+          _sum: { totalAmount: true, paidAmount: true, balance: true },
+          _count: { _all: true },
+        }),
+        // El próximo vencimiento sale SOLO de lo que todavía se debe: mostrar la
+        // fecha de una factura ya pagada haría cobrarle primero al que no urge.
+        prisma.credit.groupBy({
+          by: ['customerId'],
+          where: { ...where, balance: { gt: 0 } },
+          _min: { dueDate: true },
+        }),
+      ]);
+      const vencePorId = new Map(porVencer.map((g) => [g.customerId, g._min.dueDate]));
 
       // Los datos del cliente en una sola consulta, no una por grupo.
       const clientes = await prisma.customer.findMany({
@@ -93,8 +102,8 @@ export const creditController = {
         totalAmount: Number(g._sum.totalAmount || 0),
         paidAmount: Number(g._sum.paidAmount || 0),
         balance: Number(g._sum.balance || 0),
-        // La más próxima a vencer de ese cliente: es la que hay que cobrar primero.
-        proximoVencimiento: g._min.dueDate,
+        // La más próxima a vencer de las que aún deben: es la que hay que cobrar primero.
+        proximoVencimiento: vencePorId.get(g.customerId) ?? null,
       }))
         // De mayor a menor deuda: arriba queda lo que más pesa en la cartera.
         .sort((a, b) => b.balance - a.balance);
