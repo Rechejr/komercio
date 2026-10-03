@@ -1,4 +1,5 @@
 ﻿import { Response, NextFunction } from 'express';
+import { Prisma } from '@prisma/client';
 import { prisma } from '../config/database';
 import { cache } from '../config/redis';
 import { AppError, success, created, paginated } from '../utils/response';
@@ -43,6 +44,71 @@ export const creditController = {
       ]);
 
       return paginated(res, credits, total, page, limit);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  /**
+   * Cuánto debe cada cliente EN TOTAL, no factura por factura.
+   *
+   * Para qué: con tres fiados abiertos, el dueño tenía que sumar a mano para
+   * saber cuánto le debe esa persona. Esta vista responde la pregunta que de
+   * verdad se hace al cobrar: "¿cuánto me debe Marta?".
+   *
+   * Usa los MISMOS filtros que el listado detallado (estado, cliente, rango de
+   * fechas), así que lo que se ve acumulado es la suma de lo que se vería
+   * detallado — nunca dos cifras distintas para el mismo filtro.
+   */
+  async saldosPorCliente(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const businessId = req.user!.businessId;
+      const { status, customerId, startDate, endDate } = req.query;
+
+      const where: Prisma.CreditWhereInput = { deletedAt: null, customer: { businessId } };
+      if (status) where.status = status as Prisma.CreditWhereInput['status'];
+      if (customerId) where.customerId = customerId as string;
+      const gte = parseBogotaBoundary(startDate, 'start');
+      const lte = parseBogotaBoundary(endDate, 'end');
+      if (gte || lte) where.createdAt = { ...(gte && { gte }), ...(lte && { lte }) };
+
+      const grupos = await prisma.credit.groupBy({
+        by: ['customerId'],
+        where,
+        _sum: { totalAmount: true, paidAmount: true, balance: true },
+        _count: { _all: true },
+        _min: { dueDate: true },
+      });
+
+      // Los datos del cliente en una sola consulta, no una por grupo.
+      const clientes = await prisma.customer.findMany({
+        where: { id: { in: grupos.map((g) => g.customerId) } },
+        select: { id: true, name: true, document: true, phone: true },
+      });
+      const porId = new Map(clientes.map((c) => [c.id, c]));
+
+      const filas = grupos.map((g) => ({
+        customer: porId.get(g.customerId) ?? { id: g.customerId, name: '—', document: null, phone: null },
+        facturas: g._count._all,
+        totalAmount: Number(g._sum.totalAmount || 0),
+        paidAmount: Number(g._sum.paidAmount || 0),
+        balance: Number(g._sum.balance || 0),
+        // La más próxima a vencer de ese cliente: es la que hay que cobrar primero.
+        proximoVencimiento: g._min.dueDate,
+      }))
+        // De mayor a menor deuda: arriba queda lo que más pesa en la cartera.
+        .sort((a, b) => b.balance - a.balance);
+
+      return success(res, {
+        clientes: filas,
+        totals: {
+          clientes: filas.length,
+          facturas: filas.reduce((a, f) => a + f.facturas, 0),
+          totalAmount: filas.reduce((a, f) => a + f.totalAmount, 0),
+          paidAmount: filas.reduce((a, f) => a + f.paidAmount, 0),
+          balance: filas.reduce((a, f) => a + f.balance, 0),
+        },
+      });
     } catch (err) {
       next(err);
     }

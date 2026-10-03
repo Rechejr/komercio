@@ -14,10 +14,12 @@ jest.mock('../../config/database', () => ({
       count: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
+      groupBy: jest.fn(),
     },
     customer: {
       findFirst: jest.fn(),
       findUnique: jest.fn(),
+      findMany: jest.fn(),
       update: jest.fn(),
     },
     creditPayment: { create: jest.fn() },
@@ -689,5 +691,130 @@ describe('creditController.addPayment — con cuotas', () => {
     );
 
     expect((next as jest.Mock).mock.calls[0][0].statusCode).toBe(400);
+  });
+});
+
+describe('creditController.saldosPorCliente', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  // Tres facturas de Marta y una de Pedro: la pregunta que responde esta vista
+  // es "¿cuánto me debe Marta?", no "¿qué dice la factura 3?".
+  function conCartera() {
+    (mockPrisma.credit.groupBy as jest.Mock).mockResolvedValue([
+      {
+        customerId: 'cli-pedro',
+        _sum: { totalAmount: 100000, paidAmount: 100000, balance: 0 },
+        _count: { _all: 1 },
+        _min: { dueDate: new Date('2026-10-20') },
+      },
+      {
+        customerId: 'cli-marta',
+        _sum: { totalAmount: 600000, paidAmount: 150000, balance: 450000 },
+        _count: { _all: 3 },
+        _min: { dueDate: new Date('2026-10-05') },
+      },
+    ]);
+    (mockPrisma.customer.findMany as jest.Mock).mockResolvedValue([
+      { id: 'cli-marta', name: 'Marta Ruiz', document: '41234567', phone: '3001112233' },
+      { id: 'cli-pedro', name: 'Pedro Gil', document: null, phone: null },
+    ]);
+  }
+
+  it('junta las facturas de un cliente en una sola fila', async () => {
+    conCartera();
+    const { res, json } = makeRes();
+
+    await creditController.saldosPorCliente(makeReq({ query: {} }), res, next);
+
+    const { clientes } = json.mock.calls[0][0].data;
+    const marta = clientes.find((c: any) => c.customer.id === 'cli-marta');
+    expect(marta.facturas).toBe(3);
+    expect(marta.balance).toBe(450000);
+    expect(marta.paidAmount).toBe(150000);
+    expect(marta.customer.name).toBe('Marta Ruiz');
+  });
+
+  it('ordena por saldo: lo que más pesa en la cartera queda arriba', async () => {
+    conCartera();
+    const { res, json } = makeRes();
+
+    await creditController.saldosPorCliente(makeReq({ query: {} }), res, next);
+
+    expect(json.mock.calls[0][0].data.clientes.map((c: any) => c.customer.id))
+      .toEqual(['cli-marta', 'cli-pedro']);
+  });
+
+  it('muestra la cuota más próxima a vencer de cada cliente', async () => {
+    conCartera();
+    const { res, json } = makeRes();
+
+    await creditController.saldosPorCliente(makeReq({ query: {} }), res, next);
+
+    const marta = json.mock.calls[0][0].data.clientes[0];
+    expect(marta.proximoVencimiento).toEqual(new Date('2026-10-05'));
+  });
+
+  it('los totales suman toda la cartera filtrada', async () => {
+    conCartera();
+    const { res, json } = makeRes();
+
+    await creditController.saldosPorCliente(makeReq({ query: {} }), res, next);
+
+    expect(json.mock.calls[0][0].data.totals).toEqual({
+      clientes: 2,
+      facturas: 4,
+      totalAmount: 700000,
+      paidAmount: 250000,
+      balance: 450000,
+    });
+  });
+
+  it('solo cuenta los fiados del negocio y no los anulados', async () => {
+    conCartera();
+
+    await creditController.saldosPorCliente(makeReq({ query: {} }), makeRes().res, next);
+
+    const where = (mockPrisma.credit.groupBy as jest.Mock).mock.calls[0][0].where;
+    expect(where.customer).toEqual({ businessId: 'biz-1' });
+    expect(where.deletedAt).toBeNull();
+  });
+
+  it('usa los mismos filtros que el listado detallado', async () => {
+    conCartera();
+
+    await creditController.saldosPorCliente(
+      makeReq({ query: { status: 'PENDING', customerId: 'cli-marta', startDate: '2026-10-01', endDate: '2026-10-31' } }),
+      makeRes().res, next,
+    );
+
+    const where = (mockPrisma.credit.groupBy as jest.Mock).mock.calls[0][0].where;
+    expect(where.status).toBe('PENDING');
+    expect(where.customerId).toBe('cli-marta');
+    // El rango se interpreta en hora de Colombia: el 1 de octubre empieza a las
+    // 05:00 UTC, no a medianoche UTC.
+    expect(where.createdAt.gte.toISOString()).toBe('2026-10-01T05:00:00.000Z');
+    expect(where.createdAt.lte.toISOString()).toBe('2026-11-01T04:59:59.999Z');
+  });
+
+  it('sin fiados devuelve la lista vacía y totales en cero', async () => {
+    (mockPrisma.credit.groupBy as jest.Mock).mockResolvedValue([]);
+    (mockPrisma.customer.findMany as jest.Mock).mockResolvedValue([]);
+    const { res, json } = makeRes();
+
+    await creditController.saldosPorCliente(makeReq({ query: {} }), res, next);
+
+    const data = json.mock.calls[0][0].data;
+    expect(data.clientes).toEqual([]);
+    expect(data.totals.balance).toBe(0);
+  });
+
+  it('pide los datos de los clientes en una sola consulta', async () => {
+    conCartera();
+
+    await creditController.saldosPorCliente(makeReq({ query: {} }), makeRes().res, next);
+
+    expect(mockPrisma.customer.findMany).toHaveBeenCalledTimes(1);
+    expect((mockPrisma.customer.findMany as jest.Mock).mock.calls[0][0].where.id.in.sort())
+      .toEqual(['cli-marta', 'cli-pedro']);
   });
 });

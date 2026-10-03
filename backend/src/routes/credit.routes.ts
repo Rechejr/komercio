@@ -46,6 +46,9 @@ router.post('/import',
   creditImportController.importar,
 );
 
+// Cuánto debe cada cliente en total. Antes de /:id para que "saldos" no se
+// confunda con el id de un crédito.
+router.get('/saldos', requirePermission('creditos.ver'), creditController.saldosPorCliente);
 router.get('/', requirePermission('creditos.ver'), creditController.list);
 router.get('/:id', requirePermission('creditos.ver'), creditController.getOne);
 router.post('/',

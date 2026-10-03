@@ -6,10 +6,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm, Controller } from 'react-hook-form';
 import { PriceInput } from '@/components/ui/PriceInput';
 import { api } from '@/lib/api';
-import { formatCurrency, formatDate, formatDateTime, statusColor, statusLabel } from '@/lib/utils';
+import { cn, formatCurrency, formatDate, formatDateTime, statusColor, statusLabel } from '@/lib/utils';
 import { usePaymentAccounts, labelPago } from '@/lib/usePaymentAccounts';
 import toast from 'react-hot-toast';
-import { CreditCard, X, Loader2, Plus, DollarSign, ChevronRight, Clock, Search, Ban, MessageCircle, Download, FileDown, FileUp, Lock } from 'lucide-react';
+import { CreditCard, X, Loader2, Plus, DollarSign, ChevronRight, Clock, Search, Ban, MessageCircle, Download, FileDown, FileUp, Lock, ListChecks, Users } from 'lucide-react';
 import { useAuthStore } from '@/store/auth.store';
 import { useUpgradeStore } from '@/store/upgrade.store';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -38,6 +38,10 @@ export default function CreditosPage() {
   const [statusFilter, setStatusFilter] = useState('');
   const [customerFilter, setCustomerFilter] = useState('');
   const [customerFilterId, setCustomerFilterId] = useState('');
+  // Dos formas de ver la misma cartera: factura por factura, o cuánto debe cada
+  // cliente en total. Los filtros son los mismos para las dos a propósito: lo
+  // acumulado es la suma de lo detallado, nunca dos cifras distintas.
+  const [vista, setVista] = useState<'detalle' | 'acumulado'>('detalle');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [downloading, setDownloading] = useState(false);
@@ -94,6 +98,20 @@ export default function CreditosPage() {
     },
   });
 
+  // Saldos acumulados: una fila por cliente. Solo se pide al abrir esa vista.
+  const { data: saldos, isLoading: cargandoSaldos } = useQuery({
+    queryKey: ['credits-saldos', statusFilter, customerFilterId, startDate, endDate],
+    queryFn: () => {
+      const params = new URLSearchParams();
+      if (statusFilter) params.set('status', statusFilter);
+      if (customerFilterId) params.set('customerId', customerFilterId);
+      if (startDate) params.set('startDate', startDate);
+      if (endDate) params.set('endDate', endDate);
+      return api.get(`/credits/saldos?${params}`).then((r) => r.data.data);
+    },
+    enabled: vista === 'acumulado',
+  });
+
   // Descarga TODOS los créditos que cumplen los filtros actuales (no solo la
   // página visible) como CSV para abrir en Excel.
   async function handleDownload() {
@@ -104,6 +122,35 @@ export default function CreditosPage() {
     setDownloading(true);
     const tId = toast.loading('Generando archivo...');
     try {
+      // Se descarga lo que se está viendo: en acumulado, una fila por cliente.
+      if (vista === 'acumulado') {
+        const paramsAcum = new URLSearchParams();
+        if (statusFilter) paramsAcum.set('status', statusFilter);
+        if (customerFilterId) paramsAcum.set('customerId', customerFilterId);
+        if (startDate) paramsAcum.set('startDate', startDate);
+        if (endDate) paramsAcum.set('endDate', endDate);
+        const data = await api.get(`/credits/saldos?${paramsAcum}`).then((r) => r.data.data);
+        const filas = data?.clientes || [];
+        if (filas.length === 0) { toast.error('No hay saldos en ese rango', { id: tId }); return; }
+        const suf = startDate || endDate ? `-${startDate || 'inicio'}-${endDate || 'hoy'}` : `-${new Date().toISOString().slice(0, 10)}`;
+        downloadCsv(
+          `saldos-acumulados${suf}`,
+          ['Cliente', 'Identificación', 'Teléfono', 'Facturas', 'Total', 'Abonado', 'Saldo', 'Próximo vencimiento'],
+          filas.map((f: any) => [
+            f.customer?.name || '',
+            f.customer?.document || '',
+            f.customer?.phone || '',
+            f.facturas,
+            Math.round(Number(f.totalAmount) || 0),
+            Math.round(Number(f.paidAmount) || 0),
+            Math.round(Number(f.balance) || 0),
+            f.proximoVencimiento ? formatDate(f.proximoVencimiento) : '',
+          ]),
+        );
+        toast.success(`${filas.length} clientes descargados`, { id: tId });
+        return;
+      }
+
       const params = new URLSearchParams({ page: '1', limit: '5000' });
       if (statusFilter) params.set('status', statusFilter);
       if (customerFilterId) params.set('customerId', customerFilterId);
@@ -345,6 +392,34 @@ export default function CreditosPage() {
           )}
         </div>
 
+        {/* Detallado o acumulado. El dueño pregunta las dos cosas: "¿qué facturas
+            tiene abiertas?" y, al cobrar, "¿cuánto me debe en total?". */}
+        <div role="radiogroup" aria-label="Cómo ver la cartera"
+          className="flex items-center rounded-xl border border-slate-200 dark:border-slate-700 p-0.5 bg-slate-50 dark:bg-slate-800/60 flex-shrink-0">
+          {([
+            ['detalle', 'Detallado', ListChecks, 'Una fila por factura'],
+            ['acumulado', 'Saldos acumulados', Users, 'Una fila por cliente: cuánto debe en total'],
+          ] as const).map(([valor, etiqueta, Icono, ayuda]) => (
+            <button
+              key={valor}
+              type="button"
+              role="radio"
+              aria-checked={vista === valor ? 'true' : 'false'}
+              title={ayuda}
+              onClick={() => { setVista(valor); setPage(1); }}
+              className={cn(
+                'flex items-center gap-1.5 px-3 py-2 rounded-lg text-[13px] font-semibold transition-all duration-150 whitespace-nowrap',
+                vista === valor
+                  ? 'bg-white dark:bg-slate-700 text-emerald-700 dark:text-emerald-400 shadow-sm'
+                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200',
+              )}
+            >
+              <Icono size={14} />
+              <span className="hidden lg:inline">{etiqueta}</span>
+            </button>
+          ))}
+        </div>
+
         {/* Rango de fechas */}
         <div className="flex items-center gap-2">
           <input
@@ -435,6 +510,86 @@ export default function CreditosPage() {
         </button>
       </div>
 
+      {/* ── Saldos acumulados: una fila por cliente ─────────────────────────── */}
+      {vista === 'acumulado' ? (
+        <div className="card overflow-hidden">
+          {/* Lo primero es el total de la cartera: la cifra que el dueño busca
+              cuando abre esta vista. */}
+          {saldos?.totals && (
+            <div className="px-4 py-3 border-b border-slate-100 dark:border-white/[0.06] flex flex-wrap items-center gap-x-6 gap-y-1 text-[12.5px]">
+              <span className="text-slate-500 dark:text-slate-400">
+                Le deben <b className="text-[15px] text-red-600 dark:text-red-400 tabular-nums">{formatCurrency(saldos.totals.balance)}</b>
+              </span>
+              <span className="text-slate-400 dark:text-slate-500">
+                {saldos.totals.clientes} cliente{saldos.totals.clientes === 1 ? '' : 's'} · {saldos.totals.facturas} factura{saldos.totals.facturas === 1 ? '' : 's'}
+              </span>
+            </div>
+          )}
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-100 dark:border-white/[0.06]">
+                  <th className="text-left px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Cliente</th>
+                  <th className="hidden lg:table-cell text-left px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Identificación</th>
+                  <th className="hidden sm:table-cell text-center px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Facturas</th>
+                  <th className="hidden md:table-cell text-right px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Total</th>
+                  <th className="hidden sm:table-cell text-right px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Abonado</th>
+                  <th className="text-right px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Saldo</th>
+                  <th className="hidden lg:table-cell text-left px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Próx. vence</th>
+                  <th className="px-4 py-3" />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50 dark:divide-white/[0.04]">
+                {cargandoSaldos ? (
+                  [...Array(5)].map((_, i) => (
+                    <tr key={i}>{[...Array(8)].map((_, j) => <td key={j} className="px-4 py-3"><div className="h-4 bg-slate-100 dark:bg-slate-800 rounded-lg animate-pulse" /></td>)}</tr>
+                  ))
+                ) : (saldos?.clientes || []).length === 0 ? (
+                  <tr><td colSpan={8} className="text-center py-16">
+                    <div className="flex flex-col items-center gap-3 text-slate-400 dark:text-slate-600">
+                      <Users size={36} strokeWidth={1.5} />
+                      <p className="text-[13px]">Ningún cliente con fiados en este filtro</p>
+                    </div>
+                  </td></tr>
+                ) : (saldos.clientes).map((f: any) => (
+                  <tr
+                    key={f.customer.id}
+                    className="hover:bg-slate-50/60 dark:hover:bg-white/[0.02] transition-colors cursor-pointer"
+                    // Clic en la fila: lleva al detalle de ESE cliente, que es lo
+                    // que uno quiere después de ver el total ("¿de qué facturas sale?").
+                    onClick={() => {
+                      setCustomerFilterId(f.customer.id);
+                      setCustomerFilter(f.customer.name);
+                      setVista('detalle');
+                      setPage(1);
+                    }}
+                  >
+                    <td className="px-4 py-3 text-[13px] font-medium text-slate-800 dark:text-white">
+                      {f.customer.name}
+                      {f.customer.document && (
+                        <span className="lg:hidden block text-[11px] font-normal text-slate-400 font-mono">{f.customer.document}</span>
+                      )}
+                    </td>
+                    <td className="hidden lg:table-cell px-4 py-3 text-[12px] text-slate-500 dark:text-slate-400 font-mono">{f.customer.document || '—'}</td>
+                    <td className="hidden sm:table-cell px-4 py-3 text-center text-[13px] text-slate-500 dark:text-slate-400 tabular-nums">{f.facturas}</td>
+                    <td className="hidden md:table-cell px-4 py-3 text-right text-[13px] text-slate-600 dark:text-slate-300 tabular-nums">{formatCurrency(f.totalAmount)}</td>
+                    <td className="hidden sm:table-cell px-4 py-3 text-right text-[13px] text-emerald-600 dark:text-emerald-400 tabular-nums">{formatCurrency(f.paidAmount)}</td>
+                    <td className="px-4 py-3 text-right text-[13px] font-bold text-red-600 dark:text-red-400 tabular-nums">{formatCurrency(f.balance)}</td>
+                    <td className="hidden lg:table-cell px-4 py-3 text-[12.5px] text-slate-500 dark:text-slate-400 tabular-nums">
+                      {f.proximoVencimiento ? formatDate(f.proximoVencimiento) : '—'}
+                    </td>
+                    <td className="px-4 py-3 text-right text-slate-300 dark:text-slate-600"><ChevronRight size={15} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="px-4 py-2.5 border-t border-slate-100 dark:border-white/[0.06] text-[11.5px] text-slate-400 dark:text-slate-500">
+            Toque un cliente para ver de qué facturas sale su saldo.
+          </p>
+        </div>
+      ) : (
+      <>
       {/* ── Tabla ─────────────────────────────────────────────────────────────── */}
       <div className="card overflow-hidden">
         <div className="overflow-x-auto">
@@ -577,6 +732,8 @@ export default function CreditosPage() {
           </div>
         )}
       </div>
+      </>
+      )}
 
     </div>
 
